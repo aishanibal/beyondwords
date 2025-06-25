@@ -3,6 +3,7 @@ import requests
 import subprocess
 import os
 from typing import Dict, Any
+import time
 
 class OllamaSpeechAnalyzer:
     def __init__(self, ollama_url="http://localhost:11434"):
@@ -54,7 +55,7 @@ class OllamaSpeechAnalyzer:
 
         prompt = f"""
 You are an expert dialect and accent coach specializing in American spoken English. 
-Your goal is to help improve the speaker’s accent, clarity, and naturalness. Make sure to point
+Your goal is to help improve the speaker's accent, clarity, and naturalness. Make sure to point
 out grammer errors and suggest corrections first before pronunciation feedback.
 The Whisper reference text represents the intended utterance, while the 
 Wav2Vec2 recognized text reflects what the speaker actually said. 
@@ -72,23 +73,41 @@ Here is the analysis output:
 """
         return prompt
     
-    def query_ollama(self, prompt: str) -> str:
-        """Send prompt to Ollama and get response"""
-        try:
-            response = requests.post(
-                f"{self.ollama_url}/api/generate",
-                json={
-                    "model": self.model_name,
-                    "prompt": prompt,
-                    "stream": False
-                },
-                timeout=60
-            )
-            response.raise_for_status()
-            return response.json()["response"]
-        except requests.exceptions.RequestException as e:
-            print(f"Error querying Ollama: {e}")
-            return "Error: Could not connect to Ollama. Make sure it's running."
+    def wait_for_ollama_ready(self, max_retries=5, delay=1):
+        """Wait for Ollama to be ready by pinging /api/tags"""
+        for attempt in range(1, max_retries + 1):
+            try:
+                response = requests.get(f"{self.ollama_url}/api/tags", timeout=3)
+                if response.status_code == 200:
+                    print(f"Ollama is ready (attempt {attempt})")
+                    return True
+            except Exception as e:
+                print(f"Waiting for Ollama... (attempt {attempt})")
+            time.sleep(delay)
+        print("Ollama did not become ready in time.")
+        return False
+
+    def query_ollama(self, prompt: str, max_retries=3, delay=2) -> str:
+        """Send prompt to Ollama and get response, with retry logic"""
+        for attempt in range(1, max_retries + 1):
+            try:
+                response = requests.post(
+                    f"{self.ollama_url}/api/generate",
+                    json={
+                        "model": self.model_name,
+                        "prompt": prompt,
+                        "stream": False
+                    },
+                    timeout=60
+                )
+                response.raise_for_status()
+                return response.json()["response"]
+            except requests.exceptions.RequestException as e:
+                print(f"Error querying Ollama (attempt {attempt}): {e}")
+                if attempt < max_retries:
+                    print(f"Retrying in {delay} seconds...")
+                    time.sleep(delay)
+        return "Error: Could not connect to Ollama. Make sure it's running."
     
     def text_to_speech(self, text: str, output_file: str = "ollama_response.wav"):
         """Convert text to speech using system TTS"""
@@ -114,6 +133,11 @@ Here is the analysis output:
         print("Creating analysis prompt...")
         prompt = self.create_analysis_prompt(speech_data)
         
+        print("Checking Ollama health...")
+        if not self.wait_for_ollama_ready():
+            print("Ollama is not ready. Exiting.")
+            return "Error: Ollama is not ready."
+        
         print("Querying Ollama for analysis...")
         analysis = self.query_ollama(prompt)
         
@@ -126,13 +150,24 @@ Here is the analysis output:
         # Extract response section for TTS
         if "Response:" in analysis:
             response_text = analysis.split("Response:")[-1].strip()
-            print("\n" + "="*50)
-            print("GENERATING SPEECH RESPONSE...")
-            print("="*50)
-            
-            tts_file = self.text_to_speech(response_text)
-            if tts_file:
-                print(f"Speech response generated: {tts_file}")
+        else:
+            response_text = analysis.strip()
+
+        # Use macOS 'say' to speak the response out loud at a fast rate
+        try:
+            subprocess.run([
+                "say",
+                "-v", "Alex",
+                "-r", "300",
+                response_text
+            ], check=True)
+        except Exception as e:
+            print(f"Error using 'say' command: {e}")
+
+        # (Optional) Still generate TTS file as before
+        # tts_file = self.text_to_speech(response_text)
+        # if tts_file:
+        #     print(f"Speech response generated: {tts_file}")
         
         return analysis
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Heirloom Speech Analysis Pipeline (Wav2Vec2 version)
+BeyondWords Speech Analysis Pipeline (Wav2Vec2 version)
 Runs wav2vec2.py for all analysis, tracks all subprocesses, and feeds output to Ollama
 """
 
@@ -105,7 +105,7 @@ class SpeechAnalysisPipeline:
             return False
 
     def run_pipeline(self):
-        print("\U0001F3A4 HEIRLOOM SPEECH ANALYSIS PIPELINE (Wav2Vec2)")
+        print("\U0001F3A4 BEYONDWORDS SPEECH ANALYSIS PIPELINE (Wav2Vec2)")
         print("="*60)
         print(f"Audio file: {self.audio_wav_path}")
         print("Make sure you have:")

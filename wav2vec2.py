@@ -8,6 +8,8 @@ import librosa
 import whisper
 import re
 import sys
+import io
+import contextlib
 
 # ---- CONFIG ----
 AUDIO_PATH = sys.argv[1]  # Audio file path passed as argument
@@ -84,4 +86,21 @@ if __name__ == "__main__":
     print(f"Hypothesis phonemes: {hyp_phonemes}")
 
     print("Aligning phonemes and generating feedback...")
-    align_and_feedback(ref_phonemes, hyp_phonemes) 
+    # Capture feedback output
+    feedback_buffer = io.StringIO()
+    with contextlib.redirect_stdout(feedback_buffer):
+        align_and_feedback(ref_phonemes, hyp_phonemes)
+    feedback = feedback_buffer.getvalue()
+
+    # Save all extracted data to wav2vec2_transcription.txt
+    with open("wav2vec2_transcription.txt", "w") as f:
+        f.write("Wav2Vec2 Speech Analysis Output\n")
+        f.write("==============================\n")
+        f.write(f"Whisper reference text: {reference_text}\n")
+        f.write(f"Wav2Vec2 recognized text: {hyp_text}\n")
+        f.write(f"Reference phonemes: {ref_phonemes}\n")
+        f.write(f"Hypothesis phonemes: {hyp_phonemes}\n")
+        f.write("\nAlignment and Feedback:\n")
+        f.write(feedback)
+    # Also print feedback to console
+    print(feedback) 
