@@ -4,3 +4,12 @@
 __pycache__/
 venv/
 .env
+node_modules/
+.cache/
+# IDE and OS files
+.DS_Store
+*.log
+# Build output
+dist/
+build/
+.vercel
