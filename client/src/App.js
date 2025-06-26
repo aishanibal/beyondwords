@@ -76,7 +76,7 @@ function Footer() {
         setFooterSubmitted(true);
         setFooterEmail('');
       } else {
-        setFooterError('Failed to join waitlist. Please try again.');
+        setFooterError(result.error || 'Failed to join waitlist. Please try again.');
       }
     } catch (error) {
       console.error('Waitlist error:', error);
@@ -183,7 +183,16 @@ function Footer() {
                 </>
               )}
             </form>
-            {footerError && <div style={{ color: '#ffebee', fontSize: '0.95rem', width: '100%', textAlign: 'center' }}>{footerError}</div>}
+            {footerError && <div style={{ 
+              color: footerError.includes('already on our waitlist') ? '#2e7d32' : '#ffebee', 
+              fontSize: '0.95rem', 
+              width: '100%', 
+              textAlign: 'center',
+              background: footerError.includes('already on our waitlist') ? 'rgba(46, 125, 50, 0.1)' : 'transparent',
+              padding: footerError.includes('already on our waitlist') ? '0.5rem 0.8rem' : '0',
+              borderRadius: footerError.includes('already on our waitlist') ? '6px' : '0',
+              border: footerError.includes('already on our waitlist') ? '1px solid rgba(46, 125, 50, 0.3)' : 'none'
+            }}>{footerError}</div>}
           </div>
           <a 
             href="https://forms.office.com/Pages/ResponsePage.aspx?id=RncIw6pRT0-Po3Vc1N8ikyownBfAaZ5Gk1xJwTt1Ik1UNVNGUllUMFJWNlBQRFVCQlJHSFZZUzZNWi4u" 
@@ -246,7 +255,7 @@ function Landing() {
         setSubmitted(true);
         setEmail('');
       } else {
-        setError('Failed to join waitlist. Please try again.');
+        setError(result.error || 'Failed to join waitlist. Please try again.');
       }
     } catch (error) {
       console.error('Waitlist error:', error);
@@ -336,7 +345,14 @@ function Landing() {
                   }}>Join Waitlist</button>
                 </>
               )}
-              {error && <div style={{ color: '#b04a2b', fontSize: '0.95rem' }}>{error}</div>}
+              {error && <div style={{ 
+                color: error.includes('already on our waitlist') ? '#2e7d32' : '#b04a2b', 
+                fontSize: '0.95rem',
+                background: error.includes('already on our waitlist') ? 'rgba(46, 125, 50, 0.1)' : 'transparent',
+                padding: error.includes('already on our waitlist') ? '0.5rem 0.8rem' : '0',
+                borderRadius: error.includes('already on our waitlist') ? '6px' : '0',
+                border: error.includes('already on our waitlist') ? '1px solid rgba(46, 125, 50, 0.3)' : 'none'
+              }}>{error}</div>}
             </form>
           </div>
         </div>

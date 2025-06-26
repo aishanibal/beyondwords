@@ -22,12 +22,30 @@ export const saveWaitlistEmail = async (email, source = 'website') => {
     
     if (error) {
       console.error('Error saving email:', error)
+      
+      // Check if it's a duplicate email error
+      if (error.message && error.message.includes('duplicate key value violates unique constraint')) {
+        return { 
+          success: false, 
+          error: 'This email is already on our waitlist! Thank you for your interest.' 
+        }
+      }
+      
       throw error
     }
     
     return { success: true, data }
   } catch (error) {
     console.error('Supabase error:', error)
+    
+    // Check if it's a duplicate email error in the catch block too
+    if (error.message && error.message.includes('duplicate key value violates unique constraint')) {
+      return { 
+        success: false, 
+        error: 'This email is already on our waitlist! Thank you for your interest.' 
+      }
+    }
+    
     return { success: false, error: error.message }
   }
 }
