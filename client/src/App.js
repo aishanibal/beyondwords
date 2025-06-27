@@ -88,11 +88,13 @@ function Footer() {
     <footer style={{
       background: 'linear-gradient(135deg, #7e5a75 0%, #8a6a7a 25%, #a67a8a 75%, #c38d94 100%)',
       color: '#f5f1ec',
-      padding: '3rem 2rem 2rem 2rem',
+      padding: '3rem 1rem 2rem 1rem',
       marginTop: '4rem',
       textAlign: 'center',
       position: 'relative',
-      overflow: 'hidden'
+      overflow: 'hidden',
+      width: '100%',
+      boxSizing: 'border-box'
     }}>
       {/* Animated background elements */}
       <div style={{
@@ -105,7 +107,7 @@ function Footer() {
         animation: 'float 6s ease-in-out infinite'
       }}></div>
       
-      <div style={{ position: 'relative', zIndex: 1 }}>
+      <div style={{ position: 'relative', zIndex: 1, width: '100%', maxWidth: '1200px', margin: '0 auto', boxSizing: 'border-box' }}>
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: '1rem' }}>
             <span style={{ 
             fontSize: '1.5rem', 
@@ -135,8 +137,8 @@ function Footer() {
           flexWrap: 'wrap',
           alignItems: 'center'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-            <form onSubmit={handleFooterWaitlistSubmit} style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem', width: '100%', maxWidth: '500px' }}>
+            <form onSubmit={handleFooterWaitlistSubmit} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem', width: '100%' }}>
               {footerSubmitted ? (
                 <div style={{ color: '#3e3e3e', background: '#c38d94', padding: '0.7rem 1.2rem', borderRadius: 10, fontWeight: 600, marginBottom: 8 }}>Thank you for joining the waitlist!</div>
               ) : (
@@ -154,7 +156,9 @@ function Footer() {
                       fontFamily: 'AR One Sans',
                       background: 'rgba(245,241,236,0.8)',
                       color: '#3e3e3e',
-                      minWidth: 250,
+                      width: '100%',
+                      maxWidth: '300px',
+                      boxSizing: 'border-box'
                     }}
                     required
                   />
@@ -171,6 +175,8 @@ function Footer() {
                       cursor: 'pointer',
                       fontFamily: 'AR One Sans',
                       transition: 'all 0.3s ease',
+                      width: '100%',
+                      maxWidth: '200px',
                       ':hover': {
                         background: '#f5f1ec',
                         color: '#7e5a75',
@@ -272,6 +278,9 @@ function Landing() {
       color: '#3e3e3e',
       padding: 0,
       margin: 0,
+      overflowX: 'hidden',
+      width: '100%',
+      boxSizing: 'border-box'
     }}>
       {/* Hero Section */}
       <div style={{
@@ -279,16 +288,18 @@ function Landing() {
         alignItems: 'stretch',
         justifyContent: 'center',
         margin: '0 auto',
-        padding: '5rem 2rem 2rem 2rem',
-        gap: 'clamp(32px, 4vw, 64px)',
+        padding: '5rem 1rem 2rem 1rem',
+        gap: 'clamp(16px, 3vw, 64px)',
         maxWidth: '1200px',
         width: '100%',
-        flexWrap: 'wrap'
+        flexWrap: 'wrap',
+        boxSizing: 'border-box',
+        overflow: 'hidden'
       }}>
         <div style={{ 
-          flex: '1 1 400px', 
-          minWidth: 320, 
-          maxWidth: 600,
+          flex: '1 1 300px', 
+          minWidth: 280, 
+          maxWidth: '100%',
           background: translucentBg, 
           borderRadius: 24, 
           boxShadow: '0 2px 12px #3c4c7322', 
@@ -297,17 +308,19 @@ function Landing() {
           flexDirection: 'column', 
           justifyContent: 'center',
           transition: 'all 0.3s ease',
+          boxSizing: 'border-box',
+          overflow: 'hidden',
           ':hover': {
             transform: 'translateY(-5px)',
             boxShadow: '0 8px 25px #3c4c7333'
           }
         }}>
-          <h1 style={{ fontSize: 'clamp(2rem, 4vw, 2.8rem)', fontWeight: 600, color: '#3c4c73', marginBottom: 18, lineHeight: 1.3, fontFamily: 'Grandstander, Arial, sans-serif' }}>Reconnect with Your Heritage Language</h1>
+          <h1 style={{ fontSize: 'clamp(1.8rem, 4vw, 2.8rem)', fontWeight: 600, color: '#3c4c73', marginBottom: 18, lineHeight: 1.3, fontFamily: 'Grandstander, Arial, sans-serif' }}>Reconnect with Your Heritage Language</h1>
           <p style={{ fontSize: 'clamp(0.9rem, 1.5vw, 1rem)', color: '#3e3e3e', lineHeight: 1.9, marginBottom: 32, maxWidth: 500, fontFamily: 'AR One Sans', fontWeight: 400 }}>
             An AI-powered tool designed for heritage speakers and diaspora communities to speak their native language with confidence, emotion, and pride.
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 32 }}>
-            <form id="waitlist" onSubmit={handleWaitlistSubmit} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+            <form id="waitlist" onSubmit={handleWaitlistSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%' }}>
               {submitted ? (
                 <div style={{ color: '#3e3e3e', background: '#c38d94', padding: '0.7rem 1.2rem', borderRadius: 10, fontWeight: 600, marginBottom: 8 }}>Thank you for joining the waitlist!</div>
               ) : (
@@ -325,8 +338,9 @@ function Landing() {
                       fontFamily: 'AR One Sans',
                       background: '#f5f1ec',
                       color: '#3e3e3e',
-                      flex: '1 1 250px',
-                      minWidth: 250,
+                      width: '100%',
+                      minWidth: 'auto',
+                      boxSizing: 'border-box'
                     }}
                     required
                   />
@@ -341,7 +355,9 @@ function Landing() {
                     cursor: 'pointer',
                     boxShadow: '0 2px 8px #7e5a7522',
                     fontFamily: 'AR One Sans',
-                    whiteSpace: 'nowrap',
+                    width: '100%',
+                    maxWidth: '200px',
+                    alignSelf: 'center'
                   }}>Join Waitlist</button>
                 </>
               )}
@@ -351,24 +367,27 @@ function Landing() {
                 background: error.includes('already on our waitlist') ? 'rgba(46, 125, 50, 0.1)' : 'transparent',
                 padding: error.includes('already on our waitlist') ? '0.5rem 0.8rem' : '0',
                 borderRadius: error.includes('already on our waitlist') ? '6px' : '0',
-                border: error.includes('already on our waitlist') ? '1px solid rgba(46, 125, 50, 0.3)' : 'none'
+                border: error.includes('already on our waitlist') ? '1px solid rgba(46, 125, 50, 0.3)' : 'none',
+                textAlign: 'center'
               }}>{error}</div>}
             </form>
           </div>
         </div>
-        <div style={{ flex: '1 1 350px', minWidth: 320, maxWidth: 400, display: 'flex', alignItems: 'stretch' }}>
+        <div style={{ flex: '1 1 300px', minWidth: 280, maxWidth: '100%', display: 'flex', alignItems: 'stretch', boxSizing: 'border-box' }}>
           <div style={{ 
             background: translucentRose, 
             borderRadius: 24, 
             boxShadow: '0 2px 16px #3c4c7333', 
             padding: 'clamp(1.5rem, 3vw, 2.5rem) clamp(1rem, 2vw, 2rem)', 
             width: '100%', 
-            maxWidth: 400, 
+            maxWidth: '100%', 
             textAlign: 'center', 
             display: 'flex', 
             flexDirection: 'column', 
             justifyContent: 'center',
             transition: 'all 0.3s ease',
+            boxSizing: 'border-box',
+            overflow: 'hidden',
             ':hover': {
               transform: 'translateY(-5px)',
               boxShadow: '0 8px 25px #3c4c7333'
@@ -407,9 +426,9 @@ function Landing() {
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
-        gap: 'clamp(16px, 2vw, 32px)',
+        gap: 'clamp(8px, 2vw, 32px)',
         margin: '36px auto 12px auto',
-        fontSize: 'clamp(1rem, 2vw, 1.25rem)',
+        fontSize: 'clamp(0.8rem, 2vw, 1.25rem)',
         fontWeight: 600,
         letterSpacing: 1,
         fontFamily: 'Grandstander, Arial, sans-serif',
@@ -417,16 +436,27 @@ function Landing() {
         background: '#f5f1ec',
         borderRadius: 0,
         boxShadow: '0 2px 12px #3c4c7311',
-        padding: 'clamp(0.8rem, 2vw, 1.1rem) clamp(1.5rem, 3vw, 2.5rem)',
+        padding: 'clamp(0.8rem, 2vw, 1.1rem) clamp(1rem, 2vw, 2.5rem)',
         maxWidth: '1200px',
         width: '100%',
-        flexWrap: 'wrap'
+        flexWrap: 'wrap',
+        textAlign: 'center'
       }}>
-        <span role="img" aria-label="English" style={{fontSize: 'clamp(1.5rem, 3vw, 2rem)', marginRight: 8}}>🇬🇧</span> English
-        <span role="img" aria-label="Spanish" style={{fontSize: 'clamp(1.5rem, 3vw, 2rem)', margin: '0 8px 0 clamp(16px, 2vw, 32px)'}}>🇪🇸</span> Spanish
-        <span role="img" aria-label="Tagalog" style={{fontSize: 'clamp(1.5rem, 3vw, 2rem)', margin: '0 8px 0 clamp(16px, 2vw, 32px)'}}>🇵🇭</span> Tagalog
-        <span role="img" aria-label="Hindi" style={{fontSize: 'clamp(1.5rem, 3vw, 2rem)', margin: '0 8px 0 clamp(16px, 2vw, 32px)'}}>🇮🇳</span> Hindi
-        <span role="img" aria-label="Tamil" style={{fontSize: 'clamp(1.5rem, 3vw, 2rem)', margin: '0 8px 0 clamp(16px, 2vw, 32px)'}}>🇮🇳</span> Tamil
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
+          <span role="img" aria-label="English" style={{fontSize: 'clamp(1.2rem, 3vw, 2rem)', marginRight: 4}}>🇬🇧</span> English
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
+          <span role="img" aria-label="Spanish" style={{fontSize: 'clamp(1.2rem, 3vw, 2rem)', marginRight: 4}}>🇪🇸</span> Spanish
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
+          <span role="img" aria-label="Tagalog" style={{fontSize: 'clamp(1.2rem, 3vw, 2rem)', marginRight: 4}}>🇵🇭</span> Tagalog
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
+          <span role="img" aria-label="Hindi" style={{fontSize: 'clamp(1.2rem, 3vw, 2rem)', marginRight: 4}}>🇮🇳</span> Hindi
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
+          <span role="img" aria-label="Tamil" style={{fontSize: 'clamp(1.2rem, 3vw, 2rem)', marginRight: 4}}>🇮🇳</span> Tamil
+        </div>
       </div>
 
       {/* Features Row */}
@@ -435,11 +465,13 @@ function Landing() {
         width: '100%', 
         maxWidth: '1200px',
         justifyContent: 'center', 
-        gap: 'clamp(32px, 4vw, 52px)', 
+        gap: 'clamp(16px, 3vw, 52px)', 
         margin: '0 auto', 
         marginTop: 32, 
         flexWrap: 'wrap', 
-        padding: 'clamp(1.5rem, 3vw, 2.5rem) clamp(1rem, 2vw, 2rem)' 
+        padding: 'clamp(1.5rem, 3vw, 2.5rem) clamp(1rem, 2vw, 2rem)',
+        boxSizing: 'border-box',
+        overflow: 'hidden'
       }}>
         <FeatureCard icon="🤝" title="Conversational Practice" desc="Chat naturally with AI to build fluency judgement-free." noBorder bg={translucentRose} textColor="#7e5a75" />
         <FeatureCard icon="🌱" title="Detailed Feedback" desc="Recieve personalized feedback on grammar, pronunciation, and cultural context." noBorder bg={translucentBg} textColor="#3c4c73" />
@@ -456,12 +488,14 @@ function Landing() {
         width: '100%', 
         boxShadow: '0 1px 8px #3c4c7322', 
         textAlign: 'center', 
-        fontFamily: 'AR One Sans' 
+        fontFamily: 'AR One Sans',
+        boxSizing: 'border-box',
+        overflow: 'hidden'
       }}>
         <h2 style={{ color: '#7e5a75', fontSize: 'clamp(1.2rem, 2.5vw, 1.4rem)', marginBottom: 24, fontWeight: 500, fontFamily: 'Grandstander, Arial, sans-serif' }}>What Heritage Speakers Tell Us</h2>
         
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 'clamp(24px, 3vw, 32px)', flexWrap: 'wrap', marginBottom: 24 }}>
-          <div style={{ flex: '1 1 300px', minWidth: 280, textAlign: 'left' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 'clamp(16px, 3vw, 32px)', flexWrap: 'wrap', marginBottom: 24 }}>
+          <div style={{ flex: '1 1 280px', minWidth: 250, textAlign: 'left' }}>
             <h3 style={{ color: '#3c4c73', fontSize: 'clamp(1rem, 2vw, 1.2rem)', marginBottom: 16, fontWeight: 600, fontFamily: 'Grandstander, Arial, sans-serif' }}>What motivates you to speak your heritage language?</h3>
             <SurveyResponse quote="To keep my heritage alive. To communicate with my parents in public and in their native language. I want to be fluent for my own sake of being bilingual but not feeling fully confident in the second language.
 " name="— Bengali Heritage Speaker" />
@@ -470,7 +504,7 @@ function Landing() {
 " name="— Bahamian Creole Heritage Speaker" />
           </div>
           
-          <div style={{ flex: '1 1 300px', minWidth: 280, textAlign: 'left' }}>
+          <div style={{ flex: '1 1 280px', minWidth: 250, textAlign: 'left' }}>
             <h3 style={{ color: '#3c4c73', fontSize: 'clamp(1rem, 2vw, 1.2rem)', marginBottom: 16, fontWeight: 600, fontFamily: 'Grandstander, Arial, sans-serif' }}>What do you find helpful in a language tool?</h3>
             <SurveyResponse quote="Practicing conversations. With Malayalam, I just picked up the language and practiced by conversing. In Spanish class, we used to chat with people in Spanish Speaking countries and it forced me to think in the language which was good.
 " name="— Malayalam Heritage Speaker" />
@@ -489,8 +523,8 @@ function Landing() {
       {/* Contact Button Overlay */}
       <div style={{
         position: 'fixed',
-        bottom: '2rem',
-        right: '2rem',
+        bottom: 'clamp(1rem, 3vw, 2rem)',
+        right: 'clamp(1rem, 3vw, 2rem)',
         zIndex: 1000,
       }}>
         <a 
@@ -503,9 +537,9 @@ function Landing() {
             color: '#f5f1ec',
             border: 'none',
             borderRadius: '50px',
-            padding: '1rem 1.5rem',
+            padding: 'clamp(0.8rem, 2vw, 1rem) clamp(1rem, 2vw, 1.5rem)',
             fontWeight: 600,
-            fontSize: '1rem',
+            fontSize: 'clamp(0.9rem, 2vw, 1rem)',
             cursor: 'pointer',
             boxShadow: '0 4px 20px rgba(126,90,117,0.3)',
             fontFamily: 'AR One Sans',
@@ -518,8 +552,8 @@ function Landing() {
             }
           }}
         >
-          <span style={{ fontSize: '1.2rem' }}>✉️</span>
-          Contact Us
+          <span style={{ fontSize: 'clamp(1rem, 2vw, 1.2rem)' }}>✉️</span>
+          <span style={{ display: 'none', '@media (min-width: 480px)': { display: 'inline' } }}>Contact Us</span>
         </a>
       </div>
     </div>
@@ -549,9 +583,9 @@ function FeatureCard({ icon, title, desc, noBorder, bg, textColor }) {
       borderRadius: 16,
       boxShadow: '0 2px 12px #3c4c7322',
       padding: 'clamp(1.5rem, 2vw, 2rem) clamp(1rem, 1.5vw, 1.7rem)',
-      minWidth: 280,
+      minWidth: 250,
       maxWidth: 380,
-      flex: '1 1 300px',
+      flex: '1 1 280px',
       textAlign: 'center',
       fontFamily: 'AR One Sans',
       border: noBorder ? 'none' : undefined,
