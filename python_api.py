@@ -11,26 +11,33 @@ import torch
 from transformers import Wav2Vec2ForCTC, Wav2Vec2Processor
 import librosa
 import numpy as np
+import datetime
+from ollama_client import get_conversational_response, get_detailed_feedback, is_ollama_ready
 
 app = Flask(__name__)
 CORS(app)
 
 # Global variables for models
 whisper_model = None
-wav2vec2_processor = None
-wav2vec2_model = None
+wav2vec2_processors = {}
+wav2vec2_models = {}
+
+SUPPORTED_WAV2VEC2 = {
+    'en': 'facebook/wav2vec2-base-960h',
+    'es': 'jonatasgrosman/wav2vec2-large-xlsr-53-spanish',
+}
+
+SUPPORTED_LANGUAGES = ['en', 'es', 'hi', 'ja']
 
 def load_models():
-    """Load speech recognition models"""
-    global whisper_model, wav2vec2_processor, wav2vec2_model
-    
+    """Load sendgnition models"""
+    global whisper_model, wav2vec2_processors, wav2vec2_models
     print("Loading Whisper model...")
-    whisper_model = whisper.load_model("base")
-    
-    print("Loading Wav2Vec2 model...")
-    wav2vec2_processor = Wav2Vec2Processor.from_pretrained("facebook/wav2vec2-base-960h")
-    wav2vec2_model = Wav2Vec2ForCTC.from_pretrained("facebook/wav2vec2-base-960h")
-    
+    whisper_model = whisper.load_model("large")
+    for lang, model_name in SUPPORTED_WAV2VEC2.items():
+        print(f"Loading Wav2Vec2 model for {lang} ({model_name})...")
+        wav2vec2_processors[lang] = Wav2Vec2Processor.from_pretrained(model_name)
+        wav2vec2_models[lang] = Wav2Vec2ForCTC.from_pretrained(model_name)
     print("All models loaded successfully!")
 
 def transcribe_audio(audio_path):
@@ -42,8 +49,17 @@ def transcribe_audio(audio_path):
         print(f"Whisper transcription error: {e}")
         return ""
 
-def analyze_speech_with_wav2vec2(audio_path, reference_text):
+def analyze_speech_with_wav2vec2(audio_path, reference_text, language='en'):
     """Analyze speech using Wav2Vec2 and provide feedback"""
+    language = language if language in SUPPORTED_LANGUAGES else 'en'
+    if language in ['hi', 'ja']:
+        return {
+            "transcription": "",
+            "reference": reference_text,
+            "analysis": f"Wav2Vec2 phoneme-level analysis is not yet supported for {language.upper()}. Only Whisper transcription is available."
+        }
+    wav2vec2_processor = wav2vec2_processors.get(language, wav2vec2_processors['en'])
+    wav2vec2_model = wav2vec2_models.get(language, wav2vec2_models['en'])
     try:
         # Load and preprocess audio with better error handling
         print(f"Loading audio file: {audio_path}")
@@ -93,7 +109,7 @@ def analyze_speech_with_wav2vec2(audio_path, reference_text):
         
         # Use the proper Wav2Vec2 analysis from wav2vec2.py
         print("Getting reference text using Whisper...")
-        reference_text_whisper = whisper_model.transcribe(audio_path)["text"].strip().lower()
+        reference_text_whisper = whisper_model.transcribe(audio_path, language=language)["text"].strip().lower()
         print(f"Whisper reference text: {reference_text_whisper}")
 
         print("Transcribing audio with Wav2Vec2...")
@@ -109,7 +125,8 @@ def analyze_speech_with_wav2vec2(audio_path, reference_text):
         def text_to_phonemes(text):
             try:
                 import subprocess
-                cmd = ["espeak", "-q", "--ipa=3", "-ven", text]
+                espeak_lang = {'en': 'en', 'es': 'es'}.get(language, 'en')
+                cmd = ["espeak", "-q", "--ipa=3", f"-v{espeak_lang}", text]
                 result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
                 phonemes = result.stdout.strip().replace(" ", "")
                 return phonemes
@@ -178,159 +195,116 @@ def analyze_speech_with_wav2vec2(audio_path, reference_text):
             "analysis": f"Error analyzing speech: {str(e)}"
         }
 
-def generate_speech_feedback(transcription, reference_text):
-    """Generate feedback based on transcription vs reference"""
-    if not transcription or not reference_text:
-        return "Unable to analyze speech. Please try again."
-    
-    # Simple feedback generation
-    feedback_parts = []
-    
-    # Check for basic pronunciation issues
-    if len(transcription.split()) < len(reference_text.split()) * 0.7:
-        feedback_parts.append("• You may be speaking too quickly or unclearly")
-    
-    # Check for common pronunciation patterns
-    common_issues = []
-    if "th" in reference_text.lower() and "th" not in transcription.lower():
-        common_issues.append("'th' sounds")
-    if "ing" in reference_text.lower() and "ing" not in transcription.lower():
-        common_issues.append("'-ing' endings")
-    
-    if common_issues:
-        feedback_parts.append(f"• Pay attention to: {', '.join(common_issues)}")
-    
-    # Overall assessment
-    similarity = len(set(transcription.lower().split()) & set(reference_text.lower().split())) / max(len(reference_text.split()), 1)
-    
-    if similarity > 0.8:
-        feedback_parts.append("• Excellent pronunciation! Keep up the great work.")
-    elif similarity > 0.6:
-        feedback_parts.append("• Good effort! With practice, you'll improve further.")
-    else:
-        feedback_parts.append("• Try speaking more slowly and clearly.")
-    
-    return "\n".join(feedback_parts) if feedback_parts else "Thank you for your speech. Keep practicing!"
-
 @app.route('/transcribe', methods=['POST'])
 def transcribe():
-    """Transcribe audio file"""
+    """FAST: Transcribe audio and get quick Ollama response"""
     try:
         data = request.get_json()
         audio_file = data.get('audio_file')
+        chat_history = data.get('chat_history', [])
+        language = data.get('language', 'en')
+        
+        print(f"=== /transcribe called ===")
+        print(f"Language received: {language}")
+        print(f"Audio file: {audio_file}")
+        print(f"Chat history length: {len(chat_history)}")
         
         if not audio_file or not os.path.exists(audio_file):
             return jsonify({"error": "Audio file not found"}), 400
         
-        transcription = transcribe_audio(audio_file)
+        # Get transcription using Whisper (with language)
+        print(f"Calling Whisper with language={language}")
+        transcription = whisper_model.transcribe(audio_file, language=language)["text"]
+        print(f"Whisper transcription: '{transcription}'")
+        
+        print(f"Calling Ollama with language={language}")
+        ai_response = get_conversational_response(transcription, chat_history, language)
+        print(f"Ollama response: '{ai_response}'")
         
         return jsonify({
             "transcription": transcription,
-            "success": True
+            "ai_response": ai_response
         })
-    
     except Exception as e:
         print(f"Transcription error: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/analyze', methods=['POST'])
 def analyze():
-    """Analyze speech and provide feedback"""
+    """SLOW: Analyze audio for detailed feedback"""
     try:
         data = request.get_json()
         audio_file = data.get('audio_file')
-        transcription = data.get('transcription', '')
+        reference_text = data.get('reference_text', '')
+        chat_history = data.get('chat_history', [])
+        language = data.get('language', 'en')
+        
+        print(f"=== /analyze called ===")
+        print(f"Language received: {language}")
+        print(f"Audio file: {audio_file}")
+        print(f"Reference text: {reference_text}")
+        print(f"Chat history length: {len(chat_history)}")
         
         if not audio_file or not os.path.exists(audio_file):
             return jsonify({"error": "Audio file not found"}), 400
         
-        # Use transcription as reference text for analysis
-        reference_text = transcription if transcription else "Speech recorded"
+        # Use Whisper for reference text if not provided
+        if not reference_text:
+            print(f"Getting reference text with Whisper (language={language})")
+            reference_text = whisper_model.transcribe(audio_file, language=language)["text"]
+            print(f"Whisper reference text: '{reference_text}'")
         
-        analysis_result = analyze_speech_with_wav2vec2(audio_file, reference_text)
+        # Wav2Vec2 analysis (if supported)
+        print(f"Calling Wav2Vec2 analysis with language={language}")
+        analysis_result = analyze_speech_with_wav2vec2(audio_file, reference_text, language=language)
+        
+        # Detailed feedback from Ollama
+        print(f"Calling Ollama detailed feedback with language={language}")
+        feedback = get_detailed_feedback(
+            analysis_result.get('analysis', ''),
+            reference_text,
+            analysis_result.get('transcription', ''),
+            chat_history,
+            language
+        )
+        print(f"Ollama detailed feedback: '{feedback[:100]}...'")
         
         return jsonify({
-            "analysis": analysis_result["analysis"],
-            "transcription": analysis_result["transcription"],
-            "success": True
+            "transcription": analysis_result.get('transcription', ''),
+            "reference": reference_text,
+            "analysis": analysis_result.get('analysis', ''),
+            "feedback": feedback
         })
-    
     except Exception as e:
         print(f"Analysis error: {e}")
         return jsonify({"error": str(e)}), 500
 
-@app.route('/feedback', methods=['POST'])
-def feedback():
-    """Generate detailed feedback based on chat history"""
-    try:
-        data = request.get_json()
-        chat_history = data.get('chat_history', [])
-        
-        if not chat_history:
-            return jsonify({"error": "No chat history provided"}), 400
-        
-        # Extract user messages for analysis
-        user_messages = [msg["text"] for msg in chat_history if msg["sender"] == "User"]
-        
-        if not user_messages:
-            return jsonify({"error": "No user messages found"}), 400
-        
-        # Generate comprehensive feedback
-        feedback = generate_comprehensive_feedback(user_messages)
-        
-        return jsonify({
-            "feedback": feedback,
-            "success": True
-        })
-    
-    except Exception as e:
-        print(f"Feedback error: {e}")
-        return jsonify({"error": str(e)}), 500
-
-def generate_comprehensive_feedback(user_messages):
-    """Generate comprehensive feedback based on user messages"""
-    feedback_parts = []
-    
-    feedback_parts.append("📊 Detailed Speech Analysis")
-    feedback_parts.append("=" * 40)
-    
-    # Analyze message patterns
-    total_messages = len(user_messages)
-    total_words = sum(len(msg.split()) for msg in user_messages)
-    avg_words = total_words / max(total_messages, 1)
-    
-    feedback_parts.append(f"\n📈 Session Statistics:")
-    feedback_parts.append(f"• Total speech samples: {total_messages}")
-    feedback_parts.append(f"• Average words per sample: {avg_words:.1f}")
-    
-    # Pronunciation tips
-    feedback_parts.append(f"\n🎯 Pronunciation Tips:")
-    feedback_parts.append("• Practice speaking at a moderate pace")
-    feedback_parts.append("• Focus on clear articulation of each word")
-    feedback_parts.append("• Pay attention to word endings and stress patterns")
-    
-    # Common improvement areas
-    feedback_parts.append(f"\n💡 Areas for Improvement:")
-    feedback_parts.append("• Vowel sounds: Practice long and short vowel distinctions")
-    feedback_parts.append("• Consonant clusters: Work on difficult sound combinations")
-    feedback_parts.append("• Intonation: Vary your pitch to sound more natural")
-    
-    # Encouragement
-    feedback_parts.append(f"\n🌟 Keep Going!")
-    feedback_parts.append("Regular practice is the key to improvement. Try recording yourself")
-    feedback_parts.append("reading different types of texts to build confidence.")
-    
-    return "\n".join(feedback_parts)
-
 @app.route('/health', methods=['GET'])
 def health():
     """Health check endpoint"""
-    return jsonify({
-        "status": "healthy",
-        "models_loaded": whisper_model is not None and wav2vec2_model is not None
-    })
+    try:
+        models_status = {
+            "whisper_model": whisper_model is not None,
+            "wav2vec2_processors": all(wav2vec2_processors.values()),
+            "wav2vec2_models": all(wav2vec2_models.values())
+        }
+        
+        all_models_loaded = all(models_status.values())
+        
+        return jsonify({
+            "status": "healthy" if all_models_loaded else "degraded",
+            "models_loaded": all_models_loaded,
+            "models_status": models_status,
+            "timestamp": str(datetime.datetime.now())
+        })
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "error": str(e),
+            "timestamp": str(datetime.datetime.now())
+        }), 500
 
 if __name__ == '__main__':
     print("Starting Python Speech Analysis API...")
     load_models()
-    app.run(host='0.0.0.0', port=5000, debug=True) 
+    app.run(host='0.0.0.0', port=5001, debug=True) 

@@ -1,9 +1,0 @@
-wav_path,unit,start,end,type
-mfa_chunks/chunk_0.wav,quick,0.15,0.38,word
-mfa_chunks/chunk_0.wav,brown,0.49,0.74,word
-mfa_chunks/chunk_0.wav,fox,0.74,1.22,word
-mfa_chunks/chunk_0.wav,jumps,1.27,1.61,word
-mfa_chunks/chunk_0.wav,over,1.61,1.8,word
-mfa_chunks/chunk_0.wav,the,1.8,1.93,word
-mfa_chunks/chunk_0.wav,lazy,1.93,2.29,word
-mfa_chunks/chunk_0.wav,dog,2.29,2.7,word

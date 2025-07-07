@@ -7,10 +7,26 @@ const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
 const multer = require('multer');
-// const { OAuth2Client } = require('google-auth-library');
+const { OAuth2Client } = require('google-auth-library');
 const path = require('path');
 const fs = require('fs').promises;
 const { exec } = require('child_process');
+const bcrypt = require('bcrypt');
+const { 
+  createUser, 
+  findUserByGoogleId, 
+  findUserByEmail, 
+  findUserById,
+  updateUser,
+  saveSession,
+  getSession,
+  getAllSessions,
+  closeDatabase,
+  getAllUsers
+} = require('./database');
+const jwt = require('jsonwebtoken');
+const JWT_SECRET = process.env.JWT_SECRET || 'your_super_secret_key';
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 const app = express();
 app.use(express.json());
@@ -137,17 +153,33 @@ fs.mkdir(uploadsDir, { recursive: true }).catch(console.error);
 //   }
 // };
 
+// JWT middleware
+function authenticateJWT(req, res, next) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+  const token = authHeader.split(' ')[1];
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) return res.status(403).json({ error: 'Invalid token' });
+    req.user = user;
+    next();
+  });
+}
+
 // Routes
-app.get('/api/user', async (req, res) => {
+app.get('/api/user', authenticateJWT, async (req, res) => {
   try {
-    // For now, return a mock user for testing
-    // In production, you'd get this from the session/token
-    res.json({ 
-      id: 'mock-user-id', 
-      name: 'Test User', 
-      email: 'test@example.com',
-      role: 'user'
-    });
+    const user = await findUserById(req.user.userId);
+    
+    // Parse learning goals from JSON string to array
+    if (user && user.learning_goals) {
+      try {
+        user.learning_goals = JSON.parse(user.learning_goals);
+      } catch (e) {
+        user.learning_goals = [];
+      }
+    }
+    
+    res.json({ user });
   } catch (error) {
     res.status(500).json({ error: 'Server error' });
   }
@@ -170,112 +202,114 @@ app.post('/api/analyze', upload.single('audio'), async (req, res) => {
     const audioFilePath = path.resolve(req.file.path);
     console.log('Received audio file:', audioFilePath);
 
-    // Call Python API for transcription only
-    const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5000';
-    
-    // Get transcription from Python API
-    console.log('Sending transcription request to Python API:', `${pythonApiUrl}/transcribe`);
-    let transcription = 'Speech recorded';
-    try {
-      const transcriptionResponse = await axios.post(`${pythonApiUrl}/transcribe`, {
-        audio_file: audioFilePath
-      }, {
-        headers: { 'Content-Type': 'application/json' },
-        timeout: 30000
-      });
-      console.log('Transcription response:', transcriptionResponse.data);
-      transcription = transcriptionResponse.data.transcription || 'Speech recorded';
-    } catch (transcriptionError) {
-      console.error('Transcription error:', transcriptionError.message);
-      // Continue with default transcription
-    }
-
     // Accept chatHistory from request body (for context-aware fast response)
     let chatHistory = [];
     if (req.body.chatHistory) {
       try {
         chatHistory = JSON.parse(req.body.chatHistory);
       } catch (e) {
+        console.error('Error parsing chatHistory:', e);
         chatHistory = [];
       }
     }
     global.lastChatHistory = chatHistory; // Optionally store for session continuity
 
-    // Ollama health check before generating response
-    const ollamaUrl = 'http://localhost:11434';
-    let ollamaReady = false;
-    for (let attempt = 1; attempt <= 5; attempt++) {
-      try {
-        const health = await axios.get(`${ollamaUrl}/api/tags`, { timeout: 3000 });
-        if (health.status === 200) {
-          console.log(`Ollama is ready (attempt ${attempt})`);
-          ollamaReady = true;
-          break;
-        }
-      } catch (e) {
-        console.log(`Waiting for Ollama... (attempt ${attempt})`);
-        await new Promise(r => setTimeout(r, 1000));
-      }
-    }
-    if (!ollamaReady) {
-      console.error('Ollama did not become ready in time. Returning fallback.');
-      return res.json({
-        transcription: transcription,
-        aiResponse: 'Thank you for your speech! Keep practicing and you\'ll improve.',
-        ttsUrl: null,
-        sessionId: null
-      });
-    }
-
-    // Use Ollama Fast for immediate response (no analysis needed) with retry logic
+    // Call Python API for transcription and AI response (using ollama_client)
+    const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5001';
+    
+    console.log('Calling Python API for transcription and AI response:', `${pythonApiUrl}/transcribe`);
+    let transcription = 'Speech recorded';
     let aiResponse = 'Thank you for your speech!';
-    let ollamaSuccess = false;
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      try {
-        // Always format chat history as a string
-        const chatHistoryString = (chatHistory && chatHistory.length > 0)
-          ? chatHistory.map(msg => `${msg.sender}: ${msg.text}`).join('\n')
-          : '';
-        const ollamaPrompt = `You are a helpful speech coach. Here is the conversation so far:\n${chatHistoryString}\nThe user just said: "${transcription}". Respond in a way that continues the conversation like you're having a regular convo with the user. Keep it around 20 words but it's not strict.`;
-        console.log(`Generating fast response with Ollama (attempt ${attempt})...`);
-        const ollamaResponse = await axios.post(`${ollamaUrl}/api/generate`, {
-          model: 'llama3.2',
-          prompt: ollamaPrompt,
-          stream: false
-        }, {
-          timeout: 5000  // 5 second timeout for fast response
-        });
-        aiResponse = ollamaResponse.data.response;
-        console.log('Ollama fast response generated:', aiResponse);
-        ollamaSuccess = true;
-        break;
-      } catch (ollamaError) {
-        console.error(`Ollama error (attempt ${attempt}):`, ollamaError.message);
-        if (attempt < 3) {
-          console.log('Retrying Ollama in 2 seconds...');
-          await new Promise(r => setTimeout(r, 2000));
-        }
-      }
-    }
-    if (!ollamaSuccess) {
-      aiResponse = 'Thank you for your speech! Keep practicing and you\'ll improve.';
+    let pythonApiAvailable = false;
+    
+    try {
+      console.log('=== ATTEMPTING PYTHON API CALL ===');
+      console.log('Python API URL:', `${pythonApiUrl}/transcribe`);
+      console.log('Audio file path:', audioFilePath);
+      console.log('Chat history length:', chatHistory.length);
+      console.log('Language:', req.body.language || 'en');
+      
+      const transcriptionResponse = await axios.post(`${pythonApiUrl}/transcribe`, {
+        audio_file: audioFilePath,
+        chat_history: chatHistory,
+        language: req.body.language || 'en'
+      }, {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 30000
+      });
+      
+      console.log('=== PYTHON API SUCCESS ===');
+      console.log('Python API response received:', transcriptionResponse.data);
+      transcription = transcriptionResponse.data.transcription || 'Speech recorded';
+      aiResponse = transcriptionResponse.data.ai_response || 'Thank you for your speech!';
+      pythonApiAvailable = true;
+      console.log('Using transcription from Python API:', transcription);
+      console.log('Using AI response from Python API:', aiResponse);
+    } catch (transcriptionError) {
+      console.error('=== PYTHON API FAILED ===');
+      console.error('Python API call failed:', transcriptionError.message);
+      console.error('Error details:', transcriptionError.response?.data || transcriptionError.code || 'No additional details');
+      console.log('Falling back to basic transcription and response');
+      pythonApiAvailable = false;
+      // Keep the default values
     }
 
     // Generate text-to-speech for the response using macOS 'say'
     let ttsUrl = null;
+    const language = req.body.language || 'en';
     try {
       const ttsFileName = `tts_${Date.now()}.wav`;
       const ttsFilePath = path.join(uploadsDir, ttsFileName);
+      
+      // Choose voice based on language with fallback
+      let ttsVoice = 'Alex'; // Default to English (Alex is more reliable than Flo)
+      if (language === 'es') ttsVoice = 'Monica'; // Spanish voice
+      else if (language === 'hi') ttsVoice = 'Lekha'; // macOS Hindi voice
+      else if (language === 'ja') ttsVoice = 'Otoya'; // macOS Japanese voice
+      
+      // Check if voice is available
+      try {
+        const voiceCheck = await new Promise((resolve, reject) => {
+          exec(`say -v ${ttsVoice} "test"`, (error) => {
+            if (error) reject(error);
+            else resolve();
+          });
+        });
+      } catch (voiceError) {
+        console.log(`Voice ${ttsVoice} not available, using default`);
+        ttsVoice = 'Alex'; // Fallback to Alex
+      }
+      
+      const sayCmd = `say -v ${ttsVoice} -o "${ttsFilePath}" --data-format=LEI16@22050 "${aiResponse.replace(/\"/g, '\\"')}"`;
+      console.log('TTS voice:', ttsVoice);
+      console.log('TTS command:', sayCmd);
+      console.log('TTS text length:', aiResponse.length);
+      
       await new Promise((resolve, reject) => {
-        exec(`say -v Flo -o "${ttsFilePath}" --data-format=LEI16@22050 "${aiResponse.replace(/\"/g, '\\"')}"`, (error) => {
-          if (error) reject(error);
-          else resolve();
+        exec(sayCmd, (error) => {
+          if (error) {
+            console.error('TTS command failed:', error);
+            reject(error);
+          } else {
+            console.log('TTS command completed successfully');
+            resolve();
+          }
         });
       });
-      ttsUrl = `/uploads/${ttsFileName}`;
-      console.log('TTS audio generated at:', ttsUrl);
+      
+      // Check if file was created
+      const fs = require('fs');
+      if (fs.existsSync(ttsFilePath)) {
+        const stats = fs.statSync(ttsFilePath);
+        console.log('TTS file created, size:', stats.size, 'bytes');
+        ttsUrl = `/uploads/${ttsFileName}`;
+        console.log('TTS audio generated at:', ttsUrl);
+      } else {
+        console.error('TTS file was not created');
+        ttsUrl = null;
+      }
     } catch (ttsError) {
-      console.log('TTS not available:', ttsError);
+      console.error('TTS error:', ttsError);
       ttsUrl = null;
     }
 
@@ -284,6 +318,7 @@ app.post('/api/analyze', upload.single('audio'), async (req, res) => {
     global.lastTranscription = transcription;
     global.lastChatHistory = chatHistory;
 
+    console.log('Sending successful response to frontend');
     res.json({
       transcription: transcription,
       aiResponse: aiResponse,
@@ -293,15 +328,18 @@ app.post('/api/analyze', upload.single('audio'), async (req, res) => {
 
   } catch (error) {
     console.error('Analysis error:', error);
+    console.error('Error stack:', error.stack);
     if (error.response) {
       console.error('Error response:', error.response.data);
     }
-    // Simple fallback
-    res.json({
+    // Return error response instead of fallback
+    res.status(500).json({
+      error: 'Error processing audio',
+      details: error.message,
       transcription: 'Speech recorded',
       aiResponse: 'Thank you for your speech! Keep practicing.',
       ttsUrl: null,
-      sessionId: 'offline-session'
+      sessionId: 'error-session'
     });
   }
 });
@@ -331,7 +369,7 @@ app.post('/api/feedback', async (req, res) => {
     // Call Python API for detailed analysis of the most recent recording
     let pythonAnalysis = '';
     try {
-      const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5000';
+      const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5001';
       console.log('Requesting detailed analysis from Python API for most recent recording...');
       
       // Get the last audio file path from global variable
@@ -342,7 +380,8 @@ app.post('/api/feedback', async (req, res) => {
         console.log('Using audio file for detailed analysis:', lastAudioFile);
         const analysisResponse = await axios.post(`${pythonApiUrl}/analyze`, {
           audio_file: lastAudioFile,
-          transcription: lastTranscription
+          transcription: lastTranscription,
+          language: req.body.language || 'en'
         }, {
           headers: { 'Content-Type': 'application/json' },
           timeout: 60000
@@ -371,21 +410,9 @@ ${chatHistory.map(msg => `${msg.sender}: ${msg.text}`).join('\n')}
 
 Provide a comprehensive speech analysis report that includes:
 
-📊 SESSION OVERVIEW
-- Analysis of the most recent speech sample
-- Overall speaking patterns observed
-
-🎯 PRONUNCIATION FEEDBACK
-- Specific sounds or words that need attention
-- Common pronunciation challenges identified
-
-💡 IMPROVEMENT SUGGESTIONS
-- 3-5 specific tips for better pronunciation
-- Practice exercises or techniques
-
-🌟 ENCOURAGEMENT
-- Positive reinforcement
-- Progress acknowledgment
+1. List all mismatched phonemes in the most recent speech.
+2. Using the reference text, MOST IMPORTANT - point out grammar and sentence structure errors
+3. Based on the stresses and hesitations, point out the most important words to work on
 
 Keep the tone encouraging and professional. Format with clear sections and bullet points.`,
       stream: false
@@ -431,75 +458,279 @@ The full analysis pipeline requires Ollama to be running. Please start Ollama fo
   }
 });
 
-// Save session endpoint (commented out for now)
-// app.post('/api/save-session', async (req, res) => {
-//   try {
-//     if (!req.user || !req.user._id) {
-//       return res.status(401).json({ error: 'Not authenticated' });
-//     }
-//     const { chatHistory } = req.body;
-//     if (!chatHistory || !Array.isArray(chatHistory) || chatHistory.length === 0) {
-//       return res.status(400).json({ error: 'No chat history provided' });
-//     }
-//     // Save the session
-//     const session = new AnalysisSession({
-//       userId: req.user._id,
-//       transcription: chatHistory.map(msg => msg.text).join('\n'),
-//       aiResponse: chatHistory.filter(msg => msg.sender === 'AI').map(msg => msg.text).join('\n'),
-//       // audioFile and detailedFeedback can be omitted or set to null
-//     });
-//     await session.save();
-//     res.json({ success: true, sessionId: session._id });
-//   } catch (error) {
-//     console.error('Save session error:', error);
-//     res.status(500).json({ error: 'Failed to save session', details: error.message });
-//   }
-// });
-
-// Google OAuth token verification (commented out for now)
-// app.post('/auth/google/token', async (req, res) => {
-//   try {
-//     const { credential } = req.body;
+// Save session endpoint
+app.post('/api/save-session', async (req, res) => {
+  try {
+    const { userId, chatHistory, language = 'en' } = req.body;
+    if (!userId) {
+      return res.status(401).json({ error: 'User ID required' });
+    }
+    if (!chatHistory || !Array.isArray(chatHistory) || chatHistory.length === 0) {
+      return res.status(400).json({ error: 'No chat history provided' });
+    }
     
-//     const ticket = await googleClient.verifyIdToken({
-//       idToken: credential,
-//       audience: process.env.GOOGLE_CLIENT_ID
-//     });
+    // Save the session
+    const session = await saveSession(userId, chatHistory, language);
+    res.json({ success: true, sessionId: session.id });
+  } catch (error) {
+    console.error('Save session error:', error);
+    res.status(500).json({ error: 'Failed to save session', details: error.message });
+  }
+});
 
-//     const payload = ticket.getPayload();
-//     let user = await User.findOne({ googleId: payload.sub });
+// Get user sessions
+app.get('/api/sessions/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const sessions = await getAllSessions(userId);
+    res.json({ sessions });
+  } catch (error) {
+    console.error('Get sessions error:', error);
+    res.status(500).json({ error: 'Failed to get sessions' });
+  }
+});
+
+// Get latest session
+app.get('/api/sessions/:userId/latest', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const session = await getSession(userId);
+    res.json({ session });
+  } catch (error) {
+    console.error('Get latest session error:', error);
+    res.status(500).json({ error: 'Failed to get latest session' });
+  }
+});
+
+// Google OAuth token verification
+app.post('/auth/google/token', async (req, res) => {
+  try {
+    const { credential } = req.body;
     
-//     if (!user) {
-//       user = new User({
-//         googleId: payload.sub,
-//         email: payload.email,
-//         name: payload.name
-//       });
-//       await user.save();
-//     }
+    // Verify the Google token
+    const ticket = await googleClient.verifyIdToken({
+      idToken: credential,
+      audience: process.env.GOOGLE_CLIENT_ID
+    });
+    
+    const payload = ticket.getPayload();
+    const { sub: googleId, email, name } = payload;
+    
+    let user = await findUserByGoogleId(googleId);
+    
+    if (!user) {
+      user = await createUser({
+        googleId,
+        email,
+        name,
+        role: 'user',
+        onboardingComplete: false
+      });
+    }
+    
+    // Generate JWT token
+    const token = jwt.sign(
+      { userId: user.id, email: user.email, name: user.name },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
 
-//     res.json({ user: user });
-//   } catch (error) {
-//     console.error('Google auth error:', error);
-//     res.status(400).json({ error: 'Invalid credential' });
-//   }
-// });
+    res.json({ user, token });
+  } catch (error) {
+    console.error('Google auth error:', error);
+    res.status(400).json({ error: 'Invalid credential' });
+  }
+});
+
+// Email/password registration
+app.post('/auth/register', async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
+    
+    // Check if user already exists
+    const existingUser = await findUserByEmail(email);
+    if (existingUser) {
+      return res.status(400).json({ error: 'User already exists' });
+    }
+    
+    // Hash password
+    const passwordHash = await bcrypt.hash(password, 10);
+    
+    // Create user
+    const user = await createUser({
+      email,
+      name,
+      passwordHash,
+      role: 'user'
+    });
+    
+    res.json({ user: { id: user.id, name: user.name, email: user.email, role: user.role } });
+  } catch (error) {
+    console.error('Registration error:', error);
+    res.status(500).json({ error: 'Registration failed' });
+  }
+});
+
+// Email/password login with JWT
+app.post('/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    const user = await findUserByEmail(email);
+    if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+    const isValid = await bcrypt.compare(password, user.password_hash);
+    if (!isValid) return res.status(401).json({ error: 'Invalid credentials' });
+    const token = jwt.sign(
+      { userId: user.id, email: user.email, name: user.name },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+    res.json({ token, user: { id: user.id, email: user.email, name: user.name } });
+  } catch (error) {
+    res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+// Onboarding route (protected)
+app.post('/api/user/onboarding', authenticateJWT, async (req, res) => {
+  try {
+    const { language, proficiency, goals, practicePreference, motivation } = req.body;
+    
+    if (!language || !proficiency || !goals || !practicePreference || !motivation) {
+      return res.status(400).json({ error: 'Missing required onboarding fields' });
+    }
+    
+    // Convert goals array to JSON string for storage
+    const goalsJson = JSON.stringify(goals);
+    
+    await updateUser(req.user.userId, {
+      target_language: language,
+      proficiency_level: proficiency,
+      learning_goals: goalsJson,
+      practice_preference: practicePreference,
+      motivation: motivation,
+      onboarding_complete: true
+    });
+    
+    const user = await findUserById(req.user.userId);
+    
+    // Parse goals back to array for frontend
+    if (user.learning_goals) {
+      try {
+        user.learning_goals = JSON.parse(user.learning_goals);
+      } catch (e) {
+        user.learning_goals = [];
+      }
+    }
+    
+    res.json({ user });
+  } catch (error) {
+    console.error('Onboarding error:', error);
+    res.status(500).json({ error: 'Failed to save onboarding' });
+  }
+});
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'healthy', 
     timestamp: new Date().toISOString(),
-    pythonApiUrl: process.env.PYTHON_API_URL || 'http://localhost:5000'
+    pythonApiUrl: process.env.PYTHON_API_URL || 'http://localhost:5001'
   });
+});
+
+// Test TTS endpoint
+app.get('/api/test-tts', async (req, res) => {
+  try {
+    const testText = "Hello, this is a test of text to speech.";
+    const ttsFileName = `test_tts_${Date.now()}.aiff`;
+    const ttsFilePath = path.join(uploadsDir, ttsFileName);
+    
+    const sayCmd = `say -v Alex -o "${ttsFilePath}" "${testText}"`;
+    console.log('Test TTS command:', sayCmd);
+    
+    await new Promise((resolve, reject) => {
+      exec(sayCmd, (error) => {
+        if (error) {
+          console.error('Test TTS command failed:', error);
+          reject(error);
+        } else {
+          console.log('Test TTS command completed successfully');
+          resolve();
+        }
+      });
+    });
+    
+    const fs = require('fs');
+    if (fs.existsSync(ttsFilePath)) {
+      const stats = fs.statSync(ttsFilePath);
+      console.log('Test TTS file created, size:', stats.size, 'bytes');
+      res.json({ 
+        success: true, 
+        ttsUrl: `/uploads/${ttsFileName}`,
+        fileSize: stats.size
+      });
+    } else {
+      res.status(500).json({ error: 'Test TTS file was not created' });
+    }
+  } catch (error) {
+    console.error('Test TTS error:', error);
+    res.status(500).json({ error: 'Test TTS failed', details: error.message });
+  }
+});
+
+// Admin: List all users
+app.get('/api/admin/users', authenticateJWT, async (req, res) => {
+  try {
+    if (!req.user || req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    const users = await getAllUsers();
+    res.json({ users });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+});
+
+// Admin: Promote user to admin
+app.post('/api/admin/promote', authenticateJWT, async (req, res) => {
+  try {
+    if (!req.user || req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email required' });
+    const user = await findUserByEmail(email);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    await updateUser(user.id, { role: 'admin' });
+    res.json({ success: true, message: `${email} promoted to admin.` });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to promote user' });
+  }
+});
+
+// Admin: Demote user to regular user
+app.post('/api/admin/demote', authenticateJWT, async (req, res) => {
+  try {
+    if (!req.user || req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email required' });
+    const user = await findUserByEmail(email);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    await updateUser(user.id, { role: 'user' });
+    res.json({ success: true, message: `${email} demoted to user.` });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to demote user' });
+  }
 });
 
 // Serve uploads directory statically for TTS audio
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
-  console.log(`Python API URL: ${process.env.PYTHON_API_URL || 'http://localhost:5000'}`);
-  console.log('Note: Running without database (MongoDB disabled)');
+  console.log(`Python API URL: ${process.env.PYTHON_API_URL || 'http://localhost:5001'}`);
+  console.log('Note: Using SQLite database for temporary storage');
 }); 
