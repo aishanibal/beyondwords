@@ -3,3 +3,13 @@
 *.wav
 __pycache__/
 venv/
+tts_output/
+audio_files/
+*.aiff
+*.mp3
+*.log
+*.txt
+whisper_words_*.
+archive/opensmile_features/
+archive/mfa_output/
+*.db
