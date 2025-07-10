@@ -12,7 +12,7 @@ from transformers import Wav2Vec2ForCTC, Wav2Vec2Processor
 import librosa
 import numpy as np
 import datetime
-from ollama_client import get_conversational_response, get_detailed_feedback, get_text_suggestions, get_translation, is_ollama_ready
+from gemini_client import get_conversational_response, get_detailed_feedback, get_text_suggestions, get_translation, is_ollama_ready
 
 app = Flask(__name__)
 CORS(app)
