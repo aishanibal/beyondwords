@@ -84,12 +84,17 @@ CONVERSATION FLOW RULES:
 - You can extend conversations not just by asking questions, but also by sharing relatable experiences, comments, or stories, and encouraging the user to share their own thoughts or feelings.
 - Do not offer things you cannot actually give virtually (like food or drinks).
 
-RESPONSE STRUCTURE FOR EVERY TURN:
-- Main Response (in {self.heritage_language}): Use appropriate vocabulary for heritage speakers (level: {self.level}). Full sentences only. Use {self.heritage_language} by default, unless another language is requested. Match the tone and context of the conversation. Use correct verb tenses. Avoid unnecessary code-switching unless contextually or culturally appropriate.
+RESPONSE STRUCTURE:
+- Respond naturally in {self.heritage_language} using appropriate vocabulary for heritage speakers (level: {self.level}).
+- Use full sentences and correct verb tenses. Avoid unnecessary code-switching unless contextually or culturally appropriate.
+- MATCH YOUR RESPONSE LENGTH TO THE USER'S INPUT. If the user gives a short, simple message, respond with a similarly concise response. Do not give long, detailed responses to short inputs. Keep the conversation flow natural and balanced.
+- If the user makes grammar or vocabulary mistakes, gently correct them in {self.feedback_language} after your main response, like a helpful friend would.
 
-CRITICAL: MATCH YOUR RESPONSE LENGTH TO THE USER'S INPUT. If the user gives a short, simple message, respond with a similarly concise response. Do not give long, detailed responses to short inputs. Keep the conversation flow natural and balanced.
-
-- Error Feedback (in {self.feedback_language}): Identify and explain any mistakes the user made. Incorrect grammar, incorrect or unnatural vocabulary, incorrect sentence structure. If the user uses an English or other non-{self.heritage_language} word that has a more natural or common equivalent, gently suggest: "Instead of using 'X', you can sound more fluent if you use 'Y' instead." If there are no errors, just say "Correct."
+CORRECTION STYLE:
+- If there are no errors, don't mention corrections.
+- If there are errors, briefly point them out in {self.feedback_language} after your main response.
+- Be encouraging and specific: "Instead of using 'X', you can sound more fluent if you use 'Y' instead."
+- Keep corrections brief and friendly.
 
 ADDITIONAL BEHAVIOR INSTRUCTIONS:
 - Use {self.feedback_language} for explanations by default unless another language is requested.
@@ -99,13 +104,13 @@ ADDITIONAL BEHAVIOR INSTRUCTIONS:
 QUALITY CONTROL FOR YOUR RESPONSES:
 - Before replying, double-check that your response is grammatically correct and natural, appropriate for the cultural and conversational context, and free from English-influenced sentence structures.
 
-Sample Output Format
-Main Response (in {self.heritage_language}):
-Okay lang ako! Ikaw, kumusta ka?
-Error Feedback (in {self.feedback_language}):
-You said: "Nakita ko sila kahapon sa mall at kain kami sa Jollibee."
-Correction: "kumain kami sa Jollibee"
-Explanation: You used the root verb "kain" instead of the past tense "kumain", which is needed to match the past tense of "nakita ko sila kahapon".
+Example of natural flow:
+User: "Kumusta ka?"
+You: "Okay lang ako! Ikaw, kumusta ka?"
+
+User: "Nakita ko sila kahapon sa mall at kain kami sa Jollibee."
+You: "Ah, kumain kayo sa Jollibee! Anong inorder niyo? 
+(By the way, it should be 'kumain kami' instead of 'kain kami' - 'kumain' is the past tense form.)"
 """
 
     def get_relevant_grammar_rules(self, user_input: str) -> str:
@@ -255,21 +260,15 @@ BASIC GRAMMAR REFERENCE:
             return False
 
     def check_and_fix_response(self, full_response: str, user_input: str) -> str:
-        """Use a second LLM call to check and fix the main response, preserving the full structure."""
+        """Use a second LLM call to check and fix the main response, preserving the natural flow."""
         if not self.model or not GOOGLE_AI_AVAILABLE:
             return full_response
         
-        # Extract the main response part
-        main_response_match = re.search(r'Main Response \(Tagalog\):\s*(.*?)(?:\n\n|$)', full_response, re.DOTALL)
-        if not main_response_match:
-            return full_response
-        
-        main_response = main_response_match.group(1).strip()
-        
+        # Since we're no longer using structured format, we'll check the entire response
         checker_prompt = f"""You are a {self.heritage_language} language expert reviewing a tutor's response for grammar and cultural appropriateness.
 
 USER INPUT: "{user_input}"
-TUTOR'S MAIN RESPONSE: "{main_response}"
+TUTOR'S RESPONSE: "{full_response}"
 
 CHECK AND FIX THESE SPECIFIC ERRORS:
 
@@ -305,25 +304,18 @@ CHECK AND FIX THESE SPECIFIC ERRORS:
 
 IMPORTANT: Only make changes if there are actual errors. If the response is already correct, return it unchanged.
 
-Provide ONLY the corrected main response in Tagalog. Do not include any formatting or labels."""
+Provide ONLY the corrected response in natural conversation format. Do not include any formatting or labels."""
 
         try:
             checker_response = self.model.generate_content(checker_prompt)
             if checker_response and checker_response.text:
-                corrected_main = checker_response.text.strip()
+                corrected_response = checker_response.text.strip()
                 
                 # Debug: Print original vs corrected
-                print(f"\n🔍 DEBUG - Original tutor response: {main_response}")
-                print(f"🔍 DEBUG - Checker corrected to: {corrected_main}")
+                print(f"\n🔍 DEBUG - Original tutor response: {full_response}")
+                print(f"🔍 DEBUG - Checker corrected to: {corrected_response}")
                 
-                # Replace the main response in the full response
-                corrected_full = re.sub(
-                    r'(Main Response \(Tagalog\):\s*).*?(?=\n\n|$)',
-                    r'\1' + corrected_main,
-                    full_response,
-                    flags=re.DOTALL
-                )
-                return corrected_full
+                return corrected_response
             else:
                 return full_response
         except Exception as e:
@@ -395,11 +387,10 @@ Provide ONLY the corrected main response in Tagalog. Do not include any formatti
             return f"⚠️ Google AI not available. Set GOOGLE_API_KEY environment variable."
 
 def extract_main_response(llm_output: str) -> str:
-    """Extract the Main Response (Tagalog) section from the LLM output."""
-    match = re.search(r'Main Response \(Tagalog\):\s*(.*?)(?:\n\n|$)', llm_output, re.DOTALL)
-    if match:
-        return match.group(1).strip()
-    return llm_output.strip()[:200]  # fallback
+    """Extract the main response from the LLM output (no longer using structured format)."""
+    # Since we're now using natural conversation format, just return the full response
+    # The response should be the main conversation without any labels
+    return llm_output.strip()
 
 # Singleton instance for efficiency
 _filipino_tutor_instance = None
