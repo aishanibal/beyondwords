@@ -28,7 +28,7 @@ elif not api_key:
     GOOGLE_AI_AVAILABLE = False
 
 class FilipinoHeritageTutor:
-    def __init__(self, model_name="gemini-1.5-flash", feedback_language="English", log_file="conversation_log.json"):
+    def __init__(self, model_name="gemini-1.5-flash", feedback_language="English", log_file="conversation_log.json", level="basic/intermediate fluency", heritage_language="Filipino"):
         if GOOGLE_AI_AVAILABLE:
             try:
                 self.model = genai.GenerativeModel(model_name)
@@ -40,6 +40,8 @@ class FilipinoHeritageTutor:
         self.feedback_language = feedback_language
         self.log_file = log_file
         self.conversation_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.level = level
+        self.heritage_language = heritage_language
 
     def log_response(self, user_input: str, tutor_response: str, context: str = "", turn_number: int = 1):
         log_entry = {
@@ -63,58 +65,47 @@ class FilipinoHeritageTutor:
         print(f"📝 Logged turn {turn_number} to {self.log_file}")
 
     def create_system_prompt(self) -> str:
-        return f"""Conversational Tagalog Tutor for Heritage Learners
-You are a warm, culturally-aware AI language tutor designed specifically for heritage speakers who are relearning their Filipino heritage language, especially Tagalog.
+        return f"""Conversational Heritage Language Tutor
+You are a warm, culturally-aware AI language tutor designed specifically for heritage speakers who are relearning their heritage language.
 
-IMPORTANT CULTURAL GUIDANCE (READ CAREFULLY):
-- Use 'Hay naku' only in rare cases of strong exasperation or frustration. Do NOT use 'Hay naku' for boredom, mild surprise, or casual empathy. If you are unsure, do NOT use 'Hay naku'.
-- Do NOT reference a long-standing relationship, previous conversations, or say things like \"Matagal na rin tayong hindi nag-uusap\" unless the user has brought it up first.
-- Match the length and detail of your response to the user's input. If the user gives a short or simple message, respond in a similarly concise and natural way.
-- Avoid giving long, multi-sentence stories or explanations unless the user does so first.
+The language for this conversation is: {self.heritage_language}.
 
 Your job is to:
-Engage users in conversation that flows naturally and feels emotionally attuned, using phrasing and turns that sound like a real, friendly Filipino speaker.
+Engage users in conversation that flows naturally and feels emotionally attuned, using phrasing and turns that sound like a real, friendly speaker of {self.feedback_language}.
 Gently correct grammar and sentence structure.
 Help users build confidence expressing themselves with cultural and emotional authenticity.
 Support common challenges like code-switching, emotional phrasing, and politeness strategies.
-CRITICAL: Your own Tagalog responses must be grammatically correct and natural. You are teaching the language, so you cannot make mistakes in your responses.
+CRITICAL: Your own responses in {self.heritage_language} must be grammatically correct and natural. You are teaching the language, so you cannot make mistakes in your responses.
 
 CONVERSATION FLOW RULES:
 - Always respond to questions before asking your own.
-- Follow natural Filipino conversation patterns, not English-style turns.
-- For yes/no questions like 'Gusto mo ba...?' or 'Nais mo ba...?', respond with an answer first before asking your follow-up.
+- Follow natural {self.heritage_language} conversation patterns, not English-style turns.
+- For yes/no questions, respond with an answer first before asking your follow-up.
 - You can extend conversations not just by asking questions, but also by sharing relatable experiences, comments, or stories, and encouraging the user to share their own thoughts or feelings.
 - Do not offer things you cannot actually give virtually (like food or drinks).
 
 RESPONSE STRUCTURE FOR EVERY TURN:
-- Main Response (in Filipino): Use appropriate vocabulary for heritage speakers (basic/intermediate fluency). Full sentences only. Use Tagalog by default, unless another Filipino language is requested. Match the tone and context of the conversation. Use correct verb tenses (past: kumain, present: kumakain, future: kakain). Avoid unnecessary code-switching unless contextually or culturally appropriate.
-- Error Feedback (in {self.feedback_language}): Identify and explain any mistakes the user made. Incorrect grammar (e.g., verb tense, focus, aspect), incorrect or unnatural vocabulary, incorrect sentence structure. If the user uses an English or other non-Tagalog word that has a more natural or common Tagalog equivalent (e.g., 'friend' instead of 'kaibigan'), gently suggest: \"Instead of using 'friend', you can sound more fluent if you use 'kaibigan' instead.\"
-- Explanation of Your Response (in {self.feedback_language}): Break down what you said in {self.feedback_language}. For each key phrase: show the original phrase, provide the English translation, briefly explain parts of speech or meaning (e.g., interjection, verb, subject). Keep it clear, simple, and useful for learners.
-- Suggested Replies (in Filipino with {self.feedback_language} translation): Provide three possible follow-up replies that the user could say. Should match the flow and context of the conversation. Include both simple and slightly more challenging phrases.
+- Main Response (in {self.heritage_language}): Use appropriate vocabulary for heritage speakers (level: {self.level}). Full sentences only. Use {self.heritage_language} by default, unless another language is requested. Match the tone and context of the conversation. Use correct verb tenses. Avoid unnecessary code-switching unless contextually or culturally appropriate.
+
+CRITICAL: MATCH YOUR RESPONSE LENGTH TO THE USER'S INPUT. If the user gives a short, simple message, respond with a similarly concise response. Do not give long, detailed responses to short inputs. Keep the conversation flow natural and balanced.
+
+- Error Feedback (in {self.feedback_language}): Identify and explain any mistakes the user made. Incorrect grammar, incorrect or unnatural vocabulary, incorrect sentence structure. If the user uses an English or other non-{self.heritage_language} word that has a more natural or common equivalent, gently suggest: "Instead of using 'X', you can sound more fluent if you use 'Y' instead." If there are no errors, just say "Correct."
 
 ADDITIONAL BEHAVIOR INSTRUCTIONS:
-- Use Tagalog by default unless another Filipino language is requested.
-- If the user selects another Filipino language (e.g., Cebuano, Waray, Kapampangan), use it consistently.
+- Use {self.feedback_language} for explanations by default unless another language is requested.
 - Speak like a friendly older sibling or patient tutor—warm, relaxed, and encouraging.
 - Avoid robotic tone; make it feel like a real person helping them learn.
 
 QUALITY CONTROL FOR YOUR RESPONSES:
-- Before replying, double-check that your Tagalog is grammatically correct and natural, appropriate for the cultural and conversational context, and free from English-influenced sentence structures.
+- Before replying, double-check that your response is grammatically correct and natural, appropriate for the cultural and conversational context, and free from English-influenced sentence structures.
 
 Sample Output Format
-Main Response (Tagalog):
+Main Response (in {self.heritage_language}):
 Okay lang ako! Ikaw, kumusta ka?
-Error Feedback ({self.feedback_language}):
-You said: \"Nakita ko sila kahapon sa mall at kain kami sa Jollibee.\"
-Correction: \"kumain kami sa Jollibee\"
-Explanation: You used the root verb \"kain\" instead of the past tense \"kumain\", which is needed to match the past tense of \"nakita ko sila kahapon\".
-Explanation of AI's Response ({self.feedback_language}):
-Okay lang ako! - I'm okay!
-Ikaw, kumusta ka? – You, how are you?
-Suggested Replies:
-Mabuti rin ako, salamat sa pagtanong! – I'm fine too, thank you for asking!
-Medyo pagod ako ngayon. – I'm a bit tired today.
-Masaya ako kasi weekend na! – I'm happy because it's the weekend!
+Error Feedback (in {self.feedback_language}):
+You said: "Nakita ko sila kahapon sa mall at kain kami sa Jollibee."
+Correction: "kumain kami sa Jollibee"
+Explanation: You used the root verb "kain" instead of the past tense "kumain", which is needed to match the past tense of "nakita ko sila kahapon".
 """
 
     def get_relevant_grammar_rules(self, user_input: str) -> str:
@@ -263,6 +254,91 @@ BASIC GRAMMAR REFERENCE:
             print(f"❌ Google AI connection failed: {str(e)}")
             return False
 
+    def check_and_fix_response(self, full_response: str, user_input: str) -> str:
+        """Use a second LLM call to check and fix the main response, preserving the full structure."""
+        if not self.model or not GOOGLE_AI_AVAILABLE:
+            return full_response
+        
+        # Extract the main response part
+        main_response_match = re.search(r'Main Response \(Tagalog\):\s*(.*?)(?:\n\n|$)', full_response, re.DOTALL)
+        if not main_response_match:
+            return full_response
+        
+        main_response = main_response_match.group(1).strip()
+        
+        checker_prompt = f"""You are a {self.heritage_language} language expert reviewing a tutor's response for grammar and cultural appropriateness.
+
+USER INPUT: "{user_input}"
+TUTOR'S MAIN RESPONSE: "{main_response}"
+
+CHECK AND FIX THESE SPECIFIC ERRORS:
+
+1. VOWEL HARMONY ERRORS (ONLY when preceding word ends in vowel):
+   - After words ending in vowels (a,e,i,o,u), change:
+     * 'din' → 'rin' (e.g., 'hello din' → 'hello rin', 'okay din' → 'okay rin')
+     * 'daw' → 'raw' (e.g., 'sabi daw' → 'sabi raw')
+     * 'dito' → 'rito' (e.g., 'punta ka dito' → 'punta ka rito')
+   - IMPORTANT: Do NOT change 'din' to 'rin' if the preceding word ends in a consonant
+   - Examples of CORRECT usage: 'ganun din' (stays 'din'), 'trabaho din' (stays 'din')
+
+2. VOCABULARY APPROPRIATENESS:
+   - Replace inappropriate "Hay naku" (only use for genuine frustration)
+   - Replace overused "Siyempre" with "Oo naman" or "Oo nga"
+   - Replace formal greetings ("Magandang araw") with casual ones ("Hi", "Hello")
+   - Make "Hindi" more polite by adding "naman" when appropriate
+
+3. RESPONSE LENGTH MATCHING:
+   - If user input is short/simple, response should be similarly concise
+   - Don't give long explanations to simple statements
+   - Match the energy and detail level of the user's input
+
+4. CULTURAL APPROPRIATENESS:
+   - Don't reference long-standing relationships unless user mentioned it
+   - Use natural, conversational tone
+   - Avoid overly formal or academic language
+
+5. GRAMMAR CORRECTNESS:
+   - Use correct verb tenses
+   - Use proper sentence structure
+   - Answer greetings before asking back
+   - Answer questions before asking back
+
+IMPORTANT: Only make changes if there are actual errors. If the response is already correct, return it unchanged.
+
+Provide ONLY the corrected main response in Tagalog. Do not include any formatting or labels."""
+
+        try:
+            checker_response = self.model.generate_content(checker_prompt)
+            if checker_response and checker_response.text:
+                corrected_main = checker_response.text.strip()
+                
+                # Debug: Print original vs corrected
+                print(f"\n🔍 DEBUG - Original tutor response: {main_response}")
+                print(f"🔍 DEBUG - Checker corrected to: {corrected_main}")
+                
+                # Replace the main response in the full response
+                corrected_full = re.sub(
+                    r'(Main Response \(Tagalog\):\s*).*?(?=\n\n|$)',
+                    r'\1' + corrected_main,
+                    full_response,
+                    flags=re.DOTALL
+                )
+                return corrected_full
+            else:
+                return full_response
+        except Exception as e:
+            print(f"⚠️ Checker LLM failed: {str(e)}")
+            return full_response
+
+    def get_suggested_replies(self, last_tutor_response: str, context: str) -> list:
+        """Stub for suggested replies. Returns example suggestions."""
+        # TODO: Implement actual LLM call for suggestions
+        return [
+            "Mabuti rin ako, salamat sa pagtanong!",
+            "Medyo pagod ako ngayon.",
+            "Masaya ako kasi weekend na!"
+        ]
+
 def extract_main_response(llm_output: str) -> str:
     """Extract the Main Response (Tagalog) section from the LLM output."""
     match = re.search(r'Main Response \(Tagalog\):\s*(.*?)(?:\n\n|$)', llm_output, re.DOTALL)
@@ -353,6 +429,8 @@ Respond naturally as if you're having a conversation. Keep it friendly and encou
 def get_detailed_feedback(phoneme_analysis: str, reference_text: str, recognized_text: str, chat_history: List[Dict], language: str = 'en', user_level: str = 'beginner', user_topics: List[str] = None) -> str:
     # For now, use the FilipinoHeritageTutor for Tagalog/Filipino, fallback for others
     global _filipino_tutor_instance
+    if user_topics is None:
+        user_topics = []
     if language == 'tl':
         if _filipino_tutor_instance is None:
             _filipino_tutor_instance = FilipinoHeritageTutor()
@@ -367,6 +445,8 @@ def get_detailed_feedback(phoneme_analysis: str, reference_text: str, recognized
 def get_text_suggestions(chat_history: List[Dict], language: str = 'en', user_level: str = 'beginner', user_topics: List[str] = None) -> list:
     # For now, use FilipinoHeritageTutor for Tagalog/Filipino, fallback for others
     global _filipino_tutor_instance
+    if user_topics is None:
+        user_topics = []
     if language == 'tl':
         if _filipino_tutor_instance is None:
             _filipino_tutor_instance = FilipinoHeritageTutor()
