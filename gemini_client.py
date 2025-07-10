@@ -273,9 +273,14 @@ def extract_main_response(llm_output: str) -> str:
 # Singleton instance for efficiency
 _filipino_tutor_instance = None
 
-def get_conversational_response(transcription: str, chat_history: List[Dict], language: str = 'en') -> str:
+def get_conversational_response(transcription: str, chat_history: List[Dict], language: str = 'en', user_level: str = 'beginner', user_topics: List[str] = None) -> str:
     """Get conversational response for main chat. Uses FilipinoHeritageTutor for Tagalog/Filipino."""
     global _filipino_tutor_instance
+    
+    # Handle default user_topics
+    if user_topics is None:
+        user_topics = []
+    
     if language == 'tl':  # Tagalog/Filipino
         if _filipino_tutor_instance is None:
             _filipino_tutor_instance = FilipinoHeritageTutor()
@@ -283,8 +288,67 @@ def get_conversational_response(transcription: str, chat_history: List[Dict], la
         context = "\n".join([f"{msg['sender']}: {msg['text']}" for msg in chat_history[-4:]]) if chat_history else ""
         return _filipino_tutor_instance.provide_conversational_response(transcription, context)
     else:
-        # Fallback: just return a simple message or implement other language logic as needed
-        return "[Gemini: Only Tagalog/Filipino ('tl') is supported in this version for the heritage tutor.]"
+        # For other languages, use Gemini directly with similar structure to Ollama
+        if not GOOGLE_AI_AVAILABLE:
+            return "[Gemini: Google AI not available. Please set GOOGLE_API_KEY environment variable.]"
+        
+        try:
+            # Create a temporary model instance for non-Filipino languages
+            model = genai.GenerativeModel("gemini-1.5-flash")
+            
+            # Format chat history for context (last 4 messages)
+            chat_context = ""
+            if chat_history:
+                recent_messages = chat_history[-4:]
+                chat_context = "\n".join([f"{msg['sender']}: {msg['text']}" for msg in recent_messages])
+            
+            # Language-specific instructions
+            language_instruction = ""
+            if language == 'es':
+                language_instruction = "Respond ONLY in Spanish. Do NOT provide any English translation or explanation."
+            elif language == 'hi':
+                language_instruction = "Respond ONLY in Hindi. Do NOT provide any English translation or explanation."
+            elif language == 'ja':
+                language_instruction = "Respond ONLY in Japanese. Do NOT provide any English translation or explanation."
+            
+            # User context for personalization
+            level_context = ""
+            if user_level == 'heritage':
+                level_context = "You're talking to a heritage speaker who understands the language but needs confidence speaking."
+            elif user_level == 'beginner':
+                level_context = "You're talking to a beginner learner. Be encouraging and use simpler vocabulary."
+            elif user_level == 'intermediate':
+                level_context = "You're talking to an intermediate learner. You can use more complex structures."
+            elif user_level == 'advanced':
+                level_context = "You're talking to an advanced learner. Feel free to use complex vocabulary and idioms."
+            
+            topics_context = ""
+            if user_topics:
+                topics_context = f"Their preferred topics to discuss include: {', '.join(user_topics)}. Try to steer conversation toward these topics when appropriate."
+            
+            prompt = f"""You are a helpful speech coach having a conversation. 
+
+{level_context}
+{topics_context}
+
+Previous conversation:
+{chat_context}
+
+The user just said: "{transcription}"
+
+{language_instruction}
+
+Respond naturally as if you're having a conversation. Keep it friendly and encouraging, around 15-25 words. Don't be too formal - just chat naturally! Try to keep the conversation going while considering their experience level and preferred topics."""
+            
+            response = model.generate_content(prompt)
+            if response and response.text:
+                return response.text
+            else:
+                return "Thanks for your speech! Keep practicing."
+                
+        except Exception as e:
+            print(f"Gemini conversational response error: {e}")
+            return "Thanks for your speech! Keep practicing."
 
 def get_detailed_feedback(phoneme_analysis: str, reference_text: str, recognized_text: str, chat_history: List[Dict], language: str = 'en', user_level: str = 'beginner', user_topics: List[str] = None) -> str:
     # For now, use the FilipinoHeritageTutor for Tagalog/Filipino, fallback for others
@@ -322,8 +386,8 @@ def get_translation(text: str, source_language: str = 'auto', target_language: s
     # For now, just return a stub
     return {"translation": "[Gemini: Translation not implemented in this version.]"}
 
-def is_ollama_ready() -> bool:
-    # For compatibility, check Gemini API connection
+def is_gemini_ready() -> bool:
+    # Check Gemini API connection
     global _filipino_tutor_instance
     if _filipino_tutor_instance is None:
         _filipino_tutor_instance = FilipinoHeritageTutor()

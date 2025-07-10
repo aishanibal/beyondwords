@@ -12,7 +12,9 @@ from transformers import Wav2Vec2ForCTC, Wav2Vec2Processor
 import librosa
 import numpy as np
 import datetime
-from gemini_client import get_conversational_response, get_detailed_feedback, get_text_suggestions, get_translation, is_ollama_ready
+from gemini_client import get_conversational_response, get_detailed_feedback, get_text_suggestions, get_translation, is_gemini_ready
+# from dotenv import load_dotenv
+# load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
