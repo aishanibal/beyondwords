@@ -42,10 +42,30 @@ def load_models():
         wav2vec2_models[lang] = Wav2Vec2ForCTC.from_pretrained(model_name)
     print("All models loaded successfully!")
 
-def transcribe_audio(audio_path):
-    """Transcribe audio using Whisper"""
+def get_whisper_language_code(language):
+    """Map application language codes to Whisper-supported language codes"""
+    # Whisper language mapping
+    language_mapping = {
+        'tl': 'tl',  # Tagalog - Whisper supports 'tl' for Tagalog
+        'en': 'en',  # English
+        'es': 'es',  # Spanish
+        'hi': 'hi',  # Hindi
+        'ja': 'ja',  # Japanese
+    }
+    return language_mapping.get(language, None)  # Return None for auto-detection
+
+def transcribe_audio(audio_path, language=None):
+    """Transcribe audio using Whisper with optional language specification"""
     try:
-        result = whisper_model.transcribe(audio_path)
+        whisper_lang = get_whisper_language_code(language) if language else None
+        
+        if whisper_lang:
+            print(f"Using Whisper with language: {whisper_lang} (from app language: {language})")
+            result = whisper_model.transcribe(audio_path, language=whisper_lang)
+        else:
+            print("Using Whisper with auto-detection")
+            result = whisper_model.transcribe(audio_path)
+        
         return result["text"]
     except Exception as e:
         print(f"Whisper transcription error: {e}")
@@ -111,7 +131,11 @@ def analyze_speech_with_wav2vec2(audio_path, reference_text, language='en'):
         
         # Use the proper Wav2Vec2 analysis from wav2vec2.py
         print("Getting reference text using Whisper...")
-        reference_text_whisper = whisper_model.transcribe(audio_path, language=language)["text"].strip().lower()
+        whisper_lang = get_whisper_language_code(language)
+        if whisper_lang:
+            reference_text_whisper = whisper_model.transcribe(audio_path, language=whisper_lang)["text"].strip().lower()
+        else:
+            reference_text_whisper = whisper_model.transcribe(audio_path)["text"].strip().lower()
         print(f"Whisper reference text: {reference_text_whisper}")
 
         print("Transcribing audio with Wav2Vec2...")
@@ -199,7 +223,7 @@ def analyze_speech_with_wav2vec2(audio_path, reference_text, language='en'):
 
 @app.route('/transcribe', methods=['POST'])
 def transcribe():
-    """FAST: Transcribe audio and get quick Ollama response"""
+    """FAST: Transcribe audio and get quick Gemini response"""
     try:
         data = request.get_json()
         audio_file = data.get('audio_file')
@@ -218,12 +242,16 @@ def transcribe():
         
         # Get transcription using Whisper (with language)
         print(f"Calling Whisper with language={language}")
-        transcription = whisper_model.transcribe(audio_file, language=language)["text"]
+        whisper_lang = get_whisper_language_code(language)
+        if whisper_lang:
+            transcription = whisper_model.transcribe(audio_file, language=whisper_lang)["text"]
+        else:
+            transcription = whisper_model.transcribe(audio_file)["text"]
         print(f"Whisper transcription: '{transcription}'")
         
-        print(f"Calling Ollama with language={language}, level={user_level}, goals={user_topics}")
+        print(f"Calling Gemini with language={language}, level={user_level}, goals={user_topics}")
         ai_response = get_conversational_response(transcription, chat_history, language, user_level, user_topics)
-        print(f"Ollama response: '{ai_response}'")
+        print(f"Gemini response: '{ai_response}'")
         
         return jsonify({
             "transcription": transcription,
@@ -255,7 +283,11 @@ def analyze():
         # Use Whisper for reference text if not provided
         if not reference_text:
             print(f"Getting reference text with Whisper (language={language})")
-            reference_text = whisper_model.transcribe(audio_file, language=language)["text"]
+            whisper_lang = get_whisper_language_code(language)
+            if whisper_lang:
+                reference_text = whisper_model.transcribe(audio_file, language=whisper_lang)["text"]
+            else:
+                reference_text = whisper_model.transcribe(audio_file)["text"]
             print(f"Whisper reference text: '{reference_text}'")
         
         # Wav2Vec2 analysis (if supported)
@@ -266,8 +298,8 @@ def analyze():
         user_level = data.get('user_level', 'beginner')
         user_topics = data.get('user_topics', [])
         
-        # Detailed feedback from Ollama
-        print(f"Calling Ollama detailed feedback with language={language}, level={user_level}")
+        # Detailed feedback from Gemini
+        print(f"Calling Gemini detailed feedback with language={language}, level={user_level}")
         feedback = get_detailed_feedback(
             analysis_result.get('analysis', ''),
             reference_text,
@@ -277,7 +309,7 @@ def analyze():
             user_level,
             user_topics
         )
-        print(f"Ollama detailed feedback: '{feedback[:100]}...'")
+        print(f"Gemini detailed feedback: '{feedback[:100]}...'")
         
         return jsonify({
             "transcription": analysis_result.get('transcription', ''),
@@ -330,7 +362,7 @@ def feedback():
         print(f"Last transcription: {last_transcription}")
         print(f"Chat history length: {len(chat_history)}")
 
-        # Call AI client for detailed feedback (scalable for future Gemini integration)
+        # Call AI client for detailed feedback using Gemini
         response = get_detailed_feedback(
             phoneme_analysis="",  # Placeholder for future phoneme analysis
             reference_text="",    # Placeholder for future reference text
@@ -362,7 +394,7 @@ def suggestions():
         print(f"User goals: {user_topics}")
         print(f"Chat history length: {len(chat_history)}")
 
-        # Call AI client for suggestions (scalable for future Gemini integration)
+        # Call AI client for suggestions using Gemini
         suggestions = get_text_suggestions(chat_history, language, user_level, user_topics)
         print(f"Generated {len(suggestions)} suggestions")
         
