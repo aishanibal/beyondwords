@@ -330,14 +330,69 @@ Provide ONLY the corrected main response in Tagalog. Do not include any formatti
             print(f"⚠️ Checker LLM failed: {str(e)}")
             return full_response
 
-    def get_suggested_replies(self, last_tutor_response: str, context: str) -> list:
-        """Stub for suggested replies. Returns example suggestions."""
-        # TODO: Implement actual LLM call for suggestions
-        return [
-            "Mabuti rin ako, salamat sa pagtanong!",
-            "Medyo pagod ako ngayon.",
-            "Masaya ako kasi weekend na!"
-        ]
+    def get_explanation_of_response(self, main_response: str, context: str = "") -> str:
+        """Generate an explanation of the AI's main response (in feedback_language), using conversation context."""
+        prompt = (
+            f"You're helping a heritage speaker of {self.heritage_language} who is relearning the language.\n"
+            f"Below is the conversation context including your most recent response:\n"
+            f"{context}\n\n"
+            f"Explain the response in {self.feedback_language} like a real person would - simple and natural.\n"
+            f"When explaining what a {self.heritage_language} sentence means, don't just translate it.\n"
+            f"Break down the sentence into parts, and explain why each phrase is used — including any nuance, tone, or cultural context (like politeness, typical phrasing, or emotional tone).\n"
+            f"Keep the explanation natural and not too long — just a few short sentences per phrase. Avoid sounding like a textbook. Speak as if you're a friend helping someone understand how real conversations work.\n"
+            f"\n"
+            f"Explain your most recent response in {self.feedback_language} using this exact format:\n"
+            f"---\n"
+            f"\"[Key phrase]\"\n"
+            f"[{self.feedback_language} meaning and cultural explanation]\n"
+            f"\n"
+            f"\"[Another phrase]\"\n"
+            f"[{self.feedback_language} meaning and cultural explanation]\n"
+            f"\n"
+            f"[Continue for each important phrase]\n"
+            f"---\n"
+            f"\n"
+            f"Focus on:\n"
+            f"- What each phrase means in {self.feedback_language}\n"
+            f"- Why you chose that specific wording\n"
+            f"- Cultural context or conversational patterns\n"
+            f"\n"
+            f"Keep explanations conversational and natural, like you're explaining to a friend."
+        )
+        if self.model and GOOGLE_AI_AVAILABLE:
+            try:
+                response = self.model.generate_content(prompt)
+                return response.text
+            except Exception as e:
+                return f"Unable to generate explanation: {str(e)}"
+        else:
+            return f"⚠️ Google AI not available. Set GOOGLE_API_KEY environment variable."
+
+    def get_suggested_replies(self, main_response: str, context: str = "") -> str:
+        """Generate suggested replies (in heritage language with English translation) for the user to continue the conversation, using conversation context."""
+        prompt = (
+            f"You are a {self.heritage_language} language tutor.\n"
+            f"Below is the conversation context including your most recent response:\n"
+            f"{context}\n\n"
+            f"Provide three possible follow-up replies the user could say.\n"
+            f"Use this format:\n"
+            f"---\n"
+            f"Here are some ways you could respond:\n"
+            f"1. [Simple Tagalog phrase] - [English translation]\n"
+            f"2. [Slightly more complex Tagalog] - [English translation]\n"
+            f"3. [Another natural option] - [English translation]\n"
+            f"---\n"
+            f"\n"
+            f"Make them natural, conversational, and appropriate for the context."
+        )
+        if self.model and GOOGLE_AI_AVAILABLE:
+            try:
+                response = self.model.generate_content(prompt)
+                return response.text
+            except Exception as e:
+                return f"Unable to generate suggested replies: {str(e)}"
+        else:
+            return f"⚠️ Google AI not available. Set GOOGLE_API_KEY environment variable."
 
 def extract_main_response(llm_output: str) -> str:
     """Extract the Main Response (Tagalog) section from the LLM output."""
@@ -462,7 +517,9 @@ def get_text_suggestions(chat_history: List[Dict], language: str = 'en', user_le
     else:
         return ["[Gemini: Only Tagalog/Filipino ('tl') is supported for suggestions in this version.]"]
 
-def get_translation(text: str, source_language: str = 'auto', target_language: str = 'en', breakdown: bool = False) -> dict:
+def get_translation(text: str, source_language: str = 'auto', target_language: str = 'en', breakdown: bool = False, user_topics: List[str] = None) -> dict:
+    if user_topics is None:
+        user_topics = []
     # For now, just return a stub
     return {"translation": "[Gemini: Translation not implemented in this version.]"}
 
