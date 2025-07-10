@@ -27,8 +27,17 @@ elif not api_key:
     print("Or run: source ~/.bashrc or source ~/.zshrc if you set it there")
     GOOGLE_AI_AVAILABLE = False
 
-class FilipinoHeritageTutor:
-    def __init__(self, model_name="gemini-1.5-flash", feedback_language="English", log_file="conversation_log.json", level="basic/intermediate fluency", heritage_language="Filipino"):
+# Base class for language tutors
+class LanguageTutor:
+    def __init__(self, language_code: str, language_name: str, model_name="gemini-1.5-flash", feedback_language="English", log_file="conversation_log.json"):
+        self.language_code = language_code
+        self.language_name = language_name
+        self.feedback_language = feedback_language
+        self.log_file = log_file
+        self.conversation_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.user_level = "beginner"
+        self.user_topics = []
+        
         if GOOGLE_AI_AVAILABLE:
             try:
                 self.model = genai.GenerativeModel(model_name)
@@ -37,38 +46,198 @@ class FilipinoHeritageTutor:
                 self.model = None
         else:
             self.model = None
-        self.feedback_language = feedback_language
-        self.log_file = log_file
-        self.conversation_id = datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.level = level
-        self.heritage_language = heritage_language
 
-    def log_response(self, user_input: str, tutor_response: str, context: str = "", turn_number: int = 1):
-        log_entry = {
-            "conversation_id": self.conversation_id,
-            "timestamp": datetime.now().isoformat(),
-            "turn_number": turn_number,
-            "user_input": user_input,
-            "tutor_response": tutor_response,
-            "context": context,
-            "model_used": "gemini-1.5-flash",
-            "feedback_language": self.feedback_language
-        }
+    def get_conversational_response(self, user_input: str, context: str = "") -> str:
+        """Generate a conversational response in the target language."""
+        if not self.model or not GOOGLE_AI_AVAILABLE:
+            return f"⚠️ Google AI not available. Set GOOGLE_API_KEY environment variable."
+        
+        prompt = self._build_conversation_prompt(user_input, context)
+        
         try:
-            with open(self.log_file, 'r', encoding='utf-8') as f:
-                logs = json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError):
-            logs = {"conversations": []}
-        logs["conversations"].append(log_entry)
-        with open(self.log_file, 'w', encoding='utf-8') as f:
-            json.dump(logs, f, indent=2, ensure_ascii=False)
-        print(f"📝 Logged turn {turn_number} to {self.log_file}")
+            response = self.model.generate_content(prompt)
+            if response and response.text:
+                return response.text.strip()
+            else:
+                return "I'm here to help you practice!"
+        except Exception as e:
+            print(f"Error generating conversational response: {e}")
+            return "Let's keep practicing together!"
 
-    def create_system_prompt(self) -> str:
+    def get_detailed_feedback(self, user_input: str, context: str = "") -> str:
+        """Generate detailed feedback about grammar, pronunciation, etc."""
+        if not self.model or not GOOGLE_AI_AVAILABLE:
+            return "⚠️ Google AI not available for feedback."
+        
+        prompt = self._build_feedback_prompt(user_input, context)
+        
+        try:
+            response = self.model.generate_content(prompt)
+            if response and response.text:
+                return response.text.strip()
+            else:
+                return "No corrections needed - great job!"
+        except Exception as e:
+            print(f"Error generating feedback: {e}")
+            return "Keep practicing - you're doing well!"
+
+    def get_suggestions(self, context: str = "") -> list:
+        """Generate suggestions for what the user could say next."""
+        if not self.model or not GOOGLE_AI_AVAILABLE:
+            return [{"text": "Keep practicing!", "translation": "Continue learning!"}]
+        
+        prompt = self._build_suggestions_prompt(context)
+        
+        try:
+            response = self.model.generate_content(prompt)
+            if response and response.text:
+                return self._parse_suggestions(response.text)
+            else:
+                return self._get_fallback_suggestions()
+        except Exception as e:
+            print(f"Error generating suggestions: {e}")
+            return self._get_fallback_suggestions()
+
+    def _build_conversation_prompt(self, user_input: str, context: str) -> str:
+        """Build prompt for conversational response - to be overridden by language-specific classes."""
+        level_guidance = self._get_level_guidance()
+        topics_guidance = self._get_topics_guidance()
+        
+        topic_integration = ""
+        if self.user_topics and len(self.user_topics) > 0:
+            topics_list = ', '.join(self.user_topics)
+            topic_integration = f"""
+TOPIC FOCUS REQUIREMENTS:
+- User wants to practice talking about: {topics_list}
+- Connect your response to these topics whenever contextually appropriate
+- If conversation is generic, gently steer toward their preferred topics
+- Ask questions that encourage vocabulary practice around: {topics_list}"""
+        
+        return f"""You are a helpful {self.language_name} language tutor having a conversation.
+
+{level_guidance}
+{topics_guidance}
+{topic_integration}
+
+Previous conversation:
+{context}
+
+The user just said: "{user_input}"
+
+Respond naturally in {self.language_name}. Keep it friendly and encouraging, around 15-25 words. Try to keep the conversation going while considering their experience level and interests. PRIORITIZE incorporating their preferred topics when appropriate."""
+
+    def _build_feedback_prompt(self, user_input: str, context: str) -> str:
+        """Build prompt for detailed feedback - to be overridden by language-specific classes."""
+        return f"""You are a {self.language_name} language expert providing feedback to a learner.
+
+User's proficiency: {self.user_level}
+User said: "{user_input}"
+Context: {context}
+
+Provide helpful feedback about any grammar, vocabulary, or usage errors in {self.feedback_language}. If there are no errors, say "No corrections needed - great job!" Be encouraging and specific about improvements."""
+
+    def _build_suggestions_prompt(self, context: str) -> str:
+        """Build prompt for suggestions - to be overridden by language-specific classes."""
+        level_guidance = self._get_level_guidance()
+        topics_guidance = self._get_topics_guidance()
+        
+        return f"""You are a {self.language_name} language tutor.
+
+Context: {context}
+{level_guidance}
+{topics_guidance}
+
+Provide three possible follow-up replies the user could say in {self.language_name}.
+Format as:
+[{self.language_name} phrase] - [{self.feedback_language} translation]
+[{self.language_name} phrase] - [{self.feedback_language} translation]  
+[{self.language_name} phrase] - [{self.feedback_language} translation]
+
+Make them natural and appropriate for their level."""
+
+    def _get_level_guidance(self) -> str:
+        """Get guidance text based on user level."""
+        if self.user_level == 'heritage':
+            return "User is a heritage speaker who understands the language but needs confidence speaking. Use natural, everyday expressions."
+        elif self.user_level == 'beginner':
+            return "User is a beginner learner. Use simple vocabulary and basic sentence structures."
+        elif self.user_level == 'intermediate':
+            return "User is an intermediate learner. Use moderately complex structures and vocabulary."
+        elif self.user_level == 'advanced':
+            return "User is an advanced learner. Use complex vocabulary and idiomatic expressions."
+        return ""
+
+    def _get_topics_guidance(self) -> str:
+        """Get guidance text based on user topics."""
+        if self.user_topics and len(self.user_topics) > 0:
+            topics_list = ', '.join(self.user_topics)
+            return f"CRITICAL: User specifically wants to practice discussing: {topics_list}. ALWAYS try to connect conversations and suggestions to these topics. Make this a priority in your responses."
+        return ""
+
+    def _parse_suggestions(self, response_text: str) -> list:
+        """Parse suggestions response into list format."""
+        suggestions = []
+        lines = response_text.split('\n')
+        
+        for line in lines:
+            line = line.strip()
+            if ' - ' in line:
+                clean_line = line.strip('•-1234567890. ')
+                parts = clean_line.split(' - ', 1)
+                if len(parts) == 2:
+                    text = parts[0].strip('[]')
+                    translation = parts[1].strip('[]')
+                    if text and translation:
+                        suggestions.append({"text": text, "translation": translation})
+                        if len(suggestions) >= 3:
+                            break
+        
+        return suggestions if suggestions else self._get_fallback_suggestions()
+
+    def _get_fallback_suggestions(self) -> list:
+        """Get fallback suggestions when AI generation fails."""
+        return [
+            {"text": "Thank you!", "translation": "Thank you!"},
+            {"text": "I understand.", "translation": "I understand."},
+            {"text": "Can you tell me more?", "translation": "Can you tell me more?"}
+        ]
+
+# Tagalog-specific tutor with grammar rules and cultural context
+class TagalogHeritageTutor(LanguageTutor):
+    def __init__(self, model_name="gemini-1.5-flash", feedback_language="English", log_file="conversation_log.json", level="basic/intermediate fluency"):
+        super().__init__("tl", "Tagalog", model_name, feedback_language, log_file)
+        self.user_level = level
+        self.heritage_language = "Tagalog"
+
+    def _build_conversation_prompt(self, user_input: str, context: str) -> str:
+        """Build conversation prompt with Tagalog-specific cultural guidance."""
+        topics_guidance = ""
+        topic_integration_rules = ""
+        
+        if hasattr(self, 'user_topics') and self.user_topics and len(self.user_topics) > 0:
+            topics_list = ', '.join(self.user_topics)
+            topics_guidance = f"\n\nUSER'S PREFERRED TOPICS: {topics_list}"
+            
+            topic_integration_rules = f"""
+TOPIC INTEGRATION REQUIREMENTS:
+- PRIORITY: The user specifically wants to practice talking about: {topics_list}
+- ALWAYS try to connect your response to one of these topics when contextually appropriate
+- If the user's input relates to any of these topics, engage deeply with that topic
+- If the conversation is generic, gently steer it toward their preferred topics
+- Ask questions that encourage them to practice vocabulary related to: {topics_list}
+- Share relatable experiences or comments about these topics to keep conversation flowing
+- Examples of steering: If they say "kumusta ka?", you could respond about your day doing activities related to their topics
+
+TOPIC-SPECIFIC CONVERSATION STARTERS:
+- If user mentions or discusses any of their preferred topics ({topics_list}), expand on it enthusiastically
+- If conversation is running dry, naturally introduce one of their topics
+- Make your responses relevant to their learning goals around these specific subjects"""
+        
         return f"""Conversational Heritage Language Tutor
 You are a warm, culturally-aware AI language tutor designed specifically for heritage speakers who are relearning their heritage language.
 
 The language for this conversation is: {self.heritage_language}.
+User proficiency level: {self.user_level}{topics_guidance}
 
 Your job is to:
 Engage users in conversation that flows naturally and feels emotionally attuned, using phrasing and turns that sound like a real, friendly speaker of {self.feedback_language}.
@@ -76,6 +245,8 @@ Gently correct grammar and sentence structure.
 Help users build confidence expressing themselves with cultural and emotional authenticity.
 Support common challenges like code-switching, emotional phrasing, and politeness strategies.
 CRITICAL: Your own responses in {self.heritage_language} must be grammatically correct and natural. You are teaching the language, so you cannot make mistakes in your responses.
+
+{topic_integration_rules}
 
 CONVERSATION FLOW RULES:
 - Always respond to questions before asking your own.
@@ -85,16 +256,10 @@ CONVERSATION FLOW RULES:
 - Do not offer things you cannot actually give virtually (like food or drinks).
 
 RESPONSE STRUCTURE:
-- Respond naturally in {self.heritage_language} using appropriate vocabulary for heritage speakers (level: {self.level}).
+- Respond naturally in {self.heritage_language} using appropriate vocabulary for heritage speakers (level: {self.user_level}).
 - Use full sentences and correct verb tenses. Avoid unnecessary code-switching unless contextually or culturally appropriate.
 - MATCH YOUR RESPONSE LENGTH TO THE USER'S INPUT. If the user gives a short, simple message, respond with a similarly concise response. Do not give long, detailed responses to short inputs. Keep the conversation flow natural and balanced.
-- If the user makes grammar or vocabulary mistakes, gently correct them in {self.feedback_language} after your main response, like a helpful friend would.
-
-CORRECTION STYLE:
-- If there are no errors, don't mention corrections.
-- If there are errors, briefly point them out in {self.feedback_language} after your main response.
-- Be encouraging and specific: "Instead of using 'X', you can sound more fluent if you use 'Y' instead."
-- Keep corrections brief and friendly.
+- INCORPORATE USER'S PREFERRED TOPICS whenever contextually appropriate.
 
 ADDITIONAL BEHAVIOR INSTRUCTIONS:
 - Use {self.feedback_language} for explanations by default unless another language is requested.
@@ -103,17 +268,107 @@ ADDITIONAL BEHAVIOR INSTRUCTIONS:
 
 QUALITY CONTROL FOR YOUR RESPONSES:
 - Before replying, double-check that your response is grammatically correct and natural, appropriate for the cultural and conversational context, and free from English-influenced sentence structures.
+- Ensure your response connects to user's preferred topics when possible.
 
-Example of natural flow:
-User: "Kumusta ka?"
-You: "Okay lang ako! Ikaw, kumusta ka?"
+Current conversation context:
+{context}
 
-User: "Nakita ko sila kahapon sa mall at kain kami sa Jollibee."
-You: "Ah, kumain kayo sa Jollibee! Anong inorder niyo? 
-(By the way, it should be 'kumain kami' instead of 'kain kami' - 'kumain' is the past tense form.)"
-"""
+The user just said: "{user_input}"
 
-    def get_relevant_grammar_rules(self, user_input: str) -> str:
+Respond naturally in Tagalog following the guidelines above. REMEMBER to incorporate their preferred topics when contextually appropriate."""
+
+    def _build_feedback_prompt(self, user_input: str, context: str) -> str:
+        """Build detailed feedback prompt with Tagalog grammar rules."""
+        grammar_rules = self._get_relevant_grammar_rules(user_input)
+        cultural_guidance = self._get_relevant_cultural_guidance(user_input)
+        
+        return f"""You are a Tagalog language expert reviewing a heritage learner's input for grammar and cultural appropriateness.
+
+USER INPUT: "{user_input}"
+CONTEXT: {context}
+USER LEVEL: {self.user_level}
+
+{grammar_rules}
+
+{cultural_guidance}
+
+CHECK AND PROVIDE FEEDBACK ON:
+
+1. VOWEL HARMONY ERRORS (ONLY when preceding word ends in vowel):
+   - After words ending in vowels (a,e,i,o,u), change:
+     * 'din' → 'rin' (e.g., 'hello din' → 'hello rin', 'okay din' → 'okay rin')
+     * 'daw' → 'raw' (e.g., 'sabi daw' → 'sabi raw')
+     * 'dito' → 'rito' (e.g., 'punta ka dito' → 'punta ka rito')
+   - IMPORTANT: Do NOT change 'din' to 'rin' if the preceding word ends in a consonant
+   - Examples of CORRECT usage: 'ganun din' (stays 'din'), 'trabaho din' (stays 'din')
+
+2. VOCABULARY APPROPRIATENESS:
+   - Replace inappropriate "Hay naku" (only use for genuine frustration)
+   - Replace overused "Siyempre" with "Oo naman" or "Oo nga"
+   - Replace formal greetings ("Magandang araw") with casual ones ("Hi", "Hello")
+   - Make "Hindi" more polite by adding "naman" when appropriate
+
+3. GRAMMAR CORRECTNESS:
+   - Use correct verb tenses
+   - Use proper sentence structure
+   - Answer greetings before asking back
+   - Answer questions before asking back
+
+IMPORTANT: If there are no errors, say "No corrections needed - great job!" 
+If there are errors, be encouraging and specific about improvements.
+Provide feedback in {self.feedback_language}."""
+
+    def _build_suggestions_prompt(self, context: str) -> str:
+        """Build suggestions prompt specifically for Tagalog responses."""
+        level_guidance = self._get_level_guidance()
+        topics_guidance = self._get_topics_guidance()
+        
+        # Enhanced topic integration for suggestions
+        topic_focus = ""
+        if hasattr(self, 'user_topics') and self.user_topics and len(self.user_topics) > 0:
+            topics_list = ', '.join(self.user_topics)
+            topic_focus = f"""
+CRITICAL TOPIC REQUIREMENTS:
+- The user specifically wants to practice discussing: {topics_list}
+- ALL THREE suggestions should relate to or incorporate these topics when possible
+- If the conversation is not about their topics, suggest ways to introduce or transition to these topics
+- Focus suggestions on vocabulary and phrases related to: {topics_list}
+- Make suggestions that will help them practice speaking about their preferred subjects
+- Examples: If topics include 'family', suggest phrases about family members, activities, or questions about family
+- Examples: If topics include 'food', suggest phrases about cooking, eating, restaurants, or asking about food preferences
+
+SUGGESTION PRIORITY ORDER:
+1. First suggestion: Directly related to one of their preferred topics ({topics_list})
+2. Second suggestion: Moderately related or transitional to their topics  
+3. Third suggestion: Natural conversation flow that could lead to their topics"""
+        
+        return f"""You are a Tagalog language tutor providing conversation suggestions.
+Below is the conversation context:
+{context}
+
+USER CONTEXT:
+- Proficiency level: {self.user_level}
+- {level_guidance}
+- {topics_guidance}
+
+{topic_focus}
+
+Provide three possible follow-up replies the user could say to continue the conversation.
+IMPORTANT: Focus suggestions around the user's preferred topics and make them highly relevant to what they want to practice.
+Consider their proficiency level and ensure suggestions help them practice their specific interests.
+
+Use this exact format:
+---
+Here are some ways you could respond:
+[Simple Tagalog phrase] - [English translation]
+[Slightly more complex Tagalog] - [English translation]
+[Another natural option] - [English translation]
+---
+
+Make them natural, conversational, appropriate for their level, and STRONGLY connected to their preferred topics."""
+
+    def _get_relevant_grammar_rules(self, user_input: str) -> str:
+        """Get Tagalog-specific grammar rules relevant to user input."""
         grammar_rules = {
             "dahil": """
 GRAMMAR RULE - "dahil" (because) clauses:
@@ -158,11 +413,10 @@ BASIC GRAMMAR REFERENCE:
         relevant_rules.append(grammar_rules["default"])
         return "\n".join(relevant_rules)
 
-    def get_relevant_cultural_guidance(self, user_input: str) -> str:
+    def _get_relevant_cultural_guidance(self, user_input: str) -> str:
+        """Get Tagalog-specific cultural guidance."""
         notes = []
-        # Example: warn about 'Hay' as a greeting
         notes.append('- Use varied Filipino expressions instead of overusing "Hay naku". Natural options include: "ahh", "ay", "hala", "oo nga", "hindi naman", "ah ganon ba", "naku", "ay naku", "hala naman", "oo naman", "ay oo", "hindi kaya", "ay hindi", "ah talaga", "ay ganon", "hala sige", "oo sige", etc. Choose contextually appropriate expressions.')
-        # Add more checks as needed
         notes.append('- Use "po/opo" for politeness with elders or in formal situations.')
         notes.append('- "Kamusta" is more natural than "kumusta" in casual speech.')
         notes.append('- "Magandang araw" is formal; "Hi" or "Hello" is common among youth.')
@@ -173,374 +427,199 @@ BASIC GRAMMAR REFERENCE:
         notes.append('- Example (Correct): "Ah, ganon ba? Anong ginagawa mo?" or "Ay, ganon pala? Gusto mo magkwentuhan?"')
         return "CULTURAL GUIDANCE:\n" + "\n".join(notes)
 
-    def get_empty_input_response(self) -> str:
-        """Return a robust, maintainable response for empty user input."""
-        return (
-            "Main Response (Tagalog):\nAno yun? Di kita narinig nang maayos.\n\n"
-            "Error Feedback (English):\nYou didn't say anything. Please try again.\n\n"
-            "Explanation of AI's Response (English):\n'Ano yun?' means 'What was that?' and 'Di kita narinig nang maayos.' means 'I didn't hear you clearly.'\n\n"
-            "Suggested Replies (Filipino + English):\nUlitin ko po. – (I will repeat.)\nPasensya na, mahina ang signal. – (Sorry, the signal is weak.)\nNarinig mo ba ako? – (Did you hear me?)\n"
-        )
+    def _get_fallback_suggestions(self) -> list:
+        """Get Tagalog-specific fallback suggestions."""
+        return [
+            {"text": "Salamat sa pagtanong!", "translation": "Thank you for asking!"},
+            {"text": "Gusto ko ring malaman yan.", "translation": "I'd like to know that too."},
+            {"text": "Pwede mo bang ikwento pa?", "translation": "Can you tell me more?"}
+        ]
 
-    def format_context(self, user_input: str, tutor_response: str, context: str) -> str:
-        """Append the latest user and tutor turn to the conversation context."""
-        return f"{context}User: {user_input}\nTutor: {tutor_response}\n"
-
-    def get_grammar_rule_section(self, user_input: str) -> str:
-        """Return grammar rules relevant to the user input."""
-        return self.get_relevant_grammar_rules(user_input)
-
-    def get_cultural_guidance_section(self, user_input: str) -> str:
-        """Return cultural guidance relevant to the user input."""
-        return self.get_relevant_cultural_guidance(user_input)
-
-    def build_prompt(self, user_input: str, context: str) -> str:
-        """Assemble the full prompt for the LLM, including system, grammar, and cultural guidance."""
-        system_prompt = self.create_system_prompt()
-        grammar_ref = self.get_grammar_rule_section(user_input)
-        cultural_guidance = self.get_cultural_guidance_section(user_input)
-        return (
-            f"{system_prompt}\n\n"
-            f"{grammar_ref}\n\n"
-            f"{cultural_guidance}\n\n"
-            f"**CURRENT USER INPUT:** \"{user_input}\"\n"
-            f"**PREVIOUS CONVERSATION:** {context if context else 'Starting a new conversation'}\n\n"
-            "IMPORTANT: The user input above is the CURRENT input you should respond to. Ignore any user inputs in the previous conversation context.\n\n"
-            "Please provide your response following the exact 4-section format specified above."
-        )
-
-    def provide_conversational_response(self, user_input: str, context: str = "", llm_callback=None) -> str:
-        """Generate a conversational response, handling empty input and using the LLM for valid input."""
-        if not user_input or not user_input.strip():
-            return self.get_empty_input_response()
-        
-        prompt = self.build_prompt(user_input, context)
-        
-        if llm_callback:
-            try:
-                response = llm_callback(prompt)
-                return response
-            except Exception as e:
-                return f"Error in generating response: {str(e)}"
-        elif self.model and GOOGLE_AI_AVAILABLE:
-            try:
-                print(f"🤖 Sending request to Gemini... (input length: {len(user_input)} chars)")
-                response = self.model.generate_content(prompt)
-                if response and response.text:
-                    return response.text
-                else:
-                    return "Error: No response received from Gemini"
-            except Exception as e:
-                error_msg = f"Error in generating response: {str(e)}"
-                print(f"❌ {error_msg}")
-                if "500" in str(e):
-                    return f"{error_msg}\n\nThis might be due to:\n- API rate limiting (try again in a few minutes)\n- Temporary Google AI service issues\n- Invalid or expired API key"
-                return error_msg
-        else:
-            return f"⚠️ Google AI not available. Set GOOGLE_API_KEY environment variable."
-
-   
-    def test_api_connection(self) -> bool:
-        """Test if the Google AI API is working properly."""
-        if not self.model or not GOOGLE_AI_AVAILABLE:
-            print("❌ Google AI not available or model not initialized")
-            return False
-        
-        try:
-            print("🧪 Testing Google AI connection...")
-            test_response = self.model.generate_content("Hello, this is a test.")
-            if test_response and test_response.text:
-                print("✅ Google AI connection successful!")
-                return True
-            else:
-                print("❌ No response received from Google AI")
-                return False
-        except Exception as e:
-            print(f"❌ Google AI connection failed: {str(e)}")
-            return False
-
-    def check_and_fix_response(self, full_response: str, user_input: str) -> str:
-        """Use a second LLM call to check and fix the main response, preserving the natural flow."""
-        if not self.model or not GOOGLE_AI_AVAILABLE:
-            return full_response
-        
-        # Since we're no longer using structured format, we'll check the entire response
-        checker_prompt = f"""You are a {self.heritage_language} language expert reviewing a tutor's response for grammar and cultural appropriateness.
-
-USER INPUT: "{user_input}"
-TUTOR'S RESPONSE: "{full_response}"
-
-CHECK AND FIX THESE SPECIFIC ERRORS:
-
-1. VOWEL HARMONY ERRORS (ONLY when preceding word ends in vowel):
-   - After words ending in vowels (a,e,i,o,u), change:
-     * 'din' → 'rin' (e.g., 'hello din' → 'hello rin', 'okay din' → 'okay rin')
-     * 'daw' → 'raw' (e.g., 'sabi daw' → 'sabi raw')
-     * 'dito' → 'rito' (e.g., 'punta ka dito' → 'punta ka rito')
-   - IMPORTANT: Do NOT change 'din' to 'rin' if the preceding word ends in a consonant
-   - Examples of CORRECT usage: 'ganun din' (stays 'din'), 'trabaho din' (stays 'din')
-
-2. VOCABULARY APPROPRIATENESS:
-   - Replace inappropriate "Hay naku" (only use for genuine frustration)
-   - Replace overused "Siyempre" with "Oo naman" or "Oo nga"
-   - Replace formal greetings ("Magandang araw") with casual ones ("Hi", "Hello")
-   - Make "Hindi" more polite by adding "naman" when appropriate
-
-3. RESPONSE LENGTH MATCHING:
-   - If user input is short/simple, response should be similarly concise
-   - Don't give long explanations to simple statements
-   - Match the energy and detail level of the user's input
-
-4. CULTURAL APPROPRIATENESS:
-   - Don't reference long-standing relationships unless user mentioned it
-   - Use natural, conversational tone
-   - Avoid overly formal or academic language
-
-5. GRAMMAR CORRECTNESS:
-   - Use correct verb tenses
-   - Use proper sentence structure
-   - Answer greetings before asking back
-   - Answer questions before asking back
-
-IMPORTANT: Only make changes if there are actual errors. If the response is already correct, return it unchanged.
-
-Provide ONLY the corrected response in natural conversation format. Do not include any formatting or labels."""
-
-        try:
-            checker_response = self.model.generate_content(checker_prompt)
-            if checker_response and checker_response.text:
-                corrected_response = checker_response.text.strip()
-                
-                # Debug: Print original vs corrected
-                print(f"\n🔍 DEBUG - Original tutor response: {full_response}")
-                print(f"🔍 DEBUG - Checker corrected to: {corrected_response}")
-                
-                return corrected_response
-            else:
-                return full_response
-        except Exception as e:
-            print(f"⚠️ Checker LLM failed: {str(e)}")
-            return full_response
-
-    def get_explanation_of_response(self, main_response: str, context: str = "") -> str:
-        """Generate an explanation of the AI's main response (in feedback_language), using conversation context."""
-        prompt = (
-            f"You're helping a heritage speaker of {self.heritage_language} who is relearning the language.\n"
-            f"Below is the conversation context including your most recent response:\n"
-            f"{context}\n\n"
-            f"Explain the response in {self.feedback_language} like a real person would - simple and natural.\n"
-            f"When explaining what a {self.heritage_language} sentence means, don't just translate it.\n"
-            f"Break down the sentence into parts, and explain why each phrase is used — including any nuance, tone, or cultural context (like politeness, typical phrasing, or emotional tone).\n"
-            f"Keep the explanation natural and not too long — just a few short sentences per phrase. Avoid sounding like a textbook. Speak as if you're a friend helping someone understand how real conversations work.\n"
-            f"\n"
-            f"Explain your most recent response in {self.feedback_language} using this exact format:\n"
-            f"---\n"
-            f"\"[Key phrase]\"\n"
-            f"[{self.feedback_language} meaning and cultural explanation]\n"
-            f"\n"
-            f"\"[Another phrase]\"\n"
-            f"[{self.feedback_language} meaning and cultural explanation]\n"
-            f"\n"
-            f"[Continue for each important phrase]\n"
-            f"---\n"
-            f"\n"
-            f"Focus on:\n"
-            f"- What each phrase means in {self.feedback_language}\n"
-            f"- Why you chose that specific wording\n"
-            f"- Cultural context or conversational patterns\n"
-            f"\n"
-            f"Keep explanations conversational and natural, like you're explaining to a friend."
-        )
-        if self.model and GOOGLE_AI_AVAILABLE:
-            try:
-                response = self.model.generate_content(prompt)
-                return response.text
-            except Exception as e:
-                return f"Unable to generate explanation: {str(e)}"
-        else:
-            return f"⚠️ Google AI not available. Set GOOGLE_API_KEY environment variable."
-
-    def get_suggested_replies(self, main_response: str, context: str = "") -> str:
-        """Generate suggested replies (in heritage language with English translation) for the user to continue the conversation, using conversation context."""
-        prompt = (
-            f"You are a {self.heritage_language} language tutor.\n"
-            f"Below is the conversation context including your most recent response:\n"
-            f"{context}\n\n"
-            f"Provide three possible follow-up replies the user could say.\n"
-            f"Use this format:\n"
-            f"---\n"
-            f"Here are some ways you could respond:\n"
-            f"1. [Simple Tagalog phrase] - [English translation]\n"
-            f"2. [Slightly more complex Tagalog] - [English translation]\n"
-            f"3. [Another natural option] - [English translation]\n"
-            f"---\n"
-            f"\n"
-            f"Make them natural, conversational, and appropriate for the context."
-        )
-        if self.model and GOOGLE_AI_AVAILABLE:
-            try:
-                response = self.model.generate_content(prompt)
-                return response.text
-            except Exception as e:
-                return f"Unable to generate suggested replies: {str(e)}"
-        else:
-            return f"⚠️ Google AI not available. Set GOOGLE_API_KEY environment variable."
-
-def extract_main_response(llm_output: str) -> str:
-    """Extract the main response from the LLM output (no longer using structured format)."""
-    # Since we're now using natural conversation format, just return the full response
-    # The response should be the main conversation without any labels
-    return llm_output.strip()
-
-# Singleton instance for efficiency
-_filipino_tutor_instance = None
-
-def get_conversational_response(transcription: str, chat_history: List[Dict], language: str = 'en', user_level: str = 'beginner', user_topics: List[str] = None) -> str:
-    """Get conversational response for main chat. Uses FilipinoHeritageTutor for Tagalog/Filipino."""
-    global _filipino_tutor_instance
-    
-    # Handle default user_topics
+# Factory function to create language-specific tutors
+def create_tutor(language_code: str, user_level: str = 'beginner', user_topics: List[str] = None) -> LanguageTutor:
+    """Create appropriate tutor based on language code."""
     if user_topics is None:
         user_topics = []
     
-    if language == 'tl':  # Tagalog/Filipino
-        if _filipino_tutor_instance is None:
-            _filipino_tutor_instance = FilipinoHeritageTutor()
-        # Build context from last 4 messages
-        context = "\n".join([f"{msg['sender']}: {msg['text']}" for msg in chat_history[-4:]]) if chat_history else ""
-        return _filipino_tutor_instance.provide_conversational_response(transcription, context)
+    if language_code == 'tl':  # Tagalog/Filipino
+        tutor = TagalogHeritageTutor(level=f"{user_level} fluency")
+        tutor.user_level = user_level
+        tutor.user_topics = user_topics
+        return tutor
     else:
-        # For other languages, use Gemini directly with similar structure to Ollama
-        if not GOOGLE_AI_AVAILABLE:
-            return "[Gemini: Google AI not available. Please set GOOGLE_API_KEY environment variable.]"
-        
-        try:
-            # Create a temporary model instance for non-Filipino languages
-            model = genai.GenerativeModel("gemini-1.5-flash")
-            
-            # Format chat history for context (last 4 messages)
-            chat_context = ""
-            if chat_history:
-                recent_messages = chat_history[-4:]
-                chat_context = "\n".join([f"{msg['sender']}: {msg['text']}" for msg in recent_messages])
-            
-            # Language-specific instructions
-            language_instruction = ""
-            if language == 'es':
-                language_instruction = "Respond ONLY in Spanish. Do NOT provide any English translation or explanation."
-            elif language == 'hi':
-                language_instruction = "Respond ONLY in Hindi. Do NOT provide any English translation or explanation."
-            elif language == 'ja':
-                language_instruction = "Respond ONLY in Japanese. Do NOT provide any English translation or explanation."
-            
-            # User context for personalization
-            level_context = ""
-            if user_level == 'heritage':
-                level_context = "You're talking to a heritage speaker who understands the language but needs confidence speaking."
-            elif user_level == 'beginner':
-                level_context = "You're talking to a beginner learner. Be encouraging and use simpler vocabulary."
-            elif user_level == 'intermediate':
-                level_context = "You're talking to an intermediate learner. You can use more complex structures."
-            elif user_level == 'advanced':
-                level_context = "You're talking to an advanced learner. Feel free to use complex vocabulary and idioms."
-            
-            topics_context = ""
-            if user_topics:
-                topics_context = f"Their preferred topics to discuss include: {', '.join(user_topics)}. Try to steer conversation toward these topics when appropriate."
-            
-            prompt = f"""You are a helpful speech coach having a conversation. 
+        # Generic tutor for other languages
+        tutor = LanguageTutor(language_code, get_language_name(language_code))
+        tutor.user_level = user_level
+        tutor.user_topics = user_topics
+        return tutor
 
-{level_context}
-{topics_context}
+def get_language_name(language_code: str) -> str:
+    """Get full language name from code."""
+    language_names = {
+        'en': 'English',
+        'es': 'Spanish', 
+        'hi': 'Hindi',
+        'ja': 'Japanese',
+        'tl': 'Tagalog'
+    }
+    return language_names.get(language_code, language_code.upper())
 
-Previous conversation:
-{chat_context}
+# Global tutor instances for efficiency
+_tutor_instances = {}
 
-The user just said: "{transcription}"
-
-{language_instruction}
-
-Respond naturally as if you're having a conversation. Keep it friendly and encouraging, around 15-25 words. Don't be too formal - just chat naturally! Try to keep the conversation going while considering their experience level and preferred topics."""
-            
-            response = model.generate_content(prompt)
-            if response and response.text:
-                return response.text
-            else:
-                return "Thanks for your speech! Keep practicing."
-                
-        except Exception as e:
-            print(f"Gemini conversational response error: {e}")
-            return "Thanks for your speech! Keep practicing."
+# Main API functions using the modular approach with separate Gemini calls
+def get_conversational_response(transcription: str, chat_history: List[Dict], language: str = 'en', user_level: str = 'beginner', user_topics: List[str] = None) -> str:
+    """Get conversational response using separate Gemini call."""
+    if user_topics is None:
+        user_topics = []
+    
+    # Get or create tutor instance
+    tutor_key = f"{language}_{user_level}_{','.join(sorted(user_topics))}"
+    if tutor_key not in _tutor_instances:
+        _tutor_instances[tutor_key] = create_tutor(language, user_level, user_topics)
+    
+    tutor = _tutor_instances[tutor_key]
+    
+    # Update tutor with current context
+    tutor.user_level = user_level
+    tutor.user_topics = user_topics
+    
+    # Build context from chat history
+    context = "\n".join([f"{msg['sender']}: {msg['text']}" for msg in chat_history[-4:]]) if chat_history else ""
+    
+    # Make separate Gemini call for conversation
+    return tutor.get_conversational_response(transcription, context)
 
 def get_detailed_feedback(phoneme_analysis: str, reference_text: str, recognized_text: str, chat_history: List[Dict], language: str = 'en', user_level: str = 'beginner', user_topics: List[str] = None) -> str:
-    # For now, use the FilipinoHeritageTutor for Tagalog/Filipino, fallback for others
-    global _filipino_tutor_instance
+    """Get detailed feedback using separate Gemini call."""
     if user_topics is None:
         user_topics = []
-    if language == 'tl':
-        if _filipino_tutor_instance is None:
-            _filipino_tutor_instance = FilipinoHeritageTutor()
-        # Use recognized_text as the main input, context from chat_history
-        context = "\n".join([f"{msg['sender']}: {msg['text']}" for msg in chat_history[-4:]]) if chat_history else ""
-        # For now, just return a conversational response as feedback
-        return _filipino_tutor_instance.provide_conversational_response(recognized_text, context)
-    else:
-        # Fallback: return a simple message
-        return "[Gemini: Only Tagalog/Filipino ('tl') is supported for detailed feedback in this version.]"
+    
+    # Get or create tutor instance
+    tutor_key = f"{language}_{user_level}_{','.join(sorted(user_topics))}"
+    if tutor_key not in _tutor_instances:
+        _tutor_instances[tutor_key] = create_tutor(language, user_level, user_topics)
+    
+    tutor = _tutor_instances[tutor_key]
+    
+    # Update tutor with current context
+    tutor.user_level = user_level
+    tutor.user_topics = user_topics
+    
+    # Build context from chat history
+    context = "\n".join([f"{msg['sender']}: {msg['text']}" for msg in chat_history[-4:]]) if chat_history else ""
+    
+    # Make separate Gemini call for feedback
+    return tutor.get_detailed_feedback(recognized_text, context)
 
 def get_text_suggestions(chat_history: List[Dict], language: str = 'en', user_level: str = 'beginner', user_topics: List[str] = None) -> list:
-    # For now, use FilipinoHeritageTutor for Tagalog/Filipino, fallback for others
-    global _filipino_tutor_instance
+    """Get text suggestions using separate Gemini call."""
     if user_topics is None:
         user_topics = []
-    if language == 'tl':
-        if _filipino_tutor_instance is None:
-            _filipino_tutor_instance = FilipinoHeritageTutor()
-        context = "\n".join([f"{msg['sender']}: {msg['text']}" for msg in chat_history[-4:]]) if chat_history else ""
-        # Use the last tutor response as the main response
-        last_tutor_response = chat_history[-1]['text'] if chat_history and chat_history[-1]['sender'] == 'Tutor' else ''
-        suggestions = _filipino_tutor_instance.get_suggested_replies(last_tutor_response, context)
-        # Try to parse suggestions into a list
-        if isinstance(suggestions, str):
-            # Split by lines and filter
-            return [line.strip() for line in suggestions.split('\n') if line.strip()]
-        return suggestions
-    else:
-        return ["[Gemini: Only Tagalog/Filipino ('tl') is supported for suggestions in this version.]"]
+    
+    # Get or create tutor instance
+    tutor_key = f"{language}_{user_level}_{','.join(sorted(user_topics))}"
+    if tutor_key not in _tutor_instances:
+        _tutor_instances[tutor_key] = create_tutor(language, user_level, user_topics)
+    
+    tutor = _tutor_instances[tutor_key]
+    
+    # Update tutor with current context
+    tutor.user_level = user_level
+    tutor.user_topics = user_topics
+    
+    # Build context from chat history
+    context = "\n".join([f"{msg['sender']}: {msg['text']}" for msg in chat_history[-4:]]) if chat_history else ""
+    
+    # Make separate Gemini call for suggestions
+    return tutor.get_suggestions(context)
 
 def get_translation(text: str, source_language: str = 'auto', target_language: str = 'en', breakdown: bool = False, user_topics: List[str] = None) -> dict:
+    """Simple translation function using Gemini."""
     if user_topics is None:
         user_topics = []
-    # For now, just return a stub
-    return {"translation": "[Gemini: Translation not implemented in this version.]"}
+    
+    if not text or not text.strip():
+        return {"translation": "", "breakdown": ""}
+    
+    if not GOOGLE_AI_AVAILABLE:
+        return {"translation": "[Translation unavailable - Google AI not configured]", "breakdown": ""}
+    
+    try:
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        
+        # Build translation prompt
+        if breakdown:
+            prompt = f"""Translate the following text and provide a detailed breakdown:
+
+Text to translate: "{text}"
+Source language: {source_language if source_language != 'auto' else 'detect automatically'}
+Target language: {target_language}
+
+Provide:
+1. Translation: [Direct translation]
+2. Breakdown: [Word-by-word or phrase-by-phrase explanation of key elements]
+
+Format your response exactly as:
+Translation: [your translation here]
+Breakdown: [your breakdown here]"""
+        else:
+            prompt = f"""Translate the following text accurately:
+
+Text: "{text}"
+Source language: {source_language if source_language != 'auto' else 'detect automatically'}  
+Target language: {target_language}
+
+Provide only the translation, no additional explanation."""
+        
+        response = model.generate_content(prompt)
+        
+        if response and response.text:
+            response_text = response.text.strip()
+            
+            if breakdown:
+                # Parse structured response
+                translation = ""
+                breakdown_text = ""
+                
+                lines = response_text.split('\n')
+                for line in lines:
+                    line = line.strip()
+                    if line.startswith('Translation:'):
+                        translation = line.replace('Translation:', '').strip()
+                    elif line.startswith('Breakdown:'):
+                        breakdown_text = line.replace('Breakdown:', '').strip()
+                
+                # If parsing failed, use the whole response as translation
+                if not translation:
+                    translation = response_text
+                
+                return {
+                    "translation": translation,
+                    "breakdown": breakdown_text
+                }
+            else:
+                return {
+                    "translation": response_text,
+                    "breakdown": ""
+                }
+        else:
+            return {"translation": "[Translation failed - no response]", "breakdown": ""}
+            
+    except Exception as e:
+        print(f"Translation error: {e}")
+        return {"translation": f"[Translation error: {str(e)}]", "breakdown": ""}
 
 def is_gemini_ready() -> bool:
-    # Check Gemini API connection
-    global _filipino_tutor_instance
-    if _filipino_tutor_instance is None:
-        _filipino_tutor_instance = FilipinoHeritageTutor()
-    return _filipino_tutor_instance.test_api_connection()
-
-def interactive_terminal_test():
-    tutor = FilipinoHeritageTutor()
-    print("\n=== Filipino Heritage Tutor Interactive Test ===\nType 'quit' or 'exit' to stop early.\n")
+    """Check if Gemini API is available and ready."""
+    if not GOOGLE_AI_AVAILABLE:
+        return False
     
-    # Test API connection first
-    if not tutor.test_api_connection():
-        print("⚠️ API test failed. Please check your GOOGLE_API_KEY and try again.")
-        return
+    try:
+        test_tutor = create_tutor('en')
+        if test_tutor.model:
+            return True
+    except Exception as e:
+        print(f"Gemini readiness check failed: {e}")
     
-    context = ""
-    for turn in range(1, 11):
-        user_input = input(f"\nTurn {turn} - You: ")
-        if user_input.strip().lower() in {"quit", "exit"}:
-            print("Exiting conversation.")
-            break
-        response = tutor.provide_conversational_response(user_input, context)
-        print(f"\nTutor: {response}\n")
-        # Extract only the main response for context
-        main_response = extract_main_response(response)
-        context += f"User: {user_input}\nTutor: {main_response}\n"
-
-if __name__ == "__main__":
-    interactive_terminal_test() 
+    return False

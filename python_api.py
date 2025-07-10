@@ -35,7 +35,7 @@ def load_models():
     """Load sendgnition models"""
     global whisper_model, wav2vec2_processors, wav2vec2_models
     print("Loading Whisper model...")
-    whisper_model = whisper.load_model("base")  # Changed from "large" to "base" for speed
+    whisper_model = whisper.load_model("large")  # Using large model for better Tagalog accuracy
     for lang, model_name in SUPPORTED_WAV2VEC2.items():
         print(f"Loading Wav2Vec2 model for {lang} ({model_name})...")
         wav2vec2_processors[lang] = Wav2Vec2Processor.from_pretrained(model_name)
@@ -383,22 +383,50 @@ def suggestions():
     """Generate 3 contextual text suggestions for what to say next"""
     try:
         data = request.get_json()
+        print(f"=== /suggestions called ===")
+        print(f"Request data: {data}")
+        
+        # Handle both frontend format (conversationId) and direct chat_history
+        conversation_id = data.get('conversationId')
         chat_history = data.get('chat_history', [])
         language = data.get('language', 'en')
         user_level = data.get('user_level', 'beginner')
         user_topics = data.get('user_topics', [])
 
-        print(f"=== /suggestions called ===")
+        # If conversationId is provided but no chat_history, fetch from database
+        if conversation_id and not chat_history:
+            try:
+                conversation_data = getConversationWithMessages(conversation_id)
+                if conversation_data and 'messages' in conversation_data:
+                    # Convert database messages to chat_history format
+                    chat_history = []
+                    for msg in conversation_data['messages']:
+                        chat_history.append({
+                            'sender': 'User' if msg.get('sender') == 'user' else 'Tutor',
+                            'text': msg.get('content', '')
+                        })
+                print(f"Fetched {len(chat_history)} messages from conversation {conversation_id}")
+            except Exception as e:
+                print(f"Error fetching conversation {conversation_id}: {e}")
+                chat_history = []
+
         print(f"Language: {language}")
         print(f"User level: {user_level}")
         print(f"User goals: {user_topics}")
         print(f"Chat history length: {len(chat_history)}")
 
         # Call AI client for suggestions using Gemini
+        print(f"Calling get_text_suggestions with: language={language}, history_len={len(chat_history)}")
         suggestions = get_text_suggestions(chat_history, language, user_level, user_topics)
-        print(f"Generated {len(suggestions)} suggestions")
+        print(f"Generated {len(suggestions)} suggestions: {suggestions}")
         
-        return jsonify({"suggestions": suggestions})
+        # Ensure suggestions is a list and format properly for frontend
+        if not isinstance(suggestions, list):
+            suggestions = [str(suggestions)]
+        
+        response_data = {"suggestions": suggestions}
+        print(f"Returning response: {response_data}")
+        return jsonify(response_data)
     except Exception as e:
         print(f"Suggestions error: {e}")
         return jsonify({"suggestions": [], "error": str(e)}), 500
