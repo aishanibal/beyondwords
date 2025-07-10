@@ -12,7 +12,7 @@ from transformers import Wav2Vec2ForCTC, Wav2Vec2Processor
 import librosa
 import numpy as np
 import datetime
-from ollama_client import get_conversational_response, get_detailed_feedback, is_ollama_ready
+from ollama_client import get_conversational_response, get_detailed_feedback, get_text_suggestions, get_translation, is_ollama_ready
 
 app = Flask(__name__)
 CORS(app)
@@ -33,7 +33,7 @@ def load_models():
     """Load sendgnition models"""
     global whisper_model, wav2vec2_processors, wav2vec2_models
     print("Loading Whisper model...")
-    whisper_model = whisper.load_model("large")
+    whisper_model = whisper.load_model("base")  # Changed from "large" to "base" for speed
     for lang, model_name in SUPPORTED_WAV2VEC2.items():
         print(f"Loading Wav2Vec2 model for {lang} ({model_name})...")
         wav2vec2_processors[lang] = Wav2Vec2Processor.from_pretrained(model_name)
@@ -203,6 +203,8 @@ def transcribe():
         audio_file = data.get('audio_file')
         chat_history = data.get('chat_history', [])
         language = data.get('language', 'en')
+        user_level = data.get('user_level', 'beginner')
+        user_topics = data.get('user_topics', [])
         
         print(f"=== /transcribe called ===")
         print(f"Language received: {language}")
@@ -217,8 +219,8 @@ def transcribe():
         transcription = whisper_model.transcribe(audio_file, language=language)["text"]
         print(f"Whisper transcription: '{transcription}'")
         
-        print(f"Calling Ollama with language={language}")
-        ai_response = get_conversational_response(transcription, chat_history, language)
+        print(f"Calling Ollama with language={language}, level={user_level}, goals={user_topics}")
+        ai_response = get_conversational_response(transcription, chat_history, language, user_level, user_topics)
         print(f"Ollama response: '{ai_response}'")
         
         return jsonify({
@@ -258,14 +260,20 @@ def analyze():
         print(f"Calling Wav2Vec2 analysis with language={language}")
         analysis_result = analyze_speech_with_wav2vec2(audio_file, reference_text, language=language)
         
+        # Get user data for personalized feedback
+        user_level = data.get('user_level', 'beginner')
+        user_topics = data.get('user_topics', [])
+        
         # Detailed feedback from Ollama
-        print(f"Calling Ollama detailed feedback with language={language}")
+        print(f"Calling Ollama detailed feedback with language={language}, level={user_level}")
         feedback = get_detailed_feedback(
             analysis_result.get('analysis', ''),
             reference_text,
             analysis_result.get('transcription', ''),
             chat_history,
-            language
+            language,
+            user_level,
+            user_topics
         )
         print(f"Ollama detailed feedback: '{feedback[:100]}...'")
         
@@ -303,6 +311,91 @@ def health():
             "error": str(e),
             "timestamp": str(datetime.datetime.now())
         }), 500
+
+@app.route('/feedback', methods=['POST'])
+def feedback():
+    """Generate detailed feedback using Ollama, given chat history and last transcription"""
+    try:
+        data = request.get_json()
+        chat_history = data.get('chat_history', [])
+        last_transcription = data.get('last_transcription', '')
+        language = data.get('language', 'en')
+        user_level = data.get('user_level', 'beginner')
+        user_topics = data.get('user_topics', [])
+
+        print(f"=== /feedback called ===")
+        print(f"Language: {language}")
+        print(f"Last transcription: {last_transcription}")
+        print(f"Chat history length: {len(chat_history)}")
+
+        # Call AI client for detailed feedback (scalable for future Gemini integration)
+        response = get_detailed_feedback(
+            phoneme_analysis="",  # Placeholder for future phoneme analysis
+            reference_text="",    # Placeholder for future reference text
+            recognized_text=last_transcription,
+            chat_history=chat_history,
+            language=language,
+            user_level=user_level,
+            user_topics=user_topics
+        )
+        print(f"AI feedback received: {response[:100]}...")
+        return jsonify({"feedback": response})
+    except Exception as e:
+        print(f"Feedback error: {e}")
+        return jsonify({"feedback": "Error generating feedback.", "error": str(e)}), 500
+
+@app.route('/suggestions', methods=['POST'])
+def suggestions():
+    """Generate 3 contextual text suggestions for what to say next"""
+    try:
+        data = request.get_json()
+        chat_history = data.get('chat_history', [])
+        language = data.get('language', 'en')
+        user_level = data.get('user_level', 'beginner')
+        user_topics = data.get('user_topics', [])
+
+        print(f"=== /suggestions called ===")
+        print(f"Language: {language}")
+        print(f"User level: {user_level}")
+        print(f"User goals: {user_topics}")
+        print(f"Chat history length: {len(chat_history)}")
+
+        # Call AI client for suggestions (scalable for future Gemini integration)
+        suggestions = get_text_suggestions(chat_history, language, user_level, user_topics)
+        print(f"Generated {len(suggestions)} suggestions")
+        
+        return jsonify({"suggestions": suggestions})
+    except Exception as e:
+        print(f"Suggestions error: {e}")
+        return jsonify({"suggestions": [], "error": str(e)}), 500
+
+@app.route('/translate', methods=['POST'])
+def translate():
+    """Translate text with optional detailed breakdown"""
+    try:
+        data = request.get_json()
+        text = data.get('text', '')
+        source_language = data.get('source_language', 'auto')
+        target_language = data.get('target_language', 'en')
+        breakdown = data.get('breakdown', False)
+
+        print(f"=== /translate called ===")
+        print(f"Text: {text}")
+        print(f"Source language: {source_language}")
+        print(f"Target language: {target_language}")
+        print(f"Breakdown: {breakdown}")
+
+        if not text:
+            return jsonify({"error": "No text provided"}), 400
+
+        # Call AI client for translation
+        translation_result = get_translation(text, source_language, target_language, breakdown)
+        print(f"Translation result: {translation_result.get('translation', '')}")
+        
+        return jsonify(translation_result)
+    except Exception as e:
+        print(f"Translation error: {e}")
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     print("Starting Python Speech Analysis API...")

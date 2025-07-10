@@ -124,7 +124,16 @@ function Login() {
         <div style={{ position: 'relative', zIndex: 1 }}>
           {/* Header */}
           <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
-            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🗝️</div>
+              <img 
+          src="/favicon/favicon.svg" 
+          alt="BeyondWords Logo" 
+          style={{ 
+            height: '8.2rem', 
+            width: 'auto', 
+            marginRight: 0, 
+            verticalAlign: 'middle' 
+          }} 
+        />
             <h1 style={{
               color: '#3c4c73',
               fontSize: '2.2rem',

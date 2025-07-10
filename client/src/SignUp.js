@@ -60,25 +60,16 @@ function SignUp() {
         password: formData.password
       });
       
-      // Auto-login after successful registration
-      if (response.data.user) {
-        const loginResponse = await API.post('/auth/login', {
-          email: formData.email,
-          password: formData.password
-        });
+      // Registration now returns token directly
+      if (response.data.token && response.data.user) {
+        localStorage.setItem('jwt', response.data.token);
+        setUser(response.data.user);
+        setIsLoading(false);
         
-        if (loginResponse.data.token && loginResponse.data.user) {
-          localStorage.setItem('jwt', loginResponse.data.token);
-          setUser(loginResponse.data.user);
-          setIsLoading(false);
-          
-          // New users always need onboarding
-          navigate('/onboarding');
-        } else {
-          throw new Error('Login response missing token or user');
-        }
+        // New users always need onboarding
+        navigate('/onboarding');
       } else {
-        throw new Error('Registration response missing user');
+        throw new Error('Registration response missing token or user');
       }
       
     } catch (err) {

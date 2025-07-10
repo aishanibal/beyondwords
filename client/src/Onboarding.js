@@ -16,53 +16,80 @@ const LANGUAGES = [
 
 const PROFICIENCY_LEVELS = [
   { 
-    level: 'absolute-beginner', 
-    label: 'Absolute Beginner',
-    description: 'I know very few words or phrases',
+    level: 'beginner', 
+    label: 'Beginner',
+    description: 'I can use simple greetings and a handful of words, but struggle to form sentences.',
     icon: '🌱'
   },
   { 
-    level: 'beginner', 
-    label: 'Beginner',
-    description: 'I can say basic phrases but struggle with conversation',
+    level: 'elementary', 
+    label: 'Elementary',
+    description: 'I can handle basic everyday interactions in short, simple sentences.',
     icon: '🌿'
   },
   { 
     level: 'intermediate', 
     label: 'Intermediate',
-    description: 'I understand well but need practice speaking',
+    description: 'I can discuss familiar topics, understand main points, and ask questions.',
     icon: '🌳'
   },
   { 
     level: 'advanced', 
     label: 'Advanced',
-    description: 'I can hold conversations but want to improve fluency',
+    description: 'I can express detailed ideas, adapt my language, and engage comfortably in conversation.',
     icon: '🏔️'
   },
   { 
-    level: 'heritage', 
-    label: 'Heritage Speaker',
-    description: 'I grew up hearing it but want to speak more confidently',
+    level: 'fluent', 
+    label: 'Fluent',
+    description: 'I speak effortlessly, understand nuances, and participate in complex discussions.',
     icon: '🗝️'
   }
 ];
 
+
+const TALK_TOPICS = [
+  { id: 'family',    label: 'Family and relationships',            icon: '👨‍👩‍👧‍👦' },
+  { id: 'travel',    label: 'Travel experiences and cultures',      icon: '✈️' },
+  { id: 'heritage',  label: 'Cultural heritage and traditions',     icon: '🏛️' },
+  { id: 'business',  label: 'Work and professional life',           icon: '💼' },
+  { id: 'media',     label: 'Movies, music, and media',             icon: '🎬' },
+  { id: 'food',      label: 'Food and cooking',                     icon: '🍽️' },
+  { id: 'hobbies',   label: 'Hobbies and leisure activities',       icon: '🎨' },
+  { id: 'news',      label: 'News and current events',              icon: '📰' },
+  { id: 'sports',    label: 'Sports and fitness',                   icon: '⚽️' }
+];
+
 const LEARNING_GOALS = [
-  { id: 'family', label: 'Talk with family members', icon: '👨‍👩‍👧‍👦' },
-  { id: 'travel', label: 'Travel and communicate abroad', icon: '✈️' },
-  { id: 'heritage', label: 'Connect with my cultural heritage', icon: '🏛️' },
-  { id: 'business', label: 'Professional/business communication', icon: '💼' },
-  { id: 'media', label: 'Understand movies, music, and media', icon: '🎬' },
-  { id: 'confidence', label: 'Build speaking confidence', icon: '💪' },
-  { id: 'pronunciation', label: 'Improve pronunciation and accent', icon: '🗣️' },
-  { id: 'fluency', label: 'Achieve conversational fluency', icon: '💬' }
+  { id: 'confidence',   label: 'Build speaking confidence',        icon: '💪' },
+  { id: 'pronunciation',label: 'Improve pronunciation and accent',icon: '🗣️' },
+  { id: 'fluency',      label: 'Achieve conversational fluency',   icon: '💬' },
+  { id: 'vocabulary',   label: 'Expand vocabulary',                icon: '📚' },
+  { id: 'grammar',      label: 'Master grammar structures',        icon: '🔤' },
+  { id: 'listening',    label: 'Enhance listening comprehension',  icon: '👂' }
 ];
 
 const PRACTICE_PREFERENCES = [
-  { id: 'daily-short', label: '5-10 minutes daily', description: 'Quick daily practice sessions' },
-  { id: 'few-times-week', label: '15-30 minutes, few times a week', description: 'Regular focused sessions' },
-  { id: 'intensive-weekend', label: 'Longer sessions on weekends', description: 'Deep practice when you have time' },
-  { id: 'flexible', label: 'Flexible - when I have time', description: 'Practice as your schedule allows' }
+  { 
+    id: 'daily_short', 
+    label: 'Daily short sessions (5-15 minutes)',
+    description: 'Perfect for busy schedules - quick daily practice with focused exercises'
+  },
+  { 
+    id: 'few_times_week', 
+    label: 'Few times a week (20-30 minutes)',
+    description: 'Balanced approach with deeper practice sessions when you have time'
+  },
+  { 
+    id: 'weekly_long', 
+    label: 'Weekly longer sessions (45+ minutes)',
+    description: 'Intensive practice with comprehensive lessons and conversations'
+  },
+  { 
+    id: 'flexible', 
+    label: 'Flexible scheduling',
+    description: 'Adapt to your schedule - practice when you can, for as long as you want'
+  }
 ];
 
 const API = axios.create({ 
@@ -85,25 +112,34 @@ function Onboarding() {
   const [onboardingData, setOnboardingData] = useState({
     language: '',
     proficiency: '',
-    goals: [],
-    practicePreference: '',
-    motivation: ''
+    talkTopics: [],
+    learningGoals: [],
+    practicePreference: ''
   });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   
-  const totalSteps = 5;
+  const totalSteps = 4;
 
   const updateOnboardingData = (field, value) => {
     setOnboardingData(prev => ({ ...prev, [field]: value }));
   };
 
-  const toggleGoal = (goalId) => {
+  const toggleTalkTopic = (topicId) => {
     setOnboardingData(prev => ({
       ...prev,
-      goals: prev.goals.includes(goalId)
-        ? prev.goals.filter(id => id !== goalId)
-        : [...prev.goals, goalId]
+      talkTopics: prev.talkTopics.includes(topicId)
+        ? prev.talkTopics.filter(id => id !== topicId)
+        : [...prev.talkTopics, topicId]
+    }));
+  };
+
+  const toggleLearningGoal = (goalId) => {
+    setOnboardingData(prev => ({
+      ...prev,
+      learningGoals: prev.learningGoals.includes(goalId)
+        ? prev.learningGoals.filter(id => id !== goalId)
+        : [...prev.learningGoals, goalId]
     }));
   };
 
@@ -125,9 +161,8 @@ function Onboarding() {
     switch (currentStep) {
       case 1: return onboardingData.language !== '';
       case 2: return onboardingData.proficiency !== '';
-      case 3: return onboardingData.goals.length > 0;
+      case 3: return onboardingData.talkTopics.length > 0 && onboardingData.learningGoals.length > 0;
       case 4: return onboardingData.practicePreference !== '';
-      case 5: return onboardingData.motivation.trim() !== '';
       default: return false;
     }
   };
@@ -144,9 +179,8 @@ function Onboarding() {
     switch (currentStep) {
       case 1: return 'Please select a language to learn.';
       case 2: return 'Please select your proficiency level.';
-      case 3: return 'Please select at least one learning goal.';
+      case 3: return 'Please select at least one topic to talk about and one learning goal.';
       case 4: return 'Please select your practice preference.';
-      case 5: return 'Please share what motivates you to learn.';
       default: return 'Please complete this step.';
     }
   };
@@ -164,9 +198,9 @@ function Onboarding() {
       const response = await API.post('/api/user/onboarding', {
         language: onboardingData.language,
         proficiency: onboardingData.proficiency,
-        goals: onboardingData.goals,
-        practicePreference: onboardingData.practicePreference,
-        motivation: onboardingData.motivation
+        talkTopics: onboardingData.talkTopics,
+        learningGoals: onboardingData.learningGoals,
+        practicePreference: onboardingData.practicePreference
       });
       setUser(response.data.user);
       navigate('/dashboard');
@@ -271,32 +305,68 @@ function Onboarding() {
   const renderStep3 = () => (
     <div>
       <h2 style={{ color: '#3c4c73', fontSize: '1.8rem', fontWeight: 700, marginBottom: '1rem', textAlign: 'center' }}>
-        What are your learning goals?
+        What would you like to focus on?
       </h2>
       <p style={{ color: '#7e5a75', textAlign: 'center', marginBottom: '2rem', fontSize: '1rem' }}>
-        Select all that apply - we'll tailor your practice sessions
+        Choose topics you'd like to discuss and skills you want to develop
       </p>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
-        {LEARNING_GOALS.map(goal => (
-          <div
-            key={goal.id}
-            onClick={() => toggleGoal(goal.id)}
-            style={{
-              padding: '1.5rem',
-              borderRadius: '12px',
-              border: `2px solid ${onboardingData.goals.includes(goal.id) ? '#7e5a75' : 'rgba(126,90,117,0.2)'}`,
-              backgroundColor: onboardingData.goals.includes(goal.id) ? 'rgba(126,90,117,0.1)' : '#f8f6f4',
-              cursor: 'pointer',
-              transition: 'all 0.3s ease',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '1rem'
-            }}
-          >
-            <div style={{ fontSize: '1.5rem' }}>{goal.icon}</div>
-            <div style={{ fontWeight: 600, color: '#3c4c73' }}>{goal.label}</div>
-          </div>
-        ))}
+      
+      {/* Talk Topics Section */}
+      <div style={{ marginBottom: '2.5rem' }}>
+        <h3 style={{ color: '#3c4c73', fontSize: '1.3rem', fontWeight: 600, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          💬 Topics I'd like to talk about
+        </h3>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '0.75rem', marginBottom: '1rem' }}>
+          {TALK_TOPICS.map(topic => (
+            <div
+              key={topic.id}
+              onClick={() => toggleTalkTopic(topic.id)}
+              style={{
+                padding: '1rem',
+                borderRadius: '8px',
+                border: `2px solid ${onboardingData.talkTopics.includes(topic.id) ? '#7e5a75' : 'rgba(126,90,117,0.2)'}`,
+                backgroundColor: onboardingData.talkTopics.includes(topic.id) ? 'rgba(126,90,117,0.1)' : '#f8f6f4',
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.75rem'
+              }}
+            >
+              <div style={{ fontSize: '1.2rem' }}>{topic.icon}</div>
+              <div style={{ fontWeight: 500, color: '#3c4c73', fontSize: '0.9rem' }}>{topic.label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Learning Goals Section */}
+      <div>
+        <h3 style={{ color: '#3c4c73', fontSize: '1.3rem', fontWeight: 600, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          🎯 Skills I want to develop
+        </h3>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '0.75rem' }}>
+          {LEARNING_GOALS.map(goal => (
+            <div
+              key={goal.id}
+              onClick={() => toggleLearningGoal(goal.id)}
+              style={{
+                padding: '1rem',
+                borderRadius: '8px',
+                border: `2px solid ${onboardingData.learningGoals.includes(goal.id) ? '#7e5a75' : 'rgba(126,90,117,0.2)'}`,
+                backgroundColor: onboardingData.learningGoals.includes(goal.id) ? 'rgba(126,90,117,0.1)' : '#f8f6f4',
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.75rem'
+              }}
+            >
+              <div style={{ fontSize: '1.2rem' }}>{goal.icon}</div>
+              <div style={{ fontWeight: 500, color: '#3c4c73', fontSize: '0.9rem' }}>{goal.label}</div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -328,40 +398,12 @@ function Onboarding() {
           </div>
         ))}
       </div>
-    </div>
-  );
-
-  const renderStep5 = () => (
-    <div>
-      <h2 style={{ color: '#3c4c73', fontSize: '1.8rem', fontWeight: 700, marginBottom: '1rem', textAlign: 'center' }}>
-        What motivates you to learn?
-      </h2>
-      <p style={{ color: '#7e5a75', textAlign: 'center', marginBottom: '2rem', fontSize: '1rem' }}>
-        Share your personal reason - this helps us create meaningful practice sessions
-      </p>
-      <textarea
-        value={onboardingData.motivation}
-        onChange={(e) => updateOnboardingData('motivation', e.target.value)}
-        placeholder="For example: I want to speak with my grandmother in her native language, or I'm planning to visit my family's homeland..."
-        style={{
-          width: '100%',
-          minHeight: '120px',
-          padding: '1rem',
-          borderRadius: '12px',
-          border: '2px solid rgba(126,90,117,0.2)',
-          backgroundColor: '#f8f6f4',
-          fontSize: '1rem',
-          fontFamily: 'inherit',
-          resize: 'vertical',
-          boxSizing: 'border-box',
-          marginBottom: '2rem'
-        }}
-      />
       <div style={{ 
         background: 'rgba(126,90,117,0.1)', 
         padding: '1.5rem', 
         borderRadius: '12px',
-        textAlign: 'center'
+        textAlign: 'center',
+        marginTop: '2rem'
       }}>
         <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🎉</div>
         <h3 style={{ color: '#3c4c73', marginBottom: '0.5rem' }}>You're all set!</h3>
@@ -371,6 +413,7 @@ function Onboarding() {
       </div>
     </div>
   );
+
 
   return (
     <div style={{
@@ -434,7 +477,6 @@ function Onboarding() {
                 case 2: return renderStep2();
                 case 3: return renderStep3();
                 case 4: return renderStep4();
-                case 5: return renderStep5();
                 default: return <div>Invalid step</div>;
               }
             } catch (err) {

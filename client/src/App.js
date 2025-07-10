@@ -8,6 +8,8 @@ import Login from './Login';
 import SignUp from './SignUp';
 import Onboarding from './Onboarding';
 import Dashboard from './Dashboard';
+import Profile from './Profile';
+import LanguageOnboarding from './LanguageOnboarding';
 import ErrorBoundary from './ErrorBoundary';
 
 // Translucent backgrounds for sections
@@ -30,9 +32,17 @@ API.interceptors.request.use(config => {
 function useUser() { return useContext(UserContext); }
 
 function Logo() {
-  // Placeholder logo: vintage key emoji
   return (
-    <span style={{ fontSize: '2.2rem', marginRight: 12, verticalAlign: 'middle' }} role="img" aria-label="BeyondWords Key">🗝️</span>
+    <img 
+      src="/favicon/favicon.svg" 
+      alt="BeyondWords Logo" 
+      style={{ 
+        height: '4.2rem', 
+        width: 'auto', 
+        marginRight: 12, 
+        verticalAlign: 'middle' 
+      }} 
+    />
   );
 }
 
@@ -92,6 +102,14 @@ function Navbar() {
             {user.name || user.email}
           </span>
         )}
+        {user && <Link to="/profile" style={{ 
+          color: '#7e5a75', 
+          marginRight: 20,
+          textDecoration: 'none',
+          padding: '0.4rem 0.8rem',
+          borderRadius: 8,
+          transition: 'all 0.3s ease'
+        }}>Profile</Link>}
         {user && user.role === 'admin' && <Link to="/admin" style={{ 
           color: '#7e5a75', 
           marginRight: 20,
@@ -769,11 +787,13 @@ function App() {
           <Routes>
             <Route path="/" element={<Landing />} />
             <Route path="/onboarding" element={<Onboarding />} />
+            <Route path="/language-onboarding" element={<RequireAuth><LanguageOnboarding /></RequireAuth>} />
             <Route path="/analyze" element={<RequireAuth requireOnboarding={true}><Analyze /></RequireAuth>} />
             <Route path="/admin" element={<Admin />} />
             <Route path="/login" element={<RedirectToDashboard><Login /></RedirectToDashboard>} />
             <Route path="/signup" element={<RedirectToDashboard><SignUp /></RedirectToDashboard>} />
             <Route path="/dashboard" element={<RequireAuth><Dashboard /></RequireAuth>} />
+            <Route path="/profile" element={<RequireAuth><Profile /></RequireAuth>} />
           </Routes>
         </Router>
         </UserContext.Provider>

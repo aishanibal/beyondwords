@@ -22,7 +22,18 @@ const {
   getSession,
   getAllSessions,
   closeDatabase,
-  getAllUsers
+  getAllUsers,
+  getConversationWithMessages,
+  createConversation,
+  getUserConversations,
+  addMessage,
+  updateConversationTitle,
+  deleteConversation,
+  createLanguageDashboard,
+  getUserLanguageDashboards,
+  getLanguageDashboard,
+  updateLanguageDashboard,
+  deleteLanguageDashboard
 } = require('./database');
 const jwt = require('jsonwebtoken');
 const JWT_SECRET = process.env.JWT_SECRET || 'your_super_secret_key';
@@ -30,7 +41,7 @@ const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 const app = express();
 app.use(express.json());
-app.use(cors({ origin: 'http://localhost:3000', credentials: true }));
+app.use(cors({ origin: 'http://localhost:3000', credentials: false }));
 
 // Multer configuration for file uploads
 const storage = multer.diskStorage({
@@ -170,7 +181,15 @@ app.get('/api/user', authenticateJWT, async (req, res) => {
   try {
     const user = await findUserById(req.user.userId);
     
-    // Parse learning goals from JSON string to array
+    // Parse arrays from JSON strings
+    if (user && user.talk_topics) {
+      try {
+        user.talk_topics = JSON.parse(user.talk_topics);
+      } catch (e) {
+        user.talk_topics = [];
+      }
+    }
+    
     if (user && user.learning_goals) {
       try {
         user.learning_goals = JSON.parse(user.learning_goals);
@@ -190,7 +209,7 @@ app.get('/api/logout', (req, res) => {
 });
 
 // Audio analysis endpoint
-app.post('/api/analyze', upload.single('audio'), async (req, res) => {
+app.post('/api/analyze', authenticateJWT, upload.single('audio'), async (req, res) => {
   try {
     console.log('POST /api/analyze called');
     if (!req.file) {
@@ -214,6 +233,11 @@ app.post('/api/analyze', upload.single('audio'), async (req, res) => {
     }
     global.lastChatHistory = chatHistory; // Optionally store for session continuity
 
+    // Get user data for personalized prompts
+    const user = await findUserById(req.user.userId);
+    const userLevel = user?.proficiency_level || 'beginner';
+    const userTopics = user?.talk_topics ? JSON.parse(user.talk_topics) : [];
+
     // Call Python API for transcription and AI response (using ollama_client)
     const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5001';
     
@@ -229,10 +253,20 @@ app.post('/api/analyze', upload.single('audio'), async (req, res) => {
       console.log('Chat history length:', chatHistory.length);
       console.log('Language:', req.body.language || 'en');
       
+      // Check if audio file exists before sending to Python API
+      const fs = require('fs');
+      if (!fs.existsSync(audioFilePath)) {
+        throw new Error(`Audio file does not exist: ${audioFilePath}`);
+      }
+      const fileStats = fs.statSync(audioFilePath);
+      console.log('Audio file size:', fileStats.size, 'bytes');
+      
       const transcriptionResponse = await axios.post(`${pythonApiUrl}/transcribe`, {
         audio_file: audioFilePath,
         chat_history: chatHistory,
-        language: req.body.language || 'en'
+        language: req.body.language || 'en',
+        user_level: userLevel,
+        user_topics: userTopics
       }, {
         headers: { 'Content-Type': 'application/json' },
         timeout: 30000
@@ -262,8 +296,8 @@ app.post('/api/analyze', upload.single('audio'), async (req, res) => {
       const ttsFilePath = path.join(uploadsDir, ttsFileName);
       
       // Choose voice based on language with fallback
-      let ttsVoice = 'Alex'; // Default to English (Alex is more reliable than Flo)
-      if (language === 'es') ttsVoice = 'Monica'; // Spanish voice
+      let ttsVoice = 'Karen'; // Default to English (Alex is more reliable than Flo)
+      if (language === 'es') ttsVoice = 'Mónica'; // Spanish voice
       else if (language === 'hi') ttsVoice = 'Lekha'; // macOS Hindi voice
       else if (language === 'ja') ttsVoice = 'Otoya'; // macOS Japanese voice
       
@@ -345,116 +379,96 @@ app.post('/api/analyze', upload.single('audio'), async (req, res) => {
 });
 
 // Detailed feedback endpoint
-app.post('/api/feedback', async (req, res) => {
+app.post('/api/feedback', authenticateJWT, async (req, res) => {
   try {
     console.log('POST /api/feedback called');
-    const { chatHistory } = req.body;
-    
-    if (!chatHistory || chatHistory.length === 0) {
-      console.error('No chat history provided');
-      return res.status(400).json({ error: 'No chat history provided' });
+    const { conversationId, language } = req.body;
+    if (!conversationId) {
+      return res.status(400).json({ error: 'No conversation ID provided' });
     }
-
+    // Fetch conversation and messages from DB
+    const conversation = await getConversationWithMessages(conversationId);
+    if (!conversation) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+    const chatHistory = (conversation.messages || []).map(msg => ({
+      sender: msg.sender,
+      text: msg.text,
+      timestamp: msg.created_at
+    }));
     // Get the most recent user message (last recording)
     const userMessages = chatHistory.filter(msg => msg.sender === 'User');
     const lastUserMessage = userMessages[userMessages.length - 1];
-    
     if (!lastUserMessage) {
       return res.status(400).json({ error: 'No user speech found' });
     }
-
-    // Get the most recent transcription
     const lastTranscription = lastUserMessage.text;
+    // Get user data for personalized feedback
+    const user = await findUserById(req.user.userId);
+    const userLevel = user?.proficiency_level || 'beginner';
+    const userTopics = user?.talk_topics ? JSON.parse(user.talk_topics) : [];
     
-    // Call Python API for detailed analysis of the most recent recording
-    let pythonAnalysis = '';
+    // Call Python API for detailed feedback
+    let feedback = '';
     try {
       const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5001';
-      console.log('Requesting detailed analysis from Python API for most recent recording...');
-      
-      // Get the last audio file path from global variable
-      const lastAudioFile = global.lastAudioFile;
-      if (!lastAudioFile) {
-        console.log('No audio file found for detailed analysis');
-      } else {
-        console.log('Using audio file for detailed analysis:', lastAudioFile);
-        const analysisResponse = await axios.post(`${pythonApiUrl}/analyze`, {
-          audio_file: lastAudioFile,
-          transcription: lastTranscription,
-          language: req.body.language || 'en'
-        }, {
-          headers: { 'Content-Type': 'application/json' },
-          timeout: 60000
-        });
-        pythonAnalysis = analysisResponse.data.analysis || '';
-        console.log('Python analysis received:', pythonAnalysis);
-      }
+      const pythonResponse = await axios.post(`${pythonApiUrl}/feedback`, {
+        chat_history: chatHistory,
+        last_transcription: lastTranscription,
+        language: language || conversation.language || 'en',
+        user_level: userLevel,
+        user_topics: userTopics
+      }, {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 120000
+      });
+      feedback = pythonResponse.data.feedback;
+      console.log('Python feedback received.');
     } catch (pythonError) {
-      console.log('Python API not available for detailed analysis:', pythonError.message);
+      console.error('Python API not available for feedback:', pythonError.message);
+      feedback = 'Error: Could not get detailed feedback from Python API.';
     }
-
-    // Use Ollama Slow for detailed feedback
-    console.log('Generating detailed feedback with Ollama Slow...');
-    const ollamaResponse = await axios.post('http://localhost:11434/api/generate', {
-      model: 'llama3.2',
-      prompt: `You are an expert speech coach providing detailed analysis and feedback.
-
-MOST RECENT SPEECH:
-User said: "${lastTranscription}"
-
-TECHNICAL ANALYSIS:
-${pythonAnalysis || 'No technical analysis available'}
-
-CHAT HISTORY CONTEXT:
-${chatHistory.map(msg => `${msg.sender}: ${msg.text}`).join('\n')}
-
-Provide a comprehensive speech analysis report that includes:
-
-1. List all mismatched phonemes in the most recent speech.
-2. Using the reference text, MOST IMPORTANT - point out grammar and sentence structure errors
-3. Based on the stresses and hesitations, point out the most important words to work on
-
-Keep the tone encouraging and professional. Format with clear sections and bullet points.`,
-      stream: false
-    }, {
-      timeout: 60000  // 60 second timeout for detailed analysis
-    });
-
-    const feedback = ollamaResponse.data.response;
-    console.log('Detailed feedback generated with Ollama Slow');
-
-    res.json({ feedback: feedback });
-
+    res.json({ feedback });
   } catch (error) {
     console.error('Feedback error:', error);
-    if (error.response) {
-      console.error('Ollama error response:', error.response.data);
+    res.status(500).json({ error: 'Error getting feedback', details: error.message });
+  }
+});
+
+// Store detailed feedback for a specific message
+app.post('/api/messages/:messageId/feedback', authenticateJWT, async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const { feedback } = req.body;
+    
+    if (!feedback) {
+      return res.status(400).json({ error: 'No feedback provided' });
     }
-    // Fallback response if Ollama is not available
-    if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
-      res.json({
-        feedback: `📊 Detailed Analysis (Offline Mode)
-
-Based on your most recent speech, here's what I can tell you:
-
-🎯 Overall Assessment:
-• Your speech was recorded successfully
-• For detailed pronunciation analysis, please ensure Ollama is running
-
-💡 Tips for Better Analysis:
-• Speak clearly and at a moderate pace
-• Try different phrases and sentences
-• Practice regularly for best results
-
-🔧 Technical Note:
-The full analysis pipeline requires Ollama to be running. Please start Ollama for complete functionality.`
+    
+    console.log('Storing detailed feedback for message:', messageId);
+    
+    // Update the message with detailed feedback
+    const updateSql = `
+      UPDATE messages 
+      SET detailed_feedback = ? 
+      WHERE id = ?
+    `;
+    
+    await new Promise((resolve, reject) => {
+      const { db } = require('./database');
+      db.run(updateSql, [feedback, messageId], function(err) {
+        if (err) {
+          reject(err);
+        } else {
+          resolve({ changes: this.changes });
+        }
       });
-    } else {
-      res.status(500).json({ 
-        error: 'Error getting feedback',
-        details: error.message 
-      });
-    }
+    });
+    
+    res.json({ success: true, message: 'Feedback stored successfully' });
+  } catch (error) {
+    console.error('Store feedback error:', error);
+    res.status(500).json({ error: 'Error storing feedback', details: error.message });
   }
 });
 
@@ -535,7 +549,18 @@ app.post('/auth/google/token', async (req, res) => {
       { expiresIn: '7d' }
     );
 
-    res.json({ user, token });
+    // Ensure user object includes onboarding status
+    const userResponse = {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      onboarding_complete: Boolean(user.onboarding_complete),
+      target_language: user.target_language,
+      proficiency_level: user.proficiency_level
+    };
+
+    res.json({ user: userResponse, token });
   } catch (error) {
     console.error('Google auth error:', error);
     res.status(400).json({ error: 'Invalid credential' });
@@ -564,7 +589,23 @@ app.post('/auth/register', async (req, res) => {
       role: 'user'
     });
     
-    res.json({ user: { id: user.id, name: user.name, email: user.email, role: user.role } });
+    // Generate JWT token for immediate login
+    const token = jwt.sign(
+      { userId: user.id, email: user.email, name: user.name },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+    
+    res.json({ 
+      token,
+      user: { 
+        id: user.id, 
+        name: user.name, 
+        email: user.email, 
+        role: user.role,
+        onboarding_complete: Boolean(user.onboarding_complete)
+      } 
+    });
   } catch (error) {
     console.error('Registration error:', error);
     res.status(500).json({ error: 'Registration failed' });
@@ -576,44 +617,116 @@ app.post('/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
     const user = await findUserByEmail(email);
+    
+    // Check if user exists
     if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+    
+    // Check if user has a password (not a Google-only account)
+    if (!user.password_hash) {
+      return res.status(401).json({ error: 'This email is associated with a Google account. Please sign in with Google.' });
+    }
+    
+    // Verify password
     const isValid = await bcrypt.compare(password, user.password_hash);
     if (!isValid) return res.status(401).json({ error: 'Invalid credentials' });
+    
+    // Generate JWT token
     const token = jwt.sign(
       { userId: user.id, email: user.email, name: user.name },
       JWT_SECRET,
       { expiresIn: '7d' }
     );
-    res.json({ token, user: { id: user.id, email: user.email, name: user.name } });
+    
+    // Return user data including onboarding status
+    res.json({ 
+      token, 
+      user: { 
+        id: user.id, 
+        email: user.email, 
+        name: user.name,
+        role: user.role,
+        onboarding_complete: Boolean(user.onboarding_complete)
+      } 
+    });
   } catch (error) {
+    console.error('Login error:', error);
     res.status(500).json({ error: 'Login failed' });
   }
 });
 
-// Onboarding route (protected)
+// Onboarding route (protected) - Creates first language dashboard
 app.post('/api/user/onboarding', authenticateJWT, async (req, res) => {
   try {
-    const { language, proficiency, goals, practicePreference, motivation } = req.body;
+    console.log('Onboarding request received:', req.body);
+    const { language, proficiency, talkTopics, learningGoals, practicePreference } = req.body;
     
-    if (!language || !proficiency || !goals || !practicePreference || !motivation) {
+    console.log('Extracted fields:', { language, proficiency, talkTopics, learningGoals, practicePreference });
+    
+    if (!language || !proficiency || !talkTopics || !learningGoals || !practicePreference) {
+      console.log('Missing required fields validation failed');
       return res.status(400).json({ error: 'Missing required onboarding fields' });
     }
     
-    // Convert goals array to JSON string for storage
-    const goalsJson = JSON.stringify(goals);
+    // Create the first language dashboard (primary)
+    const dashboard = await createLanguageDashboard(
+      req.user.userId,
+      language,
+      proficiency,
+      talkTopics,
+      learningGoals,
+      practicePreference,
+      true // isPrimary
+    );
     
+    // Update user to mark onboarding as complete
     await updateUser(req.user.userId, {
-      target_language: language,
-      proficiency_level: proficiency,
-      learning_goals: goalsJson,
-      practice_preference: practicePreference,
-      motivation: motivation,
       onboarding_complete: true
     });
     
     const user = await findUserById(req.user.userId);
     
-    // Parse goals back to array for frontend
+    res.json({ 
+      user: {
+        ...user,
+        onboarding_complete: Boolean(user.onboarding_complete)
+      },
+      dashboard 
+    });
+  } catch (error) {
+    console.error('Onboarding error:', error);
+    res.status(500).json({ error: 'Failed to save onboarding' });
+  }
+});
+
+// Profile update route (protected)
+app.put('/api/user/profile', authenticateJWT, async (req, res) => {
+  try {
+    console.log('Profile update request received:', req.body);
+    console.log('User ID from JWT:', req.user.userId);
+    
+    const { name, email } = req.body;
+    
+    // Validate required fields
+    if (!name || !email) {
+      console.log('Validation failed: missing name or email');
+      return res.status(400).json({ error: 'Name and email are required' });
+    }
+    
+    console.log('Updating user with data:', { name, email });
+    
+    // Update user profile (only personal info)
+    await updateUser(req.user.userId, {
+      name,
+      email
+    });
+    
+    console.log('User updated successfully');
+    
+    // Get updated user data
+    const user = await findUserById(req.user.userId);
+    
+    console.log('Retrieved updated user:', user);
+    
     if (user.learning_goals) {
       try {
         user.learning_goals = JSON.parse(user.learning_goals);
@@ -622,10 +735,127 @@ app.post('/api/user/onboarding', authenticateJWT, async (req, res) => {
       }
     }
     
+    console.log('Sending response with user:', user);
     res.json({ user });
   } catch (error) {
-    console.error('Onboarding error:', error);
-    res.status(500).json({ error: 'Failed to save onboarding' });
+    console.error('Profile update error:', error);
+    res.status(500).json({ error: 'Failed to update profile' });
+  }
+});
+
+// Language Dashboard APIs
+
+// Get all language dashboards for a user
+app.get('/api/user/language-dashboards', authenticateJWT, async (req, res) => {
+  try {
+    const dashboards = await getUserLanguageDashboards(req.user.userId);
+    res.json({ dashboards });
+  } catch (error) {
+    console.error('Get language dashboards error:', error);
+    res.status(500).json({ error: 'Failed to get language dashboards' });
+  }
+});
+
+// Get a specific language dashboard
+app.get('/api/user/language-dashboards/:language', authenticateJWT, async (req, res) => {
+  try {
+    const { language } = req.params;
+    const dashboard = await getLanguageDashboard(req.user.userId, language);
+    
+    if (!dashboard) {
+      return res.status(404).json({ error: 'Language dashboard not found' });
+    }
+    
+    res.json({ dashboard });
+  } catch (error) {
+    console.error('Get language dashboard error:', error);
+    res.status(500).json({ error: 'Failed to get language dashboard' });
+  }
+});
+
+// Create a new language dashboard
+app.post('/api/user/language-dashboards', authenticateJWT, async (req, res) => {
+  try {
+    const { language, proficiency, talkTopics, learningGoals, practicePreference } = req.body;
+    
+    if (!language || !proficiency || !talkTopics || !learningGoals || !practicePreference) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+    
+    // Check if user already has a dashboard for this language
+    const existingDashboard = await getLanguageDashboard(req.user.userId, language);
+    if (existingDashboard) {
+      return res.status(409).json({ error: 'Language dashboard already exists' });
+    }
+    
+    // Check if this is the user's first dashboard (make it primary)
+    const existingDashboards = await getUserLanguageDashboards(req.user.userId);
+    const isPrimary = existingDashboards.length === 0;
+    
+    const dashboard = await createLanguageDashboard(
+      req.user.userId,
+      language,
+      proficiency, // This will be used as proficiencyLevel in the database function
+      talkTopics,
+      learningGoals,
+      practicePreference,
+      isPrimary
+    );
+    
+    res.json({ dashboard });
+  } catch (error) {
+    console.error('Create language dashboard error:', error);
+    res.status(500).json({ error: 'Failed to create language dashboard' });
+  }
+});
+
+// Update a language dashboard
+app.put('/api/user/language-dashboards/:language', authenticateJWT, async (req, res) => {
+  try {
+    const { language } = req.params;
+    const updates = req.body;
+    
+    // Check if dashboard exists
+    const existingDashboard = await getLanguageDashboard(req.user.userId, language);
+    if (!existingDashboard) {
+      return res.status(404).json({ error: 'Language dashboard not found' });
+    }
+    
+    await updateLanguageDashboard(req.user.userId, language, updates);
+    
+    // Get updated dashboard
+    const dashboard = await getLanguageDashboard(req.user.userId, language);
+    
+    res.json({ dashboard });
+  } catch (error) {
+    console.error('Update language dashboard error:', error);
+    res.status(500).json({ error: 'Failed to update language dashboard' });
+  }
+});
+
+// Delete a language dashboard
+app.delete('/api/user/language-dashboards/:language', authenticateJWT, async (req, res) => {
+  try {
+    const { language } = req.params;
+    
+    // Check if dashboard exists
+    const existingDashboard = await getLanguageDashboard(req.user.userId, language);
+    if (!existingDashboard) {
+      return res.status(404).json({ error: 'Language dashboard not found' });
+    }
+    
+    // Don't allow deletion of primary dashboard if it's the only one
+    const allDashboards = await getUserLanguageDashboards(req.user.userId);
+    if (existingDashboard.is_primary && allDashboards.length === 1) {
+      return res.status(400).json({ error: 'Cannot delete the only language dashboard' });
+    }
+    
+    await deleteLanguageDashboard(req.user.userId, language);
+    
+    res.json({ message: 'Language dashboard deleted successfully' });
+  } catch (error) {
+    console.error('Delete language dashboard error:', error);
+    res.status(500).json({ error: 'Failed to delete language dashboard' });
   }
 });
 
@@ -722,6 +952,206 @@ app.post('/api/admin/demote', authenticateJWT, async (req, res) => {
     res.json({ success: true, message: `${email} demoted to user.` });
   } catch (error) {
     res.status(500).json({ error: 'Failed to demote user' });
+  }
+});
+
+// Conversation endpoints
+app.post('/api/conversations', authenticateJWT, async (req, res) => {
+  try {
+    console.log('🔄 SERVER: Creating conversation request:', { 
+      userId: req.user.userId, 
+      body: req.body 
+    });
+    
+    const { language, title, topics } = req.body;
+    const conversation = await createConversation(req.user.userId, language, title, topics);
+    
+    console.log('✅ SERVER: Conversation created successfully:', conversation);
+    res.json({ conversation });
+  } catch (error) {
+    console.error('❌ SERVER: Create conversation error:', error);
+    res.status(500).json({ error: 'Failed to create conversation' });
+  }
+});
+
+app.get('/api/conversations', authenticateJWT, async (req, res) => {
+  try {
+    const language = req.query.language;
+    console.log('🔄 SERVER: Getting conversations for user:', req.user.userId, 'language:', language);
+    console.log('🔍 SERVER: Query params:', req.query);
+    const conversations = await getUserConversations(req.user.userId, language);
+    console.log('✅ SERVER: Found conversations:', conversations.length);
+    console.log('📋 SERVER: Conversation details:', conversations.map(c => ({ id: c.id, title: c.title, language: c.language })));
+    res.json({ conversations });
+  } catch (error) {
+    console.error('❌ SERVER: Get conversations error:', error);
+    res.status(500).json({ error: 'Failed to get conversations' });
+  }
+});
+
+app.get('/api/conversations/:id', authenticateJWT, async (req, res) => {
+  try {
+    console.log('🔄 SERVER: Getting conversation:', req.params.id);
+    const conversation = await getConversationWithMessages(req.params.id);
+    if (!conversation) {
+      console.log('❌ SERVER: Conversation not found:', req.params.id);
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+    console.log('✅ SERVER: Conversation loaded with', conversation.messages?.length || 0, 'messages');
+    console.log('📝 SERVER: Conversation details:', {
+      id: conversation.id,
+      title: conversation.title,
+      language: conversation.language,
+      messageCount: conversation.message_count,
+      messagesLength: conversation.messages?.length || 0
+    });
+    if (conversation.messages && conversation.messages.length > 0) {
+      console.log('📋 SERVER: Sample messages:', conversation.messages.slice(0, 2));
+    }
+    res.json({ conversation });
+  } catch (error) {
+    console.error('❌ SERVER: Get conversation error:', error);
+    res.status(500).json({ error: 'Failed to get conversation' });
+  }
+});
+
+app.post('/api/conversations/:id/messages', authenticateJWT, async (req, res) => {
+  try {
+    console.log('🔄 SERVER: Adding message to conversation:', req.params.id);
+    const { sender, text, messageType, audioFilePath, detailedFeedback } = req.body;
+    console.log('📝 SERVER: Message details:', { sender, text: text.substring(0, 50) + '...', messageType });
+    
+    const message = await addMessage(req.params.id, sender, text, messageType, audioFilePath, detailedFeedback);
+    
+    console.log('✅ SERVER: Message added successfully:', message);
+    res.json({ message });
+  } catch (error) {
+    console.error('❌ SERVER: Add message error:', error);
+    res.status(500).json({ error: 'Failed to add message' });
+  }
+});
+
+app.put('/api/conversations/:id/title', authenticateJWT, async (req, res) => {
+  try {
+    const { title } = req.body;
+    const result = await updateConversationTitle(req.params.id, title);
+    res.json({ success: true, changes: result.changes });
+  } catch (error) {
+    console.error('Update conversation title error:', error);
+    res.status(500).json({ error: 'Failed to update conversation title' });
+  }
+});
+
+app.delete('/api/conversations/:id', authenticateJWT, async (req, res) => {
+  try {
+    const result = await deleteConversation(req.params.id);
+    res.json({ success: true, changes: result.changes });
+  } catch (error) {
+    console.error('Delete conversation error:', error);
+    res.status(500).json({ error: 'Failed to delete conversation' });
+  }
+});
+
+// Text suggestions endpoint
+app.post('/api/suggestions', authenticateJWT, async (req, res) => {
+  try {
+    console.log('POST /api/suggestions called');
+    const { conversationId, language } = req.body;
+    
+    // Get user data for personalized suggestions
+    const user = await findUserById(req.user.userId);
+    const userLevel = user?.proficiency_level || 'beginner';
+    const userTopics = user?.talk_topics ? JSON.parse(user.talk_topics) : [];
+    
+    let chatHistory = [];
+    if (conversationId) {
+      // Get conversation history
+      const conversation = await getConversationWithMessages(conversationId);
+      if (conversation) {
+        chatHistory = (conversation.messages || []).map(msg => ({
+          sender: msg.sender,
+          text: msg.text,
+          timestamp: msg.created_at
+        }));
+      }
+    }
+    
+    // Call Python API for suggestions
+    try {
+      const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5001';
+      const pythonResponse = await axios.post(`${pythonApiUrl}/suggestions`, {
+        chat_history: chatHistory,
+        language: language || user.target_language || 'en',
+        user_level: userLevel,
+        user_topics: userTopics
+      }, {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 30000
+      });
+      
+      console.log('Python suggestions received:', pythonResponse.data.suggestions.length);
+      res.json({ suggestions: pythonResponse.data.suggestions });
+    } catch (pythonError) {
+      console.error('Python API not available for suggestions:', pythonError.message);
+      
+      // Fallback suggestions if Python API fails
+      const fallbackSuggestions = [
+        { text: "Hello", translation: "Hello", difficulty: "easy" },
+        { text: "How are you?", translation: "How are you?", difficulty: "easy" },
+        { text: "Thank you", translation: "Thank you", difficulty: "easy" }
+      ];
+      
+      res.json({ suggestions: fallbackSuggestions });
+    }
+  } catch (error) {
+    console.error('Suggestions error:', error);
+    res.status(500).json({ error: 'Error getting suggestions', details: error.message });
+  }
+});
+
+// Translation endpoint
+app.post('/api/translate', authenticateJWT, async (req, res) => {
+  try {
+    console.log('POST /api/translate called');
+    const { text, source_language, target_language, breakdown } = req.body;
+    
+    if (!text) {
+      return res.status(400).json({ error: 'No text provided' });
+    }
+    
+    // Default target language to English if not specified
+    const finalTargetLanguage = target_language || 'en';
+    
+    // Call Python API for translation
+    try {
+      const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5001';
+      const pythonResponse = await axios.post(`${pythonApiUrl}/translate`, {
+        text: text,
+        source_language: source_language || 'auto',
+        target_language: finalTargetLanguage,
+        breakdown: breakdown || false
+      }, {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 30000
+      });
+      
+      console.log('Python translation received');
+      res.json(pythonResponse.data);
+    } catch (pythonError) {
+      console.error('Python API not available for translation:', pythonError.message);
+      
+      // Fallback response if Python API fails
+      res.json({
+        translation: "Translation service temporarily unavailable",
+        source_language: source_language || 'auto',
+        target_language: finalTargetLanguage,
+        has_breakdown: false,
+        error: "Python API not available"
+      });
+    }
+  } catch (error) {
+    console.error('Translation error:', error);
+    res.status(500).json({ error: 'Error getting translation', details: error.message });
   }
 });
 
