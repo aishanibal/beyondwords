@@ -49,10 +49,44 @@ class LanguageTutor:
 
     def get_conversational_response(self, user_input: str, context: str = "") -> str:
         """Generate a conversational response in the target language."""
-        if not self.model or not GOOGLE_AI_AVAILABLE:
-            return f"⚠️ Google AI not available. Set GOOGLE_API_KEY environment variable."
         
-        prompt = self._build_conversation_prompt(user_input, context)
+        topics_guidance = ""
+        topic_integration_rules = ""
+        
+        if hasattr(self, 'user_topics') and self.user_topics and len(self.user_topics) > 0:
+            topics_list = ', '.join(self.user_topics)
+            topics_guidance = f"\n\nUSER'S PREFERRED TOPICS: {topics_list}"
+            
+            topic_integration_rules = f"""
+    TOPIC INTEGRATION:
+    - Connect your response to the user's preferred topics ({topics_list}).
+    - Show enthusiasm and expand when a topic is mentioned.
+    - Gently steer the conversation toward these topics if it becomes generic.
+    - Ask questions that encourage the user to practice vocabulary related to these topics."""
+
+        prompt = f"""Conversational Heritage Language Tutor  
+    You are a warm, culturally-aware AI tutor for a {self.user_level} heritage learner of {self.language_name}.
+
+    Your job is to engage users in natural, emotionally rich conversation that sounds like a real {self.language_name} speaker.
+
+    Follow natural conversation patterns:  
+    - Respond fully to the user's input before asking your own question.  
+    - Share relatable experiences, comments, or stories to deepen connection but do not monopolize the conversation.
+    - Use vocabulary appropriate for a {self.user_level} {self.language_name} speaker.  
+    – If shifting to a preferred topic, use a light, natural bridge that relates to the user's current mood or situation. Do not abruptly bring up the topic.
+    - Your response should be concise: no longer than 10-25 words.
+
+    {self._get_cultural_rules()}
+
+    {topics_guidance}
+    {topic_integration_rules}
+
+    Current conversation context:  
+    {context}
+
+    User just said: "{user_input}"
+
+    Reply naturally in {self.language_name}."""
         
         try:
             response = self.model.generate_content(prompt)
@@ -69,7 +103,36 @@ class LanguageTutor:
         if not self.model or not GOOGLE_AI_AVAILABLE:
             return "⚠️ Google AI not available for feedback."
         
-        prompt = self._build_feedback_prompt(user_input, context)
+        grammar_rules = self._get_grammar_rules(user_input)
+        
+        prompt = f"""
+      
+You are a kind, culturally-aware language tutor helping a heritage speaker improve their {self.language_name}.
+
+Your job is to identify and gently explain any grammar or phrasing mistakes in the user's message. Focus on helping them sound natural and fluent, like a native speaker.
+
+USER INPUT:
+"{user_input}"
+
+{grammar_rules}
+
+YOUR RESPONSE STRUCTURE (use {self.feedback_language} for explanations):
+
+- If the input is correct and natural, simply say:
+"Correct, that sounds great!" or something similar with the same sentiment and length
+
+- If there are errors, follow this format:
+  You said: "..."
+  Correction: "..."
+Explanation: Briefly explain why it was incorrect (e.g., verb tense, word order, unnatural phrasing, incorrect particle, politeness marker, etc.).
+
+TIPS:
+- Be encouraging and specific.
+- Focus on grammar, natural sentence structure, and phrasing that sounds native.
+- If the user used a non-{self.language_name} word that has a better equivalent, suggest a replacement like: "Instead of saying 'X', you'll sound more fluent if you say 'Y'."
+
+Speak like a friendly older sibling or patient tutor. Keep your tone warm, supportive, and helpful.
+"""
         
         try:
             response = self.model.generate_content(prompt)
@@ -86,7 +149,64 @@ class LanguageTutor:
         if not self.model or not GOOGLE_AI_AVAILABLE:
             return [{"text": "Keep practicing!", "translation": "Continue learning!"}]
         
-        prompt = self._build_suggestions_prompt(context)
+        # Get level guidance directly
+        level_guidance = ""
+        if self.user_level == 'beginner':
+            level_guidance = "User is a beginner learner. Use very simple vocabulary and basic sentence structures."
+        elif self.user_level == 'elementary':
+            level_guidance = "User is an elementary learner. Use simple vocabulary and short, clear sentences."
+        elif self.user_level == 'intermediate':
+            level_guidance = "User is an intermediate learner. Use moderately complex structures and vocabulary."
+        elif self.user_level == 'advanced':
+            level_guidance = "User is an advanced learner. Use complex vocabulary and idiomatic expressions."
+        elif self.user_level == 'fluent':
+            level_guidance = "User is fluent. Use natural, native-level expressions and advanced vocabulary."
+        
+        # Get topics guidance directly
+        topics_guidance = ""
+        if self.user_topics and len(self.user_topics) > 0:
+            topics_list = ', '.join(self.user_topics)
+            topics_guidance = f"CRITICAL: User specifically wants to practice discussing: {topics_list}. ALWAYS try to connect conversations and suggestions to these topics. Make this a priority in your responses."
+        
+        topic_focus = ""
+        if hasattr(self, 'user_topics') and self.user_topics and len(self.user_topics) > 0:
+            topics_list = ', '.join(self.user_topics)
+            topic_focus = f"""
+CRITICAL TOPIC REQUIREMENTS:
+- Connect the user's reply to their preferred topics: {topics_list}
+- If any topic has already been mentioned, expand on it with interest or a follow-up question
+- If the current conversation feels generic, gently steer toward one of the user's topics
+- Example (topic: 'food'): Suggest replies about favorite dishes, meals, or asking what the other person likes to eat
+"""
+
+        prompt = f"""
+You are a culturally-aware AI tutor helping a heritage speaker of {self.language_name} continue a natural conversation. Your goal is to generate fluent, emotionally attuned, and topic-relevant replies that help the learner stay engaged and build confidence using the language.
+
+YOUR TASK:  
+The user may not know how to respond to the AI's last message. Suggest 3 natural replies they could use to continue the conversation.  
+Each should directly respond to the AI's most recent message, while sounding realistic, culturally appropriate, and friendly.  
+Help the user stay engaged and gently steer the conversation toward their favorite topics.
+
+Below is the conversation so far:
+{context}
+
+USER INFO:
+- Proficiency level: {self.user_level}
+- {topics_guidance}
+
+{topic_focus}
+IMPORTANT:
+– Use vocabulary and sentence structure appropriate for a {self.user_level} learner.  
+– Each suggestion should be around the same number of words as the user's message (or up to 1.5× longer).  
+
+Use this exact format:
+[Simple {self.language_name} phrase] - [{self.feedback_language} translation]
+[Slightly more complex {self.language_name}] - [{self.feedback_language} translation]
+[Another natural option] - [{self.feedback_language} translation]
+
+– Do NOT use brackets or placeholders. Always use real, specific examples that a native speaker would mention.
+-  Never output [Artist's Name], [Song Title], [Genre], or anything in brackets.
+"""
         
         try:
             response = self.model.generate_content(prompt)
@@ -98,81 +218,9 @@ class LanguageTutor:
             print(f"Error generating suggestions: {e}")
             return self._get_fallback_suggestions()
 
-    def _build_conversation_prompt(self, user_input: str, context: str) -> str:
-        """Build prompt for conversational response - to be overridden by language-specific classes."""
-        level_guidance = self._get_level_guidance()
-        topics_guidance = self._get_topics_guidance()
-        
-        topic_integration = ""
-        if self.user_topics and len(self.user_topics) > 0:
-            topics_list = ', '.join(self.user_topics)
-            topic_integration = f"""
-TOPIC FOCUS REQUIREMENTS:
-- User wants to practice talking about: {topics_list}
-- Connect your response to these topics whenever contextually appropriate
-- If conversation is generic, gently steer toward their preferred topics
-- Ask questions that encourage vocabulary practice around: {topics_list}"""
-        
-        return f"""You are a helpful {self.language_name} language tutor having a conversation.
 
-{level_guidance}
-{topics_guidance}
-{topic_integration}
 
-Previous conversation:
-{context}
 
-The user just said: "{user_input}"
-
-Respond naturally in {self.language_name}. Keep it friendly and encouraging, around 15-25 words. Try to keep the conversation going while considering their experience level and interests. PRIORITIZE incorporating their preferred topics when appropriate."""
-
-    def _build_feedback_prompt(self, user_input: str, context: str) -> str:
-        """Build prompt for detailed feedback - to be overridden by language-specific classes."""
-        return f"""You are a {self.language_name} language expert providing feedback to a learner.
-
-User's proficiency: {self.user_level}
-User said: "{user_input}"
-Context: {context}
-
-Provide helpful feedback about any grammar, vocabulary, or usage errors in {self.feedback_language}. If there are no errors, say "No corrections needed - great job!" Be encouraging and specific about improvements."""
-
-    def _build_suggestions_prompt(self, context: str) -> str:
-        """Build prompt for suggestions - to be overridden by language-specific classes."""
-        level_guidance = self._get_level_guidance()
-        topics_guidance = self._get_topics_guidance()
-        
-        return f"""You are a {self.language_name} language tutor.
-
-Context: {context}
-{level_guidance}
-{topics_guidance}
-
-Provide three possible follow-up replies the user could say in {self.language_name}.
-Format as:
-[{self.language_name} phrase] - [{self.feedback_language} translation]
-[{self.language_name} phrase] - [{self.feedback_language} translation]  
-[{self.language_name} phrase] - [{self.feedback_language} translation]
-
-Make them natural and appropriate for their level."""
-
-    def _get_level_guidance(self) -> str:
-        """Get guidance text based on user level."""
-        if self.user_level == 'heritage':
-            return "User is a heritage speaker who understands the language but needs confidence speaking. Use natural, everyday expressions."
-        elif self.user_level == 'beginner':
-            return "User is a beginner learner. Use simple vocabulary and basic sentence structures."
-        elif self.user_level == 'intermediate':
-            return "User is an intermediate learner. Use moderately complex structures and vocabulary."
-        elif self.user_level == 'advanced':
-            return "User is an advanced learner. Use complex vocabulary and idiomatic expressions."
-        return ""
-
-    def _get_topics_guidance(self) -> str:
-        """Get guidance text based on user topics."""
-        if self.user_topics and len(self.user_topics) > 0:
-            topics_list = ', '.join(self.user_topics)
-            return f"CRITICAL: User specifically wants to practice discussing: {topics_list}. ALWAYS try to connect conversations and suggestions to these topics. Make this a priority in your responses."
-        return ""
 
     def _parse_suggestions(self, response_text: str) -> list:
         """Parse suggestions response into list format."""
@@ -202,6 +250,58 @@ Make them natural and appropriate for their level."""
             {"text": "Can you tell me more?", "translation": "Can you tell me more?"}
         ]
 
+    def _get_grammar_rules(self, user_input: str) -> str:
+        """Get language-specific grammar rules. To be implemented by subclasses."""
+        return ""
+
+    def _get_cultural_rules(self) -> str:
+        """Get language-specific cultural rules. To be implemented by subclasses."""
+        return ""
+
+    def check_and_fix_response(self, user_input: str, main_response: str) -> str:
+        """Check and fix the tutor's response for grammar and naturalness."""
+        if not self.model or not GOOGLE_AI_AVAILABLE:
+            return main_response
+        
+        checker_prompt = f"""You are a native-level {self.language_name} speaker and cultural insider reviewing a language tutor's response to a learner.
+
+Your goal is to make sure the tutor's reply sounds natural, fluent, and culturally appropriate in everyday {self.language_name} conversation. The learner's original message and the tutor's response are shown below:
+
+USER INPUT: "{user_input}"  
+TUTOR RESPONSE: "{main_response}"
+
+Revise the tutor's response if needed to:
+– Correct grammar errors, including verb usage, sentence structure, and misplaced modifiers  
+– Improve fluency to sound like natural, relaxed spoken {self.language_name}  
+
+{self._get_grammar_rules(user_input)}
+
+{self._get_cultural_rules()}
+
+Quality guidelines:
+- Do not simplify responses that are already natural, engaging, and successfully guide the conversation with topic-relevant questions.
+– Preserve natural personality and tone if the response is expressive or casual  
+- Your response should be concise: no longer than 10-25 words.
+- If the response is discussing a topic in {self.user_topics}, ensure the corrected response still incorporates it.
+- If none of the topics in {self.user_topics} are being discussed, gently steer the conversation toward one of the user's topics.
+– Only revise if there's something clearly off (e.g., awkward phrasing, grammatical error, unnatural structure) 
+– Think like a real {self.language_name} speaker: would this feel smooth, correct, and relatable in conversation?
+
+If the response is already natural and grammatically accurate, return it unchanged.
+
+Return ONLY the revised {self.language_name} response, with no explanation or formatting."""
+        try:
+            response = self.model.generate_content(checker_prompt)
+            if response and response.text:
+                return response.text.strip()
+            else:
+                return main_response
+        except Exception as e:
+            print(f"Error in check_and_fix_response: {e}")
+            return main_response
+
+
+
 # Tagalog-specific tutor with grammar rules and cultural context
 class TagalogHeritageTutor(LanguageTutor):
     def __init__(self, model_name="gemini-1.5-flash", feedback_language="English", log_file="conversation_log.json", level="basic/intermediate fluency"):
@@ -209,223 +309,18 @@ class TagalogHeritageTutor(LanguageTutor):
         self.user_level = level
         self.heritage_language = "Tagalog"
 
-    def _build_conversation_prompt(self, user_input: str, context: str) -> str:
-        """Build conversation prompt with Tagalog-specific cultural guidance."""
-        topics_guidance = ""
-        topic_integration_rules = ""
-        
-        if hasattr(self, 'user_topics') and self.user_topics and len(self.user_topics) > 0:
-            topics_list = ', '.join(self.user_topics)
-            topics_guidance = f"\n\nUSER'S PREFERRED TOPICS: {topics_list}"
-            
-            topic_integration_rules = f"""
-TOPIC INTEGRATION REQUIREMENTS:
-- PRIORITY: The user specifically wants to practice talking about: {topics_list}
-- ALWAYS try to connect your response to one of these topics when contextually appropriate
-- If the user's input relates to any of these topics, engage deeply with that topic
-- If the conversation is generic, gently steer it toward their preferred topics
-- Ask questions that encourage them to practice vocabulary related to: {topics_list}
-- Share relatable experiences or comments about these topics to keep conversation flowing
-- Examples of steering: If they say "kumusta ka?", you could respond about your day doing activities related to their topics
+    def _get_grammar_rules(self, user_input: str) -> str:
+        """Get Tagalog-specific grammar rules for response checking."""
+        return """Tagalog grammar rules:
+– Use the correct form of discourse particles (e.g., "po", "din/rin", "daw/raw", "ng/nang", "dito/rito") based on context  
+    → For example: use "rin" after a word ending in a vowel, and "din" after a consonant  (ex. "hello din" → "hello rin")
+Example of unnatural vs. natural phrasing:
+- Unnatural: Samahan kita mag-usap.  
+- Natural: Usap tayo! / Kwentuhan tayo! / Nandito ako kung gusto mong magkwento."""
 
-TOPIC-SPECIFIC CONVERSATION STARTERS:
-- If user mentions or discusses any of their preferred topics ({topics_list}), expand on it enthusiastically
-- If conversation is running dry, naturally introduce one of their topics
-- Make your responses relevant to their learning goals around these specific subjects"""
-        
-        return f"""Conversational Heritage Language Tutor
-You are a warm, culturally-aware AI language tutor designed specifically for heritage speakers who are relearning their heritage language.
-
-The language for this conversation is: {self.heritage_language}.
-User proficiency level: {self.user_level}{topics_guidance}
-
-Your job is to:
-Engage users in conversation that flows naturally and feels emotionally attuned, using phrasing and turns that sound like a real, friendly speaker of {self.feedback_language}.
-Gently correct grammar and sentence structure.
-Help users build confidence expressing themselves with cultural and emotional authenticity.
-Support common challenges like code-switching, emotional phrasing, and politeness strategies.
-CRITICAL: Your own responses in {self.heritage_language} must be grammatically correct and natural. You are teaching the language, so you cannot make mistakes in your responses.
-
-{topic_integration_rules}
-
-CONVERSATION FLOW RULES:
-- Always respond to questions before asking your own.
-- Follow natural {self.heritage_language} conversation patterns, not English-style turns.
-- For yes/no questions, respond with an answer first before asking your follow-up.
-- You can extend conversations not just by asking questions, but also by sharing relatable experiences, comments, or stories, and encouraging the user to share their own thoughts or feelings.
-- Do not offer things you cannot actually give virtually (like food or drinks).
-
-RESPONSE STRUCTURE:
-- Respond naturally in {self.heritage_language} using appropriate vocabulary for heritage speakers (level: {self.user_level}).
-- Use full sentences and correct verb tenses. Avoid unnecessary code-switching unless contextually or culturally appropriate.
-- MATCH YOUR RESPONSE LENGTH TO THE USER'S INPUT. If the user gives a short, simple message, respond with a similarly concise response. Do not give long, detailed responses to short inputs. Keep the conversation flow natural and balanced.
-- INCORPORATE USER'S PREFERRED TOPICS whenever contextually appropriate.
-
-ADDITIONAL BEHAVIOR INSTRUCTIONS:
-- Use {self.feedback_language} for explanations by default unless another language is requested.
-- Speak like a friendly older sibling or patient tutor—warm, relaxed, and encouraging.
-- Avoid robotic tone; make it feel like a real person helping them learn.
-
-QUALITY CONTROL FOR YOUR RESPONSES:
-- Before replying, double-check that your response is grammatically correct and natural, appropriate for the cultural and conversational context, and free from English-influenced sentence structures.
-- Ensure your response connects to user's preferred topics when possible.
-
-Current conversation context:
-{context}
-
-The user just said: "{user_input}"
-
-Respond naturally in Tagalog following the guidelines above. REMEMBER to incorporate their preferred topics when contextually appropriate."""
-
-    def _build_feedback_prompt(self, user_input: str, context: str) -> str:
-        """Build detailed feedback prompt with Tagalog grammar rules."""
-        grammar_rules = self._get_relevant_grammar_rules(user_input)
-        cultural_guidance = self._get_relevant_cultural_guidance(user_input)
-        
-        return f"""You are a Tagalog language expert reviewing a heritage learner's input for grammar and cultural appropriateness.
-
-USER INPUT: "{user_input}"
-CONTEXT: {context}
-USER LEVEL: {self.user_level}
-
-{grammar_rules}
-
-{cultural_guidance}
-
-CHECK AND PROVIDE FEEDBACK ON:
-
-1. VOWEL HARMONY ERRORS (ONLY when preceding word ends in vowel):
-   - After words ending in vowels (a,e,i,o,u), change:
-     * 'din' → 'rin' (e.g., 'hello din' → 'hello rin', 'okay din' → 'okay rin')
-     * 'daw' → 'raw' (e.g., 'sabi daw' → 'sabi raw')
-     * 'dito' → 'rito' (e.g., 'punta ka dito' → 'punta ka rito')
-   - IMPORTANT: Do NOT change 'din' to 'rin' if the preceding word ends in a consonant
-   - Examples of CORRECT usage: 'ganun din' (stays 'din'), 'trabaho din' (stays 'din')
-
-2. VOCABULARY APPROPRIATENESS:
-   - Replace inappropriate "Hay naku" (only use for genuine frustration)
-   - Replace overused "Siyempre" with "Oo naman" or "Oo nga"
-   - Replace formal greetings ("Magandang araw") with casual ones ("Hi", "Hello")
-   - Make "Hindi" more polite by adding "naman" when appropriate
-
-3. GRAMMAR CORRECTNESS:
-   - Use correct verb tenses
-   - Use proper sentence structure
-   - Answer greetings before asking back
-   - Answer questions before asking back
-
-IMPORTANT: If there are no errors, say "No corrections needed - great job!" 
-If there are errors, be encouraging and specific about improvements.
-Provide feedback in {self.feedback_language}."""
-
-    def _build_suggestions_prompt(self, context: str) -> str:
-        """Build suggestions prompt specifically for Tagalog responses."""
-        level_guidance = self._get_level_guidance()
-        topics_guidance = self._get_topics_guidance()
-        
-        # Enhanced topic integration for suggestions
-        topic_focus = ""
-        if hasattr(self, 'user_topics') and self.user_topics and len(self.user_topics) > 0:
-            topics_list = ', '.join(self.user_topics)
-            topic_focus = f"""
-CRITICAL TOPIC REQUIREMENTS:
-- The user specifically wants to practice discussing: {topics_list}
-- ALL THREE suggestions should relate to or incorporate these topics when possible
-- If the conversation is not about their topics, suggest ways to introduce or transition to these topics
-- Focus suggestions on vocabulary and phrases related to: {topics_list}
-- Make suggestions that will help them practice speaking about their preferred subjects
-- Examples: If topics include 'family', suggest phrases about family members, activities, or questions about family
-- Examples: If topics include 'food', suggest phrases about cooking, eating, restaurants, or asking about food preferences
-
-SUGGESTION PRIORITY ORDER:
-1. First suggestion: Directly related to one of their preferred topics ({topics_list})
-2. Second suggestion: Moderately related or transitional to their topics  
-3. Third suggestion: Natural conversation flow that could lead to their topics"""
-        
-        return f"""You are a Tagalog language tutor providing conversation suggestions.
-Below is the conversation context:
-{context}
-
-USER CONTEXT:
-- Proficiency level: {self.user_level}
-- {level_guidance}
-- {topics_guidance}
-
-{topic_focus}
-
-Provide three possible follow-up replies the user could say to continue the conversation.
-IMPORTANT: Focus suggestions around the user's preferred topics and make them highly relevant to what they want to practice.
-Consider their proficiency level and ensure suggestions help them practice their specific interests.
-
-Use this exact format:
----
-Here are some ways you could respond:
-[Simple Tagalog phrase] - [English translation]
-[Slightly more complex Tagalog] - [English translation]
-[Another natural option] - [English translation]
----
-
-Make them natural, conversational, appropriate for their level, and STRONGLY connected to their preferred topics."""
-
-    def _get_relevant_grammar_rules(self, user_input: str) -> str:
-        """Get Tagalog-specific grammar rules relevant to user input."""
-        grammar_rules = {
-            "dahil": """
-GRAMMAR RULE - "dahil" (because) clauses:
-- Use descriptive form: "dahil maganda ang panahon" (because the weather is nice)
-- NOT noun phrase form: "dahil magandang panahon" (incorrect)
-- Pattern: "dahil + adjective + ang + noun"
-""",
-            "kumusta": """
-GRAMMAR RULE - "Kumusta ka?" responses:
-- Answer first: "Okay lang ako."
-- Then ask back: "Ikaw?" or "Ikaw, kumusta ka?"
-- NEVER ask back first: "Kumusta ka rin?" (unnatural)
-""",
-            "questions": """
-GRAMMAR RULE - Responding to questions:
-- When asked "Nais mo ba sumali sa akin?" (Do you want to join me?)
-- Answer first: "Oo, gusto ko!" or "Hindi, salamat"
-- NEVER ask back first without answering
-- Pattern: Answer → Then ask back if appropriate
-""",
-            "default": """
-BASIC GRAMMAR REFERENCE:
-- Use "adjective + ang + noun" for descriptive statements
-- Use "adjective + ng/na + noun" for noun phrases
-- In "dahil" clauses, use descriptive form
-- Answer greetings before asking back
-- Answer questions first before asking back
-- When using words like 'din/daw/dito', if the word before ends in a vowel, change:
-    - 'din' to 'rin' (e.g., 'hello din' → 'hello rin')
-    - 'daw' to 'raw' (e.g., 'sabi daw' → 'sabi raw')
-    - 'dito' to 'rito' (e.g., 'punta ka dito' → 'punta ka rito')
-  This makes the sentence sound more natural in Tagalog.
-"""
-        }
-        relevant_rules = []
-        if "dahil" in user_input.lower():
-            relevant_rules.append(grammar_rules["dahil"])
-        if "kumusta" in user_input.lower():
-            relevant_rules.append(grammar_rules["kumusta"])
-        if any(q in user_input.lower() for q in ["nais mo ba", "gusto mo ba", "pwede ba", "okay ba"]):
-            relevant_rules.append(grammar_rules["questions"])
-        relevant_rules.append(grammar_rules["default"])
-        return "\n".join(relevant_rules)
-
-    def _get_relevant_cultural_guidance(self, user_input: str) -> str:
-        """Get Tagalog-specific cultural guidance."""
-        notes = []
-        notes.append('- Use varied Filipino expressions instead of overusing "Hay naku". Natural options include: "ahh", "ay", "hala", "oo nga", "hindi naman", "ah ganon ba", "naku", "ay naku", "hala naman", "oo naman", "ay oo", "hindi kaya", "ay hindi", "ah talaga", "ay ganon", "hala sige", "oo sige", etc. Choose contextually appropriate expressions.')
-        notes.append('- Use "po/opo" for politeness with elders or in formal situations.')
-        notes.append('- "Kamusta" is more natural than "kumusta" in casual speech.')
-        notes.append('- "Magandang araw" is formal; "Hi" or "Hello" is common among youth.')
-        notes.append('- Avoid direct refusals; use polite, indirect language when declining.')
-        notes.append('- Do NOT use "Hay naku" for boredom, mild surprise, or casual empathy. "Hay naku" is only for strong exasperation, frustration, or when something is truly troublesome.')
-        notes.append('- For boredom or mild surprise, use "Ah, ganon ba?", "Ay, ganon pala?", "Naku, bored ka pala?", or "Ay, ganon?".')
-        notes.append('- Example (Incorrect): "Hay naku, bored ka?" (unnatural)')
-        notes.append('- Example (Correct): "Ah, ganon ba? Anong ginagawa mo?" or "Ay, ganon pala? Gusto mo magkwentuhan?"')
-        return "CULTURAL GUIDANCE:\n" + "\n".join(notes)
+    def _get_cultural_rules(self) -> str:
+        """Get Tagalog-specific cultural rules for response checking."""
+        return f"""Tagalog cultural rules:\n- Avoid overusing \"Hay naku\" — use varied expressions like \"ahh\", \"hala\", \"oo nga\", \"ay naku\", \"ah talaga\", \"ay oo\", etc. Choose based on context."""
 
     def _get_fallback_suggestions(self) -> list:
         """Get Tagalog-specific fallback suggestions."""
@@ -505,6 +400,7 @@ def get_detailed_feedback(phoneme_analysis: str, reference_text: str, recognized
     # Update tutor with current context
     tutor.user_level = user_level
     tutor.user_topics = user_topics
+    
     
     # Build context from chat history
     context = "\n".join([f"{msg['sender']}: {msg['text']}" for msg in chat_history[-4:]]) if chat_history else ""
