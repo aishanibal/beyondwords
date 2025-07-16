@@ -1,4 +1,4 @@
-import React, { useEffect, useState, createContext, useContext } from 'react';
+import React, { useEffect, useState, createContext, useContext, useRef } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, Navigate, useNavigate } from 'react-router-dom';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import axios from 'axios';
@@ -11,6 +11,7 @@ import Dashboard from './Dashboard';
 import Profile from './Profile';
 import LanguageOnboarding from './LanguageOnboarding';
 import ErrorBoundary from './ErrorBoundary';
+import { FaUserCircle } from 'react-icons/fa'; // ESLint-compatible import at the top
 
 // Translucent backgrounds for sections
 const translucentBg = 'rgba(60,76,115,0.06)'; // subtle accent tint
@@ -49,9 +50,22 @@ function Logo() {
 function Navbar() {
   const { user, logout } = useUser();
   const navigate = useNavigate();
+  const [showDropdown, setShowDropdown] = useState(false);
+  const dropdownTimeout = useRef();
+
+  // Handlers for dropdown to avoid inline functions in JSX
+  const handleProfileMouseEnter = () => {
+    clearTimeout(dropdownTimeout.current);
+    setShowDropdown(true);
+  };
+  const handleProfileMouseLeave = () => {
+    dropdownTimeout.current = setTimeout(() => setShowDropdown(false), 150);
+  };
+  const handleProfileClick = () => navigate('/profile');
+  const handleLogoutClick = async () => { await logout(); };
+
   const handleTryItNow = () => {
     if (!user) navigate('/login');
-    else if (!Boolean(user.onboarding_complete)) navigate('/onboarding');
     else navigate('/dashboard');
   };
   return (
@@ -95,21 +109,92 @@ function Navbar() {
           marginRight: 8,
           transition: 'all 0.3s ease',
         }}>
-          Try It Now
+          {user ? 'Dashboard' : 'Try It Now'}
         </button>
         {user && (
-          <span style={{ color: '#3c4c73', fontWeight: 600, marginRight: 16 }}>
-            {user.name || user.email}
-          </span>
+          <div
+            style={{ position: 'relative', display: 'inline-block' }}
+            onMouseEnter={handleProfileMouseEnter}
+            onMouseLeave={handleProfileMouseLeave}
+          >
+            <button
+              style={{
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                padding: 0,
+                margin: 0,
+                display: 'flex',
+                alignItems: 'center',
+                fontSize: 0
+              }}
+              aria-label="Profile menu"
+              type="button"
+            >
+              {/* Use user photo if available, else generic icon */}
+              {user.photoUrl ? (
+                <img src={user.photoUrl} alt="Profile avatar" style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover', boxShadow: '0 2px 8px #7e5a7533' }} />
+              ) : (
+                <FaUserCircle style={{ fontSize: 38, color: '#7e5a75' }} />
+              )}
+            </button>
+            {showDropdown && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 48,
+                  right: 0,
+                  background: '#fff',
+                  border: '1px solid #e0e0e0',
+                  borderRadius: 12,
+                  boxShadow: '0 4px 16px rgba(60,76,115,0.12)',
+                  minWidth: 160,
+                  zIndex: 1001,
+                  padding: '0.5rem 0',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 0
+                }}
+              >
+                <button
+                  onClick={handleProfileClick}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#3c4c73',
+                    textAlign: 'left',
+                    padding: '0.75rem 1.5rem',
+                    fontSize: '1rem',
+                    cursor: 'pointer',
+                    width: '100%',
+                    borderBottom: '1px solid #f0f0f0',
+                    fontWeight: 500
+                  }}
+                  type="button"
+                >
+                  Profile / Settings
+                </button>
+                <button
+                  onClick={handleLogoutClick}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#c38d94',
+                    textAlign: 'left',
+                    padding: '0.75rem 1.5rem',
+                    fontSize: '1rem',
+                    cursor: 'pointer',
+                    width: '100%',
+                    fontWeight: 500
+                  }}
+                  type="button"
+                >
+                  Log out
+                </button>
+              </div>
+            )}
+          </div>
         )}
-        {user && <Link to="/profile" style={{ 
-          color: '#7e5a75', 
-          marginRight: 20,
-          textDecoration: 'none',
-          padding: '0.4rem 0.8rem',
-          borderRadius: 8,
-          transition: 'all 0.3s ease'
-        }}>Profile</Link>}
         {user && user.role === 'admin' && <Link to="/admin" style={{ 
           color: '#7e5a75', 
           marginRight: 20,
@@ -118,28 +203,13 @@ function Navbar() {
           borderRadius: 8,
           transition: 'all 0.3s ease'
         }}>Admin</Link>}
-        {user ? (
-          <button onClick={async () => {
-            await logout();
-          }} style={{ 
-            color: '#7e5a75',
-            textDecoration: 'none',
-            padding: '0.4rem 0.8rem',
-            borderRadius: 8,
-            border: 'none',
-            background: 'transparent',
-            cursor: 'pointer',
-            transition: 'all 0.3s ease'
-          }}>Logout</button>
-        ) : (
-          <Link to="/login" style={{ 
-            color: '#7e5a75',
-            textDecoration: 'none',
-            padding: '0.4rem 0.8rem',
-            borderRadius: 8,
-            transition: 'all 0.3s ease'
-          }}>Login</Link>
-        )}
+        {!user && <Link to="/login" style={{ 
+          color: '#7e5a75',
+          textDecoration: 'none',
+          padding: '0.4rem 0.8rem',
+          borderRadius: 8,
+          transition: 'all 0.3s ease'
+        }}>Login</Link>}
       </div>
     </nav>
   );

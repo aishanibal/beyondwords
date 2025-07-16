@@ -2,6 +2,13 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useUser } from './App';
 import axios from 'axios';
 import { useSearchParams } from 'react-router-dom';
+import PropTypes from 'prop-types';
+
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+let MediaRecorderClass = null;
+if (typeof window !== 'undefined') {
+  MediaRecorderClass = window.MediaRecorder;
+}
 
 const TALK_TOPICS = [
   { id: 'family',    label: 'Family and relationships',            icon: '👨‍👩‍👧‍👦' },
@@ -47,7 +54,7 @@ const getLanguageLabel = (code) => {
   return languages[code] || 'English';
 };
 
-function TopicSelectionModal({ isOpen, onClose, onStartConversation, user, currentLanguage }) {
+function TopicSelectionModal({ isOpen, onClose, onStartConversation, currentLanguage }) {
   const [selectedTopic, setSelectedTopic] = useState('');
   const [customTopic, setCustomTopic] = useState('');
   const [useCustomTopic, setUseCustomTopic] = useState(false);
@@ -55,12 +62,7 @@ function TopicSelectionModal({ isOpen, onClose, onStartConversation, user, curre
   const [error, setError] = useState('');
   const [currentDashboard, setCurrentDashboard] = useState(null);
 
-  useEffect(() => {
-    if (currentLanguage && isOpen) {
-      fetchLanguageDashboard();
-    }
-  }, [currentLanguage, isOpen]);
-
+  // Move fetchLanguageDashboard back inside the component
   const fetchLanguageDashboard = async () => {
     try {
       const response = await API.get(`/api/user/language-dashboards/${currentLanguage}`);
@@ -70,6 +72,14 @@ function TopicSelectionModal({ isOpen, onClose, onStartConversation, user, curre
       setError('Failed to load language settings');
     }
   };
+
+  useEffect(() => {
+    if (currentLanguage && isOpen) {
+      fetchLanguageDashboard();
+    }
+  }, [currentLanguage, isOpen, fetchLanguageDashboard]);
+
+
 
   const handleTopicSelect = (topicId) => {
     setSelectedTopic(topicId);
@@ -237,7 +247,7 @@ function TopicSelectionModal({ isOpen, onClose, onStartConversation, user, curre
                 No topics selected yet
               </div>
               <div style={{ color: '#7e5a75', fontSize: '0.85rem' }}>
-                Visit your profile settings to add topics you'd like to discuss.
+                Visit your profile settings to add topics you&apos;d like to discuss.
               </div>
             </div>
           )}
@@ -363,6 +373,13 @@ function TopicSelectionModal({ isOpen, onClose, onStartConversation, user, curre
       </div>
     </div>
   );
+}
+
+TopicSelectionModal.propTypes = {
+  isOpen: PropTypes.bool.isRequired,
+  onClose: PropTypes.func.isRequired,
+  onStartConversation: PropTypes.func.isRequired,
+  currentLanguage: PropTypes.string
 };
 
 function usePersistentChatHistory(user) {
@@ -400,6 +417,33 @@ function Analyze() {
           transform: translateY(0) scale(1);
         }
       }
+      @keyframes pulse {
+        0% {
+          box-shadow: 0 0 0 0 rgba(195,141,148,0.25);
+        }
+        70% {
+          box-shadow: 0 0 0 12px rgba(195,141,148,0);
+        }
+        100% {
+          box-shadow: 0 0 0 0 rgba(195,141,148,0);
+        }
+      }
+      @keyframes pulse-autospeak {
+        0% {
+          box-shadow: 0 0 0 0 rgba(60,76,115,0.25), 0 0 0 0 rgba(195,141,148,0.25);
+        }
+        50% {
+          box-shadow: 0 0 0 8px rgba(60,76,115,0.18), 0 0 0 16px rgba(195,141,148,0.12);
+        }
+        100% {
+          box-shadow: 0 0 0 0 rgba(60,76,115,0.25), 0 0 0 0 rgba(195,141,148,0.25);
+        }
+      }
+      @keyframes pulse-silence {
+        0% { box-shadow: 0 0 0 0 #e67e2255; }
+        70% { box-shadow: 0 0 0 8px #e67e2200; }
+        100% { box-shadow: 0 0 0 0 #e67e2255; }
+      }
     `;
     document.head.appendChild(style);
     return () => document.head.removeChild(style);
@@ -422,13 +466,13 @@ function Analyze() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [feedback, setFeedback] = useState('');
   const [isLoadingFeedback, setIsLoadingFeedback] = useState(false);
-  const mediaRecorderRef = useRef(null);
-  const audioChunksRef = useRef([]);
+  const recognitionRef = useRef(null);
+  const ttsAudioRef = useRef(null);
+  const autoSpeakRef = useRef(false);
   const [showSavePrompt, setShowSavePrompt] = useState(false);
   const [chatHistory, setChatHistory] = usePersistentChatHistory(user);
   const [language, setLanguage] = useState(urlLang || user?.target_language || 'en');
   const [conversationId, setConversationId] = useState(null);
-  const [isCreatingConversation, setIsCreatingConversation] = useState(false);
   const [isLoadingConversation, setIsLoadingConversation] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
@@ -436,9 +480,37 @@ function Analyze() {
   const [isTranslating, setIsTranslating] = useState({});
   const [showTranslations, setShowTranslations] = useState({});
   const [isLoadingMessageFeedback, setIsLoadingMessageFeedback] = useState({});
-  const [selectedTopics, setSelectedTopics] = useState([]);
   const [showTopicModal, setShowTopicModal] = useState(false);
+  const [autoSpeak, setAutoSpeak] = useState(false);
+  // Add state for short feedback toggle
+  const [enableShortFeedback, setEnableShortFeedback] = useState(true); // default ON
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const [mediaStream, setMediaStream] = useState(null);
+  const [wasInterrupted, setWasInterrupted] = useState(false);
+  const interruptedRef = useRef(false);
+  // Add a state to store short feedback for each message
+  const [shortFeedbacks, setShortFeedbacks] = useState({});
   
+  // Keep refs in sync with state
+  useEffect(() => {
+    if (recognitionRef.current) {
+      recognitionRef.current.lang = language || 'en-US';
+    }
+  }, [language]);
+
+  // On unmount: stop recording and save session if needed
+  useEffect(() => {
+    return () => {
+      // Stop any ongoing recording
+      stopRecording();
+      // Save session if there is unsaved chat history
+      if (user && chatHistory.length > 0) {
+        saveSessionToBackend(false); // Don't show alert on navigation
+      }
+    };
+  }, []);
+
   // Show topic modal automatically when accessing analyze page without conversation ID
   useEffect(() => {
     if (user && !urlConversationId && !conversationId && chatHistory.length === 0) {
@@ -461,7 +533,7 @@ function Analyze() {
   useEffect(() => {
     if (urlTopics) {
       const topics = urlTopics.split(',').filter(topic => topic.trim());
-      setSelectedTopics(topics);
+      // setSelectedTopics(topics); // This setter is no longer used
     }
   }, [urlTopics]);
 
@@ -469,6 +541,37 @@ function Analyze() {
   useEffect(() => {
     console.log('Chat history changed:', chatHistory);
   }, [chatHistory]);
+  const loadExistingConversation = async (convId) => {
+    if (!user || !convId) {
+      console.log('[DEBUG] No user or conversation ID, skipping load');
+      return;
+    }
+    console.log('[DEBUG] Loading existing conversation:', convId);
+    setIsLoadingConversation(true);
+    try {
+      const response = await API.get(`/api/conversations/${convId}`);
+      console.log('[DEBUG] Conversation load response:', response.data);
+      const conversation = response.data.conversation;
+      setConversationId(conversation.id);
+      setLanguage(conversation.language);
+      const messages = conversation.messages || [];
+      const history = messages.map(msg => ({
+        sender: msg.sender,
+        text: msg.text,
+        timestamp: new Date(msg.created_at)
+      }));
+      console.log('[DEBUG] Loaded conversation history with', history.length, 'messages');
+      console.log('[DEBUG] Messages:', history);
+      setChatHistory(history);
+    } catch (error) {
+      console.error('[DEBUG] Error loading conversation:', error);
+      console.error('[DEBUG] Error details:', error.response?.data || error.message);
+      // Don't show error to user, just log it
+    } finally {
+      setIsLoadingConversation(false);
+    }
+  };
+  
 
   // Remove auto-fetch - suggestions will be fetched on-demand only
 
@@ -477,13 +580,52 @@ function Analyze() {
     console.log('[DEBUG] useEffect for conversation loading:', {
       user,
       conversationId,
-      isCreatingConversation,
       isLoadingConversation,
       urlConversationId
     });
     
-    // Load existing conversation if URL has conversation ID
-    if (user && urlConversationId && !conversationId && !isLoadingConversation && !isCreatingConversation) {
+  
+  
+   
+    
+    // Show save prompt for localStorage data
+    if (user && localStorage.getItem('chatHistory')) {
+      setShowSavePrompt(true);
+    }
+  }, [user, conversationId, isLoadingConversation, urlConversationId, loadExistingConversation]);
+
+  // Move validateConversationId outside useEffect
+  const validateConversationId = async (user, urlConversationId, setConversationId) => {
+    if (user && urlConversationId) {
+      try {
+        const response = await API.get(`/api/conversations/${urlConversationId}`);
+        if (!response.data.conversation) {
+          // Conversation not found, clear from URL and state
+          const newUrl = new URL(window.location);
+          newUrl.searchParams.delete('conversation');
+          window.history.replaceState({}, '', newUrl);
+          setConversationId(null);
+        }
+      } catch (error) {
+        if (error.response && error.response.status === 404) {
+          // Conversation not found, clear from URL and state
+          const newUrl = new URL(window.location);
+          newUrl.searchParams.delete('conversation');
+          window.history.replaceState({}, '', newUrl);
+          setConversationId(null);
+        }
+      }
+    }
+  };
+
+  useEffect(() => {
+    // On login, check if urlConversationId is present and valid
+    validateConversationId(user, urlConversationId, setConversationId);
+  }, [user, urlConversationId]);
+
+
+   // Load existing conversation if URL has conversation ID
+    if (user && urlConversationId && !conversationId && !isLoadingConversation) {
       console.log('[DEBUG] CONDITIONS MET - Loading existing conversation from URL:', urlConversationId);
       loadExistingConversation(urlConversationId);
     } else {
@@ -491,16 +633,10 @@ function Analyze() {
         hasUser: !!user,
         hasUrlConversationId: !!urlConversationId,
         noConversationId: !conversationId,
-        notLoadingConversation: !isLoadingConversation,
-        notCreatingConversation: !isCreatingConversation
+        notLoadingConversation: !isLoadingConversation
       });
     }
-    
-    // Show save prompt for localStorage data
-    if (user && localStorage.getItem('chatHistory')) {
-      setShowSavePrompt(true);
-    }
-  }, [user, conversationId, isCreatingConversation, isLoadingConversation, urlConversationId]);
+
 
 
   const saveSessionToBackend = async (showAlert = true) => {
@@ -524,190 +660,218 @@ function Analyze() {
   };
 
   // Auto-save session after conversation exchanges
-  const autoSaveSession = async () => {
-    if (user?.id && chatHistory.length > 0) {
-      await saveSessionToBackend(false);
-    }
-  };
+  // const autoSaveSession = async () => {
+  //   if (user?.id && chatHistory.length > 0) {
+  //     await saveSessionToBackend(false);
+  //   }
+  // };
 
+  // Replace startRecording and stopRecording with MediaRecorder + SpeechRecognition logic
   const startRecording = async () => {
+    setWasInterrupted(false);
+    if (!SpeechRecognition) {
+      alert('SpeechRecognition API not supported in this browser.');
+      return;
+    }
+    if (!MediaRecorderClass) {
+      alert('MediaRecorder API not supported in this browser.');
+      return;
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaRecorderRef.current = new MediaRecorder(stream);
+      setMediaStream(stream);
       audioChunksRef.current = [];
-
-      mediaRecorderRef.current.ondataavailable = (event) => {
-        audioChunksRef.current.push(event.data);
+      const mediaRecorder = new MediaRecorderClass(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          audioChunksRef.current.push(e.data);
+        }
       };
-
-      mediaRecorderRef.current.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
-        await sendAudioToBackend(audioBlob);
+      mediaRecorder.onstop = () => {
+        if (interruptedRef.current) {
+          interruptedRef.current = false;
+          setWasInterrupted(true);
+          stream.getTracks().forEach(track => track.stop());
+          setMediaStream(null);
+          return;
+        }
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        sendAudioToBackend(audioBlob);
+        stream.getTracks().forEach(track => track.stop());
+        setMediaStream(null);
       };
-
-      mediaRecorderRef.current.start();
+      mediaRecorder.start();
+      // Start SpeechRecognition for speech activity detection
+      const recognition = new SpeechRecognition();
+      recognitionRef.current = recognition;
+      recognition.lang = language || 'en-US';
+      recognition.interimResults = false;
+      recognition.continuous = false;
       setIsRecording(true);
-    } catch (error) {
-      console.error('Error starting recording:', error);
-      alert('Error accessing microphone. Please check permissions.');
+      recognition.onresult = (event) => {
+        setIsRecording(false);
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+          mediaRecorderRef.current.stop();
+        }
+      };
+      recognition.onerror = (event) => {
+        setIsRecording(false);
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+          mediaRecorderRef.current.stop();
+        }
+        alert('Speech recognition error: ' + event.error);
+      };
+      recognition.onend = () => {
+        setIsRecording(false);
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+          mediaRecorderRef.current.stop();
+        }
+      };
+      recognition.start();
+    } catch (err) {
+      alert('Could not start audio recording: ' + err.message);
+      setIsRecording(false);
+      setMediaStream(null);
     }
   };
 
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+  const stopRecording = (interrupted = false) => {
+    if (interrupted) {
+      interruptedRef.current = true;
+    }
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
       setIsRecording(false);
     }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+    if (mediaStream) {
+      mediaStream.getTracks().forEach(track => track.stop());
+      setMediaStream(null);
+    }
   };
 
-  const sendAudioToBackend = async (audioBlob) => {
-    // Create conversation if needed, but don't fail if it doesn't work
-    let currentConversationId = conversationId;
-    if (!currentConversationId && user) {
-      console.log('[AUTO] No conversationId, attempting to create new conversation.');
-      try {
-        currentConversationId = await createNewConversation();
-        console.log('[AUTO] After conversation creation, got conversationId:', currentConversationId);
-      } catch (error) {
-        console.error('[AUTO] Failed to create conversation, but continuing with audio processing:', error);
-      }
-    }
-    setIsProcessing(true);
-    const userMessage = { sender: 'User', text: '🎤 Recording...', timestamp: new Date() };
-    setChatHistory(prev => [...prev, userMessage]);
+  // New: Separate function to fetch and show short feedback
+  const fetchAndShowShortFeedback = async (transcription) => {
+    console.log('[DEBUG] fetchAndShowShortFeedback called', { autoSpeak, enableShortFeedback, chatHistory: [...chatHistory] });
+    if (!autoSpeak || !enableShortFeedback) return;
+    // Prepare context (last 4 messages)
+    const context = chatHistory.slice(-4).map(msg => `${msg.sender}: ${msg.text}`).join('\n');
     try {
-      console.log('=== FRONTEND: Starting audio processing ===');
-      const formData = new FormData();
-      formData.append('audio', audioBlob, 'recording.wav');
-      formData.append('chatHistory', JSON.stringify(chatHistory));
-      formData.append('language', language);
-      
-      console.log('=== FRONTEND: Sending request to server ===');
-      const response = await API.post('/api/analyze', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-      console.log('=== FRONTEND: Server response received ===');
-      console.log('Server response:', response.data);
-      
-      console.log('=== FRONTEND: Processing transcription ===');
-      const transcription = response.data.transcription || 'Speech recorded';
-      console.log('Transcription:', transcription);
-      
-      console.log('=== FRONTEND: Updating chat history with transcription ===');
-      setChatHistory(prev => prev.map(msg => 
-        msg === userMessage ? { ...msg, text: transcription } : msg
-      ));
-      if (currentConversationId) {
-        console.log('[DEBUG] Saving user message with conversationId:', currentConversationId);
-        await saveMessageToBackend('User', transcription, 'text', null, currentConversationId);
-      } else {
-        console.log('[DEBUG] No conversationId available, skipping user message save');
-      }
-      
-      if (response.data.aiResponse) {
-        console.log('=== FRONTEND: Processing AI response ===');
-        console.log('AI Response received:', response.data.aiResponse);
-        const aiMessage = { 
-          sender: 'AI', 
-          text: response.data.aiResponse, 
-          timestamp: new Date() 
-        };
-        console.log('=== FRONTEND: Adding AI message to chat history ===');
-        setChatHistory(prev => {
-          const newHistory = [...prev, aiMessage];
-          console.log('Updated chat history:', newHistory);
-          return newHistory;
-        });
-        if (currentConversationId) {
-          console.log('[DEBUG] Saving AI message with conversationId:', currentConversationId);
-          await saveMessageToBackend('AI', response.data.aiResponse, 'text', null, currentConversationId);
-        } else {
-          console.log('[DEBUG] No conversationId available, skipping AI message save');
+      console.log('[DEBUG] (fetchAndShowShortFeedback) Calling /short_feedback API with:', { transcription, context, language, user_level: user?.proficiency_level || 'beginner', user_topics: user?.talk_topics || [] });
+      // Hardcode the short feedback endpoint to the Python backend
+      const shortFeedbackRes = await axios.post(
+        'http://localhost:5001/short_feedback',
+        {
+          user_input: transcription,
+          context,
+          language,
+          user_level: user?.proficiency_level || 'beginner',
+          user_topics: user?.talk_topics || []
         }
+      );
+      console.log('[DEBUG] /short_feedback response', shortFeedbackRes);
+      const shortFeedback = shortFeedbackRes.data.short_feedback;
+      console.log('[DEBUG] shortFeedback value:', shortFeedback);
+      setShortFeedbacks(prev => ({ ...prev, [chatHistory.length]: shortFeedback }));
+      if (shortFeedback !== undefined && shortFeedback !== null && shortFeedback !== '') {
+        console.log('[DEBUG] Adding System feedback to chatHistory', { shortFeedback, chatHistory: [...chatHistory] });
+        setChatHistory(prev => {
+          const updated = [...prev, { sender: 'System', text: shortFeedback, timestamp: new Date() }];
+          console.log('[DEBUG] (fetchAndShowShortFeedback) Updated chatHistory after System message:', updated);
+          return updated;
+        });
       } else {
-        console.log('No AI response received');
+        console.warn('[DEBUG] (fetchAndShowShortFeedback) shortFeedback is empty or undefined:', shortFeedback);
       }
+      // Play short feedback TTS (if autospeak and feedback exists)
+      if (shortFeedback) {
+        const ttsUrl = await getTTSUrl(shortFeedback, language);
+        if (ttsUrl) {
+          await playTTS(ttsUrl);
+        }
+      }
+    } catch (e) {
+      console.error('[DEBUG] (fetchAndShowShortFeedback) Error calling /short_feedback API:', e);
+    }
+  };
+
+  // Update sendAudioToBackend to handle short feedback in autospeak mode
+  const sendAudioToBackend = async (audioBlob) => {
+    if (!(audioBlob instanceof Blob)) return;
+    try {
+      setIsProcessing(true);
+      const formData = new FormData();
+      formData.append('audio', audioBlob, 'recording.webm');
+      formData.append('language', language);
+      formData.append('chatHistory', JSON.stringify(chatHistory));
+      // Add JWT token to headers
+      const token = localStorage.getItem('jwt');
+      const response = await API.post('/api/analyze', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        }
+      });
+      // Prepare new chat messages
+      const transcription = response.data.transcription || 'Speech recorded';
+      // Use callback form to ensure chatHistory is updated before fetching feedback
+      setChatHistory(prev => {
+        const updated = [...prev, { sender: 'User', text: transcription, timestamp: new Date() }];
+        // After chatHistory is updated, fetch short feedback if needed
+        if (autoSpeak && enableShortFeedback) {
+          // Use setTimeout to ensure state update is flushed before calling feedback
+          setTimeout(() => {
+            fetchAndShowShortFeedback(transcription);
+          }, 0);
+        }
+        return updated;
+      });
+      // Save user message to backend
+      if (conversationId) {
+        await saveMessageToBackend('User', transcription, 'text', null, conversationId);
+      }
+      // Add AI response if present
+      if (response.data.aiResponse) {
+        setChatHistory(prev => [...prev, { sender: 'AI', text: response.data.aiResponse, timestamp: new Date() }]);
+        if (conversationId) {
+          await saveMessageToBackend('AI', response.data.aiResponse, 'text', null, conversationId);
+        }
+      }
+      // Play AI response TTS if present
       if (response.data.ttsUrl) {
-        console.log('=== FRONTEND: Processing TTS ===');
-        console.log('TTS URL received:', response.data.ttsUrl);
         const audioUrl = `http://localhost:4000${response.data.ttsUrl}`;
-        console.log('Full audio URL:', audioUrl);
-        
-        // Test if the audio file exists by making a HEAD request
         try {
-          console.log('=== FRONTEND: Checking TTS audio file ===');
           const headResponse = await fetch(audioUrl, { method: 'HEAD' });
-          if (!headResponse.ok) {
-            console.error('TTS audio file not found:', headResponse.status);
-            console.log('Skipping TTS playback due to missing file');
-          } else {
-            console.log('TTS audio file exists, size:', headResponse.headers.get('content-length'));
-            
-            console.log('=== FRONTEND: Creating audio element ===');
+          if (headResponse.ok) {
             const audio = new window.Audio(audioUrl);
-            
-            // Add error handling for audio playback
-            audio.onerror = (e) => {
-              console.error('TTS audio playback error:', e);
-              console.error('Audio error details:', audio.error);
-            };
-            
-            audio.onloadstart = () => {
-              console.log('TTS audio loading started');
-            };
-            
-            audio.oncanplay = () => {
-              console.log('TTS audio can play');
-            };
-            
+            ttsAudioRef.current = audio;
             audio.onended = () => {
-              console.log('TTS audio playback completed');
+              ttsAudioRef.current = null;
+              if (autoSpeakRef.current) {
+                setTimeout(() => {
+                  if (autoSpeakRef.current) startRecording();
+                }, 300);
+              }
             };
-            
-            audio.onload = () => {
-              console.log('TTS audio loaded successfully');
-            };
-            
-            // Try to play the audio
-            console.log('=== FRONTEND: Attempting to play TTS audio ===');
             audio.play().catch(error => {
               console.error('Failed to play TTS audio:', error);
             });
-            console.log('=== FRONTEND: TTS audio play() called ===');
           }
         } catch (fetchError) {
           console.error('Error checking TTS audio file:', fetchError);
-          console.log('Skipping TTS playback due to fetch error');
         }
-      } else {
-        console.log('No TTS URL received from server');
       }
-      
-      console.log('=== FRONTEND: All processing complete, should be successful ===');
     } catch (error) {
-      console.error('=== FRONTEND: ERROR CAUGHT ===');
-      console.error('Error type:', error.constructor.name);
-      console.error('Error message:', error.message);
-      console.error('Error stack:', error.stack);
-      console.error('Full error object:', error);
-      
-      if (error.response) {
-        console.error('Server responded with error:', error.response.status, error.response.data);
-      } else if (error.request) {
-        console.error('No response received:', error.request);
-      } else {
-        console.error('Error setting up request:', error.message);
-      }
-      
-      const errorMessage = { 
-        sender: 'System', 
-        text: '❌ Error processing audio. Please try again.', 
-        timestamp: new Date() 
+      const errorMessage = {
+        sender: 'System',
+        text: '❌ Error processing audio. Please try again.',
+        timestamp: new Date()
       };
       setChatHistory(prev => [...prev, errorMessage]);
     } finally {
-      console.log('=== FRONTEND: Finally block - setting isProcessing to false ===');
       setIsProcessing(false);
     }
   };
@@ -756,7 +920,7 @@ function Analyze() {
 
   const handleModalConversationStart = (newConversationId, topics) => {
     setConversationId(newConversationId);
-    setSelectedTopics(topics);
+    // setSelectedTopics(topics); // This setter is no longer used
     setChatHistory([]);
     setShowTopicModal(false);
     
@@ -767,73 +931,11 @@ function Analyze() {
     window.history.pushState({}, '', newUrl);
   };
 
-  const handleSuggestionClick = (suggestionText) => {
+  const handleSuggestionClick = () => {
     // Just scroll to recording button to encourage user to record
     const recordingSection = document.querySelector('[data-recording-section]');
     if (recordingSection) {
       recordingSection.scrollIntoView({ behavior: 'smooth' });
-    }
-  };
-
-  const createNewConversation = async () => {
-    if (!user) {
-      console.log('[DEBUG] No user found, skipping conversation creation');
-      return null;
-    }
-    console.log('[DEBUG] Creating new conversation for user:', user.email);
-    setIsCreatingConversation(true);
-    try {
-      const title = selectedTopics.length > 0 
-        ? `${getLanguageLabel(language)} Practice Session - ${selectedTopics.join(', ')}`
-        : `${getLanguageLabel(language)} Practice Session`;
-      console.log('[DEBUG] Sending conversation creation request:', { language, title, topics: selectedTopics });
-      const response = await API.post('/api/conversations', {
-        language,
-        title,
-        topics: selectedTopics
-      });
-      console.log('[DEBUG] Conversation creation response:', response.data);
-      const newConversationId = response.data.conversation.id;
-      setConversationId(newConversationId);
-      console.log('[DEBUG] Created new conversation:', newConversationId);
-      return newConversationId;
-    } catch (error) {
-      console.error('[DEBUG] Error creating conversation:', error);
-      console.error('[DEBUG] Error details:', error.response?.data || error.message);
-      return null;
-    } finally {
-      setIsCreatingConversation(false);
-    }
-  };
-
-  const loadExistingConversation = async (convId) => {
-    if (!user || !convId) {
-      console.log('[DEBUG] No user or conversation ID, skipping load');
-      return;
-    }
-    console.log('[DEBUG] Loading existing conversation:', convId);
-    setIsLoadingConversation(true);
-    try {
-      const response = await API.get(`/api/conversations/${convId}`);
-      console.log('[DEBUG] Conversation load response:', response.data);
-      const conversation = response.data.conversation;
-      setConversationId(conversation.id);
-      setLanguage(conversation.language);
-      const messages = conversation.messages || [];
-      const history = messages.map(msg => ({
-        sender: msg.sender,
-        text: msg.text,
-        timestamp: new Date(msg.created_at)
-      }));
-      console.log('[DEBUG] Loaded conversation history with', history.length, 'messages');
-      console.log('[DEBUG] Messages:', history);
-      setChatHistory(history);
-    } catch (error) {
-      console.error('[DEBUG] Error loading conversation:', error);
-      console.error('[DEBUG] Error details:', error.response?.data || error.message);
-      // Don't show error to user, just log it
-    } finally {
-      setIsLoadingConversation(false);
     }
   };
 
@@ -964,6 +1066,26 @@ function Analyze() {
     console.log('[DEBUG] Chat history changed:', chatHistory);
   }, [chatHistory]);
 
+  useEffect(() => {
+    autoSpeakRef.current = autoSpeak;
+    // When Autospeak is turned ON, start recording if not already recording
+    if (autoSpeak && !isRecording && !isProcessing) {
+      startRecording();
+    }
+    // When Autospeak is turned OFF, stop any ongoing recording
+    if (!autoSpeak) {
+      stopRecording();
+      // Stop any playing TTS audio
+      if (ttsAudioRef.current) {
+        ttsAudioRef.current.pause();
+        ttsAudioRef.current.currentTime = 0;
+        ttsAudioRef.current = null;
+      }
+    }
+    // Only run this effect when autoSpeak changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSpeak]);
+
   return (
     <div style={{ 
       display: 'flex', 
@@ -1030,13 +1152,14 @@ function Analyze() {
                   style={{
                     flex: 1,
                     padding: '0.75rem 1rem',
-                    borderRadius: message.sender === 'User' ? '20px 20px 4px 20px' : '20px 20px 20px 4px',
+                    borderRadius: message.sender === 'User' ? '20px 20px 4px 20px' : message.sender === 'AI' ? '20px 20px 20px 4px' : '12px',
                     background: message.sender === 'User' ? 
                       'linear-gradient(135deg, #c38d94 0%, #b87d8a 100%)' : 
                       message.sender === 'AI' ? 
-                        'linear-gradient(135deg, #fff 0%, #f8f9fa 100%)' : '#f5f1ec',
-                    color: message.sender === 'User' ? '#fff' : '#3e3e3e',
-                    border: message.sender === 'AI' ? '1px solid #e0e0e0' : 'none',
+                        'linear-gradient(135deg, #fff 0%, #f8f9fa 100%)' :
+                        '#fff7e6',
+                    color: message.sender === 'User' ? '#fff' : message.sender === 'System' ? '#e67e22' : '#3e3e3e',
+                    border: message.sender === 'AI' ? '1px solid #e0e0e0' : message.sender === 'System' ? '1px solid #e67e22' : 'none',
                     fontSize: '0.9rem',
                     cursor: 'pointer',
                     transition: 'all 0.2s ease',
@@ -1044,24 +1167,24 @@ function Analyze() {
                     position: 'relative',
                     boxShadow: message.sender === 'User' ? 
                       '0 2px 8px rgba(195,141,148,0.3)' : 
-                      '0 2px 8px rgba(60,76,115,0.15)',
+                      message.sender === 'AI' ? '0 2px 8px rgba(60,76,115,0.15)' : '0 1px 4px rgba(230,126,34,0.08)',
                     maxWidth: '75%',
                     wordWrap: 'break-word',
                     transform: 'scale(1)',
-                    fontWeight: message.sender === 'User' ? '500' : '400',
+                    fontWeight: message.sender === 'User' ? '500' : message.sender === 'System' ? '500' : '400',
                     animation: 'messageAppear 0.3s ease-out'
                   }}
                   onMouseEnter={(e) => {
                     e.target.style.transform = 'scale(1.02)';
                     e.target.style.boxShadow = message.sender === 'User' ? 
                       '0 4px 12px rgba(195,141,148,0.4)' : 
-                      '0 4px 12px rgba(60,76,115,0.2)';
+                      message.sender === 'AI' ? '0 4px 12px rgba(60,76,115,0.2)' : '0 2px 8px rgba(230,126,34,0.18)';
                   }}
                   onMouseLeave={(e) => {
                     e.target.style.transform = 'scale(1)';
                     e.target.style.boxShadow = message.sender === 'User' ? 
                       '0 2px 8px rgba(195,141,148,0.3)' : 
-                      '0 2px 8px rgba(60,76,115,0.15)';
+                      message.sender === 'AI' ? '0 2px 8px rgba(60,76,115,0.15)' : '0 1px 4px rgba(230,126,34,0.08)';
                   }}
                 >
                   {message.text}
@@ -1363,7 +1486,57 @@ function Analyze() {
             textAlign: 'center'
           }}
         >
-          
+          {/* Autospeak Toggle Button */}
+          <button
+            onClick={() => setAutoSpeak(v => !v)}
+            style={{
+              marginBottom: '0.5rem',
+              background: autoSpeak ? '#7e5a75' : '#c38d94',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '20px',
+              padding: '0.5rem 1rem',
+              cursor: 'pointer',
+              fontWeight: 600
+            }}
+          >
+            {autoSpeak ? '✅ Autospeak ON' : 'Autospeak OFF'}
+          </button>
+          {/* Short Feedback Toggle Button */}
+          <button
+            onClick={() => setEnableShortFeedback(v => !v)}
+            style={{
+              marginBottom: '0.5rem',
+              marginLeft: 12,
+              background: enableShortFeedback ? '#e67e22' : '#c38d94',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '20px',
+              padding: '0.5rem 1rem',
+              cursor: 'pointer',
+              fontWeight: 600
+            }}
+          >
+            {enableShortFeedback ? '💡 Short Feedback ON' : 'Short Feedback OFF'}
+          </button>
+         {/* Interrupt/Redo Button */}
+         {isRecording && (
+           <button
+             onClick={() => stopRecording(true)}
+             style={{
+               marginLeft: 12,
+               background: '#e67e22',
+               color: '#fff',
+               border: 'none',
+               borderRadius: '20px',
+               padding: '0.5rem 1rem',
+               cursor: 'pointer',
+               fontWeight: 600
+             }}
+           >
+             ⏹️ Redo
+           </button>
+         )}
           <button
             onClick={isRecording ? stopRecording : startRecording}
             disabled={isProcessing}
@@ -1377,11 +1550,36 @@ function Analyze() {
               fontSize: '24px',
               cursor: isProcessing ? 'not-allowed' : 'pointer',
               transition: 'all 0.3s',
-              animation: isRecording ? 'pulse 1.5s infinite' : 'none'
+              animation: isRecording
+                ? autoSpeak
+                  ? 'pulse-autospeak 1s infinite'
+                  : 'pulse 1.5s infinite'
+                : 'none',
+              boxShadow: isRecording && autoSpeak
+                ? '0 0 0 6px rgba(195,141,148,0.25), 0 0 0 12px rgba(60,76,115,0.15)'
+                : isRecording
+                  ? '0 0 0 8px rgba(195,141,148,0.18)'
+                  : 'none'
             }}
           >
             {isRecording ? '⏹️' : '🎤'}
           </button>
+
+          {/* Visual indicator for recording and silence detection */}
+          {isRecording && (
+            <div style={{ marginTop: '0.5rem', color: '#c0392b', fontWeight: 600, fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+              <span style={{
+                display: 'inline-block',
+                width: 12,
+                height: 12,
+                borderRadius: '50%',
+                background: '#c0392b',
+                marginRight: 6,
+                boxShadow: '0 0 8px 2px #c0392b55'
+              }} />
+              Recording...
+            </div>
+          )}
           <p style={{ marginTop: '0.5rem', color: '#7e5a75', fontSize: '0.9rem' }}>
             {isRecording ? 'Recording... Click to stop' : 'Click to start recording'}
           </p>
@@ -1451,12 +1649,42 @@ function Analyze() {
         </div>
       </div>
       
+      {/* Interrupt message - prominent UI position */}
+      {wasInterrupted && !isRecording && (
+        <div style={{
+          position: 'fixed',
+          left: 0,
+          right: 0,
+          top: 80,
+          zIndex: 10000,
+          display: 'flex',
+          justifyContent: 'center',
+          pointerEvents: 'none'
+        }}>
+          <div style={{
+            background: '#fff7e6',
+            color: '#e67e22',
+            border: '2px solid #e67e22',
+            borderRadius: 12,
+            padding: '1rem 2rem',
+            fontWeight: 700,
+            fontSize: '1.1rem',
+            boxShadow: '0 2px 12px rgba(230,126,34,0.08)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            pointerEvents: 'auto'
+          }}>
+            <span style={{ fontSize: '1.5rem' }}>⏹️</span>
+            Recording canceled. You can try again.
+          </div>
+        </div>
+      )}
       {/* Topic Selection Modal */}
       <TopicSelectionModal
         isOpen={showTopicModal}
         onClose={() => setShowTopicModal(false)}
         onStartConversation={handleModalConversationStart}
-        user={user}
         currentLanguage={language}
       />
     </div>

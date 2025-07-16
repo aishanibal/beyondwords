@@ -12,7 +12,7 @@ from transformers import Wav2Vec2ForCTC, Wav2Vec2Processor
 import librosa
 import numpy as np
 import datetime
-from gemini_client import get_conversational_response, get_detailed_feedback, get_text_suggestions, get_translation, is_gemini_ready
+from gemini_client import get_conversational_response, get_detailed_feedback, get_text_suggestions, get_translation, is_gemini_ready, get_short_feedback
 # from dotenv import load_dotenv
 # load_dotenv()
 
@@ -377,6 +377,21 @@ def feedback():
     except Exception as e:
         print(f"Feedback error: {e}")
         return jsonify({"feedback": "Error generating feedback.", "error": str(e)}), 500
+
+@app.route('/short_feedback', methods=['POST'])
+def short_feedback():
+    try:
+        data = request.get_json()
+        user_input = data.get('user_input', '')
+        context = data.get('context', '')
+        language = data.get('language', 'en')
+        user_level = data.get('user_level', 'beginner')
+        user_topics = data.get('user_topics', [])
+        feedback = get_short_feedback(user_input, context, language, user_level, user_topics)
+        return jsonify({"short_feedback": feedback})
+    except Exception as e:
+        print(f"Short feedback error: {e}")
+        return jsonify({"short_feedback": "Error generating feedback.", "error": str(e)}), 500
 
 @app.route('/suggestions', methods=['POST'])
 def suggestions():

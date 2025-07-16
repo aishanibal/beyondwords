@@ -430,6 +430,32 @@ def get_text_suggestions(chat_history: List[Dict], language: str = 'en', user_le
     # Make separate Gemini call for suggestions
     return tutor.get_suggestions(context)
 
+def get_short_feedback(user_input: str, context: str = "", language: str = 'en', user_level: str = 'beginner', user_topics: list = None) -> str:
+    """Generate a short, conversational feedback about grammar/style."""
+    if not GOOGLE_AI_AVAILABLE:
+        return "Short feedback ran (no Gemini API key configured)"
+    if user_topics is None:
+        user_topics = []
+    prompt = (
+        f"You are a friendly language tutor. The user just said: \"{user_input}\".\n"
+        f"Context: {context}\n"
+        f"User level: {user_level}\n"
+        f"Preferred topics: {', '.join(user_topics) if user_topics else 'none'}\n"
+        f"Give a very short (1-2 sentences) tip or correction about grammar or style, only if needed. "
+        f"If there are no issues, say something encouraging. "
+        f"Be brief and natural, like a quick chat comment."
+    )
+    try:
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        response = model.generate_content(prompt)
+        if response and response.text:
+            return response.text.strip()
+        else:
+            return "Great job!"
+    except Exception as e:
+        print(f"Short feedback error: {e}")
+        return "Keep going!"
+
 def get_translation(text: str, source_language: str = 'auto', target_language: str = 'en', breakdown: bool = False, user_topics: List[str] = None) -> dict:
     """Simple translation function using Gemini."""
     if user_topics is None:

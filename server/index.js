@@ -33,13 +33,21 @@ const {
   getUserLanguageDashboards,
   getLanguageDashboard,
   updateLanguageDashboard,
-  deleteLanguageDashboard
+  deleteLanguageDashboard,
+  getUserStreak
 } = require('./database');
 const jwt = require('jsonwebtoken');
 const JWT_SECRET = process.env.JWT_SECRET || 'your_super_secret_key';
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 const app = express();
+
+// Log every incoming request for debugging
+app.use((req, res, next) => {
+  console.log('INCOMING REQUEST:', req.method, req.url, 'Headers:', req.headers);
+  next();
+});
+
 app.use(express.json());
 app.use(cors({ origin: 'http://localhost:3000', credentials: false }));
 
@@ -206,6 +214,21 @@ app.get('/api/user', authenticateJWT, async (req, res) => {
 
 app.get('/api/logout', (req, res) => {
   res.json({ message: 'Logged out' });
+});
+
+// Add streak endpoint
+app.get('/api/user/streak', async (req, res) => {
+  console.log('[STREAK DEBUG] /api/user/streak called', { userId: req.user?.id || req.query.userId, language: req.query.language });
+  const userId = req.user?.id || req.query.userId;
+  const language = req.query.language;
+  if (!userId || !language) return res.status(400).json({ error: 'Missing user or language' });
+
+  try {
+    const result = await getUserStreak(userId, language);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Audio analysis endpoint

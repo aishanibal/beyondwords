@@ -771,6 +771,52 @@ function deleteLanguageDashboard(userId, language) {
   });
 }
 
+function getUserStreak(userId, language) {
+  return new Promise((resolve, reject) => {
+    // Get all user messages for the language, grouped by date
+    const sql = `
+      SELECT DATE(m.created_at) as day
+      FROM messages m
+      JOIN conversations c ON m.conversation_id = c.id
+      JOIN language_dashboards ld ON c.language_dashboard_id = ld.id
+      WHERE c.user_id = ? AND ld.language = ? AND m.sender = 'User'
+      GROUP BY day
+      ORDER BY day DESC
+    `;
+    db.all(sql, [userId, language], (err, rows) => {
+      if (err) return reject(err);
+      const days = rows.map(r => r.day);
+      console.log('[STREAK DEBUG] User:', userId, 'Language:', language);
+      console.log('[STREAK DEBUG] Message days:', days);
+      if (days.length === 0) {
+        console.log('[STREAK DEBUG] No days found, streak is 0');
+        return resolve({ streak: 0, last_active: null, days: [] });
+      }
+
+      // Calculate streak in US Eastern Time by comparing date strings
+      const tz = 'America/New_York';
+      const now = new Date();
+      let streak = 0;
+      let lastActive = null;
+      for (let i = 0; i < days.length; i++) {
+        if (i === 0) lastActive = days[i];
+        // Calculate expected date string for streak
+        const expectedDate = new Date(now);
+        expectedDate.setDate(expectedDate.getDate() - streak);
+        const expectedStr = expectedDate.toLocaleDateString('en-CA', { timeZone: tz }); // 'YYYY-MM-DD'
+        console.log(`[STREAK DEBUG] Comparing day: ${days[i]} to expected: ${expectedStr}`);
+        if (days[i] === expectedStr) {
+          streak++;
+        } else {
+          break;
+        }
+      }
+      console.log('[STREAK DEBUG] Final streak:', streak, 'Last active:', lastActive);
+      resolve({ streak, last_active: lastActive, days });
+    });
+  });
+}
+
 module.exports = {
   db,
   createUser,
@@ -796,5 +842,6 @@ module.exports = {
   getUserLanguageDashboards,
   getLanguageDashboard,
   updateLanguageDashboard,
-  deleteLanguageDashboard
+  deleteLanguageDashboard,
+  getUserStreak
 }; 

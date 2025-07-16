@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useUser } from './App';
 import axios from 'axios';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
+import PropTypes from 'prop-types';
 import LanguageOnboarding from './LanguageOnboarding';
 
 const TALK_TOPICS = [
@@ -33,7 +34,6 @@ API.interceptors.request.use(config => {
 
 function Dashboard() {
   const { user } = useUser();
-  const navigate = useNavigate();
   const [languageDashboards, setLanguageDashboards] = useState([]);
   const [selectedLanguage, setSelectedLanguage] = useState(null);
   const [conversations, setConversations] = useState([]);
@@ -174,16 +174,23 @@ function Dashboard() {
   }
   
   // Calculate usage stats
-  const streak = 3; // TODO: calculate real streak from conversations
-  const usageByDay = [
-    { day: 'Mon', count: 1 },
-    { day: 'Tue', count: 2 },
-    { day: 'Wed', count: 1 },
-    { day: 'Thu', count: 0 },
-    { day: 'Fri', count: 2 },
-    { day: 'Sat', count: 1 },
-    { day: 'Sun', count: 0 },
-  ];
+  const [streak, setStreak] = useState(0);
+  // Optionally: const [usageByDay, setUsageByDay] = useState([]);
+
+  useEffect(() => {
+    async function fetchStreak() {
+      if (user?.id && selectedLanguage) {
+        try {
+          const res = await API.get(`/api/user/streak?userId=${user.id}&language=${selectedLanguage}`);
+          setStreak(res.data.streak || 0);
+          // Optionally: setUsageByDay(res.data.days || []);
+        } catch (err) {
+          setStreak(0);
+        }
+      }
+    }
+    fetchStreak();
+  }, [user?.id, selectedLanguage]);
 
   // Dashboard Settings Modal Component
   const DashboardSettingsModal = ({ dashboard, isOpen, onClose, onUpdate }) => {
@@ -526,6 +533,20 @@ function Dashboard() {
     );
   };
 
+  // PropTypes for DashboardSettingsModal
+  DashboardSettingsModal.propTypes = {
+    dashboard: PropTypes.shape({
+      language: PropTypes.string.isRequired,
+      proficiency_level: PropTypes.string,
+      talk_topics: PropTypes.array,
+      learning_goals: PropTypes.array,
+      // add other fields as needed
+    }).isRequired,
+    isOpen: PropTypes.bool.isRequired,
+    onClose: PropTypes.func.isRequired,
+    onUpdate: PropTypes.func.isRequired,
+  };
+
   // Handle dashboard update
   const handleDashboardUpdate = (updatedDashboard) => {
     setLanguageDashboards(prev => 
@@ -747,7 +768,9 @@ function Dashboard() {
                 }}>
                   <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🎤</div>
                   <div style={{ fontWeight: 600, marginBottom: '0.5rem' }}>Start your first conversation!</div>
-                  <div style={{ fontSize: '0.9rem', opacity: 0.8 }}>Click "Practice Now" to begin learning {getLanguageInfo(currentDashboard.language).label}</div>
+                  <div style={{ fontSize: '0.9rem', opacity: 0.8 }}>
+                    Click &quot;Practice Now&quot; to begin learning {getLanguageInfo(currentDashboard.language).label}
+                  </div>
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
