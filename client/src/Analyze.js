@@ -1538,7 +1538,7 @@ function Analyze() {
            </button>
          )}
           <button
-            onClick={isRecording ? stopRecording : startRecording}
+            onClick={isRecording ? () => stopRecording(false) : startRecording}
             disabled={isProcessing}
             style={{
               width: 60,
