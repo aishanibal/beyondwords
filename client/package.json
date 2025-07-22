@@ -31,6 +31,9 @@
     ]
   },
   "devDependencies": {
-    "eslint-plugin-react-hooks": "^5.2.0"
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "typescript": "^5.8.3"
   }
 }

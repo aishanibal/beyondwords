@@ -19,6 +19,16 @@ from gemini_client import get_conversational_response, get_detailed_feedback, ge
 app = Flask(__name__)
 CORS(app)
 
+# Check API key at startup
+api_key = os.getenv("GOOGLE_API_KEY")
+if not api_key:
+    print("⚠️ WARNING: GOOGLE_API_KEY environment variable is not set!")
+    print("   The AI features will not work. Please set your API key:")
+    print("   export GOOGLE_API_KEY='your-api-key-here'")
+    print("   Then restart this server.")
+else:
+    print(f"✅ Google API key is configured (starts with: {api_key[:8]}...)")
+
 # Global variables for models
 whisper_model = None
 wav2vec2_processors = {}
@@ -231,15 +241,15 @@ def transcribe():
         language = data.get('language', 'en')
         user_level = data.get('user_level', 'beginner')
         user_topics = data.get('user_topics', [])
-        
+        formality = data.get('formality', 'friendly')
+        feedback_language = data.get('feedback_language', 'en')
         print(f"=== /transcribe called ===")
         print(f"Language received: {language}")
         print(f"Audio file: {audio_file}")
-        print(f"Chat history length: {len(chat_history)}")
-        
+        print(f"Chat history length: {len(chat_history)})")
+        print(f"Formality: {formality}")
         if not audio_file or not os.path.exists(audio_file):
             return jsonify({"error": "Audio file not found"}), 400
-        
         # Get transcription using Whisper (with language)
         print(f"Calling Whisper with language={language}")
         whisper_lang = get_whisper_language_code(language)
@@ -248,11 +258,14 @@ def transcribe():
         else:
             transcription = whisper_model.transcribe(audio_file)["text"]
         print(f"Whisper transcription: '{transcription}'")
-        
-        print(f"Calling Gemini with language={language}, level={user_level}, goals={user_topics}")
-        ai_response = get_conversational_response(transcription, chat_history, language, user_level, user_topics)
-        print(f"Gemini response: '{ai_response}'")
-        
+        print(f"Calling Gemini with language={language}, level={user_level}, goals={user_topics}, formality={formality}")
+        ai_response = get_conversational_response(transcription, chat_history, language, user_level, user_topics, formality, feedback_language)
+        if not ai_response or not str(ai_response).strip():
+            if not os.getenv('GOOGLE_API_KEY'):
+                ai_response = "AI is not available: Gemini API key is not configured."
+            else:
+                ai_response = "Hello! What would you like to talk about today?"
+        print(f"DEBUG: Outgoing ai_response: {ai_response}")
         return jsonify({
             "transcription": transcription,
             "ai_response": ai_response
@@ -332,11 +345,15 @@ def health():
         }
         
         all_models_loaded = all(models_status.values())
+        api_key_set = bool(os.getenv("GOOGLE_API_KEY"))
+        gemini_ready = is_gemini_ready() if api_key_set else False
         
         return jsonify({
-            "status": "healthy" if all_models_loaded else "degraded",
+            "status": "healthy" if all_models_loaded and gemini_ready else "degraded",
             "models_loaded": all_models_loaded,
             "models_status": models_status,
+            "api_key_configured": api_key_set,
+            "gemini_ready": gemini_ready,
             "timestamp": str(datetime.datetime.now())
         })
     except Exception as e:
@@ -356,6 +373,7 @@ def feedback():
         language = data.get('language', 'en')
         user_level = data.get('user_level', 'beginner')
         user_topics = data.get('user_topics', [])
+        feedback_language = data.get('feedback_language', 'en')
 
         print(f"=== /feedback called ===")
         print(f"Language: {language}")
@@ -370,7 +388,8 @@ def feedback():
             chat_history=chat_history,
             language=language,
             user_level=user_level,
-            user_topics=user_topics
+            user_topics=user_topics,
+            feedback_language=feedback_language
         )
         print(f"AI feedback received: {response[:100]}...")
         return jsonify({"feedback": response})
@@ -387,11 +406,45 @@ def short_feedback():
         language = data.get('language', 'en')
         user_level = data.get('user_level', 'beginner')
         user_topics = data.get('user_topics', [])
-        feedback = get_short_feedback(user_input, context, language, user_level, user_topics)
+        feedback_language = data.get('feedback_language', 'en')
+        feedback = get_short_feedback(user_input, context, language, user_level, user_topics, feedback_language)
         return jsonify({"short_feedback": feedback})
     except Exception as e:
         print(f"Short feedback error: {e}")
         return jsonify({"short_feedback": "Error generating feedback.", "error": str(e)}), 500
+
+@app.route('/initial_message', methods=['POST'])
+def initial_message():
+    """Generate an initial AI greeting message for a new conversation"""
+    try:
+        data = request.get_json()
+        chat_history = data.get('chat_history', [])
+        language = data.get('language', 'en')
+        user_level = data.get('user_level', 'beginner')
+        user_topics = data.get('user_topics', [])
+        formality = data.get('formality', 'friendly')
+        feedback_language = data.get('feedback_language', 'en')
+        
+        print(f"=== /initial_message called ===")
+        print(f"Language: {language}")
+        print(f"User level: {user_level}")
+        print(f"User topics: {user_topics}")
+        print(f"Formality: {formality}")
+        
+        # Generate a welcoming initial message
+        ai_response = get_conversational_response("", chat_history, language, user_level, user_topics, formality, feedback_language)
+        
+        if not ai_response or not str(ai_response).strip():
+            if not os.getenv('GOOGLE_API_KEY'):
+                ai_response = "AI is not available: Gemini API key is not configured."
+            else:
+                ai_response = "Hello! What would you like to talk about today?"
+        
+        print(f"Initial AI message: {ai_response}")
+        return jsonify({"ai_response": ai_response})
+    except Exception as e:
+        print(f"Initial message error: {e}")
+        return jsonify({"ai_response": "Hello! What would you like to talk about today?"}), 500
 
 @app.route('/suggestions', methods=['POST'])
 def suggestions():
@@ -455,6 +508,7 @@ def translate():
         source_language = data.get('source_language', 'auto')
         target_language = data.get('target_language', 'en')
         breakdown = data.get('breakdown', False)
+        feedback_language = data.get('feedback_language', 'en')
 
         print(f"=== /translate called ===")
         print(f"Text: {text}")
@@ -466,7 +520,7 @@ def translate():
             return jsonify({"error": "No text provided"}), 400
 
         # Call AI client for translation
-        translation_result = get_translation(text, source_language, target_language, breakdown)
+        translation_result = get_translation(text, source_language, target_language, breakdown, feedback_language)
         print(f"Translation result: {translation_result.get('translation', '')}")
         
         return jsonify(translation_result)
@@ -477,4 +531,4 @@ def translate():
 if __name__ == '__main__':
     print("Starting Python Speech Analysis API...")
     load_models()
-    app.run(host='0.0.0.0', port=5001, debug=True) 
+    app.run(host='0.0.0.0', port=5000, debug=True) 

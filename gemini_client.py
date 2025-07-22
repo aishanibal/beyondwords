@@ -363,29 +363,37 @@ def get_language_name(language_code: str) -> str:
 _tutor_instances = {}
 
 # Main API functions using the modular approach with separate Gemini calls
-def get_conversational_response(transcription: str, chat_history: List[Dict], language: str = 'en', user_level: str = 'beginner', user_topics: List[str] = None) -> str:
+def get_conversational_response(transcription: str, chat_history: List[Dict], language: str = 'en', user_level: str = 'beginner', user_topics: List[str] = None, formality: str = 'friendly', feedback_language: str = 'en') -> str:
     """Get conversational response using separate Gemini call."""
     if user_topics is None:
         user_topics = []
+    if not GOOGLE_AI_AVAILABLE or not api_key:
+        return "AI is not available: Gemini API key is not configured."
     
     # Get or create tutor instance
-    tutor_key = f"{language}_{user_level}_{','.join(sorted(user_topics))}"
+    tutor_key = f"{language}_{user_level}_{','.join(sorted(user_topics))}_{formality}"
     if tutor_key not in _tutor_instances:
-        _tutor_instances[tutor_key] = create_tutor(language, user_level, user_topics)
-    
+        tutor = create_tutor(language, user_level, user_topics)
+        tutor.formality = formality
+        _tutor_instances[tutor_key] = tutor
     tutor = _tutor_instances[tutor_key]
     
     # Update tutor with current context
     tutor.user_level = user_level
     tutor.user_topics = user_topics
+    tutor.formality = formality
     
     # Build context from chat history
     context = "\n".join([f"{msg['sender']}: {msg['text']}" for msg in chat_history[-4:]]) if chat_history else ""
     
+    # Add formality and feedback language to the prompt
+    formality_note = f"\n\nFORMALITY LEVEL: {formality}\n" if formality else ""
+    feedback_lang_note = f"\n\nFEEDBACK LANGUAGE: {feedback_language}\n" if feedback_language else ""
+    
     # Make separate Gemini call for conversation
-    return tutor.get_conversational_response(transcription, context)
+    return tutor.get_conversational_response(transcription, context + formality_note + feedback_lang_note)
 
-def get_detailed_feedback(phoneme_analysis: str, reference_text: str, recognized_text: str, chat_history: List[Dict], language: str = 'en', user_level: str = 'beginner', user_topics: List[str] = None) -> str:
+def get_detailed_feedback(phoneme_analysis: str, reference_text: str, recognized_text: str, chat_history: List[Dict], language: str = 'en', user_level: str = 'beginner', user_topics: List[str] = None, feedback_language: str = 'en') -> str:
     """Get detailed feedback using separate Gemini call."""
     if user_topics is None:
         user_topics = []
@@ -405,8 +413,8 @@ def get_detailed_feedback(phoneme_analysis: str, reference_text: str, recognized
     # Build context from chat history
     context = "\n".join([f"{msg['sender']}: {msg['text']}" for msg in chat_history[-4:]]) if chat_history else ""
     
-    # Make separate Gemini call for feedback
-    return tutor.get_detailed_feedback(recognized_text, context)
+    # Add feedback_language to the prompt
+    return tutor.get_detailed_feedback(recognized_text, context, feedback_language)
 
 def get_text_suggestions(chat_history: List[Dict], language: str = 'en', user_level: str = 'beginner', user_topics: List[str] = None) -> list:
     """Get text suggestions using separate Gemini call."""
@@ -430,7 +438,7 @@ def get_text_suggestions(chat_history: List[Dict], language: str = 'en', user_le
     # Make separate Gemini call for suggestions
     return tutor.get_suggestions(context)
 
-def get_short_feedback(user_input: str, context: str = "", language: str = 'en', user_level: str = 'beginner', user_topics: list = None) -> str:
+def get_short_feedback(user_input: str, context: str = "", language: str = 'en', user_level: str = 'beginner', user_topics: list = None, feedback_language: str = 'en') -> str:
     """Generate a short, conversational feedback about grammar/style."""
     if not GOOGLE_AI_AVAILABLE:
         return "Short feedback ran (no Gemini API key configured)"
@@ -443,7 +451,8 @@ def get_short_feedback(user_input: str, context: str = "", language: str = 'en',
         f"Preferred topics: {', '.join(user_topics) if user_topics else 'none'}\n"
         f"Give a very short (1-2 sentences) tip or correction about grammar or style, only if needed. "
         f"If there are no issues, say something encouraging. "
-        f"Be brief and natural, like a quick chat comment."
+        f"Be brief and natural, like a quick chat comment.\n"
+        f"Respond in {feedback_language}."
     )
     try:
         model = genai.GenerativeModel("gemini-1.5-flash")
@@ -456,7 +465,7 @@ def get_short_feedback(user_input: str, context: str = "", language: str = 'en',
         print(f"Short feedback error: {e}")
         return "Keep going!"
 
-def get_translation(text: str, source_language: str = 'auto', target_language: str = 'en', breakdown: bool = False, user_topics: List[str] = None) -> dict:
+def get_translation(text: str, source_language: str = 'auto', target_language: str = 'en', breakdown: bool = False, user_topics: List[str] = None, feedback_language: str = 'en') -> dict:
     """Simple translation function using Gemini."""
     if user_topics is None:
         user_topics = []
@@ -472,27 +481,9 @@ def get_translation(text: str, source_language: str = 'auto', target_language: s
         
         # Build translation prompt
         if breakdown:
-            prompt = f"""Translate the following text and provide a detailed breakdown:
-
-Text to translate: "{text}"
-Source language: {source_language if source_language != 'auto' else 'detect automatically'}
-Target language: {target_language}
-
-Provide:
-1. Translation: [Direct translation]
-2. Breakdown: [Word-by-word or phrase-by-phrase explanation of key elements]
-
-Format your response exactly as:
-Translation: [your translation here]
-Breakdown: [your breakdown here]"""
+            prompt = f"""Translate the following text and provide a detailed breakdown:\n\nText to translate: \"{text}\"\nSource language: {source_language if source_language != 'auto' else 'detect automatically'}\nTarget language: {target_language}\nFeedback language: {feedback_language}\n\nProvide:\n1. Translation: [Direct translation]\n2. Breakdown: [Word-by-word or phrase-by-phrase explanation of key elements, in {feedback_language}]\n\nFormat your response exactly as:\nTranslation: [your translation here]\nBreakdown: [your breakdown here]"""
         else:
-            prompt = f"""Translate the following text accurately:
-
-Text: "{text}"
-Source language: {source_language if source_language != 'auto' else 'detect automatically'}  
-Target language: {target_language}
-
-Provide only the translation, no additional explanation."""
+            prompt = f"""Translate the following text accurately:\n\nText: \"{text}\"\nSource language: {source_language if source_language != 'auto' else 'detect automatically'}  \nTarget language: {target_language}\nFeedback language: {feedback_language}\n\nProvide only the translation, no additional explanation. Respond in {feedback_language}."""
         
         response = model.generate_content(prompt)
         
