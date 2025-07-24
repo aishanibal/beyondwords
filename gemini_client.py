@@ -490,14 +490,14 @@ Example of unnatural vs. natural phrasing:
 - Unnatural: Samahan kita mag-usap.  
 - Natural: Usap tayo! / Kwentuhan tayo! / Nandito ako kung gusto mong magkwento.
 - Make sure the response is natural and appropriately targeted (e.g., "ano'ng balita sa'yo?" is more relevant than "ano'ng balita?")
-– Be aware of commonly fused clitic forms (e.g., “mong”, “kang”, “bang”, “anong”), which combine pronouns or particles with the linker “ng” to streamline phrasing; these are not contractions, but grammatical shortcuts that differ in meaning or tone from their separated counterparts (e.g., “wag mong isipin” vs. “wag mo nang isipin”).
+– Be aware of commonly fused clitic forms (e.g., "mong", "kang", "bang", "anong"), which combine pronouns or particles with the linker "ng" to streamline phrasing; these are not contractions, but grammatical shortcuts that differ in meaning or tone from their separated counterparts ("wag mong isipin" vs. "wag mo nang isipin").
 - Avoid using partial reduplications (e.g., mainit-init, gutom-gutom, lamig-lamig) unless they are contextually natural and common in everyday speech. 
 - Ensure that all verbs match the intended tense or aspect based on context (e.g., if the user says they just ate, use the completed form like 'kumain lang ako', not the future form 'kakain').
 """
 
     def _get_cultural_rules(self) -> str:
         """Get Tagalog-specific cultural rules for response checking."""
-        return f"""Tagalog cultural rules:\n- Avoid overusing \"Hay naku\" — use varied expressions like \"ahh\", \"hala\", \"oo nga\", \"ay naku\", \"ah talaga\", \"ay oo\", etc. Choose based on context."""
+        return f"""Tagalog cultural rules:\n- Avoid overusing "Hay naku" — use varied expressions like "ahh", "hala", "oo nga", "ay naku", "ah talaga", "ay oo", etc. Choose based on context."""
 
     def _get_fallback_suggestions(self) -> list:
         """Get Tagalog-specific fallback suggestions."""
@@ -1229,3 +1229,46 @@ def is_gemini_ready() -> bool:
         print(f"Gemini readiness check failed: {e}")
     
     return False
+
+def generate_conversation_summary(chat_history: List[Dict]) -> Dict[str, str]:
+    """Generate a title and synopsis for the entire conversation history using Gemini."""
+    if not GOOGLE_AI_AVAILABLE:
+        return {"title": "[Unavailable]", "synopsis": "[Gemini not available]"}
+    
+    # Build the full context string
+    context = "\n".join([f"{msg['sender']}: {msg['text']}" for msg in chat_history])
+    
+    prompt = f"""
+You are an expert conversation summarizer for a language learning app. Given the full conversation below, generate:
+1. A short, descriptive title (max 8 words) that captures the main topic or theme of the conversation.
+2. A concise synopsis (2-4 sentences) that summarizes what was discussed, the tone, and any key moments or learning points.
+
+CONVERSATION HISTORY:
+{context}
+
+Return your answer in this exact format:
+Title: <your title here>
+Synopsis: <your synopsis here>
+"""
+    try:
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        response = model.generate_content(prompt)
+        if response and response.text:
+            # Parse the response
+            lines = response.text.strip().split("\n")
+            title = ""
+            synopsis = ""
+            for line in lines:
+                if line.lower().startswith("title:"):
+                    title = line[len("title:"):].strip()
+                elif line.lower().startswith("synopsis:"):
+                    synopsis = line[len("synopsis:"):].strip()
+            if not title or not synopsis:
+                # fallback: use the whole response as synopsis
+                synopsis = response.text.strip()
+            return {"title": title, "synopsis": synopsis}
+        else:
+            return {"title": "[No response]", "synopsis": "[No response from Gemini]"}
+    except Exception as e:
+        print(f"Error generating conversation summary: {e}")
+        return {"title": "[Error]", "synopsis": str(e)}
