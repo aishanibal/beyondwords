@@ -350,6 +350,8 @@ If the response is already natural and grammatically accurate, return it unchang
         """Explain the LLM's response to the user in a strict, structured way, tailored to their proficiency and feedback language."""
         if not self.model or not GOOGLE_AI_AVAILABLE:
             return f"Here's an explanation: {llm_response}"
+
+        script_lang_instruction = "– [Romanized version]" if self.language_code in self.SCRIPT_LANGUAGES else ""
     
         prompt = f"""
         You are an expert {self.language_name} language tutor. Your job is to explain the following {self.language_name} response to a heritage learner at the {self.user_level} level.
@@ -375,7 +377,7 @@ If the response is already natural and grammatically accurate, return it unchang
     Provide the full response in its original script.
 
     For each sentence in the response, repeat:
-    [Sentence in original script] – [Romanized version if applicable]
+    [Sentence in original script] {script_lang_instruction}]
 
     Briefly explain the overall meaning, tone, and social context. Do NOT mention or reference the user's info, closeness, or proficiency in your explanation. Do not say things like "this matches your user info" or similar. Only focus on the meaning, structure, and cultural/grammatical breakdown of the response itself.
 
@@ -488,6 +490,7 @@ Example of unnatural vs. natural phrasing:
 - Unnatural: Samahan kita mag-usap.  
 - Natural: Usap tayo! / Kwentuhan tayo! / Nandito ako kung gusto mong magkwento.
 - Make sure the response is natural and appropriately targeted (e.g., "ano'ng balita sa'yo?" is more relevant than "ano'ng balita?")
+– Be aware of commonly fused clitic forms (e.g., “mong”, “kang”, “bang”, “anong”), which combine pronouns or particles with the linker “ng” to streamline phrasing; these are not contractions, but grammatical shortcuts that differ in meaning or tone from their separated counterparts (e.g., “wag mong isipin” vs. “wag mo nang isipin”).
 - Avoid using partial reduplications (e.g., mainit-init, gutom-gutom, lamig-lamig) unless they are contextually natural and common in everyday speech. 
 - Ensure that all verbs match the intended tense or aspect based on context (e.g., if the user says they just ate, use the completed form like 'kumain lang ako', not the future form 'kakain').
 """
