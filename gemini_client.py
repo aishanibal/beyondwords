@@ -134,7 +134,7 @@ Reply naturally in {self.language_name}."""
         if not self.model or not GOOGLE_AI_AVAILABLE:
             return "⚠️ Google AI not available for feedback."
         
-        grammar_rules = self._get_grammar_rules(user_input)
+        grammar_rules = self._get_grammar_rules()
         
         prompt = f"""
       
@@ -184,68 +184,82 @@ Always use {self.feedback_language} for explanations.
 
     def get_suggestions(self, context: str = "") -> list:
         """Generate suggestions for what the user could say next."""
-        if not self.model or not GOOGLE_AI_AVAILABLE:
+        if not getattr(self, 'model', None) or not GOOGLE_AI_AVAILABLE:
             return [{"text": "Keep practicing!", "translation": "Continue learning!"}]
         
-        # Get level guidance from dictionary
+        # Prepare proficiency level guidance
         level_guidance = self.PROFICIENCY_LEVELS.get(self.user_level, "")
         
-        # Get topics guidance directly
+        # Combine topic-related guidance
+        topics_list = ', '.join(self.user_topics) if self.user_topics else ""
         topics_guidance = ""
-        if self.user_topics and len(self.user_topics) > 0:
-            topics_list = ', '.join(self.user_topics)
-            topics_guidance = f"CRITICAL: User specifically wants to practice discussing: {topics_list}. ALWAYS try to connect conversations and suggestions to these topics. Make this a priority in your responses."
-        
-        topic_focus = ""
-        if hasattr(self, 'user_topics') and self.user_topics and len(self.user_topics) > 0:
-            topics_list = ', '.join(self.user_topics)
-            topic_focus = f"""
-CRITICAL TOPIC REQUIREMENTS:
-- Connect the user's reply to their preferred topics: {topics_list}
-- If any topic has already been mentioned, expand on it with interest or a follow-up question
-- If the current conversation feels generic, gently steer toward one of the user's topics
-- Example (topic: 'food'): Suggest replies about favorite dishes, meals, or asking what the other person likes to eat
+        if topics_list:
+            topics_guidance = f"""
+- The user wants to focus on the following topics: {topics_list}
+- CRITICAL: Connect replies to these topics whenever possible. If one has already been mentioned, expand naturally or ask a related question.
+- If the conversation becomes generic, gently steer it back toward these topics.
 """
 
+        # Begin prompt
         prompt = f"""
-You are a culturally-aware AI tutor helping a heritage speaker of {self.language_name} continue a natural conversation. Your goal is to generate fluent, emotionally attuned, and topic-relevant replies that help the learner stay engaged and build confidence using the language.
+You are a culturally-aware AI tutor helping a heritage speaker of {self.language_name} continue a natural conversation.
 
-YOUR TASK:  
-The user may not know how to respond to the AI's last message. Suggest 3 natural replies they could use to continue the conversation appropriate for a {self.user_closeness} closeness level.
-Each should directly respond to the AI's most recent message, while maintaining this in mind: {self.CLOSENESS_LEVELS[self.user_closeness]}.
-Help the user stay engaged and gently steer the conversation toward their favorite topics.
+Your goal is to generate fluent, emotionally attuned, and topic-relevant replies that help the learner stay engaged and build confidence using the language.
 
+TASK:
+The user may be unsure how to reply to the AI's last message. Suggest 3 natural responses they could say next, suited to a {self.user_closeness} closeness level.
+Each should directly respond to the AI's most recent message, using this description of closeness: {self.CLOSENESS_LEVELS[self.user_closeness]}.
+Try to gently incorporate the user's favorite topics where appropriate.
 
-Below is the conversation so far:
+Conversation so far (latest message last):
 {context}
 
 USER INFO:
-- Proficiency level: {self.user_level} ({self.PROFICIENCY_LEVELS[self.user_level]})
-- {topics_guidance}
+- Proficiency level: {self.user_level} ({level_guidance})
+- Target translation language: {self.feedback_language}
+{topics_guidance}
 
-{topic_focus}
 IMPORTANT:
-– Use vocabulary and sentence structure appropriate for a {self.user_level} learner: {self.PROFICIENCY_LEVELS[self.user_level]}.  
-– Each suggestion should be around the same number of words as the user's message (or up to 1.5× longer). 
- 
+– Use vocabulary and sentence structure appropriate for a {self.user_level} learner: {level_guidance}
+– Each suggestion should be roughly the same length as the user's last message (or up to 1.5× longer)
+– Do NOT use placeholders like [Song Title], [Artist's Name], or brackets
+– Always provide real, natural-sounding examples that a native speaker would say
+– The translation must always be in {self.feedback_language}. Only use English if {self.feedback_language} is English.
+
+For each suggestion, also include a short explanation of what it means and how it would be used in the conversation. 
+– Make the explanation as detailed as is helpful for the user's proficiency level.  
+– If the phrase includes a cultural nuance or idiomatic structure, briefly explain it.
 """
-        # Add format instructions for script languages
+
+        # Add format instructions for script-based languages
         if self.language_code in self.SCRIPT_LANGUAGES:
-            prompt += """Use this exact format for each suggestion:
-            [Simple {self.language_name} phrase] - [Romanized version] - [{self.feedback_language} translation]
-            [Slightly more complex {self.language_name}] - [Romanized version] - [{self.feedback_language} translation]
-            Another natural option] - [Romanized version] - [{self.feedback_language} translation]"""
+            prompt += f"""
+Use this exact format for each suggestion:
+[Simple {self.language_name} phrase] - [Romanized version] - [{self.feedback_language} translation]
+Explanation: [brief explanation here]
+
+[Slightly more complex {self.language_name} phrase] - [Romanized version] - [{self.feedback_language} translation]
+Explanation: [brief explanation here]
+
+[Another natural option] - [Romanized version] - [{self.feedback_language} translation]
+Explanation: [brief explanation here]
+"""
             example = self.get_script_suggestion_example()
             if example:
                 prompt += f"\nExample:\n{example}\n"
         else:
-            prompt += "Use this exact format:\n[Simple {self.language_name} phrase] - [{self.feedback_language} translation]\n[Slightly more complex {self.language_name}] - [{self.feedback_language} translation]\n[Another natural option] - [{self.feedback_language} translation]\n"
-        prompt += """
-– Do NOT use brackets or placeholders. Always use real, specific examples that a native speaker would mention.
-– Never output [Artist's Name], [Song Title], [Genre], or anything in brackets.
-- The translation should always be in {self.feedback_language}. Do not use English unless the feedback_language is English.
+            prompt += f"""
+Use this exact format for each suggestion:
+[Simple {self.language_name} phrase] - [{self.feedback_language} translation]
+Explanation: [brief explanation here]
+
+[Slightly more complex {self.language_name} phrase] - [{self.feedback_language} translation]
+Explanation: [brief explanation here]
+
+[Another natural option] - [{self.feedback_language} translation]
+Explanation: [brief explanation here]
 """
-        
+
         try:
             response = self.model.generate_content(prompt)
             if response and response.text:
@@ -284,6 +298,9 @@ Carefully check that:
 - You have complete control to return a corrected version in {self.language_name} that fits the user's closeness and proficiency levels and touches on the provided topics if necessary.
 - If the response is already natural and grammatically accurate, return it unchanged.
 
+Abide by these grammar rules:
+{self._get_grammar_rules()}
+
 {script_lang_instruction}"""
         try:
             response = self.model.generate_content(checker_prompt)
@@ -321,7 +338,7 @@ Revise the tutor's response if needed to:
 - Adjust the tone, pronouns, and grammar to match this level of closeness: {self.CLOSENESS_LEVELS[self.user_closeness]}.
 
 
-{self._get_grammar_rules(user_input)}
+{self._get_grammar_rules()}
 {self._get_cultural_rules()}
 
 Quality guidelines:
@@ -459,7 +476,7 @@ If the response is already natural and grammatically accurate, return it unchang
             {"text": "Can you tell me more?", "translation": "Can you tell me more?"}
         ]
 
-    def _get_grammar_rules(self, user_input: str) -> str:
+    def _get_grammar_rules(self) -> str:
         """Get language-specific grammar rules. To be implemented by subclasses."""
         return ""
 
@@ -471,6 +488,32 @@ If the response is already natural and grammatically accurate, return it unchang
         """Return the closeness level description for the given key."""
         return self.CLOSENESS_LEVELS.get(key, "")
 
+    def check_and_naturalize_feedback(self, user_input: str, feedback: str) -> str:
+        """Check and revise feedback to be more natural, conversational, and encouraging."""
+        if not self.model or not GOOGLE_AI_AVAILABLE:
+            return feedback
+        
+        prompt = f"""
+You are a friendly, supportive language tutor. Your job is to review the following feedback given to a learner about their message and revise it ONLY if it sounds stiff, overly formal, robotic, or not like something a real, encouraging tutor would say in conversation.
+
+USER INPUT: "{user_input}"
+FEEDBACK: "{feedback}"
+
+If the feedback is already natural, warm, and encouraging, return it unchanged.
+If it is too formal, stiff, or robotic, rewrite it to sound more like a real, supportive tutor: use natural, conversational language, contractions, and a friendly tone. Keep it concise and positive, but do not remove important corrections or explanations.
+
+Return ONLY the improved feedback, with no explanation or formatting.
+"""
+        try:
+            response = self.model.generate_content(prompt)
+            if response and response.text:
+                return response.text.strip()
+            else:
+                return feedback
+        except Exception as e:
+            print(f"Error in check_and_naturalize_feedback: {e}")
+            return feedback
+
 
 
 
@@ -481,7 +524,7 @@ class TagalogHeritageTutor(LanguageTutor):
         self.user_level = level
         self.heritage_language = "Tagalog"
 
-    def _get_grammar_rules(self, user_input: str) -> str:
+    def _get_grammar_rules(self) -> str:
         """Get Tagalog-specific grammar rules for response checking."""
         return """Tagalog grammar rules:
 – Use the correct form of discourse particles (e.g., "po", "din/rin", "daw/raw", "ng/nang", "dito/rito") based on context  
@@ -527,17 +570,22 @@ class JapaneseHeritageTutor(LanguageTutor):
         self.user_level = level
         self.heritage_language = "Japanese"
 
-    def _get_grammar_rules(self, user_input: str) -> str:
+    def _get_grammar_rules(self) -> str:
+        """Get Japanese-specific grammar rules for response checking."""
         return """Japanese grammar rules:
-- Ensure correct use of particles (e.g., は vs. が, に vs. で).
-- Check verb conjugations for tense, politeness, and negative forms.
-- Avoid direct translations from English that sound unnatural in Japanese (e.g., avoid overusing 私は).
-- Confirm proper sentence-final forms: use 〜です/ます for polite tone, and plain form when appropriate.
-- Avoid redundant subjects; Japanese often omits the subject when it's understood.
-- Avoid unnecessary interjections (e.g., はい, ええ, あの) when they don't serve a clear conversational or emotional purpose, especially at the start of statements or responses that aren't answering a question.
-- Use appropriate question endings like ～か or ～の? depending on formality and gender.
-- Verify natural use of はじめまして, よろしくお願いします, and similar set phrases.
-Ensure correct use of ～ている forms: Use for ongoing actions or states (e.g., 読んでいる = "is reading"), and avoid mixing up habitual vs. current action meanings.
+- Use correct word order: Subject–Object–Verb (SOV).
+- Use appropriate particles (e.g., は, が, を, に, で, へ, と, も, から, まで) to mark grammatical roles.
+- Match verb endings and politeness level (casual: だ/る, polite: です/ます, honorific/humble forms for formal situations).
+- Omit the subject or object when it is clear from context (common in natural conversation).
+- Use topic marker は to introduce or shift the topic, but avoid overusing it in short exchanges.
+- Use correct counters and numbers for counting objects, people, etc.
+- Use natural sentence-final particles (e.g., ね, よ, かな, か) to convey nuance, but avoid overusing them.
+- Avoid direct, literal translations from English that sound unnatural in Japanese.
+- Use appropriate pronouns (私, 僕, 俺, あなた, 君, etc.) based on gender, formality, and relationship, but omit when possible.
+- Use natural contractions and colloquial forms in casual speech (e.g., じゃない instead of ではない).
+- Avoid overusing personal pronouns; Japanese often omits them when understood from context.
+- Use correct tense and aspect (e.g., 〜ている for ongoing actions, 〜た for completed actions).
+- Use honorifics (さん, ちゃん, くん, 様) appropriately based on relationship and context.
 """
 
     def _get_cultural_rules(self) -> str:
@@ -577,7 +625,7 @@ class KoreanHeritageTutor(LanguageTutor):
         self.user_level = level
         self.heritage_language = "Korean"
 
-    def _get_grammar_rules(self, user_input: str) -> str:
+    def _get_grammar_rules(self) -> str:
         return """Korean grammar rules:
         - Use the correct speech level (반말 banmal for casual, 존댓말 jondaetmal for polite/formal).
         - Check verb endings for politeness and formality (-요, -습니다, etc.).
@@ -624,7 +672,7 @@ class MandarinChineseHeritageTutor(LanguageTutor):
         self.user_level = level
         self.heritage_language = "Mandarin Chinese"
 
-    def _get_grammar_rules(self, user_input: str) -> str:
+    def _get_grammar_rules(self) -> str:
         return """Mandarin Chinese grammar rules:
 - Use correct word order: Subject-Verb-Object (SVO).
 - Avoid unnecessary pronouns; Mandarin often omits the subject when it is clear from context.
@@ -733,7 +781,7 @@ class HindiHeritageTutor(LanguageTutor):
         self.user_level = level
         self.heritage_language = "Hindi"
 
-    def _get_grammar_rules(self, user_input: str) -> str:
+    def _get_grammar_rules(self) -> str:
         return """Hindi grammar rules:
 - Use correct word order: Subject-Object-Verb (SOV).
 - Use appropriate postpositions (e.g., को, से, में, पर) instead of prepositions.
@@ -764,7 +812,7 @@ class HindiHeritageTutor(LanguageTutor):
 - Briefly show how the form would change for masculine/feminine, singular/plural, and for different closeness levels. Give examples: e.g., 'aapka' (formal/masculine), 'aapki' (formal/feminine), 'tumhara/tumhari', 'tera/teri'.
 - Relate the form used to the user's {self.user_closeness} closeness level.
 - If a gendered or informal form is used, explain the social and grammatical implications.
-\- Do not reference the AI, tutor, or learner in your explanation. Just describe the language and its usage neutrally, as if explaining to any interested person."""
+- Do not reference the AI, tutor, or learner in your explanation. Just describe the language and its usage neutrally, as if explaining to any interested person."""
     def get_script_suggestion_example(self) -> str:
         return """நீங்கள் எப்படி இருக்கிறீர்கள்? - Neenga epadi irukkireergal? - How are you?
 எனக்கு தமிழ் பேச விருப்பம். - Enakku Tamil pesa viruppam. - I like to speak Tamil.
@@ -790,7 +838,7 @@ class MalayalamHeritageTutor(LanguageTutor):
         self.user_level = level
         self.heritage_language = "Malayalam"
 
-    def _get_grammar_rules(self, user_input: str) -> str:
+    def _get_grammar_rules(self) -> str:
         return """Malayalam grammar rules:
 - Use correct word order: Subject-Object-Verb (SOV).
 - Match number agreement between nouns, adjectives, and verbs.
@@ -836,7 +884,7 @@ class TamilHeritageTutor(LanguageTutor):
         self.user_level = level
         self.heritage_language = "Tamil"
 
-    def _get_grammar_rules(self, user_input: str) -> str:
+    def _get_grammar_rules(self) -> str:
         return """Tamil grammar rules:
 - Use correct word order: Subject-Object-Verb (SOV).
 - Use appropriate postpositions (e.g., இல், க்கு, உடன்) instead of prepositions.
@@ -882,7 +930,7 @@ class OdiaHeritageTutor(LanguageTutor):
         self.user_level = level
         self.heritage_language = "Odia"
 
-    def _get_grammar_rules(self, user_input: str) -> str:
+    def _get_grammar_rules(self) -> str:
         return """Odia grammar rules:
 - Use correct word order: Subject-Object-Verb (SOV).
 - Use appropriate postpositions (e.g., ରେ, କୁ, ପାଇଁ) instead of prepositions.
@@ -943,7 +991,7 @@ class SpanishHeritageTutor(LanguageTutor):
         self.user_level = level
         self.heritage_language = "Spanish"
 
-    def _get_grammar_rules(self, user_input: str) -> str:
+    def _get_grammar_rules(self) -> str:
         return """Spanish grammar rules:
 """
 
@@ -1272,3 +1320,98 @@ Synopsis: <your synopsis here>
     except Exception as e:
         print(f"Error generating conversation summary: {e}")
         return {"title": "[Error]", "synopsis": str(e)}
+
+def generate_conversation_performance_summary(chat_history: List[Dict], user_goals: List[str] = None) -> Dict[str, any]:
+    """
+    Generate a detailed error tracking and performance summary for a conversation using Gemini.
+    Tracks mistake types, their frequency, repetition, and improvement. Outputs a summary with:
+    - Title and short description of the conversation
+    - Mistakes per 100 words (for graphing)
+    - Categorized mistake/correction logs
+    - Performance tags: what went well, what to work on, suggested next focus
+    """
+    if not GOOGLE_AI_AVAILABLE:
+        return {
+            "title": None,
+            "description": None,
+            "mistakes_per_100_words": None,
+            "mistake_log": [],
+            "performance_tags": {},
+            "summary": "[Gemini not available]"
+        }
+
+    context = "\n".join([f"{msg['sender']}: {msg['text']}" for msg in chat_history])
+    goals_str = f"\nUSER GOALS: {', '.join(user_goals)}" if user_goals else ""
+
+    prompt = f"""
+You are an expert language learning coach and error analyst. Given the full conversation below, analyze the user's performance for error tracking and progress measurement.
+
+CONVERSATION HISTORY:
+{context}
+{goals_str}
+
+TASKS:
+1. Generate a short, descriptive title (max 8 words) that captures the main topic or theme of the conversation.
+2. Write a concise description (1-2 sentences) summarizing what was discussed, the tone, important cultural or heritage points, and any key moments or learning points.
+3. Identify and categorize all mistakes made by the user (grammar, word order, code-switching, missing pronouns, etc.).
+4. Track whether the same mistake types repeat or are corrected later in the conversation.
+5. Calculate the total number of mistakes and the number of words spoken by the user. Compute "mistakes per 100 words" (round to 1 decimal place).
+6. Output a categorized log of mistakes and corrections, e.g.:
+   - Missed linking particle ("na") → Used correctly later that convo.
+   - Code-switched to English ("I went to the tindahan")
+   - Repeated tense error ("nagpunta ako go" x2)
+7. Summarize performance with tags in {self.feedback_language}:
+   - What went well (e.g., "You asked 2 great follow-up questions")
+   - What to work on (e.g., "Practice using past tense verbs")
+   - Suggested next focus (based on mistake patterns and goals not yet achieved)
+8. Output a short, readable summary for a timeline or streak board, e.g.:
+   Week 1: "Talked about family" ✅ / "Used past tense" ⚠️ / "Avoided English code-switching" ✅
+
+FORMAT:
+Return your answer in this format:
+- title: string
+- description: string
+- mistakes_per_100_words: number
+- mistake_log: list of strings (each a categorized log entry)
+- performance_tags: dict with keys 'went_well', 'work_on', 'next_focus' (each a string)
+- summary: short string for timeline display
+"""
+    try:
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        response = model.generate_content(prompt)
+        if response and response.text:
+            import json
+            try:
+                parsed = json.loads(response.text)
+                return parsed
+            except Exception:
+                # If not valid JSON, try to extract fields manually
+                lines = response.text.strip().split('\n')
+                result = {"title": None, "description": None, "mistakes_per_100_words": None, "mistake_log": [], "performance_tags": {}, "summary": ""}
+                for line in lines:
+                    if line.lower().startswith('title:'):
+                        result["title"] = line[len('title:'):].strip()
+                    elif line.lower().startswith('description:'):
+                        result["description"] = line[len('description:'):].strip()
+                    elif line.lower().startswith('mistakes_per_100_words:'):
+                        try:
+                            result["mistakes_per_100_words"] = float(line.split(':',1)[1].strip())
+                        except Exception:
+                            pass
+                    elif line.lower().startswith('mistake_log:'):
+                        # Start collecting mistake log lines
+                        result["mistake_log"] = []
+                    elif line.lower().startswith('performance_tags:'):
+                        # Start collecting performance tags
+                        result["performance_tags"] = {}
+                    elif line.lower().startswith('summary:'):
+                        result["summary"] = line[len('summary:'):].strip()
+                    elif line.strip().startswith('- '):
+                        # Mistake log entry
+                        result["mistake_log"].append(line.strip()[2:])
+                return result
+        else:
+            return {"title": None, "description": None, "mistakes_per_100_words": None, "mistake_log": [], "performance_tags": {}, "summary": "[No response from Gemini]"}
+    except Exception as e:
+        print(f"Error generating conversation performance summary: {e}")
+        return {"title": None, "description": None, "mistakes_per_100_words": None, "mistake_log": [], "performance_tags": {}, "summary": str(e)}

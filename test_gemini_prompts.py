@@ -2,7 +2,8 @@ import sys
 from gemini_client import (
     create_tutor,
     is_gemini_ready,
-    TagalogHeritageTutor
+    TagalogHeritageTutor, 
+    generate_conversation_summary
 )
 
 def main():
@@ -49,7 +50,8 @@ def main():
         print("6. Clear Chat History")
         print("7. Explain last AI response")
         print("8. Exit")
-        choice = input("\nEnter choice (1-8): ").strip()
+        print("9. Generate Conversation Summary")
+        choice = input("\nEnter choice (1-9): ").strip()
 
         if choice == "1":
             user_input = input("User input: ")
@@ -113,6 +115,14 @@ def main():
             context = "\n".join([f"{msg['sender']}: {msg['text']}" for msg in chat_history[-4:]]) if chat_history else ""
             explanation = tutor.explain_llm_response(last_ai_response, last_user_input or "", context)
             print(f"Explanation: {explanation}")
+        elif choice == "9":
+            if not chat_history:
+                print("No conversation history yet.")
+            else:
+                print("\n--- Conversation Summary ---")
+                summary = generate_conversation_summary(chat_history)
+                print(f"Title: {summary.get('title')}")
+                print(f"Synopsis: {summary.get('synopsis')}")
         elif choice == "8":
             print("Goodbye!")
             break
