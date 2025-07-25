@@ -430,16 +430,25 @@ If the response is already natural and grammatically accurate, return it unchang
         return ""
 
     def _parse_suggestions(self, response_text: str) -> list:
-        """Parse suggestions response into list format, supporting 2 or 3 fields per suggestion."""
+        """Parse suggestions response into list format, supporting explanations and romanized forms."""
         suggestions = []
         lines = response_text.split('\n')
-        for line in lines:
-            line = line.strip()
+        i = 0
+        while i < len(lines):
+            line = lines[i].strip()
             if not line or line.startswith('---') or 'ways you could respond' in line.lower():
+                i += 1
                 continue
             # Remove any leading bullets or numbers
             clean_line = line.strip('•-1234567890. ')
             parts = clean_line.split(' - ')
+            explanation = None
+            # Look ahead for explanation line
+            if i + 1 < len(lines):
+                next_line = lines[i+1].strip()
+                if next_line.lower().startswith('explanation:'):
+                    explanation = next_line[len('explanation:'):].strip()
+                    i += 1  # Skip explanation line in next iteration
             # Script language: expect 3 fields (characters, romanized, translation)
             if self.language_code in self.SCRIPT_LANGUAGES:
                 if len(parts) == 3:
@@ -450,7 +459,8 @@ If the response is already natural and grammatically accurate, return it unchang
                         suggestions.append({
                             "text": chars,
                             "romanized": romanized,
-                            "translation": translation
+                            "translation": translation,
+                            "explanation": explanation or ""
                         })
                         if len(suggestions) >= 3:
                             break
@@ -462,10 +472,12 @@ If the response is already natural and grammatically accurate, return it unchang
                     if text and translation:
                         suggestions.append({
                             "text": text,
-                            "translation": translation
+                            "translation": translation,
+                            "explanation": explanation or ""
                         })
                         if len(suggestions) >= 3:
                             break
+            i += 1
         return suggestions if suggestions else self._get_fallback_suggestions()
 
     def _get_fallback_suggestions(self) -> list:
