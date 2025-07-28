@@ -31,6 +31,7 @@ const sqlite3_1 = __importDefault(require("sqlite3"));
 const path_1 = __importDefault(require("path"));
 // Database file path
 const dbPath = path_1.default.join(__dirname, 'users.db');
+console.log('USING DATABASE FILE:', dbPath);
 // Create database connection
 const db = new sqlite3_1.default.Database(dbPath, (err) => {
     if (err) {
@@ -44,130 +45,72 @@ const db = new sqlite3_1.default.Database(dbPath, (err) => {
 exports.db = db;
 // Initialize database tables
 function initDatabase() {
-    // Create users table
-    const createUsersTable = `
-    CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      google_id TEXT UNIQUE,
-      email TEXT UNIQUE NOT NULL,
-      name TEXT NOT NULL,
-      password_hash TEXT,
-      role TEXT DEFAULT 'user',
-      target_language TEXT,
-      proficiency_level TEXT,
-      talk_topics TEXT,
-      learning_goals TEXT,
-      practice_preference TEXT,
-      motivation TEXT,
-      onboarding_complete BOOLEAN DEFAULT FALSE,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `;
-    // Create sessions table for chat history
-    const createSessionsTable = `
-    CREATE TABLE IF NOT EXISTS sessions (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER NOT NULL,
-      chat_history TEXT,
-      language TEXT DEFAULT 'en',
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (user_id) REFERENCES users (id)
-    )
-  `;
-    // Create language_dashboards table
-    const createLanguageDashboardsTable = `
-    CREATE TABLE IF NOT EXISTS language_dashboards (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER NOT NULL,
-      language TEXT NOT NULL,
-      proficiency_level TEXT,
-      talk_topics TEXT,
-      learning_goals TEXT,
-      practice_preference TEXT,
-      feedback_language TEXT,
-      is_primary BOOLEAN DEFAULT FALSE,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (user_id) REFERENCES users (id),
-      UNIQUE(user_id, language)
-    )
-  `;
-    // Create conversations table (now tied to language dashboards)
-    const createConversationsTable = `
-    CREATE TABLE IF NOT EXISTS conversations (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER NOT NULL,
-      language_dashboard_id INTEGER NOT NULL,
-      title TEXT,
-      topics TEXT,
-      formality TEXT,
-      message_count INTEGER DEFAULT 0,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (user_id) REFERENCES users (id),
-      FOREIGN KEY (language_dashboard_id) REFERENCES language_dashboards (id)
-    )
-  `;
-    // Create messages table
-    const createMessagesTable = `
-    CREATE TABLE IF NOT EXISTS messages (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      conversation_id INTEGER NOT NULL,
-      sender TEXT NOT NULL,
-      text TEXT NOT NULL,
-      message_type TEXT DEFAULT 'text',
-      audio_file_path TEXT,
-      detailed_feedback TEXT,
-      message_order INTEGER NOT NULL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (conversation_id) REFERENCES conversations (id)
-    )
-  `;
     db.serialize(() => {
-        db.run(createUsersTable, (err) => {
-            if (err) {
-                console.error('Error creating users table:', err.message);
-            }
-            else {
-                console.log('Users table ready');
-                // Add new columns if they don't exist (for existing databases)
-                addColumnsIfNotExist();
-            }
-        });
-        db.run(createSessionsTable, (err) => {
-            if (err) {
-                console.error('Error creating sessions table:', err.message);
-            }
-            else {
-                console.log('Sessions table ready');
-            }
-        });
-        db.run(createLanguageDashboardsTable, (err) => {
-            if (err) {
-                console.error('Error creating language_dashboards table:', err.message);
-            }
-            else {
-                console.log('Language dashboards table ready');
-            }
-        });
-        db.run(createConversationsTable, (err) => {
-            if (err) {
-                console.error('Error creating conversations table:', err.message);
-            }
-            else {
-                console.log('Conversations table ready');
-            }
-        });
-        db.run(createMessagesTable, (err) => {
-            if (err) {
-                console.error('Error creating messages table:', err.message);
-            }
-            else {
-                console.log('Messages table ready');
-            }
-        });
+        db.run(`
+      CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        google_id TEXT,
+        email TEXT UNIQUE NOT NULL,
+        name TEXT NOT NULL,
+        password_hash TEXT,
+        role TEXT DEFAULT 'user',
+        target_language TEXT,
+        proficiency_level TEXT,
+        talk_topics TEXT,
+        learning_goals TEXT,
+        practice_preference TEXT,
+        motivation TEXT,
+        onboarding_complete BOOLEAN DEFAULT FALSE,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+        db.run(`
+      CREATE TABLE IF NOT EXISTS language_dashboards (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        language TEXT NOT NULL,
+        proficiency_level TEXT,
+        talk_topics TEXT,
+        learning_goals TEXT,
+        practice_preference TEXT,
+        feedback_language TEXT,
+        is_primary BOOLEAN DEFAULT FALSE,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users (id),
+        UNIQUE(user_id, language)
+      )
+    `);
+        db.run(`
+      CREATE TABLE IF NOT EXISTS conversations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        language_dashboard_id INTEGER NOT NULL,
+        title TEXT,
+        topics TEXT,
+        formality TEXT,
+        message_count INTEGER DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users (id),
+        FOREIGN KEY (language_dashboard_id) REFERENCES language_dashboards (id)
+      )
+    `);
+        db.run(`
+      CREATE TABLE IF NOT EXISTS messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        conversation_id INTEGER NOT NULL,
+        sender TEXT NOT NULL,
+        text TEXT NOT NULL,
+        message_type TEXT DEFAULT 'text',
+        audio_file_path TEXT,
+        detailed_feedback TEXT,
+        message_order INTEGER NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (conversation_id) REFERENCES conversations (id)
+      )
+    `);
     });
 }
 // Add new columns to existing databases
@@ -373,63 +316,73 @@ function createConversation(userId, language, title, topics, formality) {
         });
     });
 }
-function addMessage(conversationId, sender, text, messageType = 'text', audioFilePath, detailedFeedback) {
+function addMessage(conversationId, sender, text, messageType = 'text', audioFilePath, detailedFeedback, messageOrder // <-- add this parameter
+) {
     return new Promise((resolve, reject) => {
         console.log('🗄️ DATABASE: Adding message:', {
             conversationId,
             sender,
             text: text.substring(0, 50) + (text.length > 50 ? '...' : ''),
             messageType,
-            audioFilePath
+            audioFilePath,
+            messageOrder
         });
-        // Get the next message order
-        const getOrderSql = `
-      SELECT COALESCE(MAX(message_order), 0) + 1 as next_order
-      FROM messages WHERE conversation_id = ?
-    `;
-        db.get(getOrderSql, [conversationId], (err, row) => {
-            if (err) {
-                console.error('❌ DATABASE: Error getting message order:', err);
-                reject(err);
+        // If messageOrder is provided, use it; otherwise, auto-increment
+        const getOrder = (cb) => {
+            if (typeof messageOrder === 'number') {
+                cb(messageOrder);
             }
             else {
-                const messageOrder = row.next_order;
-                console.log('📝 DATABASE: Message order:', messageOrder);
-                const insertSql = `
-          INSERT INTO messages (conversation_id, sender, text, message_type, audio_file_path, detailed_feedback, message_order)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
+                const getOrderSql = `
+          SELECT COALESCE(MAX(message_order), 0) + 1 as next_order
+          FROM messages WHERE conversation_id = ?
         `;
-                db.run(insertSql, [conversationId, sender, text, messageType, audioFilePath, detailedFeedback, messageOrder], function (err) {
+                db.get(getOrderSql, [conversationId], (err, row) => {
                     if (err) {
-                        console.error('❌ DATABASE: Error inserting message:', err);
+                        console.error('❌ DATABASE: Error getting message order:', err);
                         reject(err);
                     }
                     else {
-                        console.log('✅ DATABASE: Message inserted successfully:', {
-                            id: this.lastID,
-                            conversationId,
-                            sender,
-                            messageOrder
-                        });
-                        // Update conversation message count
-                        const updateSql = `
-              UPDATE conversations 
-              SET message_count = message_count + 1, updated_at = CURRENT_TIMESTAMP
-              WHERE id = ?
-            `;
-                        db.run(updateSql, [conversationId], (err) => {
-                            if (err) {
-                                console.error('❌ DATABASE: Error updating conversation message count:', err);
-                                reject(err);
-                            }
-                            else {
-                                console.log('✅ DATABASE: Conversation message count updated for ID:', conversationId);
-                                resolve({ id: this.lastID });
-                            }
-                        });
+                        cb(row.next_order);
                     }
                 });
             }
+        };
+        getOrder((finalOrder) => {
+            const insertSql = `
+        INSERT INTO messages (conversation_id, sender, text, message_type, audio_file_path, detailed_feedback, message_order)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `;
+            db.run(insertSql, [conversationId, sender, text, messageType, audioFilePath, detailedFeedback, finalOrder], function (err) {
+                if (err) {
+                    console.error('❌ DATABASE: Error inserting message:', err);
+                    reject(err);
+                }
+                else {
+                    console.log('✅ DATABASE: Message inserted successfully:', {
+                        id: this.lastID,
+                        conversationId,
+                        sender,
+                        messageOrder: finalOrder
+                    });
+                    // Update conversation message count
+                    const updateSql = `
+            UPDATE conversations 
+            SET message_count = message_count + 1, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+          `;
+                    db.run(updateSql, [conversationId], (err) => {
+                        if (err) {
+                            console.error('❌ DATABASE: Error updating conversation message count:', err);
+                            reject(err);
+                        }
+                        else {
+                            console.log('✅ DATABASE: Conversation message count updated for ID:', conversationId);
+                            resolve({ id: this.lastID });
+                        }
+                    });
+                }
+            });
         });
     });
 }

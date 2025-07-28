@@ -148,6 +148,34 @@ function Analyze() {
   const [isTranslating, setIsTranslating] = useState<Record<number, boolean>>({});
   const [showTranslations, setShowTranslations] = useState<Record<number, boolean>>({});
   const [isLoadingMessageFeedback, setIsLoadingMessageFeedback] = useState<Record<number, boolean>>({});
+  const [leftPanelWidth, setLeftPanelWidth] = useState(0.25); // 25% of screen width (1/4)
+  const [rightPanelWidth, setRightPanelWidth] = useState(0.25); // 25% of screen width (1/4)
+  const [isResizing, setIsResizing] = useState(false);
+  const [resizingPanel, setResizingPanel] = useState<'left' | 'right' | null>(null);
+
+  // Calculate actual panel widths based on visibility
+  const getPanelWidths = () => {
+    const visiblePanels = [showShortFeedbackPanel, true, showDetailedFeedbackPanel].filter(Boolean).length;
+    
+    if (visiblePanels === 1) {
+      // Only middle panel visible
+      return { left: 0, center: 1, right: 0 };
+    } else if (visiblePanels === 2) {
+      // Two panels visible - allow resizing between them
+      if (!showShortFeedbackPanel) {
+        // Left panel hidden - middle and right panels are resizable
+        const centerWidth = Math.max(0.33, 1 - rightPanelWidth); // Ensure center is at least 1/3
+        return { left: 0, center: centerWidth, right: 1 - centerWidth };
+      } else if (!showDetailedFeedbackPanel) {
+        // Right panel hidden - left and middle panels are resizable
+        const centerWidth = Math.max(0.33, 1 - leftPanelWidth); // Ensure center is at least 1/3
+        return { left: 1 - centerWidth, center: centerWidth, right: 0 };
+      }
+    }
+    
+    // All three panels visible (default case)
+    return { left: leftPanelWidth, center: 1 - leftPanelWidth - rightPanelWidth, right: rightPanelWidth };
+  };
   const [showTopicModal, setShowTopicModal] = useState<boolean>(false);
   const [autoSpeak, setAutoSpeak] = useState<boolean>(false);
   const [enableShortFeedback, setEnableShortFeedback] = useState<boolean>(true);
@@ -159,6 +187,29 @@ function Analyze() {
   const [shortFeedbacks, setShortFeedbacks] = useState<Record<number, string>>({});
   const [isLoadingInitialAI, setIsLoadingInitialAI] = useState<boolean>(false);
   const [manualRecording, setManualRecording] = useState(false);
+  const [showShortFeedbackPanel, setShowShortFeedbackPanel] = useState<boolean>(true);
+  const [showDetailedFeedbackPanel, setShowDetailedFeedbackPanel] = useState<boolean>(true);
+  const [shortFeedback, setShortFeedback] = useState<string>('');
+  const [showDetailedBreakdown, setShowDetailedBreakdown] = useState<{[key: number]: boolean}>({});
+  const [explainButtonPressed, setExplainButtonPressed] = useState<boolean>(false);
+  const [parsedBreakdown, setParsedBreakdown] = useState<{
+    sentence: string;
+    overview: string;
+    details: string;
+  }[]>([]);
+  const [userPreferences, setUserPreferences] = useState<{
+    formality: string;
+    topics: string[];
+    user_goals: string[];
+    userLevel: string;
+    feedbackLanguage: string;
+  }>({
+    formality: 'friendly',
+    topics: [],
+    user_goals: [],
+    userLevel: 'beginner',
+    feedbackLanguage: 'en'
+  });
   
   // Keep refs in sync with state
   useEffect(() => {
@@ -222,6 +273,18 @@ function Analyze() {
       const conversation = response.data.conversation;
       setConversationId(conversation.id);
       setLanguage(conversation.language);
+      
+      // Extract user preferences from conversation
+      const formality = conversation.formality || 'friendly';
+      const topics = conversation.topics ? (typeof conversation.topics === 'string' ? JSON.parse(conversation.topics) : conversation.topics) : [];
+      const userLevel = user?.proficiency_level || 'beginner';
+      const feedbackLanguage = 'en'; // Default to English for now
+      
+      // Get user goals from the user's language dashboard
+      const user_goals = user?.learning_goals ? (typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : user.learning_goals) : [];
+      
+      console.log('[DEBUG] Extracted user preferences:', { formality, topics, user_goals, userLevel, feedbackLanguage });
+      
       const messages = conversation.messages || [];
       const history = messages.map((msg: any) => ({
         sender: msg.sender,
@@ -231,6 +294,9 @@ function Analyze() {
       console.log('[DEBUG] Loaded conversation history with', history.length, 'messages');
       console.log('[DEBUG] Messages:', history);
       setChatHistory(history);
+      
+      // Store user preferences for use in API calls
+      setUserPreferences({ formality, topics, user_goals, userLevel, feedbackLanguage });
     } catch (error: any) {
       console.error('[DEBUG] Error loading conversation:', error);
       console.error('[DEBUG] Error details:', error.response?.data || error.message);
@@ -364,6 +430,22 @@ function Analyze() {
     if (typeof window !== 'undefined') {
       SpeechRecognitionClassRef.current = window.SpeechRecognition || (window as any).webkitSpeechRecognition;
       MediaRecorderClassRef.current = window.MediaRecorder;
+      
+      // Check browser compatibility
+      if (!window.MediaRecorder) {
+        console.warn('MediaRecorder API not supported in this browser');
+      }
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        console.warn('MediaDevices API not supported in this browser');
+      }
+      if (!SpeechRecognitionClassRef.current) {
+        console.warn('SpeechRecognition API not supported in this browser');
+      }
+      
+      // Check if running on HTTPS (required for getUserMedia)
+      if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
+        console.warn('getUserMedia requires HTTPS in production. Audio recording may not work.');
+      }
     }
   }, []);
 
@@ -374,6 +456,13 @@ function Analyze() {
       alert('MediaRecorder API not supported in this browser.');
       return;
     }
+    
+    // Check if mediaDevices is available
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      alert('Microphone access is not available in this browser. Please use a modern browser with microphone support.');
+      return;
+    }
+    
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       setMediaStream(stream);
@@ -441,7 +530,21 @@ function Analyze() {
         setManualRecording(true);
       }
     } catch (err: any) {
-      alert('Could not start audio recording: ' + err.message);
+      console.error('Audio recording error:', err);
+      let errorMessage = 'Could not start audio recording: ' + err.message;
+      
+      // Provide more specific error messages
+      if (err.name === 'NotAllowedError') {
+        errorMessage = 'Microphone access denied. Please allow microphone permissions and try again.';
+      } else if (err.name === 'NotFoundError') {
+        errorMessage = 'No microphone found. Please connect a microphone and try again.';
+      } else if (err.name === 'NotSupportedError') {
+        errorMessage = 'Audio recording is not supported in this browser. Please use a modern browser.';
+      } else if (err.name === 'SecurityError') {
+        errorMessage = 'Microphone access blocked for security reasons. Please check your browser settings.';
+      }
+      
+      alert(errorMessage);
       setIsRecording(false);
       setManualRecording(false);
       setMediaStream(null);
@@ -477,7 +580,7 @@ function Analyze() {
     // Prepare context (last 4 messages)
     const context = chatHistory.slice(-4).map(msg => `${msg.sender}: ${msg.text}`).join('\n');
     try {
-      console.log('[DEBUG] (fetchAndShowShortFeedback) Calling /short_feedback API with:', { transcription, context, language, user_level: user?.proficiency_level || 'beginner', user_topics: user?.talk_topics || [] });
+      console.log('[DEBUG] (fetchAndShowShortFeedback) Calling /short_feedback API with:', { transcription, context, language, user_level: userPreferences.userLevel, user_topics: userPreferences.topics, formality: userPreferences.formality, feedback_language: userPreferences.feedbackLanguage });
       // Call the Express proxy endpoint instead of Python directly
       const token = localStorage.getItem('jwt');
       const shortFeedbackRes = await axios.post(
@@ -486,8 +589,10 @@ function Analyze() {
           user_input: transcription,
           context,
           language,
-          user_level: user?.proficiency_level || 'beginner',
-          user_topics: user?.talk_topics || []
+          user_level: userPreferences.userLevel,
+          user_topics: userPreferences.topics,
+          formality: userPreferences.formality,
+          feedback_language: userPreferences.feedbackLanguage
         },
         token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
       );
@@ -530,6 +635,10 @@ function Analyze() {
       formData.append('audio', audioBlob, 'recording.webm');
       formData.append('language', language);
       formData.append('chatHistory', JSON.stringify(chatHistory));
+      formData.append('formality', userPreferences.formality);
+      formData.append('user_level', userPreferences.userLevel);
+      formData.append('user_topics', JSON.stringify(userPreferences.topics));
+      formData.append('feedback_language', userPreferences.feedbackLanguage);
       // Add JWT token to headers
       const token = localStorage.getItem('jwt');
       const response = await axios.post('/api/analyze', formData, {
@@ -631,7 +740,11 @@ function Analyze() {
       // Optionally, add to chatHistory
       setChatHistory(prev => [...prev, { sender: 'System', text: response.data.feedback, timestamp: new Date() }]);
     } catch (error: any) {
-      setFeedback('❌ Error getting detailed feedback. Please try again.');
+      console.error('Error getting detailed feedback:', error);
+      console.error('[DEBUG] Error response:', error.response?.data);
+      console.error('[DEBUG] Error status:', error.response?.status);
+      console.error('[DEBUG] Error message:', error.message);
+      setFeedback('Error getting detailed feedback. Please try again.');
     } finally {
       setIsLoadingFeedback(false);
     }
@@ -647,7 +760,11 @@ function Analyze() {
         '/api/suggestions',
         {
           conversationId: conversationId,
-          language: language
+          language: language,
+          user_level: userPreferences.userLevel,
+          user_topics: userPreferences.topics,
+          formality: userPreferences.formality,
+          feedback_language: userPreferences.feedbackLanguage
         },
         token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
       );
@@ -708,12 +825,20 @@ function Analyze() {
     }
   };
 
-  const handleModalConversationStart = async (newConversationId: string, topics: string[], aiMessage: any) => {
+  const handleModalConversationStart = async (newConversationId: string, topics: string[], aiMessage: any, formality: string) => {
     setConversationId(newConversationId);
     setChatHistory([]);
     setShowTopicModal(false);
     setSkipValidation(true);
     setTimeout(() => setSkipValidation(false), 2000); // Skip validation for 2 seconds
+    
+    // Update user preferences with the selected formality and topics
+    setUserPreferences(prev => ({
+      ...prev,
+      formality,
+      topics
+    }));
+    
     // Use Next.js router to update the URL
     router.replace(`/analyze?conversation=${newConversationId}&topics=${encodeURIComponent(topics.join(','))}`);
     // Set the initial AI message from the backend response
@@ -765,32 +890,62 @@ function Analyze() {
     
     try {
       const token = localStorage.getItem('jwt');
-      const response = await axios.post(
-        '/api/translate',
-        {
-          text,
-          source_language: 'auto',
-          target_language: 'en',
-          breakdown
-        },
-        token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
-      );
       
-      setTranslations(prev => ({ 
-        ...prev, 
-        [messageIndex]: response.data 
-      }));
+      if (breakdown) {
+        // Call detailed breakdown API
+        const response = await axios.post(
+          '/api/detailed_breakdown',
+          {
+            llm_response: text,
+            user_input: '', // We don't have the user input for this message
+            context: chatHistory.slice(-4).map(msg => `${msg.sender}: ${msg.text}`).join('\n'),
+            language: language,
+            user_level: userPreferences.userLevel,
+            user_topics: userPreferences.topics,
+            user_goals: userPreferences.user_goals,
+            formality: userPreferences.formality,
+            feedback_language: userPreferences.feedbackLanguage
+          },
+          token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
+        );
+        
+        setTranslations(prev => ({ 
+          ...prev, 
+          [messageIndex]: { 
+            translation: text, // Show original text as translation
+            breakdown: response.data.breakdown,
+            has_breakdown: true
+          } 
+        }));
+      } else {
+        // Call regular translation API
+        const response = await axios.post(
+          '/api/translate',
+          {
+            text,
+            source_language: 'auto',
+            target_language: 'en',
+            breakdown
+          },
+          token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
+        );
+        
+        setTranslations(prev => ({ 
+          ...prev, 
+          [messageIndex]: response.data 
+        }));
+      }
       
       setShowTranslations(prev => ({ 
         ...prev, 
         [messageIndex]: true 
       }));
     } catch (error: any) {
-      console.error('Translation error:', error);
+      console.error('Translation/breakdown error:', error);
       setTranslations(prev => ({ 
         ...prev, 
         [messageIndex]: { 
-          translation: 'Translation failed', 
+          translation: breakdown ? 'Detailed breakdown failed' : 'Translation failed', 
           error: true 
         } 
       }));
@@ -804,12 +959,12 @@ function Analyze() {
       // Hide translation
       setShowTranslations(prev => ({ ...prev, [index]: false }));
     } else {
-      // Show or fetch translation
+      // Show existing translation if available, otherwise do nothing
+      // (Let the user use the Detailed Breakdown button for new translations)
       if (translations[index]) {
         setShowTranslations(prev => ({ ...prev, [index]: true }));
-      } else {
-        translateMessage(index, text);
       }
+      // Removed the automatic translation call to avoid interfering with detailed breakdown
     }
   };
 
@@ -820,19 +975,46 @@ function Analyze() {
     
     try {
       const token = localStorage.getItem('jwt');
+      
+      // Get the message text and context
+      const message = chatHistory[messageIndex];
+      const user_input = message?.text || '';
+      const context = chatHistory.slice(-4).map(msg => `${msg.sender}: ${msg.text}`).join('\n');
+      
+      const requestData = {
+        user_input,
+        context,
+        language,
+        user_level: userPreferences.userLevel,
+        user_topics: userPreferences.topics
+      };
+      
+      console.log('[DEBUG] Sending to /api/feedback:', requestData);
+      console.log('[DEBUG] Request data details:', {
+        user_input: user_input,
+        context_length: context.length,
+        language: language,
+        user_level: userPreferences.userLevel,
+        user_topics: userPreferences.topics
+      });
+      
+      // Test server connectivity first
+      try {
+        const healthCheck = await axios.get('/api/health');
+        console.log('[DEBUG] Server health check:', healthCheck.status);
+      } catch (healthError: any) {
+        console.error('[DEBUG] Server health check failed:', healthError.message);
+      }
+      
       const response = await axios.post(
         '/api/feedback',
-        {
-          conversationId,
-          language
-        },
+        requestData,
         token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
       );
       
       const detailedFeedback = response.data.feedback;
       
       // Store feedback in the database for the specific message
-      const message = chatHistory[messageIndex];
       if (message && message.id) {
         const token = localStorage.getItem('jwt');
         await axios.post(
@@ -858,6 +1040,7 @@ function Analyze() {
       setFeedback(detailedFeedback);
     } catch (error: any) {
       console.error('Error getting detailed feedback:', error);
+      console.error('[DEBUG] Error response:', error.response?.data);
       setFeedback('Error getting detailed feedback. Please try again.');
     } finally {
       setIsLoadingMessageFeedback(prev => ({ ...prev, [messageIndex]: false }));
@@ -876,9 +1059,329 @@ function Analyze() {
     }
   };
 
+  const requestShortFeedbackForMessage = async (messageIndex: number) => {
+    const message = chatHistory[messageIndex];
+    if (!message || message.sender !== 'AI') return;
+
+    console.log('[DEBUG] Starting requestShortFeedbackForMessage for messageIndex:', messageIndex);
+    console.log('[DEBUG] Message:', message);
+    console.log('[DEBUG] User preferences:', userPreferences);
+    console.log('[DEBUG] Language:', language);
+
+    setIsLoadingMessageFeedback(prev => ({ ...prev, [messageIndex]: true }));
+
+    try {
+      const token = localStorage.getItem('jwt');
+      const requestData = {
+        text: message.text,
+        user_level: userPreferences.userLevel,
+        user_topics: userPreferences.topics,
+        user_goals: userPreferences.user_goals,
+        feedback_language: userPreferences.feedbackLanguage,
+        language: language
+      };
+
+      console.log('[DEBUG] Request data for short feedback:', requestData);
+      console.log('[DEBUG] Making request to /api/short_feedback');
+
+      // Call Gemini client directly through Python API
+      const response = await axios.post(
+        '/api/short_feedback',
+        requestData,
+        token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
+      );
+
+      console.log('[DEBUG] Short feedback response received:', response);
+      console.log('[DEBUG] Response data:', response.data);
+      console.log('[DEBUG] Response status:', response.status);
+
+      const shortFeedback = response.data.short_feedback;
+      console.log('[DEBUG] Extracted short feedback:', shortFeedback);
+      
+      // Store short feedback in state
+      setShortFeedbacks(prev => ({ ...prev, [messageIndex]: shortFeedback }));
+      console.log('[DEBUG] Updated shortFeedbacks state for messageIndex:', messageIndex);
+      
+      // Update the short feedback display in left panel
+      setShortFeedback(shortFeedback);
+      
+      // Clear parsed breakdown since this is short feedback, not detailed breakdown
+      setParsedBreakdown([]);
+      setShowDetailedBreakdown({});
+      console.log('[DEBUG] Set shortFeedback state to:', shortFeedback);
+    } catch (error: any) {
+      console.error('[DEBUG] Error getting short feedback:', error);
+      console.error('[DEBUG] Error response:', error.response?.data);
+      console.error('[DEBUG] Error status:', error.response?.status);
+      setShortFeedback('Error getting short feedback. Please try again.');
+    } finally {
+      setIsLoadingMessageFeedback(prev => ({ ...prev, [messageIndex]: false }));
+      console.log('[DEBUG] Finished requestShortFeedbackForMessage');
+    }
+  };
+
+  const parseBreakdownResponse = (breakdownText: string) => {
+    console.log('[DEBUG] Parsing breakdown response:', breakdownText);
+    
+    // Split by double newlines to separate sections
+    const sections = breakdownText.split('\n\n').filter(section => section.trim());
+    console.log('[DEBUG] Split sections:', sections);
+    
+    // Parse each sentence section
+    const sentences = [];
+    let currentSentence = null;
+    let currentOverview = '';
+    let currentDetails = [];
+    
+    for (let i = 0; i < sections.length; i++) {
+      const section = sections[i];
+      const trimmedSection = section.trim();
+      
+      // Check if this section contains a sentence (marked with **)
+      const sentenceMatch = trimmedSection.match(/\*\*(.*?)\*\*/);
+      
+      if (sentenceMatch) {
+        // If we have a previous sentence, save it
+        if (currentSentence) {
+          sentences.push({
+            sentence: currentSentence,
+            overview: currentOverview,
+            details: currentDetails.join('\n\n').trim()
+          });
+        }
+        
+        // Start new sentence
+        currentSentence = sentenceMatch[1].trim();
+        currentOverview = trimmedSection.replace(/\*\*.*?\*\*/, '').trim();
+        currentDetails = [];
+      } else {
+        // This is a details section for the current sentence
+        if (currentSentence && (trimmedSection.startsWith('*   ') || 
+            trimmedSection.includes('Literal translation') || 
+            trimmedSection.includes('Sentence structure pattern'))) {
+          currentDetails.push(trimmedSection);
+        }
+      }
+    }
+    
+    // Add the last sentence
+    if (currentSentence) {
+      sentences.push({
+        sentence: currentSentence,
+        overview: currentOverview,
+        details: currentDetails.join('\n\n').trim()
+      });
+    }
+    
+    console.log('[DEBUG] Parsed sentences:', sentences);
+    
+    return sentences;
+  };
+
+  const requestDetailedBreakdownForMessage = async (messageIndex: number) => {
+    const message = chatHistory[messageIndex];
+    if (!message || message.sender !== 'AI') return;
+
+    console.log('[DEBUG] Starting requestDetailedBreakdownForMessage for messageIndex:', messageIndex);
+    console.log('[DEBUG] Message:', message);
+    console.log('[DEBUG] User preferences:', userPreferences);
+    console.log('[DEBUG] Language:', language);
+
+    setIsLoadingMessageFeedback(prev => ({ ...prev, [messageIndex]: true }));
+
+    try {
+      const token = localStorage.getItem('jwt');
+      const requestData = {
+        llm_response: message.text,
+        user_input: "", // AI message doesn't have user input
+        context: "",
+        language: language,
+        user_level: userPreferences.userLevel,
+        user_topics: userPreferences.topics,
+        user_goals: userPreferences.user_goals,
+        formality: userPreferences.formality,
+        feedback_language: userPreferences.feedbackLanguage
+      };
+
+      console.log('[DEBUG] Request data for detailed breakdown:', requestData);
+      console.log('[DEBUG] Making request to /api/detailed_breakdown');
+
+      // Call Gemini client's get_detailed_breakdown function through Python API
+      const response = await axios.post(
+        '/api/detailed_breakdown',
+        requestData,
+        token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
+      );
+
+      console.log('[DEBUG] Detailed breakdown response received:', response);
+      console.log('[DEBUG] Response data:', response.data);
+      console.log('[DEBUG] Response status:', response.status);
+      console.log('[DEBUG] Response data keys:', Object.keys(response.data));
+      console.log('[DEBUG] Response data type:', typeof response.data);
+
+      const detailedBreakdown = response.data.breakdown || response.data.feedback;
+      console.log('[DEBUG] Extracted detailed breakdown:', detailedBreakdown);
+      console.log('[DEBUG] Detailed breakdown type:', typeof detailedBreakdown);
+      console.log('[DEBUG] Detailed breakdown length:', detailedBreakdown?.length);
+      
+      // Parse the breakdown response
+      console.log('[DEBUG] Raw LLM response:', detailedBreakdown);
+      const parsed = parseBreakdownResponse(detailedBreakdown);
+      console.log('[DEBUG] Parsed breakdown structure:', parsed);
+      setParsedBreakdown(parsed);
+      setShowDetailedBreakdown({}); // Start collapsed
+      
+      // Show initial part (first sentence + overview) in left panel
+      const initialDisplay = parsed.length > 0 && parsed[0].sentence 
+        ? `**${parsed[0].sentence}**\n\n${parsed[0].overview}` 
+        : parsed.length > 0 ? parsed[0].overview : '';
+      console.log('[DEBUG] Setting initial display:', initialDisplay);
+      setShortFeedback(initialDisplay);
+      
+      // Store the parsed breakdown in shortFeedbacks state for consistency
+      console.log('[DEBUG] About to update shortFeedbacks state');
+      setShortFeedbacks(prev => {
+        const newState = { ...prev, [messageIndex]: initialDisplay };
+        console.log('[DEBUG] New shortFeedbacks state:', newState);
+        return newState;
+      });
+      console.log('[DEBUG] Updated shortFeedbacks state for messageIndex:', messageIndex);
+      
+      // Also store in message for consistency
+      setChatHistory(prev => 
+        prev.map((msg, idx) => 
+          idx === messageIndex 
+            ? { ...msg, detailed_feedback: detailedBreakdown }
+            : msg
+        )
+      );
+      console.log('[DEBUG] Updated chatHistory with detailed feedback');
+    } catch (error: any) {
+      console.error('[DEBUG] Error getting detailed breakdown:', error);
+      console.error('[DEBUG] Error response:', error.response?.data);
+      console.error('[DEBUG] Error status:', error.response?.status);
+      setShortFeedback('Error getting detailed breakdown. Please try again.');
+    } finally {
+      setIsLoadingMessageFeedback(prev => ({ ...prev, [messageIndex]: false }));
+      console.log('[DEBUG] Finished requestDetailedBreakdownForMessage');
+    }
+  };
+
+  const toggleShortFeedback = (messageIndex: number) => {
+    const message = chatHistory[messageIndex];
+    
+    console.log('[DEBUG] toggleShortFeedback called for messageIndex:', messageIndex);
+    console.log('[DEBUG] Message:', message);
+    console.log('[DEBUG] Existing shortFeedbacks:', shortFeedbacks);
+    console.log('[DEBUG] shortFeedbacks[messageIndex]:', shortFeedbacks[messageIndex]);
+    
+    // Set explain button as pressed
+    setExplainButtonPressed(true);
+    
+    if (message && shortFeedbacks[messageIndex]) {
+      // Show existing short feedback in left panel
+      console.log('[DEBUG] Showing existing short feedback:', shortFeedbacks[messageIndex]);
+      setShortFeedback(shortFeedbacks[messageIndex]);
+      
+      // If we have detailed feedback stored, parse it to show the collapsible details
+      if (message.detailed_feedback) {
+        const parsed = parseBreakdownResponse(message.detailed_feedback);
+        setParsedBreakdown(parsed);
+        setShowDetailedBreakdown({}); // Start collapsed
+      }
+    } else {
+      // Generate new short feedback
+      console.log('[DEBUG] Generating new short feedback');
+      requestShortFeedbackForMessage(messageIndex);
+    }
+  };
+
+  // Panel resize handlers
+  const handleLeftResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+    setResizingPanel('left');
+  };
+
+  const handleRightResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+    setResizingPanel('right');
+  };
+
+  const handleMouseMove = (e: MouseEvent) => {
+    if (!isResizing || !resizingPanel) return;
+    
+    const containerWidth = window.innerWidth;
+    const minPanelRatio = 0.25; // Minimum 25% of screen width
+    const maxPanelRatio = 0.33; // Maximum 33.33% of screen width (allows 1/3, 1/3, 1/3)
+    const minCenterRatio = 0.33; // Middle panel should never be smaller than 1/3
+    
+    const visiblePanels = [showShortFeedbackPanel, true, showDetailedFeedbackPanel].filter(Boolean).length;
+    
+    if (visiblePanels === 2) {
+      // Only two panels visible - handle resizing between them
+      if (!showShortFeedbackPanel && resizingPanel === 'right') {
+        // Left panel hidden, resizing right panel (which affects center panel)
+        const newRightRatio = Math.max(minPanelRatio, Math.min(1 - minCenterRatio, (containerWidth - e.clientX) / containerWidth));
+        setRightPanelWidth(newRightRatio);
+      } else if (!showDetailedFeedbackPanel && resizingPanel === 'left') {
+        // Right panel hidden, resizing left panel (which affects center panel)
+        const newLeftRatio = Math.max(minPanelRatio, Math.min(1 - minCenterRatio, e.clientX / containerWidth));
+        setLeftPanelWidth(newLeftRatio);
+      }
+    } else if (visiblePanels === 3) {
+      // All three panels visible
+      if (resizingPanel === 'left') {
+        // Resizing left panel
+        const newLeftRatio = Math.max(minPanelRatio, Math.min(maxPanelRatio, e.clientX / containerWidth));
+        // Ensure middle panel doesn't get smaller than 1/3
+        const remainingForRight = 1 - newLeftRatio - minCenterRatio;
+        if (remainingForRight >= minPanelRatio) {
+          setLeftPanelWidth(newLeftRatio);
+        }
+      } else if (resizingPanel === 'right') {
+        // Resizing right panel
+        const newRightRatio = Math.max(minPanelRatio, Math.min(maxPanelRatio, (containerWidth - e.clientX) / containerWidth));
+        // Ensure middle panel doesn't get smaller than 1/3
+        const remainingForLeft = 1 - newRightRatio - minCenterRatio;
+        if (remainingForLeft >= minPanelRatio) {
+          setRightPanelWidth(newRightRatio);
+        }
+      }
+    }
+  };
+
+  const handleMouseUp = () => {
+    setIsResizing(false);
+    setResizingPanel(null);
+  };
+
+  // Add/remove event listeners
+  useEffect(() => {
+    if (isResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [isResizing, resizingPanel]);
+
   useEffect(() => {
     console.log('[DEBUG] Chat history changed:', chatHistory);
   }, [chatHistory]);
+
+  useEffect(() => {
+    console.log('[DEBUG] shortFeedback state changed:', shortFeedback);
+  }, [shortFeedback]);
+
+  useEffect(() => {
+    console.log('[DEBUG] shortFeedbacks state changed:', shortFeedbacks);
+  }, [shortFeedbacks]);
+
+
 
   useEffect(() => {
     autoSpeakRef.current = autoSpeak;
@@ -912,20 +1415,245 @@ function Analyze() {
     <div style={{ 
       display: 'flex', 
       height: 'calc(100vh - 80px)', 
+      width: '100%',
       background: 'linear-gradient(135deg, #f5f1ec 0%, #e8e0d8 50%, #d4c8c0 100%)',
-      padding: '2rem'
+      padding: '1rem',
+      gap: '0.5rem'
     }}>
-      <div style={{ flex: 1, background: '#fff', borderRadius: 16, marginRight: '1rem', display: 'flex', flexDirection: 'column', border: '1px solid #e0e0e0', boxShadow: '0 4px 24px rgba(60,76,115,0.08)' }}>
+      {/* Short Feedback Panel - Left */}
+      {showShortFeedbackPanel && (
+        <div style={{ 
+          width: `${getPanelWidths().left * 100}%`, 
+          background: '#fff', 
+          borderRadius: 16,
+          display: 'flex',
+          flexDirection: 'column',
+          boxShadow: '0 4px 24px rgba(60,76,115,0.08)',
+          position: 'relative'
+        }}>
+          {/* Short Feedback Header */}
+          <div style={{ 
+            background: 'var(--blue-secondary)', 
+            color: '#fff', 
+            padding: '1rem', 
+            borderRadius: '14px 14px 0 0',
+            textAlign: 'center',
+            borderBottom: '1px solid #ececec',
+            fontFamily: 'Gabriela, Arial, sans-serif',
+            fontWeight: 700,
+            fontSize: '1.1rem',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center'
+          }}>
+            <span>💡 Short Feedback</span>
+            <button
+              onClick={() => setShowShortFeedbackPanel(false)}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#fff',
+                fontSize: '1.2rem',
+                cursor: 'pointer',
+                padding: '0.2rem',
+                borderRadius: '4px',
+                transition: 'all 0.2s'
+              }}
+              title="Hide panel"
+            >
+              ◀
+            </button>
+          </div>
+          {/* Resize Handle */}
+          <div
+            onMouseDown={handleLeftResizeStart}
+            style={{
+              position: 'absolute',
+              right: -4,
+              top: 0,
+              bottom: 0,
+              width: 8,
+              cursor: 'col-resize',
+              background: 'transparent',
+              zIndex: 10
+            }}
+          />
+          {/* Short Feedback Content */}
+          <div style={{ 
+            flex: 1, 
+            display: 'flex',
+            flexDirection: 'column',
+            minHeight: 0
+          }}>
+            {shortFeedback && (
+              <div style={{
+                background: '#fff',
+                padding: '1rem',
+                flex: 1,
+                overflowY: 'auto',
+                overflowX: 'hidden',
+                fontSize: '1rem',
+                lineHeight: 1.5,
+                whiteSpace: 'pre-wrap',
+                fontFamily: 'AR One Sans, Arial, sans-serif',
+                fontWeight: 400,
+                minHeight: 0
+              }}>
+                {parsedBreakdown.length > 0 ? (
+                  <div>
+                                          {parsedBreakdown.map((sentenceData, index) => (
+                        <div key={index} style={{ marginBottom: index < parsedBreakdown.length - 1 ? '1.5rem' : '0' }}>
+                          <div style={{ 
+                            display: 'flex', 
+                            flexDirection: 'column',
+                            width: '100%'
+                          }}>
+                            <div style={{ 
+                              display: 'flex', 
+                              justifyContent: 'space-between', 
+                              alignItems: 'flex-start',
+                              marginBottom: '0.5rem'
+                            }}>
+                              <div style={{ fontWeight: 700, fontSize: '1.1rem', flex: 1 }}>
+                                {sentenceData.sentence}
+                              </div>
+                              {sentenceData.details && sentenceData.details.trim() && (
+                                <button
+                                  onClick={() => {
+                                    const newExpanded = { ...showDetailedBreakdown };
+                                    newExpanded[index] = !newExpanded[index];
+                                    setShowDetailedBreakdown(newExpanded);
+                                  }}
+                                  style={{
+                                    background: showDetailedBreakdown[index] ? '#4a90e2' : 'rgba(74,144,226,0.08)',
+                                    border: '1px solid #4a90e2',
+                                    color: showDetailedBreakdown[index] ? '#fff' : '#4a90e2',
+                                    padding: '0.4rem 0.8rem',
+                                    borderRadius: 6,
+                                    cursor: 'pointer',
+                                    fontSize: '0.8rem',
+                                    fontWeight: 600,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.3rem',
+                                    transition: 'all 0.2s ease',
+                                    boxShadow: showDetailedBreakdown[index] ? '0 2px 6px rgba(74,144,226,0.2)' : '0 1px 3px rgba(74,144,226,0.1)',
+                                    minWidth: 'fit-content',
+                                    height: 'fit-content',
+                                    marginLeft: '0.5rem'
+                                  }}
+                                >
+                                  {showDetailedBreakdown[index] ? '▼' : '▶'} 
+                                  {showDetailedBreakdown[index] ? 'Hide' : 'Details'}
+                                </button>
+                              )}
+                            </div>
+                            <div style={{ color: '#666', fontSize: '0.95rem', width: '100%' }}>
+                              {sentenceData.overview}
+                            </div>
+                          </div>
+                        {showDetailedBreakdown[index] && sentenceData.details && sentenceData.details.trim() && (
+                          <div style={{
+                            marginTop: '1rem',
+                            padding: '1.2rem',
+                            background: 'linear-gradient(135deg, #f8f9fa 0%, #f0f4f8 100%)',
+                            borderRadius: 10,
+                            border: '1px solid #e1e8ed',
+                            fontSize: '0.9rem',
+                            lineHeight: 1.6,
+                            whiteSpace: 'pre-wrap',
+                            boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.05)',
+                            color: '#2c3e50'
+                          }}>
+                            {sentenceData.details}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div>{shortFeedback}</div>
+                )}
+              </div>
+            )}
+
+            {!shortFeedback && (
+              <div style={{
+                background: '#fff',
+                padding: '1rem',
+                flex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#666',
+                fontSize: '0.9rem',
+                fontStyle: 'italic'
+              }}>
+                Click "💡 Explain" on any AI message to see short feedback here
+              </div>
+            )}
+            {explainButtonPressed && (
+              <button
+                onClick={() => {
+                  console.log('[DEBUG] "Get Detailed Explanation" button clicked');
+                  console.log('[DEBUG] Current shortFeedback:', shortFeedback);
+                  console.log('[DEBUG] Current chatHistory:', chatHistory);
+                  console.log('[DEBUG] Current shortFeedbacks:', shortFeedbacks);
+                  
+                  // Find the current AI message and get detailed breakdown
+                  const currentMessageIndex = chatHistory.findIndex(msg => 
+                    msg.sender === 'AI' && shortFeedbacks[chatHistory.indexOf(msg)] === shortFeedback
+                  );
+                  
+                  console.log('[DEBUG] Found messageIndex:', currentMessageIndex);
+                  
+                  if (currentMessageIndex !== -1) {
+                    console.log('[DEBUG] Calling requestDetailedBreakdownForMessage with index:', currentMessageIndex);
+                    requestDetailedBreakdownForMessage(currentMessageIndex);
+                  } else {
+                    console.log('[DEBUG] Could not find matching AI message for shortFeedback');
+                  }
+                }}
+                disabled={isLoadingFeedback || !shortFeedback}
+                style={{
+                  width: '100%',
+                  padding: '0.75rem',
+                  background: shortFeedback ? 'var(--rose-primary)' : '#ccc',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 10,
+                  boxShadow: 'inset 0 2px 8px #c38d9422',
+                  cursor: (isLoadingFeedback || !shortFeedback) ? 'not-allowed' : 'pointer',
+                  fontWeight: 700,
+                  fontSize: '1rem',
+                  transition: 'all 0.2s',
+                  marginTop: 'auto'
+                }}
+              >
+                {isLoadingFeedback ? '⏳ Processing...' : '🎯 Get Detailed Explanation'}
+              </button>
+            )}
+        </div>
+        </div>
+      )}
+      {/* Chat Panel - Center */}
+      <div style={{ 
+        flex: 1, 
+        background: '#fff', 
+        borderRadius: 16, 
+        display: 'flex', 
+        flexDirection: 'column', 
+        boxShadow: '0 4px 24px rgba(60,76,115,0.08)',
+        position: 'relative'
+      }}>
         {/* Header Bar */}
-        <div style={{ padding: '1rem', background: '#f5f1ec', borderBottom: '1px solid #ececec', display: 'flex', justifyContent: 'center', alignItems: 'center', borderTopLeftRadius: 16, borderTopRightRadius: 16 }}>
+        <div style={{ padding: '1rem', background: '#f5f1ec', borderBottom: '1px solid #ececec', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTopLeftRadius: 16, borderTopRightRadius: 16 }}>
           <div style={{ color: 'var(--rose-primary)', fontWeight: 700, fontSize: '1.1rem', fontFamily: 'Gabriela, Arial, sans-serif' }}>
             🌐 {getLanguageLabel(language)} Practice Session
           </div>
+
         </div>
-        {/* Chat Header */}
-        <div style={{ background: 'var(--blue-secondary)', color: '#fff', padding: '1rem', borderRadius: '14px 14px 0 0', textAlign: 'center', fontFamily: 'Gabriela, Arial, sans-serif', fontWeight: 700, fontSize: '1.3rem', letterSpacing: '-0.5px' }}>
-          🎤 BeyondWords Chat
-        </div>
+
         {/* Chat Messages */}
         <div style={{ 
           flex: 1, 
@@ -935,7 +1663,7 @@ function Analyze() {
           flexDirection: 'column',
           gap: '0.7rem',
           background: '#f9f6f4',
-          borderBottomLeftRadius: 16, borderBottomRightRadius: 16
+          borderRadius: '0 0 16px 16px'
         }}>
           {isLoadingConversation && (
             <div style={{
@@ -987,7 +1715,7 @@ function Analyze() {
                   </span>
                 )}
               </div>
-              {/* Detailed Feedback Button - only for user messages */}
+              {/* Feedback Buttons */}
               {message.sender === 'User' && (
                 <button
                   onClick={() => toggleDetailedFeedback(index)}
@@ -1010,6 +1738,30 @@ function Analyze() {
                   title={message.detailed_feedback ? 'Show detailed feedback' : 'Generate detailed feedback'}
                 >
                   {isLoadingMessageFeedback[index] ? '🔄' : message.detailed_feedback ? '🎯 Show' : '🎯 Get'}
+                </button>
+              )}
+              {message.sender === 'AI' && (
+                <button
+                  onClick={() => toggleShortFeedback(index)}
+                  disabled={isLoadingMessageFeedback[index]}
+                  style={{
+                    padding: '0.45rem 1.1rem',
+                    borderRadius: 8,
+                    border: shortFeedbacks[index] ? 'none' : '1px solid #4a90e2',
+                    background: shortFeedbacks[index] ? 'linear-gradient(135deg, #4a90e2 0%, #357abd 100%)' : 'rgba(74,144,226,0.08)',
+                    color: shortFeedbacks[index] ? '#fff' : '#4a90e2',
+                    fontSize: '0.88rem',
+                    cursor: isLoadingMessageFeedback[index] ? 'not-allowed' : 'pointer',
+                    transition: 'all 0.2s ease',
+                    opacity: isLoadingMessageFeedback[index] ? 0.6 : 1,
+                    minWidth: '80px',
+                    fontWeight: 600,
+                    marginTop: 6,
+                    boxShadow: shortFeedbacks[index] ? '0 2px 6px rgba(74,144,226,0.18)' : '0 1px 3px rgba(74,144,226,0.10)'
+                  }}
+                  title={shortFeedbacks[index] ? 'Show short feedback' : 'Get short feedback'}
+                >
+                  {isLoadingMessageFeedback[index] ? '🔄' : shortFeedbacks[index] ? '💡 Show' : '💡 Explain'}
                 </button>
               )}
               {showTranslations[index] && translations[index] && (
@@ -1051,47 +1803,20 @@ function Analyze() {
                   </div>
                   {translations[index].has_breakdown && translations[index].breakdown && (
                     <div style={{ marginTop: '0.5rem' }}>
-                      {translations[index].breakdown.word_by_word && (
-                        <div style={{ marginBottom: '0.5rem' }}>
-                          <strong>Word by Word:</strong>
-                          <div style={{ marginTop: '0.25rem', display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
-                            {translations[index].breakdown.word_by_word.map((word: any, wordIndex: any) => (
-                              <span key={wordIndex} style={{
-                                display: 'inline-block',
-                                margin: 0,
-                                padding: '0.25rem 0.5rem',
-                                background: 'linear-gradient(135deg, #e6f3ff 0%, #d1e7ff 100%)',
-                                borderRadius: 7,
-                                border: '1px solid #b8daff',
-                                fontSize: '0.8rem',
-                                boxShadow: '0 1px 3px rgba(44,82,130,0.08)'
-                              }}>
-                                <strong>{word.original}</strong> → {word.translation}
-                                {word.part_of_speech && (
-                                  <span style={{ opacity: 0.7, fontSize: '0.75rem' }}>
-                                    {' '}({word.part_of_speech})
-                                  </span>
-                                )}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      {translations[index].breakdown.grammar_notes && (
-                        <div style={{ marginBottom: '0.5rem' }}>
-                          <strong>Grammar Notes:</strong> {translations[index].breakdown.grammar_notes}
-                        </div>
-                      )}
-                      {translations[index].breakdown.cultural_notes && (
-                        <div style={{ marginBottom: '0.5rem' }}>
-                          <strong>Cultural Notes:</strong> {translations[index].breakdown.cultural_notes}
-                        </div>
-                      )}
-                      {translations[index].breakdown.literal_translation && (
-                        <div>
-                          <strong>Literal Translation:</strong> {translations[index].breakdown.literal_translation}
-                        </div>
-                      )}
+                      <div style={{ marginBottom: '0.5rem' }}>
+                        <strong>📖 Detailed Analysis:</strong>
+                      </div>
+                      <div style={{
+                        background: 'rgba(255,255,255,0.7)',
+                        padding: '0.75rem',
+                        borderRadius: 8,
+                        border: '1px solid #e0e0e0',
+                        fontSize: '0.9rem',
+                        lineHeight: '1.5',
+                        whiteSpace: 'pre-wrap'
+                      }}>
+                        {translations[index].breakdown}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1239,14 +1964,14 @@ function Analyze() {
           </div>
         )}
         {/* Recording Controls */}
-        <div 
+                <div
           data-recording-section
           style={{ 
             padding: '1.2rem', 
             borderTop: '1px solid #c38d94',
             background: '#f5f1ec',
             borderRadius: '0 0 16px 16px',
-            textAlign: 'center',
+            textAlign: 'left',
             marginTop: 0
           }}
         >
@@ -1314,79 +2039,111 @@ function Analyze() {
           {/* Mic Button: In manual mode, toggles start/stop. In autospeak, toggles start/stop but disables stop if not recording. */}
           {/* This button is now in the top right of the chat card */}
         </div>
+        {/* Resize Handle */}
+        {showDetailedFeedbackPanel && (
+          <div
+            onMouseDown={handleRightResizeStart}
+            style={{
+              position: 'absolute',
+              right: -4,
+              top: 0,
+              bottom: 0,
+              width: 8,
+              cursor: 'col-resize',
+              background: 'transparent',
+              zIndex: 10
+            }}
+          />
+        )}
       </div>
       {/* Feedback Section */}
-      <div style={{ 
-        width: 320, 
-        background: '#f5f1ec', 
-        borderRadius: 16,
-        display: 'flex',
-        flexDirection: 'column',
-        border: '1px solid #e0e0e0',
-        boxShadow: '0 4px 24px rgba(60,76,115,0.08)',
-        marginLeft: 0,
-        marginTop: 0
-      }}>
-        {/* Feedback Header */}
+      {showDetailedFeedbackPanel && (
         <div style={{ 
-          background: 'var(--rose-accent)', 
-          color: 'var(--blue-secondary)', 
-          padding: '1rem', 
-          borderRadius: '14px 14px 0 0',
-          textAlign: 'center',
-          borderBottom: '1px solid #ececec',
-          fontFamily: 'Gabriela, Arial, sans-serif',
-          fontWeight: 700,
-          fontSize: '1.1rem'
+          width: `${getPanelWidths().right * 100}%`, 
+          background: '#fff', 
+          borderRadius: 16,
+          display: 'flex',
+          flexDirection: 'column',
+          boxShadow: '0 4px 24px rgba(60,76,115,0.08)',
+          marginLeft: 0,
+          marginTop: 0
         }}>
-          📊 Detailed Analysis
-        </div>
+          {/* Feedback Header */}
+          <div style={{ 
+            background: 'var(--rose-accent)', 
+            color: 'var(--blue-secondary)', 
+            padding: '1rem', 
+            borderRadius: '14px 14px 0 0',
+            textAlign: 'center',
+            borderBottom: '1px solid #ececec',
+            fontFamily: 'Gabriela, Arial, sans-serif',
+            fontWeight: 700,
+            fontSize: '1.1rem',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center'
+          }}>
+            <span>📊 Detailed Analysis</span>
+            <button
+              onClick={() => setShowDetailedFeedbackPanel(false)}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'var(--blue-secondary)',
+                fontSize: '1.2rem',
+                cursor: 'pointer',
+                padding: '0.2rem',
+                borderRadius: '4px',
+                transition: 'all 0.2s'
+              }}
+              title="Hide panel"
+            >
+              ▶
+            </button>
+          </div>
         {/* Feedback Content */}
         <div style={{ 
           flex: 1, 
-          padding: '1.2rem',
           display: 'flex',
-          flexDirection: 'column'
+          flexDirection: 'column',
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          minHeight: 0
         }}>
-          <button
-            onClick={requestDetailedFeedback}
-            disabled={isLoadingFeedback || chatHistory.length === 0}
-            style={{
-              width: '100%',
-              padding: '0.75rem',
-              background: 'var(--blue-secondary)',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 10,
-              boxShadow: 'inset 0 2px 8px #3c4c7322',
-              cursor: isLoadingFeedback ? 'not-allowed' : 'pointer',
-              fontWeight: 700,
-              marginBottom: '1rem',
-              fontSize: '1rem',
-              transition: 'all 0.2s'
-            }}
-          >
-            {isLoadingFeedback ? '⏳ Processing...' : 'Request Detailed Feedback'}
-          </button>
           {feedback && (
             <div style={{
               background: '#fff',
               padding: '1rem',
-              borderRadius: 10,
-              border: '1px solid #c38d94',
               flex: 1,
-              overflowY: 'auto',
               fontSize: '1rem',
               lineHeight: 1.5,
               whiteSpace: 'pre-wrap',
               fontFamily: 'AR One Sans, Arial, sans-serif',
-              fontWeight: 400
+              fontWeight: 400,
+              minHeight: 0
             }}>
               {feedback}
             </div>
           )}
+          {!feedback && (
+            <div style={{
+              background: '#fff',
+              padding: '1rem',
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#666',
+              fontSize: '0.9rem',
+              fontStyle: 'italic'
+            }}>
+              Click "🎯 Get" on any user message to see corrections here
+            </div>
+          )}
+
         </div>
-      </div>
+        </div>
+      )}
       {/* Interrupt message - prominent UI position */}
       {wasInterrupted && !isRecording && (
         <div style={{
@@ -1417,6 +2174,55 @@ function Analyze() {
             Recording canceled. You can try again.
           </div>
         </div>
+      )}
+      {/* Floating Panel Toggle Buttons */}
+      {!showShortFeedbackPanel && (
+        <button
+          onClick={() => setShowShortFeedbackPanel(true)}
+          style={{
+            position: 'fixed',
+            left: '1rem',
+            top: '6rem',
+            background: 'var(--blue-secondary)',
+            color: '#fff',
+            border: 'none',
+            borderRadius: '8px 0 0 8px',
+            padding: '1rem 0.5rem',
+            fontSize: '1.2rem',
+            cursor: 'pointer',
+            fontWeight: 600,
+            transition: 'all 0.2s',
+            boxShadow: '0 2px 8px rgba(60,76,115,0.2)',
+            zIndex: 1000
+          }}
+          title="Show Short Feedback Panel"
+        >
+          💡
+        </button>
+      )}
+      {!showDetailedFeedbackPanel && (
+        <button
+          onClick={() => setShowDetailedFeedbackPanel(true)}
+          style={{
+            position: 'fixed',
+            right: '1rem',
+            top: '6rem',
+            background: 'var(--rose-primary)',
+            color: '#fff',
+            border: 'none',
+            borderRadius: '0 8px 8px 0',
+            padding: '1rem 0.5rem',
+            fontSize: '1.2rem',
+            cursor: 'pointer',
+            fontWeight: 600,
+            transition: 'all 0.2s',
+            boxShadow: '0 2px 8px rgba(195,141,148,0.2)',
+            zIndex: 1000
+          }}
+          title="Show Detailed Analysis Panel"
+        >
+          📊
+        </button>
       )}
       {/* Topic Selection Modal */}
       <TopicSelectionModal
