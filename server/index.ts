@@ -439,42 +439,28 @@ app.post('/api/analyze', authenticateJWT, upload.single('audio'), async (req: Re
 app.post('/api/feedback', authenticateJWT, async (req: Request, res: Response) => {
   try {
     console.log('POST /api/feedback called');
-    const { conversationId, language } = req.body;
-    if (!conversationId) {
-      return res.status(400).json({ error: 'No conversation ID provided' });
+    const { user_input, context, language, user_level, user_topics } = req.body;
+    if (!user_input || !context) {
+      return res.status(400).json({ error: 'Missing user_input or context' });
     }
-    // Fetch conversation and messages from DB
-    const conversation = await getConversationWithMessages(Number(conversationId));
-    if (!conversation) {
-      return res.status(404).json({ error: 'Conversation not found' });
-    }
-    const chatHistory = (conversation.messages || []).map(msg => ({
-      sender: msg.sender,
-      text: msg.text,
-      timestamp: msg.created_at
-    }));
-    // Get the most recent user message (last recording)
-    const userMessages = chatHistory.filter(msg => msg.sender === 'User');
-    const lastUserMessage = userMessages[userMessages.length - 1];
-    if (!lastUserMessage) {
-      return res.status(400).json({ error: 'No user speech found' });
-    }
-    const lastTranscription = lastUserMessage.text;
-    // Get user data for personalized feedback
-    const user = await findUserById(req.user.userId);
-    const userLevel = user?.proficiency_level || 'beginner';
-    const userTopics = user?.talk_topics && typeof user.talk_topics === 'string' ? JSON.parse(user.talk_topics) : Array.isArray(user?.talk_topics) ? user.talk_topics : [];
-    
+    // Parse context string into chat_history array
+    const chat_history = context
+      .split('\n')
+      .map((line: string) => {
+        const [sender, ...rest] = line.split(':');
+        return { sender: sender.trim(), text: rest.join(':').trim() };
+      });
+
     // Call Python API for detailed feedback
     let feedback = '';
     try {
       const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5000';
       const pythonResponse = await axios.post(`${pythonApiUrl}/feedback`, {
-        chat_history: chatHistory,
-        last_transcription: lastTranscription,
-        language: language || (conversation as any).language || 'en',
-        user_level: userLevel,
-        user_topics: userTopics
+        chat_history,
+        last_transcription: user_input,
+        language,
+        user_level,
+        user_topics
       }, {
         headers: { 'Content-Type': 'application/json' },
         timeout: 120000

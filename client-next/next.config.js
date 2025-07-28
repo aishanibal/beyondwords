@@ -24,7 +24,7 @@ module.exports = {
       {
         source: '/api/translate',
         destination: 'http://localhost:4000/api/translate', // Express backend
-      },
+      }
     ];
   },
 }; 

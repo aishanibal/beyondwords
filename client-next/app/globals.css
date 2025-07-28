@@ -1,0 +1,64 @@
+@import url('https://fonts.googleapis.com/css2?family=Gabriela&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=AR+One+Sans:wght@400;500;600;700&display=swap');
+
+@import "tailwindcss";
+
+
+:root {
+  --background: #f9f6f4;
+  --foreground: hsl(0, 0%, 24%);
+  --primary: #84546d;
+  --secondary: #3b5377;
+  --accent: #d6b6b6;
+  --cream: #f9f6f4;
+  --rose-primary: #84546d;
+  --blue-secondary: #3b5377;
+  --rose-accent: #d6b6b6;
+  --text-dark: hsl(0, 0%, 24%);
+}
+
+body {
+  background: var(--cream);
+  color: var(--text-dark);
+  font-family: 'Montserrat', Arial, sans-serif;
+  margin: 0;
+  padding: 0;
+  text-align: left;
+}
+
+h1 {
+  font-family: 'Gabriela', Arial, sans-serif;
+}
+
+.font-heading {
+  font-family: 'Gabriela', Arial, sans-serif;
+}
+
+.font-body {
+  font-family: 'AR One Sans', Arial, sans-serif;
+}
+
+.font-general {
+  font-family: 'Montserrat', Arial, sans-serif;
+}
+
+.text-rose-primary {
+  color: var(--rose-primary);
+}
+
+.text-blue-secondary {
+  color: var(--blue-secondary);
+}
+
+.text-rose-accent {
+  color: var(--rose-accent);
+}
+
+.bg-card {
+  background: #fff;
+}
+
+.shadow-card {
+  box-shadow: 0 4px 32px 0 rgba(60, 60, 60, 0.10);
+} 
