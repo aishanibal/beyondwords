@@ -214,6 +214,7 @@ function Analyze() {
   const [showDetailedFeedbackPanel, setShowDetailedFeedbackPanel] = useState<boolean>(true);
   const [shortFeedback, setShortFeedback] = useState<string>('');
   const [showDetailedBreakdown, setShowDetailedBreakdown] = useState<{[key: number]: boolean}>({});
+  const [showSuggestionExplanations, setShowSuggestionExplanations] = useState<{[key: number]: boolean}>({});
   const [explainButtonPressed, setExplainButtonPressed] = useState<boolean>(false);
   const [parsedBreakdown, setParsedBreakdown] = useState<{
     sentence: string;
@@ -1448,28 +1449,28 @@ function Analyze() {
         <div style={{ 
           width: `${getPanelWidths().left * 100}%`, 
           background: '#fff', 
-          borderRadius: 16,
+          borderRadius: 12,
           display: 'flex',
           flexDirection: 'column',
-          boxShadow: '0 4px 24px rgba(60,76,115,0.08)',
+          boxShadow: '0 3px 20px rgba(60,76,115,0.08)',
           position: 'relative'
         }}>
           {/* Short Feedback Header */}
           <div style={{ 
             background: 'var(--blue-secondary)', 
             color: '#fff', 
-            padding: '1rem', 
-            borderRadius: '14px 14px 0 0',
+            padding: '0.75rem 1rem', 
+            borderRadius: '12px 12px 0 0',
             textAlign: 'center',
             borderBottom: '1px solid #ececec',
             fontFamily: 'Gabriela, Arial, sans-serif',
-            fontWeight: 700,
-            fontSize: '1.1rem',
+            fontWeight: 600,
+            fontSize: '0.95rem',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center'
           }}>
-            <span>💡 Short Feedback</span>
+                          <span>💡 AI Explanations</span>
             <button
               onClick={() => setShowShortFeedbackPanel(false)}
               style={{
@@ -1525,7 +1526,7 @@ function Analyze() {
                 {parsedBreakdown.length > 0 ? (
                   <div>
                                           {parsedBreakdown.map((sentenceData, index) => (
-                        <div key={index} style={{ marginBottom: index < parsedBreakdown.length - 1 ? '1.5rem' : '0' }}>
+                        <div key={index} style={{ marginBottom: index < parsedBreakdown.length - 1 ? '1rem' : '0' }}>
                           <div style={{ 
                             display: 'flex', 
                             flexDirection: 'column',
@@ -1535,9 +1536,9 @@ function Analyze() {
                               display: 'flex', 
                               justifyContent: 'space-between', 
                               alignItems: 'flex-start',
-                              marginBottom: '0.5rem'
+                              marginBottom: '0.4rem'
                             }}>
-                              <div style={{ fontWeight: 700, fontSize: '1.1rem', flex: 1 }}>
+                              <div style={{ fontWeight: 600, fontSize: '0.95rem', flex: 1 }}>
                                 {sentenceData.sentence}
                               </div>
                               {sentenceData.details && sentenceData.details.trim() && (
@@ -1571,19 +1572,19 @@ function Analyze() {
                                 </button>
                               )}
                             </div>
-                            <div style={{ color: '#666', fontSize: '0.95rem', width: '100%' }}>
+                            <div style={{ color: '#666', fontSize: '0.85rem', width: '100%', lineHeight: '1.4' }}>
                               {sentenceData.overview}
                             </div>
                           </div>
                         {showDetailedBreakdown[index] && sentenceData.details && sentenceData.details.trim() && (
                           <div style={{
-                            marginTop: '1rem',
-                            padding: '1.2rem',
+                            marginTop: '0.75rem',
+                            padding: '1rem',
                             background: 'linear-gradient(135deg, #f8f9fa 0%, #f0f4f8 100%)',
-                            borderRadius: 10,
+                            borderRadius: 8,
                             border: '1px solid #e1e8ed',
-                            fontSize: '0.9rem',
-                            lineHeight: 1.6,
+                            fontSize: '0.8rem',
+                            lineHeight: 1.5,
                             whiteSpace: 'pre-wrap',
                             boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.05)',
                             color: '#2c3e50'
@@ -1640,15 +1641,15 @@ function Analyze() {
                 disabled={isLoadingFeedback || !shortFeedback}
                 style={{
                   width: '100%',
-                  padding: '0.75rem',
+                  padding: '0.6rem',
                   background: shortFeedback ? 'var(--rose-primary)' : '#ccc',
                   color: '#fff',
                   border: 'none',
-                  borderRadius: 10,
+                  borderRadius: 8,
                   boxShadow: 'inset 0 2px 8px #c38d9422',
                   cursor: (isLoadingFeedback || !shortFeedback) ? 'not-allowed' : 'pointer',
-                  fontWeight: 700,
-                  fontSize: '1rem',
+                  fontWeight: 600,
+                  fontSize: '0.9rem',
                   transition: 'all 0.2s',
                   marginTop: 'auto'
                 }}
@@ -1660,18 +1661,18 @@ function Analyze() {
         </div>
       )}
       {/* Chat Panel - Center */}
-      <div style={{ 
-        flex: 1, 
-        background: '#fff', 
-        borderRadius: 16, 
-        display: 'flex', 
-        flexDirection: 'column', 
-        boxShadow: '0 4px 24px rgba(60,76,115,0.08)',
-        position: 'relative'
-      }}>
+              <div style={{ 
+          flex: 1, 
+          background: '#fff', 
+          borderRadius: 12, 
+          display: 'flex', 
+          flexDirection: 'column', 
+          boxShadow: '0 3px 20px rgba(60,76,115,0.08)',
+          position: 'relative'
+        }}>
         {/* Header Bar */}
-        <div style={{ padding: '1rem', background: '#f5f1ec', borderBottom: '1px solid #ececec', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTopLeftRadius: 16, borderTopRightRadius: 16 }}>
-          <div style={{ color: 'var(--rose-primary)', fontWeight: 700, fontSize: '1.1rem', fontFamily: 'Gabriela, Arial, sans-serif' }}>
+        <div style={{ padding: '0.75rem 1rem', background: '#f5f1ec', borderBottom: '1px solid #ececec', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTopLeftRadius: 12, borderTopRightRadius: 12 }}>
+          <div style={{ color: 'var(--rose-primary)', fontWeight: 600, fontSize: '0.95rem', fontFamily: 'Gabriela, Arial, sans-serif' }}>
             🌐 {getLanguageLabel(language)} Practice Session
           </div>
 
@@ -1680,13 +1681,13 @@ function Analyze() {
         {/* Chat Messages */}
         <div style={{ 
           flex: 1, 
-          padding: '1.2rem', 
+          padding: '1rem', 
           overflowY: 'auto',
           display: 'flex',
           flexDirection: 'column',
-          gap: '0.7rem',
+          gap: '0.6rem',
           background: '#f9f6f4',
-          borderRadius: '0 0 16px 16px'
+          borderRadius: '0 0 12px 12px'
         }}>
           {isLoadingConversation && (
             <div style={{
@@ -1713,12 +1714,12 @@ function Analyze() {
                 onClick={() => handleMessageClick(index, message.text)}
                 style={{
                   flex: 1,
-                  padding: '0.85rem 1.1rem',
-                  borderRadius: (message as any).sender === 'User' ? '18px 18px 6px 18px' : (message as any).sender === 'AI' ? '18px 18px 18px 6px' : '10px',
+                  padding: '0.7rem 1rem',
+                  borderRadius: (message as any).sender === 'User' ? '16px 16px 4px 16px' : (message as any).sender === 'AI' ? '16px 16px 16px 4px' : '8px',
                   background: (message as any).sender === 'User' ? 'linear-gradient(135deg, #c38d94 0%, #b87d8a 100%)' : (message as any).sender === 'AI' ? 'linear-gradient(135deg, #fff 0%, #f8f9fa 100%)' : '#fff7e6',
                   color: (message as any).sender === 'User' ? '#fff' : (message as any).sender === 'System' ? '#e67e22' : '#3e3e3e',
                   border: (message as any).sender === 'AI' ? '1px solid #e0e0e0' : (message as any).sender === 'System' ? '1px solid #e67e22' : 'none',
-                  fontSize: '0.98rem',
+                  fontSize: '0.9rem',
                   cursor: 'pointer',
                   transition: 'all 0.2s ease',
                   opacity: isTranslating[index] ? 0.7 : 1,
@@ -1744,23 +1745,23 @@ function Analyze() {
                   onClick={() => toggleDetailedFeedback(index)}
                   disabled={isLoadingMessageFeedback[index]}
                   style={{
-                    padding: '0.45rem 1.1rem',
-                    borderRadius: 8,
+                    padding: '0.35rem 0.9rem',
+                    borderRadius: 6,
                     border: message.detailedFeedback ? 'none' : '1px solid #c38d94',
                     background: message.detailedFeedback ? 'linear-gradient(135deg, #c38d94 0%, #b87d8a 100%)' : 'rgba(195,141,148,0.08)',
                     color: message.detailedFeedback ? '#fff' : '#c38d94',
-                    fontSize: '0.88rem',
+                    fontSize: '0.8rem',
                     cursor: isLoadingMessageFeedback[index] ? 'not-allowed' : 'pointer',
                     transition: 'all 0.2s ease',
                     opacity: isLoadingMessageFeedback[index] ? 0.6 : 1,
-                    minWidth: '80px',
-                    fontWeight: 600,
-                    marginTop: 6,
+                    minWidth: '70px',
+                    fontWeight: 500,
+                    marginTop: 4,
                     boxShadow: message.detailedFeedback ? '0 2px 6px rgba(195,141,148,0.18)' : '0 1px 3px rgba(195,141,148,0.10)'
                   }}
-                  title={message.detailedFeedback ? 'Show detailed feedback' : 'Generate detailed feedback'}
+                  title={message.detailedFeedback ? 'Show detailed feedback' : 'Check for errors'}
                 >
-                  {isLoadingMessageFeedback[index] ? '🔄' : message.detailedFeedback ? '🎯 Show' : '🎯 Get'}
+                  {isLoadingMessageFeedback[index] ? '🔄' : message.detailedFeedback ? '🎯 Show' : '🎯 Check'}
                 </button>
               )}
               {(message as any).sender === 'AI' && (
@@ -1768,18 +1769,18 @@ function Analyze() {
                   onClick={() => toggleShortFeedback(index)}
                   disabled={isLoadingMessageFeedback[index]}
                   style={{
-                    padding: '0.45rem 1.1rem',
-                    borderRadius: 8,
+                    padding: '0.35rem 0.9rem',
+                    borderRadius: 6,
                     border: shortFeedbacks[index] ? 'none' : '1px solid #4a90e2',
                     background: shortFeedbacks[index] ? 'linear-gradient(135deg, #4a90e2 0%, #357abd 100%)' : 'rgba(74,144,226,0.08)',
                     color: shortFeedbacks[index] ? '#fff' : '#4a90e2',
-                    fontSize: '0.88rem',
+                    fontSize: '0.8rem',
                     cursor: isLoadingMessageFeedback[index] ? 'not-allowed' : 'pointer',
                     transition: 'all 0.2s ease',
                     opacity: isLoadingMessageFeedback[index] ? 0.6 : 1,
-                    minWidth: '80px',
-                    fontWeight: 600,
-                    marginTop: 6,
+                    minWidth: '70px',
+                    fontWeight: 500,
+                    marginTop: 4,
                     boxShadow: shortFeedbacks[index] ? '0 2px 6px rgba(74,144,226,0.18)' : '0 1px 3px rgba(74,144,226,0.10)'
                   }}
                   title={shortFeedbacks[index] ? 'Show short feedback' : 'Get short feedback'}
@@ -1860,117 +1861,121 @@ function Analyze() {
             </div>
           )}
         </div>
-        {/* Microphone Button Row */}
-        {chatHistory.length > 0 && (
-          <div style={{ 
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            padding: '1rem',
-            borderTop: '1px solid #e0e0e0',
-            background: '#f9f9f9',
-            borderBottomLeftRadius: 12, borderBottomRightRadius: 12,
-            marginBottom: 0
-          }}>
-            {/* Microphone Button (centered) */}
-            <button
-              onClick={isRecording ? () => stopRecording(false) : startRecording}
-              disabled={isProcessing || (autoSpeak && isRecording)}
-              style={{
-                width: 64,
-                height: 64,
-                borderRadius: '50%',
-                border: 'none',
-                background: isRecording ? 'var(--blue-secondary)' : 'var(--rose-primary)',
-                color: '#fff',
-                fontSize: '32px',
-                cursor: isProcessing || (autoSpeak && isRecording) ? 'not-allowed' : 'pointer',
-                transition: 'all 0.3s',
-                boxShadow: isRecording ? '0 0 0 10px #c38d9440' : '0 2px 8px rgba(60,76,115,0.10)'
-              }}
-              title={isRecording ? 'Stop Recording' : 'Start Recording'}
-            >
-              {isRecording ? '⏹️' : '🎤'}
-            </button>
-          </div>
-        )}
+
 
         {/* Recording Controls */}
-                <div
-          data-recording-section
-          style={{ 
-            padding: '1.2rem', 
-            borderTop: '1px solid #c38d94',
-            background: '#f5f1ec',
-            borderRadius: '0 0 16px 16px',
-            textAlign: 'left',
-            marginTop: 0
-          }}
-        >
-          {/* Autospeak Toggle Button */}
-          <button
-            onClick={() => setAutoSpeak(v => !v)}
-            style={{
-              marginBottom: '0.5rem',
-              background: autoSpeak ? 'var(--blue-secondary)' : 'var(--rose-primary)',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 16,
-              padding: '0.5rem 1.2rem',
-              cursor: 'pointer',
-              fontWeight: 700,
-              fontSize: '1rem',
-              marginRight: 8,
-              transition: 'all 0.2s',
-              boxShadow: '0 1px 4px rgba(60,76,115,0.08)'
+        {chatHistory.length > 0 && (
+          <div
+            data-recording-section
+            style={{ 
+              padding: '1.2rem', 
+              borderTop: '1px solid #c38d94',
+              background: '#f5f1ec',
+              borderRadius: '0 0 16px 16px',
+              textAlign: 'center',
+              marginTop: 0
             }}
           >
-            {autoSpeak ? '✅ Autospeak ON' : 'Autospeak OFF'}
-          </button>
-          {/* Short Feedback Toggle Button */}
-          <button
-            onClick={() => setEnableShortFeedback(v => !v)}
-            style={{
-              marginBottom: '0.5rem',
-              background: enableShortFeedback ? '#e67e22' : 'var(--rose-primary)',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 16,
-              padding: '0.5rem 1.2rem',
-              cursor: 'pointer',
-              fontWeight: 700,
-              fontSize: '1rem',
-              marginRight: 8,
-              transition: 'all 0.2s',
-              boxShadow: '0 1px 4px rgba(230,126,34,0.08)'
-            }}
-          >
-            {enableShortFeedback ? '💡 Short Feedback ON' : 'Short Feedback OFF'}
-          </button>
-          {/* Redo Button: Only show in manual mode when recording */}
-          {isRecording && manualRecording && (
-            <button
-              onClick={() => stopRecording(true)}
-              style={{
-                marginLeft: 8,
-                background: '#e67e22',
-                color: '#fff',
-                border: 'none',
-                borderRadius: 16,
-                padding: '0.5rem 1.2rem',
-                cursor: 'pointer',
-                fontWeight: 700,
-                fontSize: '1rem',
-                transition: 'all 0.2s',
-                boxShadow: '0 1px 4px rgba(230,126,34,0.08)'
-              }}
-            >
-              ⏹️ Redo
-            </button>
-          )}
-          {/* Mic Button: In manual mode, toggles start/stop. In autospeak, toggles start/stop but disables stop if not recording. */}
-          {/* This button is now in the top right of the chat card */}
-        </div>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              gap: '1rem',
+              flexWrap: 'wrap'
+            }}>
+              {/* Autospeak Toggle Button */}
+              <button
+                onClick={() => setAutoSpeak(v => !v)}
+                style={{
+                  background: autoSpeak ? 'var(--blue-secondary)' : 'var(--blue-secondary)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 10,
+                  padding: '0.5rem 0.9rem',
+                  cursor: 'pointer',
+                  fontWeight: 500,
+                  fontSize: '0.85rem',
+                  transition: 'all 0.2s',
+                  boxShadow: '0 2px 4px rgba(60,76,115,0.15)',
+                  minWidth: '110px'
+                }}
+              >
+                {autoSpeak ? '✅ Autospeak ON' : 'Autospeak OFF'}
+              </button>
+
+              {/* Microphone Button (centered) */}
+              <button
+                onClick={isRecording ? () => stopRecording(false) : startRecording}
+                disabled={isProcessing || (autoSpeak && isRecording)}
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: '50%',
+                  border: 'none',
+                  background: isRecording ? 'var(--blue-secondary)' : 'var(--rose-primary)',
+                  color: '#fff',
+                  fontSize: '20px',
+                  cursor: isProcessing || (autoSpeak && isRecording) ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.3s',
+                  boxShadow: isRecording ? '0 0 0 6px #c38d9440' : '0 3px 12px rgba(60,76,115,0.20)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+                title={isRecording ? 'Stop Recording' : 'Start Recording'}
+              >
+                {isRecording ? '⏹️' : '🎤'}
+              </button>
+
+              {/* Short Feedback Toggle Button */}
+              <button
+                onClick={() => setEnableShortFeedback(v => !v)}
+                style={{
+                  background: enableShortFeedback ? 'var(--blue-secondary)' : 'var(--rose-primary)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 10,
+                  padding: '0.5rem 0.9rem',
+                  cursor: 'pointer',
+                  fontWeight: 500,
+                  fontSize: '0.85rem',
+                  transition: 'all 0.2s',
+                  boxShadow: '0 2px 4px rgba(60,76,115,0.15)',
+                  minWidth: '110px'
+                }}
+              >
+                {enableShortFeedback ? '💡 Short Feedback ON' : 'Short Feedback OFF'}
+              </button>
+            </div>
+                      {/* Redo Button: Only show in manual mode when recording */}
+            {isRecording && manualRecording && (
+              <div style={{
+                display: 'flex',
+                justifyContent: 'center',
+                marginTop: '0.8rem'
+              }}>
+                <button
+                  onClick={() => stopRecording(true)}
+                  style={{
+                    background: '#e67e22',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: 10,
+                    padding: '0.5rem 0.9rem',
+                    cursor: 'pointer',
+                    fontWeight: 500,
+                    fontSize: '0.85rem',
+                    transition: 'all 0.2s',
+                    boxShadow: '0 2px 4px rgba(230,126,34,0.15)',
+                    minWidth: '90px'
+                  }}
+                >
+                  ⏹️ Redo
+                </button>
+              </div>
+            )}
+          </div>
+        )}
         {/* Resize Handle */}
         {showDetailedFeedbackPanel && (
           <div
@@ -1993,16 +1998,16 @@ function Analyze() {
         <div style={{ 
           width: `${getPanelWidths().right * 100}%`, 
           background: '#fff', 
-          borderRadius: 16,
+          borderRadius: 12,
           display: 'flex',
           flexDirection: 'column',
-          boxShadow: '0 4px 24px rgba(60,76,115,0.08)',
+          boxShadow: '0 3px 20px rgba(60,76,115,0.08)',
           marginLeft: 0,
           marginTop: 0
         }}>
           {/* Top Half - Detailed Analysis */}
           <div style={{ 
-            flex: 1,
+            height: '50%',
             display: 'flex',
             flexDirection: 'column',
             borderBottom: '1px solid #e0e0e0'
@@ -2011,18 +2016,18 @@ function Analyze() {
             <div style={{ 
               background: 'var(--rose-accent)', 
               color: 'var(--blue-secondary)', 
-              padding: '1rem', 
-              borderRadius: '14px 14px 0 0',
+              padding: '0.75rem 1rem', 
+              borderRadius: '12px 12px 0 0',
               textAlign: 'center',
               borderBottom: '1px solid #ececec',
               fontFamily: 'Gabriela, Arial, sans-serif',
-              fontWeight: 700,
-              fontSize: '1.1rem',
+              fontWeight: 600,
+              fontSize: '0.95rem',
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center'
             }}>
-              <span>📊 Detailed Analysis</span>
+              <span>📊 Conversation Errors</span>
               <button
                 onClick={() => setShowDetailedFeedbackPanel(false)}
                 style={{
@@ -2047,19 +2052,20 @@ function Analyze() {
               flexDirection: 'column',
               overflowY: 'auto',
               overflowX: 'hidden',
-              minHeight: 0
+              minHeight: 0,
+              maxHeight: '100%'
             }}>
               {feedback && (
                 <div style={{
                   background: '#fff',
                   padding: '1rem',
-                  flex: 1,
-                  fontSize: '1rem',
-                  lineHeight: 1.5,
+                  fontSize: '0.9rem',
+                  lineHeight: 1.4,
                   whiteSpace: 'pre-wrap',
                   fontFamily: 'AR One Sans, Arial, sans-serif',
                   fontWeight: 400,
-                  minHeight: 0
+                  wordWrap: 'break-word',
+                  overflowWrap: 'break-word'
                 }}>
                   {feedback}
                 </div>
@@ -2068,15 +2074,16 @@ function Analyze() {
                 <div style={{
                   background: '#fff',
                   padding: '1rem',
-                  flex: 1,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   color: '#666',
-                  fontSize: '0.9rem',
-                  fontStyle: 'italic'
+                  fontSize: '0.85rem',
+                  fontStyle: 'italic',
+                  textAlign: 'center',
+                  minHeight: '100px'
                 }}>
-                  Click "🎯 Get" on any user message to see corrections here
+                  Click "🎯 Check" on any user message to see corrections here
                 </div>
               )}
             </div>
@@ -2091,14 +2098,14 @@ function Analyze() {
           }}>
             {/* Suggestions Header */}
             <div style={{ 
-              background: 'var(--blue-secondary)', 
-              color: '#fff', 
-              padding: '1rem', 
+              background: 'var(--rose-accent)', 
+              color: 'var(--blue-secondary)', 
+              padding: '0.75rem 1rem', 
               textAlign: 'center',
               borderBottom: '1px solid #ececec',
               fontFamily: 'Gabriela, Arial, sans-serif',
-              fontWeight: 700,
-              fontSize: '1.1rem',
+              fontWeight: 600,
+              fontSize: '0.95rem',
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center'
@@ -2139,38 +2146,76 @@ function Analyze() {
                   <div style={{ 
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: '0.5rem'
+                    gap: '1rem'
                   }}>
                     {suggestions.map((suggestion, index) => (
-                      <button
-                        key={index}
-                        onClick={() => handleSuggestionClick()}
-                        style={{
-                          padding: '0.75rem 1rem',
-                          background: 'rgba(195,141,148,0.13)',
-                          color: 'var(--rose-primary)',
-                          border: 'none',
-                          borderRadius: 12,
-                          cursor: 'pointer',
-                          fontSize: '0.95rem',
-                          fontWeight: 600,
-                          transition: 'all 0.3s ease',
-                          display: 'flex',
+                      <div key={index} style={{ marginBottom: index < suggestions.length - 1 ? '0.8rem' : '0' }}>
+                        <div style={{ 
+                          display: 'flex', 
                           flexDirection: 'column',
-                          alignItems: 'flex-start',
-                          textAlign: 'left',
-                          boxShadow: '0 1px 4px rgba(195,141,148,0.08)'
-                        }}
-                      >
-                        <div style={{ fontWeight: 600, marginBottom: '0.2rem' }}>
-                          {(suggestion as any).text}
-                        </div>
-                        {(suggestion as any).translation && (suggestion as any).translation !== (suggestion as any).text && (
-                          <div style={{ fontSize: '0.85rem', opacity: 0.8, fontStyle: 'italic' }}>
+                          width: '100%'
+                        }}>
+                          <div style={{ 
+                            display: 'flex', 
+                            justifyContent: 'space-between', 
+                            alignItems: 'flex-start',
+                            marginBottom: '0.4rem'
+                          }}>
+                            <div style={{ fontWeight: 600, fontSize: '0.95rem', flex: 1 }}>
+                              {(suggestion as any).text?.replace(/\*\*/g, '')}
+                            </div>
+                            {(suggestion as any).explanation && (suggestion as any).explanation.trim() && (
+                              <button
+                                onClick={() => {
+                                  const newExpanded = { ...showSuggestionExplanations };
+                                  newExpanded[index] = !newExpanded[index];
+                                  setShowSuggestionExplanations(newExpanded);
+                                }}
+                                style={{
+                                  background: showSuggestionExplanations[index] ? '#4a90e2' : 'rgba(74,144,226,0.08)',
+                                  border: '1px solid #4a90e2',
+                                  color: showSuggestionExplanations[index] ? '#fff' : '#4a90e2',
+                                  padding: '0.3rem 0.7rem',
+                                  borderRadius: 5,
+                                  cursor: 'pointer',
+                                  fontSize: '0.75rem',
+                                  fontWeight: 500,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '0.3rem',
+                                  transition: 'all 0.2s ease',
+                                  boxShadow: showSuggestionExplanations[index] ? '0 2px 6px rgba(74,144,226,0.2)' : '0 1px 3px rgba(74,144,226,0.1)',
+                                  minWidth: 'fit-content',
+                                  height: 'fit-content',
+                                  marginLeft: '0.5rem'
+                                }}
+                              >
+                                {showSuggestionExplanations[index] ? '▼' : '▶'} 
+                                {showSuggestionExplanations[index] ? 'Hide' : 'Details'}
+                              </button>
+                            )}
+                          </div>
+                          <div style={{ color: '#666', fontSize: '0.85rem', width: '100%', lineHeight: '1.4' }}>
                             {(suggestion as any).translation}
                           </div>
+                        </div>
+                        {showSuggestionExplanations[index] && (suggestion as any).explanation && (suggestion as any).explanation.trim() && (
+                          <div style={{
+                            marginTop: '0.75rem',
+                            padding: '1rem',
+                            background: 'linear-gradient(135deg, #f8f9fa 0%, #f0f4f8 100%)',
+                            borderRadius: 8,
+                            border: '1px solid #e1e8ed',
+                            fontSize: '0.8rem',
+                            lineHeight: 1.5,
+                            whiteSpace: 'pre-wrap',
+                            boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.05)',
+                            color: '#2c3e50'
+                          }}>
+                            {(suggestion as any).explanation}
+                          </div>
                         )}
-                      </button>
+                      </div>
                     ))}
                   </div>
                 )}
@@ -2203,14 +2248,14 @@ function Analyze() {
                     onClick={fetchSuggestions}
                     style={{
                       width: '100%',
-                      padding: '0.75rem 1.5rem',
+                      padding: '0.6rem 1.2rem',
                       background: 'var(--rose-primary)',
                       color: '#fff',
                       border: 'none',
-                      borderRadius: 14,
+                      borderRadius: 10,
                       cursor: 'pointer',
-                      fontSize: '1rem',
-                      fontWeight: 600,
+                      fontSize: '0.9rem',
+                      fontWeight: 500,
                       transition: 'all 0.2s',
                       boxShadow: '0 1px 4px rgba(195,141,148,0.10)'
                     }}
@@ -2226,14 +2271,14 @@ function Analyze() {
                     }}
                     style={{
                       width: '100%',
-                      padding: '0.75rem 1.5rem',
+                      padding: '0.6rem 1.2rem',
                       background: '#fff',
                       color: 'var(--rose-primary)',
                       border: '1px solid #c38d94',
-                      borderRadius: 14,
+                      borderRadius: 10,
                       cursor: 'pointer',
-                      fontSize: '1rem',
-                      fontWeight: 600,
+                      fontSize: '0.9rem',
+                      fontWeight: 500,
                       transition: 'all 0.2s ease',
                       boxShadow: '0 1px 4px rgba(195,141,148,0.08)'
                     }}

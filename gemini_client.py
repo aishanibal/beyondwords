@@ -168,7 +168,7 @@ TIPS:
 - Be encouraging and specific.
 - Focus on grammar, natural sentence structure, and phrasing that sounds native.
 - If the user used a non-{self.language_name} word that has a better equivalent, suggest a replacement like: "Instead of saying 'X', you'll sound more fluent if you say 'Y'." in {self.feedback_language}.
-
+- Do not include filler words like greetings, etc. 
 Speak like a friendly older sibling or patient tutor. Keep your tone warm, supportive, and helpful.
 Always use {self.feedback_language} for explanations.
 """
@@ -228,6 +228,7 @@ IMPORTANT:
 – Use vocabulary and sentence structure appropriate for a {self.user_level} learner: {level_guidance}
 – Each suggestion should be roughly the same length as the user's last message (or up to 1.5× longer)
 – Do NOT use placeholders like [Song Title], [Artist's Name], or brackets
+– Do NOT use asterisks (*) for emphasis or formatting - provide clean text only
 – Always provide real, natural-sounding examples that a native speaker would say
 – The translation must always be in {self.feedback_language}. Only use English if {self.feedback_language} is English.
 
@@ -400,19 +401,19 @@ If the response is already natural and grammatically accurate, return it unchang
 
     For each sentence in the response, provide this exact structure:
 
-    **{self.language_name} sentence** {script_lang_instruction}
+    {self.language_name} sentence {script_lang_instruction}
     [Brief explanation of the overall meaning, tone, and social context in {self.feedback_language}]
 
-    *   [Word/Phrase] ([Pronunciation if applicable]) – [Translation in {self.feedback_language}]
-    *   [Continue for each word/phrase]
+    • [Word/Phrase] ([Pronunciation if applicable]) – [Translation in {self.feedback_language}]
+    • [Continue for each word/phrase]
     Literal translation – [Direct {self.feedback_language} rendering showing word order]
     Sentence structure pattern – [Brief explanation of grammar structure and how it compares to {self.feedback_language}]
 
     [Then repeat the same structure for the next sentence]
 
     IMPORTANT FORMATTING:
-    - Use "**" around each {self.language_name} sentence
-    - Use "*   " for each word/phrase breakdown
+    - Do NOT use asterisks (*) for formatting - provide clean text only
+    - Use "• " for each word/phrase breakdown (bullet point)
     - Each sentence should have its own complete breakdown (overview + word breakdown + literal translation + sentence structure)
     - Keep explanations concise and natural
     - Only use {self.feedback_language} for explanations
