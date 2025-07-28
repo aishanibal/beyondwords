@@ -162,8 +162,6 @@ YOUR RESPONSE STRUCTURE (use {self.feedback_language} for explanations):
 "Correct, that sounds great!" or something similar with the same sentiment and length in {self.feedback_language}.
 
 - If there are errors, follow this format:
-  You said: "..."
-  Correction: "..."
 Explanation: Briefly explain why it was incorrect (e.g., verb tense, word order, unnatural phrasing, incorrect particle, politeness marker, closeness level, etc.) in {self.feedback_language}.
 
 TIPS:

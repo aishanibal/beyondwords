@@ -1763,7 +1763,7 @@ function Analyze() {
                   {isLoadingMessageFeedback[index] ? '🔄' : message.detailedFeedback ? '🎯 Show' : '🎯 Get'}
                 </button>
               )}
-              {Boolean((message as any).sender === 'AI') && (
+              {(message as any).sender === 'AI' && (
                 <button
                   onClick={() => toggleShortFeedback(index)}
                   disabled={isLoadingMessageFeedback[index]}
@@ -1860,40 +1860,19 @@ function Analyze() {
             </div>
           )}
         </div>
-        {/* Text Suggestions + Mic Button Row */}
+        {/* Microphone Button Row */}
         {chatHistory.length > 0 && (
           <div style={{ 
             display: 'flex',
             justifyContent: 'center',
             alignItems: 'center',
-            gap: 16,
             padding: '1rem',
             borderTop: '1px solid #e0e0e0',
             background: '#f9f9f9',
             borderBottomLeftRadius: 12, borderBottomRightRadius: 12,
             marginBottom: 0
           }}>
-            {/* Get Suggestions Button (smaller, left) */}
-            {suggestions.length === 0 && !isLoadingSuggestions && (
-              <button
-                onClick={fetchSuggestions}
-                style={{
-                  padding: '0.5rem 1.1rem',
-                  background: 'var(--rose-primary)',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: 14,
-                  cursor: 'pointer',
-                  fontSize: '0.93rem',
-                  fontWeight: 600,
-                  transition: 'all 0.2s',
-                  boxShadow: '0 1px 4px rgba(195,141,148,0.10)'
-                }}
-              >
-                💡 Get Suggestions
-              </button>
-            )}
-            {/* Microphone Button (right) */}
+            {/* Microphone Button (centered) */}
             <button
               onClick={isRecording ? () => stopRecording(false) : startRecording}
               disabled={isProcessing || (autoSpeak && isRecording)}
@@ -1915,77 +1894,7 @@ function Analyze() {
             </button>
           </div>
         )}
-        {/* Suggestions List (if present) */}
-        {chatHistory.length > 0 && suggestions.length > 0 && (
-          <div style={{ 
-            padding: '1rem', 
-            borderTop: '1px solid #e0e0e0',
-            background: '#f9f9f9',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '0.5rem',
-            borderBottomLeftRadius: 12, borderBottomRightRadius: 12
-          }}>
-            <div style={{ fontSize: '1rem', color: 'var(--rose-primary)', fontWeight: 600, marginBottom: '0.5rem' }}>
-              💬 Try saying:
-            </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-              {suggestions.map((suggestion, index) => (
-                <button
-                  key={index}
-                  onClick={() => handleSuggestionClick()}
-                  style={{
-                    padding: '0.5rem 1rem',
-                    background: 'rgba(195,141,148,0.13)',
-                    color: 'var(--rose-primary)',
-                    border: 'none',
-                    borderRadius: 14,
-                    cursor: 'pointer',
-                    fontSize: '0.93rem',
-                    fontWeight: 600,
-                    transition: 'all 0.3s ease',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    minWidth: '120px',
-                    boxShadow: '0 1px 4px rgba(195,141,148,0.08)'
-                  }}
-                >
-                  <div style={{ fontWeight: 600, marginBottom: '0.2rem' }}>
-                    {(suggestion as any).text}
-                  </div>
-                  {(suggestion as any).translation && (suggestion as any).translation !== (suggestion as any).text && (
-                    <div style={{ fontSize: '0.85rem', opacity: 0.8, fontStyle: 'italic' }}>
-                      {(suggestion as any).translation}
-                    </div>
-                  )}
-                </button>
-              ))}
-            </div>
-            <button
-              onClick={() => {
-                setSuggestions([]);
-                fetchSuggestions();
-              }}
-              style={{
-                padding: '0.5rem 1rem',
-                background: '#fff',
-                color: 'var(--rose-primary)',
-                border: '1px solid #c38d94',
-                borderRadius: 10,
-                cursor: 'pointer',
-                fontSize: '0.93rem',
-                fontWeight: 600,
-                transition: 'all 0.2s ease',
-                alignSelf: 'center',
-                marginTop: '0.5rem',
-                boxShadow: '0 1px 4px rgba(195,141,148,0.08)'
-              }}
-            >
-              🔄 Get New Suggestions
-            </button>
-          </div>
-        )}
+
         {/* Recording Controls */}
                 <div
           data-recording-section
@@ -2079,7 +1988,7 @@ function Analyze() {
           />
         )}
       </div>
-      {/* Feedback Section */}
+      {/* Right Panel - Split into Detailed Analysis and Suggestions */}
       {showDetailedFeedbackPanel && (
         <div style={{ 
           width: `${getPanelWidths().right * 100}%`, 
@@ -2091,80 +2000,250 @@ function Analyze() {
           marginLeft: 0,
           marginTop: 0
         }}>
-          {/* Feedback Header */}
+          {/* Top Half - Detailed Analysis */}
           <div style={{ 
-            background: 'var(--rose-accent)', 
-            color: 'var(--blue-secondary)', 
-            padding: '1rem', 
-            borderRadius: '14px 14px 0 0',
-            textAlign: 'center',
-            borderBottom: '1px solid #ececec',
-            fontFamily: 'Gabriela, Arial, sans-serif',
-            fontWeight: 700,
-            fontSize: '1.1rem',
+            flex: 1,
             display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center'
+            flexDirection: 'column',
+            borderBottom: '1px solid #e0e0e0'
           }}>
-            <span>📊 Detailed Analysis</span>
-            <button
-              onClick={() => setShowDetailedFeedbackPanel(false)}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: 'var(--blue-secondary)',
-                fontSize: '1.2rem',
-                cursor: 'pointer',
-                padding: '0.2rem',
-                borderRadius: '4px',
-                transition: 'all 0.2s'
-              }}
-              title="Hide panel"
-            >
-              ▶
-            </button>
-          </div>
-        {/* Feedback Content */}
-        <div style={{ 
-          flex: 1, 
-          display: 'flex',
-          flexDirection: 'column',
-          overflowY: 'auto',
-          overflowX: 'hidden',
-          minHeight: 0
-        }}>
-          {feedback && (
-            <div style={{
-              background: '#fff',
-              padding: '1rem',
-              flex: 1,
-              fontSize: '1rem',
-              lineHeight: 1.5,
-              whiteSpace: 'pre-wrap',
-              fontFamily: 'AR One Sans, Arial, sans-serif',
-              fontWeight: 400,
+            {/* Detailed Analysis Header */}
+            <div style={{ 
+              background: 'var(--rose-accent)', 
+              color: 'var(--blue-secondary)', 
+              padding: '1rem', 
+              borderRadius: '14px 14px 0 0',
+              textAlign: 'center',
+              borderBottom: '1px solid #ececec',
+              fontFamily: 'Gabriela, Arial, sans-serif',
+              fontWeight: 700,
+              fontSize: '1.1rem',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <span>📊 Detailed Analysis</span>
+              <button
+                onClick={() => setShowDetailedFeedbackPanel(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--blue-secondary)',
+                  fontSize: '1.2rem',
+                  cursor: 'pointer',
+                  padding: '0.2rem',
+                  borderRadius: '4px',
+                  transition: 'all 0.2s'
+                }}
+                title="Hide panel"
+              >
+                ▶
+              </button>
+            </div>
+            {/* Detailed Analysis Content */}
+            <div style={{ 
+              flex: 1, 
+              display: 'flex',
+              flexDirection: 'column',
+              overflowY: 'auto',
+              overflowX: 'hidden',
               minHeight: 0
             }}>
-              {feedback}
+              {feedback && (
+                <div style={{
+                  background: '#fff',
+                  padding: '1rem',
+                  flex: 1,
+                  fontSize: '1rem',
+                  lineHeight: 1.5,
+                  whiteSpace: 'pre-wrap',
+                  fontFamily: 'AR One Sans, Arial, sans-serif',
+                  fontWeight: 400,
+                  minHeight: 0
+                }}>
+                  {feedback}
+                </div>
+              )}
+              {!feedback && (
+                <div style={{
+                  background: '#fff',
+                  padding: '1rem',
+                  flex: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#666',
+                  fontSize: '0.9rem',
+                  fontStyle: 'italic'
+                }}>
+                  Click "🎯 Get" on any user message to see corrections here
+                </div>
+              )}
             </div>
-          )}
-          {!feedback && (
-            <div style={{
-              background: '#fff',
-              padding: '1rem',
-              flex: 1,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#666',
-              fontSize: '0.9rem',
-              fontStyle: 'italic'
-            }}>
-              Click "🎯 Get" on any user message to see corrections here
-            </div>
-          )}
+          </div>
 
-        </div>
+          {/* Bottom Half - Suggestions */}
+          <div style={{ 
+            height: '50%',
+            display: 'flex',
+            flexDirection: 'column',
+            borderTop: '1px solid #e0e0e0'
+          }}>
+            {/* Suggestions Header */}
+            <div style={{ 
+              background: 'var(--blue-secondary)', 
+              color: '#fff', 
+              padding: '1rem', 
+              textAlign: 'center',
+              borderBottom: '1px solid #ececec',
+              fontFamily: 'Gabriela, Arial, sans-serif',
+              fontWeight: 700,
+              fontSize: '1.1rem',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <span>💡 Conversation Suggestions</span>
+            </div>
+            {/* Suggestions Content */}
+            <div style={{ 
+              flex: 1, 
+              display: 'flex',
+              flexDirection: 'column',
+              minHeight: 0
+            }}>
+              {/* Scrollable Suggestions Area */}
+              <div style={{
+                flex: 1,
+                overflowY: 'auto',
+                overflowX: 'hidden',
+                padding: '1rem'
+              }}>
+                {/* Loading State */}
+                {isLoadingSuggestions && (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#666',
+                    fontSize: '0.9rem',
+                    fontStyle: 'italic',
+                    padding: '1rem'
+                  }}>
+                    ⏳ Loading suggestions...
+                  </div>
+                )}
+
+                {/* Suggestions List */}
+                {suggestions.length > 0 && (
+                  <div style={{ 
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.5rem'
+                  }}>
+                    {suggestions.map((suggestion, index) => (
+                      <button
+                        key={index}
+                        onClick={() => handleSuggestionClick()}
+                        style={{
+                          padding: '0.75rem 1rem',
+                          background: 'rgba(195,141,148,0.13)',
+                          color: 'var(--rose-primary)',
+                          border: 'none',
+                          borderRadius: 12,
+                          cursor: 'pointer',
+                          fontSize: '0.95rem',
+                          fontWeight: 600,
+                          transition: 'all 0.3s ease',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'flex-start',
+                          textAlign: 'left',
+                          boxShadow: '0 1px 4px rgba(195,141,148,0.08)'
+                        }}
+                      >
+                        <div style={{ fontWeight: 600, marginBottom: '0.2rem' }}>
+                          {(suggestion as any).text}
+                        </div>
+                        {(suggestion as any).translation && (suggestion as any).translation !== (suggestion as any).text && (
+                          <div style={{ fontSize: '0.85rem', opacity: 0.8, fontStyle: 'italic' }}>
+                            {(suggestion as any).translation}
+                          </div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Empty State */}
+                {!isLoadingSuggestions && suggestions.length === 0 && (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#666',
+                    fontSize: '0.9rem',
+                    fontStyle: 'italic',
+                    padding: '1rem',
+                    textAlign: 'center'
+                  }}>
+                    Click "Get New Suggestions" to see conversation ideas
+                  </div>
+                )}
+              </div>
+
+              {/* Get Suggestions Button - Fixed at bottom */}
+              <div style={{
+                padding: '1rem',
+                borderTop: '1px solid #e0e0e0',
+                background: '#f9f9f9'
+              }}>
+                {suggestions.length === 0 && !isLoadingSuggestions && (
+                  <button
+                    onClick={fetchSuggestions}
+                    style={{
+                      width: '100%',
+                      padding: '0.75rem 1.5rem',
+                      background: 'var(--rose-primary)',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: 14,
+                      cursor: 'pointer',
+                      fontSize: '1rem',
+                      fontWeight: 600,
+                      transition: 'all 0.2s',
+                      boxShadow: '0 1px 4px rgba(195,141,148,0.10)'
+                    }}
+                  >
+                    💡 Get New Suggestions
+                  </button>
+                )}
+                {suggestions.length > 0 && (
+                  <button
+                    onClick={() => {
+                      setSuggestions([]);
+                      fetchSuggestions();
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '0.75rem 1.5rem',
+                      background: '#fff',
+                      color: 'var(--rose-primary)',
+                      border: '1px solid #c38d94',
+                      borderRadius: 14,
+                      cursor: 'pointer',
+                      fontSize: '1rem',
+                      fontWeight: 600,
+                      transition: 'all 0.2s ease',
+                      boxShadow: '0 1px 4px rgba(195,141,148,0.08)'
+                    }}
+                  >
+                    🔄 Get New Suggestions
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       )}
       {/* Interrupt message - prominent UI position */}
