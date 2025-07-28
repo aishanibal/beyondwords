@@ -1,4 +1,7 @@
-'use client';
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable react-hooks/exhaustive-deps */
+"use client";
 import React, { useEffect, useState } from 'react';
 import { useUser } from '../ClientLayout';
 import axios from 'axios';

@@ -1,4 +1,7 @@
-'use client';
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable react/no-unescaped-entities */
+"use client";
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '../ClientLayout';

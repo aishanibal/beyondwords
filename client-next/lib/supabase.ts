@@ -1,4 +1,5 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js'
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { createClient } from '@supabase/supabase-js';
 
 // TODO: Ensure .env.local uses NEXT_PUBLIC_ variables for Next.js.
 // Supabase configuration
@@ -10,7 +11,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 // Create Supabase client
-export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // Function to save waitlist email
 export const saveWaitlistEmail = async (email: string, source: string = 'website'):

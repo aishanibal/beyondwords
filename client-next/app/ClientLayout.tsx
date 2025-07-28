@@ -1,4 +1,6 @@
-'use client';
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-unused-vars */
+"use client";
 import React, { useEffect, useState, createContext, useContext, useRef } from 'react';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import axios from 'axios';

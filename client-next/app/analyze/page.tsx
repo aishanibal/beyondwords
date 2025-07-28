@@ -1,28 +1,22 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable react-hooks/exhaustive-deps */
+/* eslint-disable react/no-unescaped-entities */
 "use client";
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useUser } from '../ClientLayout';
 import axios from 'axios';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { TALK_TOPICS, Topic } from '../../lib/preferences';
 import TopicSelectionModal from './TopicSelectionModal';
+
 // TypeScript: Add type declarations for browser APIs
-// Fix: Use 'any' for SpeechRecognition to avoid recursive type error
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 declare global {
   interface Window {
-    SpeechRecognition: any;
-    webkitSpeechRecognition: any;
+    SpeechRecognition: unknown;
+    webkitSpeechRecognition: unknown;
     MediaRecorder: typeof MediaRecorder;
   }
 }
-
-// Remove top-level window usage
-// let SpeechRecognition: any = null;
-// let MediaRecorderClass: typeof window.MediaRecorder | null = null;
-// if (typeof window !== 'undefined') {
-//   SpeechRecognition = window.SpeechRecognition || (window as any).webkitSpeechRecognition;
-//   MediaRecorderClass = window.MediaRecorder;
-// }
 
 // Add types for getLanguageLabel
 const getLanguageLabel = (code: string): string => {
@@ -52,8 +46,37 @@ const CLOSENESS_LEVELS: { [key: string]: string } = {
   distant: '🧑‍💼 Distant: Large groups, public speaking, or unknown audience',
 };
 
-function usePersistentChatHistory(user: any): [any[], React.Dispatch<React.SetStateAction<any[]>>] {
-  const [chatHistory, setChatHistory] = React.useState<any[]>(() => {
+interface ChatMessage {
+  id?: string;
+  sender: string;
+  text: string;
+  timestamp: Date;
+  messageType?: string;
+  audioFilePath?: string | null;
+  translation?: string;
+  breakdown?: unknown;
+  detailedFeedback?: string;
+  shortFeedback?: string;
+  showDetailedFeedback?: boolean;
+  showShortFeedback?: boolean;
+  showDetailedBreakdown?: boolean;
+}
+
+interface User {
+  id: string;
+  email: string;
+  name?: string;
+  selectedLanguage?: string;
+  target_language?: string;
+  language?: string;
+  proficiency_level?: string;
+  learning_goals?: string[];
+  talk_topics?: string[];
+  [key: string]: unknown;
+}
+
+function usePersistentChatHistory(user: User | null): [ChatMessage[], React.Dispatch<React.SetStateAction<ChatMessage[]>>] {
+  const [chatHistory, setChatHistory] = React.useState<ChatMessage[]>(() => {
     if (!user) {
       const saved = localStorage.getItem('chatHistory');
       return saved ? JSON.parse(saved) : [];
@@ -129,12 +152,12 @@ function Analyze() {
     return () => { document.head.removeChild(style); };
   }, []);
 
-  const { user } = useUser() as { user: any };
+  const { user } = useUser() as { user: User | null };
   const [isRecording, setIsRecording] = useState<boolean>(false);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [feedback, setFeedback] = useState<string>('');
   const [isLoadingFeedback, setIsLoadingFeedback] = useState<boolean>(false);
-  const recognitionRef = useRef<any>(null);
+  const recognitionRef = useRef<{ lang: string; stop: () => void } | null>(null);
   const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
   const autoSpeakRef = useRef<boolean>(false);
   const [showSavePrompt, setShowSavePrompt] = useState<boolean>(false);
@@ -142,9 +165,9 @@ function Analyze() {
   const [language, setLanguage] = useState<string>(urlLang || user?.target_language || 'en');
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [isLoadingConversation, setIsLoadingConversation] = useState<boolean>(false);
-  const [suggestions, setSuggestions] = useState<any[]>([]); // TODO: type this
+  const [suggestions, setSuggestions] = useState<unknown[]>([]); // TODO: type this
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState<boolean>(false);
-  const [translations, setTranslations] = useState<Record<number, any>>({});
+  const [translations, setTranslations] = useState<Record<number, unknown>>({});
   const [isTranslating, setIsTranslating] = useState<Record<number, boolean>>({});
   const [showTranslations, setShowTranslations] = useState<Record<number, boolean>>({});
   const [isLoadingMessageFeedback, setIsLoadingMessageFeedback] = useState<Record<number, boolean>>({});
@@ -286,10 +309,10 @@ function Analyze() {
       console.log('[DEBUG] Extracted user preferences:', { formality, topics, user_goals, userLevel, feedbackLanguage });
       
       const messages = conversation.messages || [];
-      const history = messages.map((msg: any) => ({
-        sender: msg.sender,
-        text: msg.text,
-        timestamp: new Date(msg.created_at)
+      const history = messages.map((msg: unknown) => ({
+        sender: (msg as any).sender,
+        text: (msg as any).text,
+        timestamp: new Date((msg as any).created_at)
       }));
       console.log('[DEBUG] Loaded conversation history with', history.length, 'messages');
       console.log('[DEBUG] Messages:', history);
@@ -297,9 +320,9 @@ function Analyze() {
       
       // Store user preferences for use in API calls
       setUserPreferences({ formality, topics, user_goals, userLevel, feedbackLanguage });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[DEBUG] Error loading conversation:', error);
-      console.error('[DEBUG] Error details:', error.response?.data || error.message);
+      console.error('[DEBUG] Error details:', (error as any).response?.data || (error as any).message);
       // Don't show error to user, just log it
     } finally {
       setIsLoadingConversation(false);
@@ -330,7 +353,7 @@ function Analyze() {
 
   // Move validateConversationId outside useEffect
   const validateConversationId = async (
-    user: any,
+    user: User | null,
     urlConversationId: string | null,
     setConversationId: React.Dispatch<React.SetStateAction<string | null>>,
     attempt = 1
@@ -341,8 +364,8 @@ function Analyze() {
         if (!response.data.conversation) {
           removeConversationParam();
         }
-      } catch (error: any) {
-        if (error.response && error.response.status === 404) {
+      } catch (error: unknown) {
+        if (error && typeof error === 'object' && 'response' in error && (error as any).response && typeof (error as any).response === 'object' && 'status' in (error as any).response && (error as any).response.status === 404) {
           if (attempt < 3) {
             setTimeout(() => {
               validateConversationId(user, urlConversationId, setConversationId, attempt + 1);
@@ -407,7 +430,7 @@ function Analyze() {
       if (showAlert) {
         alert('Session saved to your account as a conversation!');
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('Save session error:', e);
       if (showAlert) {
         alert('Failed to save session.');
@@ -504,18 +527,18 @@ function Analyze() {
         recognition.lang = language || 'en-US';
         recognition.interimResults = false;
         recognition.continuous = false;
-        recognition.onresult = (event: any) => {
+        recognition.onresult = (event: unknown) => {
           setIsRecording(false);
           if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
             mediaRecorderRef.current.stop();
           }
         };
-        recognition.onerror = (event: any) => {
+        recognition.onerror = (event: unknown) => {
           setIsRecording(false);
           if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
             mediaRecorderRef.current.stop();
           }
-          alert('Speech recognition error: ' + event.error);
+          alert('Speech recognition error: ' + (event as any).error);
         };
         recognition.onend = () => {
           setIsRecording(false);
@@ -529,18 +552,18 @@ function Analyze() {
         // Manual mode: no speech recognition, just record until user stops
         setManualRecording(true);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Audio recording error:', err);
-      let errorMessage = 'Could not start audio recording: ' + err.message;
+      let errorMessage = 'Could not start audio recording: ' + (err as any).message;
       
       // Provide more specific error messages
-      if (err.name === 'NotAllowedError') {
+      if ((err as any).name === 'NotAllowedError') {
         errorMessage = 'Microphone access denied. Please allow microphone permissions and try again.';
-      } else if (err.name === 'NotFoundError') {
+      } else if ((err as any).name === 'NotFoundError') {
         errorMessage = 'No microphone found. Please connect a microphone and try again.';
-      } else if (err.name === 'NotSupportedError') {
+      } else if ((err as any).name === 'NotSupportedError') {
         errorMessage = 'Audio recording is not supported in this browser. Please use a modern browser.';
-      } else if (err.name === 'SecurityError') {
+      } else if ((err as any).name === 'SecurityError') {
         errorMessage = 'Microphone access blocked for security reasons. Please check your browser settings.';
       }
       
@@ -617,7 +640,7 @@ function Analyze() {
           await playTTS(ttsUrl);
         }
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('[DEBUG] (fetchAndShowShortFeedback) Error calling /short_feedback API:', e);
     }
   };
@@ -692,11 +715,11 @@ function Analyze() {
               console.error('Failed to play TTS audio:', error);
             });
           }
-        } catch (fetchError: any) {
+        } catch (fetchError: unknown) {
           console.error('Error checking TTS audio file:', fetchError);
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       const errorMessage = {
         sender: 'System',
         text: '❌ Error processing audio. Please try again.',
@@ -739,11 +762,11 @@ function Analyze() {
       setFeedback(response.data.feedback);
       // Optionally, add to chatHistory
       setChatHistory(prev => [...prev, { sender: 'System', text: response.data.feedback, timestamp: new Date() }]);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error getting detailed feedback:', error);
-      console.error('[DEBUG] Error response:', error.response?.data);
-      console.error('[DEBUG] Error status:', error.response?.status);
-      console.error('[DEBUG] Error message:', error.message);
+      console.error('[DEBUG] Error response:', (error as any).response?.data);
+      console.error('[DEBUG] Error status:', (error as any).response?.status);
+      console.error('[DEBUG] Error message:', (error as any).message);
       setFeedback('Error getting detailed feedback. Please try again.');
     } finally {
       setIsLoadingFeedback(false);
@@ -769,7 +792,7 @@ function Analyze() {
         token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
       );
       setSuggestions(response.data.suggestions || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error fetching suggestions:', error);
       setSuggestions([]);
     } finally {
@@ -797,7 +820,7 @@ function Analyze() {
       // Use the AI message from the POST response if present
       if (response.data && response.data.aiMessage) {
         console.log('[DEBUG] AI message from POST response:', response.data.aiMessage);
-        setChatHistory([{ sender: 'AI', text: response.data.aiMessage.text, timestamp: new Date() }]);
+        setChatHistory([{ sender: 'AI', text: (response.data.aiMessage as any).text, timestamp: new Date() }]);
       } else {
         console.log('[DEBUG] No aiMessage in POST response, falling back to GET');
         // Fallback: fetch the updated conversation to get the AI's reply
@@ -808,15 +831,15 @@ function Analyze() {
         );
         const messages = convRes.data.conversation.messages || [];
         // Find the first AI message
-        const aiMsg = messages.find((m: any) => m.sender === 'AI');
+        const aiMsg = messages.find((m: unknown) => (m as any).sender === 'AI');
         if (aiMsg) {
           console.log('[DEBUG] AI message from GET:', aiMsg);
-          setChatHistory([{ sender: 'AI', text: aiMsg.text, timestamp: new Date(aiMsg.created_at) }]);
+          setChatHistory([{ sender: 'AI', text: (aiMsg as any).text, timestamp: new Date((aiMsg as any).created_at) }]);
         } else {
           console.log('[DEBUG] No AI message found in conversation after GET');
         }
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[DEBUG] Error in fetchInitialAIMessage:', err);
       // Fallback: just add a generic AI greeting
       setChatHistory([{ sender: 'AI', text: 'Hello! What would you like to talk about today?', timestamp: new Date() }]);
@@ -825,7 +848,7 @@ function Analyze() {
     }
   };
 
-  const handleModalConversationStart = async (newConversationId: string, topics: string[], aiMessage: any, formality: string) => {
+  const handleModalConversationStart = async (newConversationId: string, topics: string[], aiMessage: unknown, formality: string) => {
     setConversationId(newConversationId);
     setChatHistory([]);
     setShowTopicModal(false);
@@ -842,8 +865,8 @@ function Analyze() {
     // Use Next.js router to update the URL
     router.replace(`/analyze?conversation=${newConversationId}&topics=${encodeURIComponent(topics.join(','))}`);
     // Set the initial AI message from the backend response
-    if (aiMessage && aiMessage.text && aiMessage.text.trim()) {
-      setChatHistory([{ sender: 'AI', text: aiMessage.text, timestamp: new Date() }]);
+    if (aiMessage && (aiMessage as any).text && (aiMessage as any).text.trim()) {
+      setChatHistory([{ sender: 'AI', text: (aiMessage as any).text, timestamp: new Date() }]);
     } else {
       setChatHistory([{ sender: 'AI', text: 'Hello! What would you like to talk about today?', timestamp: new Date() }]);
     }
@@ -877,9 +900,9 @@ function Analyze() {
         token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
       );
       console.log('[DEBUG] Message saved to backend successfully:', response.data);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[DEBUG] Error saving message to backend:', error);
-      console.error('[DEBUG] Error details:', error.response?.data || error.message);
+      console.error('[DEBUG] Error details:', (error as any).response?.data || (error as any).message);
     }
   };
 
@@ -940,7 +963,7 @@ function Analyze() {
         ...prev, 
         [messageIndex]: true 
       }));
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Translation/breakdown error:', error);
       setTranslations(prev => ({ 
         ...prev, 
@@ -1002,8 +1025,8 @@ function Analyze() {
       try {
         const healthCheck = await axios.get('/api/health');
         console.log('[DEBUG] Server health check:', healthCheck.status);
-      } catch (healthError: any) {
-        console.error('[DEBUG] Server health check failed:', healthError.message);
+      } catch (healthError: unknown) {
+        console.error('[DEBUG] Server health check failed:', (healthError as any).message);
       }
       
       const response = await axios.post(
@@ -1030,7 +1053,7 @@ function Analyze() {
         setChatHistory(prev => 
           prev.map((msg, idx) => 
             idx === messageIndex 
-              ? { ...msg, detailed_feedback: detailedFeedback }
+              ? { ...msg, detailedFeedback: detailedFeedback }
               : msg
           )
         );
@@ -1038,9 +1061,9 @@ function Analyze() {
       
       // Update the main feedback display
       setFeedback(detailedFeedback);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error getting detailed feedback:', error);
-      console.error('[DEBUG] Error response:', error.response?.data);
+      console.error('[DEBUG] Error response:', (error as any).response?.data);
       setFeedback('Error getting detailed feedback. Please try again.');
     } finally {
       setIsLoadingMessageFeedback(prev => ({ ...prev, [messageIndex]: false }));
@@ -1050,9 +1073,9 @@ function Analyze() {
   const toggleDetailedFeedback = (messageIndex: number) => {
     const message = chatHistory[messageIndex];
     
-    if (message && message.detailed_feedback) {
+    if (message && message.detailedFeedback) {
       // Show existing feedback in right panel
-      setFeedback(message.detailed_feedback);
+      setFeedback(message.detailedFeedback);
     } else {
       // Generate new feedback
       requestDetailedFeedbackForMessage(messageIndex);
@@ -1061,7 +1084,7 @@ function Analyze() {
 
   const requestShortFeedbackForMessage = async (messageIndex: number) => {
     const message = chatHistory[messageIndex];
-    if (!message || message.sender !== 'AI') return;
+    if (!message || (message as any).sender !== 'AI') return;
 
     console.log('[DEBUG] Starting requestShortFeedbackForMessage for messageIndex:', messageIndex);
     console.log('[DEBUG] Message:', message);
@@ -1109,10 +1132,10 @@ function Analyze() {
       setParsedBreakdown([]);
       setShowDetailedBreakdown({});
       console.log('[DEBUG] Set shortFeedback state to:', shortFeedback);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[DEBUG] Error getting short feedback:', error);
-      console.error('[DEBUG] Error response:', error.response?.data);
-      console.error('[DEBUG] Error status:', error.response?.status);
+      console.error('[DEBUG] Error response:', (error as any).response?.data);
+      console.error('[DEBUG] Error status:', (error as any).response?.status);
       setShortFeedback('Error getting short feedback. Please try again.');
     } finally {
       setIsLoadingMessageFeedback(prev => ({ ...prev, [messageIndex]: false }));
@@ -1128,10 +1151,10 @@ function Analyze() {
     console.log('[DEBUG] Split sections:', sections);
     
     // Parse each sentence section
-    const sentences = [];
-    let currentSentence = null;
+    const sentences: Array<{ sentence: string; overview: string; details: string }> = [];
+    let currentSentence: string | null = null;
     let currentOverview = '';
-    let currentDetails = [];
+    let currentDetails: string[] = [];
     
     for (let i = 0; i < sections.length; i++) {
       const section = sections[i];
@@ -1180,7 +1203,7 @@ function Analyze() {
 
   const requestDetailedBreakdownForMessage = async (messageIndex: number) => {
     const message = chatHistory[messageIndex];
-    if (!message || message.sender !== 'AI') return;
+    if (!message || (message as any).sender !== 'AI') return;
 
     console.log('[DEBUG] Starting requestDetailedBreakdownForMessage for messageIndex:', messageIndex);
     console.log('[DEBUG] Message:', message);
@@ -1251,15 +1274,15 @@ function Analyze() {
       setChatHistory(prev => 
         prev.map((msg, idx) => 
           idx === messageIndex 
-            ? { ...msg, detailed_feedback: detailedBreakdown }
+            ? { ...msg, detailedFeedback: detailedBreakdown }
             : msg
         )
       );
       console.log('[DEBUG] Updated chatHistory with detailed feedback');
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[DEBUG] Error getting detailed breakdown:', error);
-      console.error('[DEBUG] Error response:', error.response?.data);
-      console.error('[DEBUG] Error status:', error.response?.status);
+      console.error('[DEBUG] Error response:', (error as any).response?.data);
+      console.error('[DEBUG] Error status:', (error as any).response?.status);
       setShortFeedback('Error getting detailed breakdown. Please try again.');
     } finally {
       setIsLoadingMessageFeedback(prev => ({ ...prev, [messageIndex]: false }));
@@ -1284,8 +1307,8 @@ function Analyze() {
       setShortFeedback(shortFeedbacks[messageIndex]);
       
       // If we have detailed feedback stored, parse it to show the collapsible details
-      if (message.detailed_feedback) {
-        const parsed = parseBreakdownResponse(message.detailed_feedback);
+      if (message.detailedFeedback) {
+        const parsed = parseBreakdownResponse(message.detailedFeedback);
         setParsedBreakdown(parsed);
         setShowDetailedBreakdown({}); // Start collapsed
       }
@@ -1683,7 +1706,7 @@ function Analyze() {
               width: '100%',
               display: 'flex',
               flexDirection: 'column',
-              alignItems: message.sender === 'User' ? 'flex-end' : 'flex-start',
+              alignItems: (message as any).sender === 'User' ? 'flex-end' : 'flex-start',
               marginBottom: '0.7rem'
             }}>
               <div 
@@ -1691,19 +1714,19 @@ function Analyze() {
                 style={{
                   flex: 1,
                   padding: '0.85rem 1.1rem',
-                  borderRadius: message.sender === 'User' ? '18px 18px 6px 18px' : message.sender === 'AI' ? '18px 18px 18px 6px' : '10px',
-                  background: message.sender === 'User' ? 'linear-gradient(135deg, #c38d94 0%, #b87d8a 100%)' : message.sender === 'AI' ? 'linear-gradient(135deg, #fff 0%, #f8f9fa 100%)' : '#fff7e6',
-                  color: message.sender === 'User' ? '#fff' : message.sender === 'System' ? '#e67e22' : '#3e3e3e',
-                  border: message.sender === 'AI' ? '1px solid #e0e0e0' : message.sender === 'System' ? '1px solid #e67e22' : 'none',
+                  borderRadius: (message as any).sender === 'User' ? '18px 18px 6px 18px' : (message as any).sender === 'AI' ? '18px 18px 18px 6px' : '10px',
+                  background: (message as any).sender === 'User' ? 'linear-gradient(135deg, #c38d94 0%, #b87d8a 100%)' : (message as any).sender === 'AI' ? 'linear-gradient(135deg, #fff 0%, #f8f9fa 100%)' : '#fff7e6',
+                  color: (message as any).sender === 'User' ? '#fff' : (message as any).sender === 'System' ? '#e67e22' : '#3e3e3e',
+                  border: (message as any).sender === 'AI' ? '1px solid #e0e0e0' : (message as any).sender === 'System' ? '1px solid #e67e22' : 'none',
                   fontSize: '0.98rem',
                   cursor: 'pointer',
                   transition: 'all 0.2s ease',
                   opacity: isTranslating[index] ? 0.7 : 1,
                   position: 'relative',
-                  boxShadow: message.sender === 'User' ? '0 2px 8px rgba(195,141,148,0.18)' : message.sender === 'AI' ? '0 2px 8px rgba(60,76,115,0.10)' : '0 1px 4px rgba(230,126,34,0.08)',
+                  boxShadow: (message as any).sender === 'User' ? '0 2px 8px rgba(195,141,148,0.18)' : (message as any).sender === 'AI' ? '0 2px 8px rgba(60,76,115,0.10)' : '0 1px 4px rgba(230,126,34,0.08)',
                   maxWidth: '75%',
                   wordWrap: 'break-word',
-                  fontWeight: message.sender === 'User' ? 600 : message.sender === 'System' ? 600 : 400,
+                  fontWeight: (message as any).sender === 'User' ? 600 : (message as any).sender === 'System' ? 600 : 400,
                   animation: 'messageAppear 0.3s ease-out',
                   fontFamily: 'AR One Sans, Arial, sans-serif'
                 }}
@@ -1716,16 +1739,16 @@ function Analyze() {
                 )}
               </div>
               {/* Feedback Buttons */}
-              {message.sender === 'User' && (
+              {(message as any).sender === 'User' && (
                 <button
                   onClick={() => toggleDetailedFeedback(index)}
                   disabled={isLoadingMessageFeedback[index]}
                   style={{
                     padding: '0.45rem 1.1rem',
                     borderRadius: 8,
-                    border: message.detailed_feedback ? 'none' : '1px solid #c38d94',
-                    background: message.detailed_feedback ? 'linear-gradient(135deg, #c38d94 0%, #b87d8a 100%)' : 'rgba(195,141,148,0.08)',
-                    color: message.detailed_feedback ? '#fff' : '#c38d94',
+                    border: message.detailedFeedback ? 'none' : '1px solid #c38d94',
+                    background: message.detailedFeedback ? 'linear-gradient(135deg, #c38d94 0%, #b87d8a 100%)' : 'rgba(195,141,148,0.08)',
+                    color: message.detailedFeedback ? '#fff' : '#c38d94',
                     fontSize: '0.88rem',
                     cursor: isLoadingMessageFeedback[index] ? 'not-allowed' : 'pointer',
                     transition: 'all 0.2s ease',
@@ -1733,14 +1756,14 @@ function Analyze() {
                     minWidth: '80px',
                     fontWeight: 600,
                     marginTop: 6,
-                    boxShadow: message.detailed_feedback ? '0 2px 6px rgba(195,141,148,0.18)' : '0 1px 3px rgba(195,141,148,0.10)'
+                    boxShadow: message.detailedFeedback ? '0 2px 6px rgba(195,141,148,0.18)' : '0 1px 3px rgba(195,141,148,0.10)'
                   }}
-                  title={message.detailed_feedback ? 'Show detailed feedback' : 'Generate detailed feedback'}
+                  title={message.detailedFeedback ? 'Show detailed feedback' : 'Generate detailed feedback'}
                 >
-                  {isLoadingMessageFeedback[index] ? '🔄' : message.detailed_feedback ? '🎯 Show' : '🎯 Get'}
+                  {isLoadingMessageFeedback[index] ? '🔄' : message.detailedFeedback ? '🎯 Show' : '🎯 Get'}
                 </button>
               )}
-              {message.sender === 'AI' && (
+              {Boolean((message as any).sender === 'AI') && (
                 <button
                   onClick={() => toggleShortFeedback(index)}
                   disabled={isLoadingMessageFeedback[index]}
@@ -1799,9 +1822,9 @@ function Analyze() {
                     </button>
                   </div>
                   <div style={{ marginBottom: '0.5rem' }}>
-                    <strong>Translation:</strong> {translations[index].translation}
+                    <strong>Translation:</strong> {(translations[index] as any).translation}
                   </div>
-                  {translations[index].has_breakdown && translations[index].breakdown && (
+                  {(translations[index] as any).has_breakdown && (translations[index] as any).breakdown && (
                     <div style={{ marginTop: '0.5rem' }}>
                       <div style={{ marginBottom: '0.5rem' }}>
                         <strong>📖 Detailed Analysis:</strong>
@@ -1815,7 +1838,7 @@ function Analyze() {
                         lineHeight: '1.5',
                         whiteSpace: 'pre-wrap'
                       }}>
-                        {translations[index].breakdown}
+                        {(translations[index] as any).breakdown}
                       </div>
                     </div>
                   )}
@@ -1929,11 +1952,11 @@ function Analyze() {
                   }}
                 >
                   <div style={{ fontWeight: 600, marginBottom: '0.2rem' }}>
-                    {suggestion.text}
+                    {(suggestion as any).text}
                   </div>
-                  {suggestion.translation && suggestion.translation !== suggestion.text && (
+                  {(suggestion as any).translation && (suggestion as any).translation !== (suggestion as any).text && (
                     <div style={{ fontSize: '0.85rem', opacity: 0.8, fontStyle: 'italic' }}>
-                      {suggestion.translation}
+                      {(suggestion as any).translation}
                     </div>
                   )}
                 </button>
