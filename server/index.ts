@@ -292,10 +292,17 @@ app.post('/api/analyze', authenticateJWT, upload.single('audio'), async (req: Re
     }
     globalAny.lastChatHistory = chatHistory; // Optionally store for session continuity
 
-    // Get user data for personalized prompts
+    // Get user preferences from form data (preferred) or fall back to database
     const user = await findUserById(req.user.userId);
-    const userLevel = user?.proficiency_level || 'beginner';
-    const userTopics = user?.talk_topics && typeof user.talk_topics === 'string' ? JSON.parse(user.talk_topics) : Array.isArray(user?.talk_topics) ? user.talk_topics : [];
+    const userLevel = req.body.user_level || user?.proficiency_level || 'beginner';
+    const userTopics = req.body.user_topics ? JSON.parse(req.body.user_topics) : (user?.talk_topics && typeof user.talk_topics === 'string' ? JSON.parse(user.talk_topics) : Array.isArray(user?.talk_topics) ? user.talk_topics : []);
+    const userGoals = req.body.user_goals ? JSON.parse(req.body.user_goals) : (user?.learning_goals && typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : Array.isArray(user?.learning_goals) ? user.learning_goals : []);
+    const formality = req.body.formality || 'friendly';
+    const feedbackLanguage = req.body.feedback_language || 'en';
+    
+    console.log('🔄 SERVER: /api/analyze received formality:', formality);
+    console.log('🔄 SERVER: /api/analyze received user_goals:', userGoals);
+    console.log('🔄 SERVER: /api/analyze form data:', req.body);
 
     // Call Python API for transcription and AI response (using ollama_client)
     const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5000';
@@ -324,7 +331,10 @@ app.post('/api/analyze', authenticateJWT, upload.single('audio'), async (req: Re
         chat_history: chatHistory,
         language: req.body.language || 'en',
         user_level: userLevel,
-        user_topics: userTopics
+        user_topics: userTopics,
+        user_goals: userGoals,
+        formality: formality,
+        feedback_language: feedbackLanguage
       }, {
         headers: { 'Content-Type': 'application/json' },
         timeout: 30000
@@ -1003,6 +1013,8 @@ app.post('/api/admin/demote', authenticateJWT, async (req: Request, res: Respons
 app.post('/api/conversations', authenticateJWT, async (req: Request, res: Response) => {
   try {
     const { language, title, topics, formality } = req.body;
+    console.log('🔄 SERVER: Creating conversation with formality:', formality);
+    console.log('🔄 SERVER: Full request body:', req.body);
     const conversation = await createConversation(req.user.userId, language, title, topics, formality);
     console.log('🔄 SERVER: Conversation creation result:', conversation);
     if (!conversation || !conversation.id) {
@@ -1035,6 +1047,7 @@ app.post('/api/conversations', authenticateJWT, async (req: Request, res: Respon
           headers: { 'Content-Type': 'application/json' },
           timeout: 30000
         });
+        console.log('DEBUG: Sending formality to /initial_message:', formality || 'friendly');
         console.log('DEBUG: Received ai_response from Python API:', aiRes.data.ai_response);
         aiIntro = aiRes.data.ai_response && aiRes.data.ai_response.trim() ? aiRes.data.ai_response : 'Hello! What would you like to talk about today?';
       } catch (err: any) {
@@ -1085,6 +1098,7 @@ app.get('/api/conversations/:id', authenticateJWT, async (req: Request, res: Res
       id: conversation.id,
       title: conversation.title,
       language: (conversation as any).language,
+      formality: (conversation as any).formality,
       messageCount: conversation.message_count,
       messagesLength: conversation.messages?.length || 0
     });
@@ -1150,8 +1164,9 @@ app.post('/api/suggestions', authenticateJWT, async (req: Request, res: Response
     
     // Get user data for personalized suggestions
     const user = await findUserById(req.user.userId);
-    const userLevel = user?.proficiency_level || 'beginner';
-    const userTopics = user?.talk_topics && typeof user.talk_topics === 'string' ? JSON.parse(user.talk_topics) : Array.isArray(user?.talk_topics) ? user.talk_topics : [];
+    const userLevel = req.body.user_level || user?.proficiency_level || 'beginner';
+    const userTopics = req.body.user_topics || (user?.talk_topics && typeof user.talk_topics === 'string' ? JSON.parse(user.talk_topics) : Array.isArray(user?.talk_topics) ? user.talk_topics : []);
+    const userGoals = req.body.user_goals || (user?.learning_goals && typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : Array.isArray(user?.learning_goals) ? user.learning_goals : []);
     
     let chatHistory: any[] = [];
     if (conversationId) {
@@ -1173,7 +1188,8 @@ app.post('/api/suggestions', authenticateJWT, async (req: Request, res: Response
         chat_history: chatHistory,
         language: language || user?.target_language || 'en',
         user_level: userLevel,
-        user_topics: userTopics
+        user_topics: userTopics,
+        user_goals: userGoals
       }, {
         headers: { 'Content-Type': 'application/json' },
         timeout: 30000
@@ -1248,8 +1264,20 @@ app.post('/api/translate', authenticateJWT, async (req: Request, res: Response) 
 // Proxy /api/short_feedback to Python API
 app.post('/api/short_feedback', authenticateJWT, async (req: Request, res: Response) => {
   try {
+    // Get user preferences from request body or fall back to database
+    const user = await findUserById(req.user.userId);
+    const userLevel = req.body.user_level || user?.proficiency_level || 'beginner';
+    const userTopics = req.body.user_topics || (user?.talk_topics && typeof user.talk_topics === 'string' ? JSON.parse(user.talk_topics) : Array.isArray(user?.talk_topics) ? user.talk_topics : []);
+    const userGoals = req.body.user_goals || (user?.learning_goals && typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : Array.isArray(user?.learning_goals) ? user.learning_goals : []);
+    const feedbackLanguage = req.body.feedback_language || 'en';
+
     const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5000';
-    const response = await axios.post(`${pythonApiUrl}/short_feedback`, req.body, {
+    const response = await axios.post(`${pythonApiUrl}/short_feedback`, {
+      ...req.body, // Pass all original request body
+      user_level: userLevel,
+      user_topics: userTopics,
+      user_goals: userGoals
+    }, {
       headers: { 'Content-Type': 'application/json' },
       timeout: 30000
     });

@@ -241,6 +241,7 @@ def transcribe():
         language = data.get('language', 'en')
         user_level = data.get('user_level', 'beginner')
         user_topics = data.get('user_topics', [])
+        user_goals = data.get('user_goals', [])
         formality = data.get('formality', 'friendly')
         feedback_language = data.get('feedback_language', 'en')
         print(f"=== /transcribe called ===")
@@ -248,6 +249,8 @@ def transcribe():
         print(f"Audio file: {audio_file}")
         print(f"Chat history length: {len(chat_history)})")
         print(f"Formality: {formality}")
+        print(f"User goals: {user_goals}")
+        print(f"Full request data: {data}")
         if not audio_file or not os.path.exists(audio_file):
             return jsonify({"error": "Audio file not found"}), 400
         # Get transcription using Whisper (with language)
@@ -259,7 +262,7 @@ def transcribe():
             transcription = whisper_model.transcribe(audio_file)["text"]
         print(f"Whisper transcription: '{transcription}'")
         print(f"Calling Gemini with language={language}, level={user_level}, goals={user_topics}, formality={formality}")
-        ai_response = get_conversational_response(transcription, chat_history, language, user_level, user_topics, formality, feedback_language)
+        ai_response = get_conversational_response(transcription, chat_history, language, user_level, user_topics, formality, feedback_language, user_goals)
         if not ai_response or not str(ai_response).strip():
             if not os.getenv('GOOGLE_API_KEY'):
                 ai_response = "AI is not available: Gemini API key is not configured."
@@ -406,8 +409,9 @@ def short_feedback():
         language = data.get('language', 'en')
         user_level = data.get('user_level', 'beginner')
         user_topics = data.get('user_topics', [])
+        user_goals = data.get('user_goals', [])
         feedback_language = data.get('feedback_language', 'en')
-        feedback = get_short_feedback(user_input, context, language, user_level, user_topics, feedback_language)
+        feedback = get_short_feedback(user_input, context, language, user_level, user_topics, feedback_language, user_goals)
         return jsonify({"short_feedback": feedback})
     except Exception as e:
         print(f"Short feedback error: {e}")
@@ -422,6 +426,7 @@ def initial_message():
         language = data.get('language', 'en')
         user_level = data.get('user_level', 'beginner')
         user_topics = data.get('user_topics', [])
+        user_goals = data.get('user_goals', [])
         formality = data.get('formality', 'friendly')
         feedback_language = data.get('feedback_language', 'en')
         
@@ -429,10 +434,12 @@ def initial_message():
         print(f"Language: {language}")
         print(f"User level: {user_level}")
         print(f"User topics: {user_topics}")
+        print(f"User goals: {user_goals}")
         print(f"Formality: {formality}")
+        print(f"Full request data: {data}")
         
         # Generate a welcoming initial message
-        ai_response = get_conversational_response("", chat_history, language, user_level, user_topics, formality, feedback_language)
+        ai_response = get_conversational_response("", chat_history, language, user_level, user_topics, formality, feedback_language, user_goals)
         
         if not ai_response or not str(ai_response).strip():
             if not os.getenv('GOOGLE_API_KEY'):
@@ -460,6 +467,9 @@ def suggestions():
         language = data.get('language', 'en')
         user_level = data.get('user_level', 'beginner')
         user_topics = data.get('user_topics', [])
+        user_goals = data.get('user_goals', [])
+        formality = data.get('formality', 'friendly')
+        feedback_language = data.get('feedback_language', 'en')
 
         # If conversationId is provided but no chat_history, fetch from database
         if conversation_id and not chat_history:
@@ -480,12 +490,13 @@ def suggestions():
 
         print(f"Language: {language}")
         print(f"User level: {user_level}")
-        print(f"User goals: {user_topics}")
+        print(f"User topics: {user_topics}")
+        print(f"User goals: {user_goals}")
         print(f"Chat history length: {len(chat_history)}")
 
         # Call AI client for suggestions using Gemini
         print(f"Calling get_text_suggestions with: language={language}, history_len={len(chat_history)}")
-        suggestions = get_text_suggestions(chat_history, language, user_level, user_topics)
+        suggestions = get_text_suggestions(chat_history, language, user_level, user_topics, formality, feedback_language, user_goals)
         print(f"Generated {len(suggestions)} suggestions: {suggestions}")
         
         # Ensure suggestions is a list and format properly for frontend
