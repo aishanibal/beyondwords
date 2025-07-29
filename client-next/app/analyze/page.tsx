@@ -8,6 +8,7 @@ import { useUser } from '../ClientLayout';
 import axios from 'axios';
 import { useRouter, useSearchParams } from 'next/navigation';
 import TopicSelectionModal from './TopicSelectionModal';
+import PersonaModal from './PersonaModal';
 
 // TypeScript: Add type declarations for browser APIs
 declare global {
@@ -102,6 +103,8 @@ function Analyze() {
   const urlConversationId = searchParams?.get('conversation');
   const urlLang = searchParams?.get('language');
   const urlTopics = searchParams?.get('topics');
+  const urlFormality = searchParams?.get('formality');
+  const usePersona = searchParams?.get('usePersona') === 'true';
 
   // Flag to skip validation right after creating a conversation
   const [skipValidation, setSkipValidation] = useState(false);
@@ -175,6 +178,10 @@ function Analyze() {
   const [rightPanelWidth, setRightPanelWidth] = useState(0.25); // 25% of screen width (1/4)
   const [isResizing, setIsResizing] = useState(false);
   const [resizingPanel, setResizingPanel] = useState<'left' | 'right' | null>(null);
+  const [showPersonaModal, setShowPersonaModal] = useState(false);
+  const [isSavingPersona, setIsSavingPersona] = useState(false);
+  const [conversationDescription, setConversationDescription] = useState<string>('');
+  const [isUsingPersona, setIsUsingPersona] = useState<boolean>(false);
 
   // Calculate actual panel widths based on visibility
   const getPanelWidths = () => {
@@ -849,12 +856,15 @@ function Analyze() {
     }
   };
 
-  const handleModalConversationStart = async (newConversationId: string, topics: string[], aiMessage: unknown, formality: string) => {
+  const handleModalConversationStart = async (newConversationId: string, topics: string[], aiMessage: unknown, formality: string, description?: string) => {
     setConversationId(newConversationId);
     setChatHistory([]);
     setShowTopicModal(false);
     setSkipValidation(true);
     setTimeout(() => setSkipValidation(false), 2000); // Skip validation for 2 seconds
+    
+    // Set the conversation description
+    setConversationDescription(description || '');
     
     // Update user preferences with the selected formality and topics
     setUserPreferences(prev => ({
@@ -1402,6 +1412,70 @@ function Analyze() {
     setResizingPanel(null);
   };
 
+  // Persona-related functions
+  const handleEndChat = () => {
+    // If conversation is already using a persona, don't ask to create a new one
+    if (isUsingPersona) {
+      router.push('/dashboard');
+    } else {
+      setShowPersonaModal(true);
+    }
+  };
+
+
+
+  const savePersona = async (personaName: string) => {
+    setIsSavingPersona(true);
+    try {
+      const personaData = {
+        name: personaName,
+        description: conversationDescription || '',
+        topics: userPreferences?.topics || [],
+        formality: userPreferences?.formality || 'neutral',
+        language: language,
+        conversationId: conversationId,
+        userId: user?.id
+      };
+
+      // Save persona to database
+      const response = await axios.post('/api/personas', personaData, {
+        headers: getAuthHeaders()
+      });
+
+      if (response.status === 201) {
+        // Update the conversation to mark it as using a persona
+        if (conversationId) {
+          try {
+            await axios.patch(`/api/conversations/${conversationId}`, {
+              usesPersona: true,
+              personaId: response.data.persona.id
+            }, {
+              headers: getAuthHeaders()
+            });
+          } catch (error) {
+            console.error('Error updating conversation with persona info:', error);
+          }
+        }
+        
+        // Close modal and navigate to dashboard
+        setShowPersonaModal(false);
+        router.push('/dashboard');
+      } else {
+        throw new Error('Failed to save persona');
+      }
+    } catch (error) {
+      console.error('Error saving persona:', error);
+      alert('Error saving persona. Please try again.');
+    } finally {
+      setIsSavingPersona(false);
+    }
+  };
+
+  const cancelPersona = () => {
+    setShowPersonaModal(false);
+    router.push('/dashboard');
+  };
+
   // Add/remove event listeners
   useEffect(() => {
     if (isResizing) {
@@ -1455,6 +1529,71 @@ function Analyze() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, urlConversationId]);
+
+  // Handle persona data when using a persona
+  useEffect(() => {
+    if (usePersona && user) {
+      const personaData = localStorage.getItem('selectedPersona');
+      if (personaData) {
+        try {
+          const persona = JSON.parse(personaData);
+          
+          // Auto-fill formality and topics from persona
+          if (persona.formality || persona.topics) {
+            // Update user preferences with persona data
+            setUserPreferences(prev => ({
+              ...prev,
+              formality: persona.formality || prev.formality,
+              topics: persona.topics || prev.topics
+            }));
+          }
+          
+          // Auto-start conversation with persona data
+          const startConversationWithPersona = async () => {
+            try {
+              // Create a new conversation with persona data
+              const topics = persona.topics || [];
+              const formality = persona.formality || 'neutral';
+              
+              // Set the persona flag
+              setIsUsingPersona(true);
+              
+              // Create conversation with persona information
+              const token = localStorage.getItem('jwt');
+              const response = await axios.post('/api/conversations', {
+                language: language,
+                title: topics.length === 1 ? `${topics[0]} Discussion` : 'Multi-topic Discussion',
+                topics: topics,
+                formality: formality,
+                description: persona.description,
+                usesPersona: true,
+                personaId: null // This is a new persona, not a saved one
+              }, {
+                headers: { Authorization: `Bearer ${token}` }
+              });
+              
+              const { conversation, aiMessage } = response.data;
+              if (conversation && conversation.id) {
+                // Start the conversation immediately
+                await handleModalConversationStart(conversation.id, topics, aiMessage, formality, persona.description);
+              }
+              
+              // Clear the persona data from localStorage
+              localStorage.removeItem('selectedPersona');
+            } catch (error) {
+              console.error('Error starting conversation with persona:', error);
+            }
+          };
+          
+          startConversationWithPersona();
+        } catch (error) {
+          console.error('Error parsing persona data:', error);
+          localStorage.removeItem('selectedPersona');
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [usePersona, user]);
 
   return (
     <div style={{ 
@@ -1793,7 +1932,7 @@ function Analyze() {
                   {isLoadingMessageFeedback[index] ? '🔄' : message.detailedFeedback ? '🎯 Show' : '🎯 Check'}
                 </button>
               )}
-              {(message as ChatMessage).sender === 'AI' && (
+              {(message as any).sender === 'AI' && (
                 <button
                   onClick={() => toggleShortFeedback(index)}
                   disabled={isLoadingMessageFeedback[index]}
@@ -1976,6 +2115,34 @@ function Analyze() {
                 {enableShortFeedback ? '💡 Short Feedback ON' : 'Short Feedback OFF'}
               </button>
             </div>
+
+                          {/* End Chat button - positioned as a separate floating element */}
+              <button
+                onClick={handleEndChat}
+              style={{
+                position: 'absolute',
+                bottom: '1rem',
+                right: '1rem',
+                background: '#e74c3c',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 10,
+                padding: '0.5rem 1rem',
+                cursor: 'pointer',
+                fontWeight: 600,
+                fontSize: '0.85rem',
+                transition: 'all 0.2s',
+                boxShadow: '0 2px 4px rgba(231,76,60,0.15)',
+                minWidth: '100px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.3rem',
+                zIndex: 10
+              }}
+              title="End chat and return to dashboard"
+            >
+              🏠 End Chat
+            </button>
                       {/* Redo Button: Only show in manual mode when recording */}
             {isRecording && manualRecording && (
               <div style={{
@@ -2407,6 +2574,17 @@ function Analyze() {
         onStartConversation={handleModalConversationStart}
         currentLanguage={language}
       />
+
+      {/* Persona Modal */}
+              <PersonaModal
+          isOpen={showPersonaModal}
+          onClose={cancelPersona}
+          onSave={savePersona}
+          isSaving={isSavingPersona}
+          currentTopics={userPreferences?.topics || []}
+          currentDescription={conversationDescription}
+          currentFormality={userPreferences?.formality || 'neutral'}
+        />
     </div>
   );
 }

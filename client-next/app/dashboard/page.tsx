@@ -26,6 +26,21 @@ interface ConversationType {
   title?: string;
   created_at: string;
   message_count?: number;
+  uses_persona?: boolean;
+  persona_id?: number;
+  persona_name?: string;
+  persona_description?: string;
+}
+
+interface PersonaType {
+  id: number;
+  name: string;
+  description: string;
+  topics: string[];
+  formality: string;
+  language: string;
+  conversation_id: string;
+  created_at: string;
 }
 
 
@@ -38,6 +53,7 @@ export default function DashboardPage() {
   const [languageDashboards, setLanguageDashboards] = useState<DashboardType[]>([]);
   const [selectedLanguage, setSelectedLanguage] = useState<string | null>(null);
   const [conversations, setConversations] = useState<ConversationType[]>([]);
+  const [personas, setPersonas] = useState<PersonaType[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
   const [showLanguageOnboarding, setShowLanguageOnboarding] = useState<boolean>(false);
@@ -111,6 +127,23 @@ export default function DashboardPage() {
     fetchConversations();
   }, [selectedLanguage, user?.id]);
 
+  useEffect(() => {
+    async function fetchPersonas() {
+      if (user?.id) {
+        try {
+          const token = localStorage.getItem('jwt');
+          const personasRes = await axios.get(`/api/personas?userId=${user.id}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          setPersonas(personasRes.data.personas || []);
+        } catch (err) {
+          setPersonas([]);
+        }
+      }
+    }
+    fetchPersonas();
+  }, [user?.id]);
+
 
 
   const deleteConversation = async (conversationId: string) => {
@@ -123,6 +156,35 @@ export default function DashboardPage() {
     } catch (error) {
       alert('Failed to delete conversation. Please try again.');
     }
+  };
+
+  const deletePersona = async (personaId: number) => {
+    if (!window.confirm('Are you sure you want to delete this persona? This action cannot be undone.')) {
+      return;
+    }
+    try {
+      const token = localStorage.getItem('jwt');
+      await axios.delete(`/api/personas/${personaId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setPersonas((prev: PersonaType[]) => prev.filter((persona: PersonaType) => persona.id !== personaId));
+    } catch (error) {
+      alert('Failed to delete persona. Please try again.');
+    }
+  };
+
+  const usePersona = (persona: PersonaType) => {
+    // Store persona data in localStorage for the analyze page to use
+    localStorage.setItem('selectedPersona', JSON.stringify({
+      name: persona.name,
+      description: persona.description,
+      topics: persona.topics,
+      formality: persona.formality,
+      language: persona.language
+    }));
+    
+    // Navigate to analyze page with persona data
+    router.push(`/analyze?language=${persona.language}&topics=${persona.topics.join(',')}&formality=${persona.formality}&usePersona=true`);
   };
 
   const handleLanguageOnboardingComplete = (newDashboard: DashboardType) => {
@@ -534,23 +596,66 @@ export default function DashboardPage() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                   {(conversations || []).slice(0, 5).map((conversation: ConversationType) => (
                     <div key={conversation.id} style={{ background: 'rgba(126,90,117,0.05)', borderRadius: 12, padding: '1rem', border: '1px solid rgba(126,90,117,0.1)', transition: 'all 0.3s ease' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                          <div style={{ 
-                            fontWeight: 600, 
-                            color: 'var(--blue-secondary)',
-                            fontFamily: 'Montserrat, Arial, sans-serif'
-                          }} className="font-body">
-                            {conversation.title || 'Untitled Conversation'}
-                          </div>
-                          <div style={{ 
-                            color: 'var(--rose-primary)', 
-                            fontSize: '0.8rem',
-                            fontFamily: 'AR One Sans, Arial, sans-serif'
-                          }} className="font-body">
-                            {new Date(conversation.created_at).toLocaleDateString()}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', flex: 1 }}>
+                          {/* Persona Indicator */}
+                          {conversation.uses_persona && (
+                            <div style={{ 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              gap: '0.25rem',
+                              background: 'rgba(126,90,117,0.1)',
+                              padding: '0.2rem 0.5rem',
+                              borderRadius: 8,
+                              fontSize: '0.7rem',
+                              color: 'var(--rose-primary)',
+                              fontWeight: 500,
+                              fontFamily: 'Montserrat, Arial, sans-serif',
+                              flexShrink: 0
+                            }}>
+                              🎭 {conversation.persona_name || 'Persona'}
+                            </div>
+                          )}
+                          
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.25rem' }}>
+                              <div style={{ 
+                                fontWeight: 600, 
+                                color: 'var(--blue-secondary)',
+                                fontFamily: 'Montserrat, Arial, sans-serif'
+                              }} className="font-body">
+                                {conversation.title || 'Untitled Conversation'}
+                              </div>
+                              <div style={{ 
+                                color: 'var(--rose-primary)', 
+                                fontSize: '0.8rem',
+                                fontFamily: 'AR One Sans, Arial, sans-serif'
+                              }} className="font-body">
+                                {new Date(conversation.created_at).toLocaleDateString()}
+                              </div>
+                            </div>
+                            {conversation.persona_description && (
+                              <div style={{ 
+                                color: 'var(--rose-accent)', 
+                                fontSize: '0.8rem', 
+                                marginBottom: '0.25rem',
+                                fontFamily: 'AR One Sans, Arial, sans-serif',
+                                fontStyle: 'italic'
+                              }} className="font-body">
+                                "{conversation.persona_description}"
+                              </div>
+                            )}
+                            <div style={{ 
+                              color: 'var(--rose-primary)', 
+                              fontSize: '0.9rem', 
+                              opacity: 0.8,
+                              fontFamily: 'AR One Sans, Arial, sans-serif'
+                            }} className="font-body">
+                              💬 {conversation.message_count || 0} messages
+                            </div>
                           </div>
                         </div>
+                        
                         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                           <Link 
                             href={`/analyze?conversation=${conversation.id}&language=${currentDashboard.language}`}
@@ -587,14 +692,215 @@ export default function DashboardPage() {
                           </button>
                         </div>
                       </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </motion.div>
+
+            {/* Saved Personas */}
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.5 }}
+              className="bg-white rounded-lg shadow-lg p-8 border border-gray-200"
+            >
+              <h3 style={{ 
+                color: 'var(--rose-primary)', 
+                fontSize: '1.3rem', 
+                fontWeight: 600, 
+                marginBottom: '1rem',
+                fontFamily: 'Gabriela, Arial, sans-serif'
+              }} className="font-heading">
+                🎭 Saved Personas
+              </h3>
+              {loading ? (
+                <div style={{ 
+                  textAlign: 'center', 
+                  padding: '2rem', 
+                  color: 'var(--rose-primary)',
+                  fontFamily: 'AR One Sans, Arial, sans-serif'
+                }} className="font-body">Loading personas...</div>
+              ) : (personas || []).length === 0 ? (
+                <div style={{ 
+                  textAlign: 'center', 
+                  padding: '2rem', 
+                  color: 'var(--rose-primary)', 
+                  background: 'rgba(126,90,117,0.05)', 
+                  borderRadius: 12, 
+                  border: '2px dashed rgba(126,90,117,0.2)',
+                  fontFamily: 'AR One Sans, Arial, sans-serif'
+                }} className="font-body">
+                  <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🎭</div>
+                  <div style={{ 
+                    fontWeight: 600, 
+                    marginBottom: '0.5rem',
+                    fontFamily: 'Gabriela, Arial, sans-serif'
+                  }}>No personas saved yet</div>
+                  <div style={{ fontSize: '0.9rem', opacity: 0.8 }}>
+                    End a conversation to save it as a reusable persona
+                  </div>
+                </div>
+              ) : (
+                <div style={{ 
+                  display: 'flex', 
+                  gap: '1rem', 
+                  overflowX: 'auto', 
+                  padding: '0.5rem 0',
+                  scrollbarWidth: 'thin',
+                  scrollbarColor: 'var(--rose-accent) transparent'
+                }}>
+                  {(personas || []).map((persona: PersonaType) => (
+                    <div 
+                      key={persona.id} 
+                      style={{ 
+                        minWidth: '200px',
+                        maxWidth: '200px',
+                        background: 'rgba(126,90,117,0.05)', 
+                        borderRadius: 16, 
+                        padding: '1.5rem', 
+                        border: '2px solid rgba(126,90,117,0.1)', 
+                        transition: 'all 0.3s ease',
+                        cursor: 'pointer',
+                        position: 'relative'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.transform = 'translateY(-4px)';
+                        e.currentTarget.style.boxShadow = '0 8px 25px rgba(126,90,117,0.15)';
+                        e.currentTarget.style.borderColor = 'rgba(126,90,117,0.3)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.transform = 'translateY(0)';
+                        e.currentTarget.style.boxShadow = 'none';
+                        e.currentTarget.style.borderColor = 'rgba(126,90,117,0.1)';
+                      }}
+                    >
+                      {/* Profile Icon */}
                       <div style={{ 
-                        color: 'var(--rose-primary)', 
-                        fontSize: '0.9rem', 
-                        opacity: 0.8,
-                        fontFamily: 'AR One Sans, Arial, sans-serif'
-                      }} className="font-body">
-                        💬 {conversation.message_count || 0} messages
+                        width: '60px', 
+                        height: '60px', 
+                        borderRadius: '50%', 
+                        background: 'linear-gradient(135deg, var(--rose-primary) 0%, #8a6a7a 100%)',
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center',
+                        margin: '0 auto 1rem auto',
+                        fontSize: '1.5rem',
+                        color: '#fff',
+                        fontWeight: 'bold',
+                        fontFamily: 'Montserrat, Arial, sans-serif'
+                      }}>
+                        {persona.name.charAt(0).toUpperCase()}
                       </div>
+                      
+                      {/* Persona Name */}
+                      <div style={{ 
+                        textAlign: 'center',
+                        fontWeight: 600, 
+                        color: 'var(--rose-primary)',
+                        fontSize: '1rem',
+                        marginBottom: '0.5rem',
+                        fontFamily: 'Montserrat, Arial, sans-serif'
+                      }} className="font-body">
+                        {persona.name}
+                      </div>
+                      
+                      {/* Description Preview */}
+                      {persona.description && (
+                        <div style={{ 
+                          color: 'var(--rose-accent)', 
+                          fontSize: '0.8rem', 
+                          textAlign: 'center',
+                          marginBottom: '0.75rem',
+                          lineHeight: '1.3',
+                          fontFamily: 'AR One Sans, Arial, sans-serif',
+                          display: '-webkit-box',
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: 'vertical',
+                          overflow: 'hidden'
+                        }} className="font-body">
+                          {persona.description}
+                        </div>
+                      )}
+                      
+                      {/* Tags */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                        <div style={{ 
+                          display: 'flex', 
+                          justifyContent: 'center', 
+                          gap: '0.25rem'
+                        }}>
+                          <span style={{ 
+                            background: 'rgba(126,90,117,0.1)', 
+                            color: 'var(--rose-primary)', 
+                            padding: '0.15rem 0.4rem', 
+                            borderRadius: 8, 
+                            fontSize: '0.65rem',
+                            fontFamily: 'AR One Sans, Arial, sans-serif',
+                            fontWeight: 500
+                          }}>
+                            {getLanguageInfo(persona.language).flag} {persona.language.toUpperCase()}
+                          </span>
+                          <span style={{ 
+                            background: 'rgba(126,90,117,0.1)', 
+                            color: 'var(--rose-primary)', 
+                            padding: '0.15rem 0.4rem', 
+                            borderRadius: 8, 
+                            fontSize: '0.65rem',
+                            fontFamily: 'AR One Sans, Arial, sans-serif',
+                            fontWeight: 500
+                          }}>
+                            {persona.formality}
+                          </span>
+                        </div>
+                        {persona.topics.length > 0 && (
+                          <div style={{ 
+                            textAlign: 'center',
+                            color: 'var(--rose-accent)', 
+                            fontSize: '0.7rem',
+                            fontFamily: 'AR One Sans, Arial, sans-serif',
+                            opacity: 0.8
+                          }}>
+                            {persona.topics.slice(0, 2).join(', ')}
+                            {persona.topics.length > 2 && '...'}
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Delete Button */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deletePersona(persona.id);
+                        }}
+                        style={{ 
+                          position: 'absolute',
+                          top: '0.5rem',
+                          right: '0.5rem',
+                          color: '#dc3545', 
+                          background: 'rgba(220,53,69,0.1)', 
+                          border: 'none', 
+                          borderRadius: '50%', 
+                          width: '24px', 
+                          height: '24px', 
+                          fontSize: '0.7rem', 
+                          cursor: 'pointer', 
+                          transition: 'all 0.3s ease',
+                          fontFamily: 'Montserrat, Arial, sans-serif',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}
+                        title="Delete persona"
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = 'rgba(220,53,69,0.2)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = 'rgba(220,53,69,0.1)';
+                        }}
+                      >
+                        ×
+                      </button>
                     </div>
                   ))}
                 </div>

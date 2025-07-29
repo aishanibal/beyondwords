@@ -39,11 +39,11 @@ class LanguageTutor:
     }
 
     CLOSENESS_LEVELS = {
-        "intimate": "Intimate/Familiar: Very casual. Used with close friends, romantic partners, younger siblings, or yourself. Informal pronouns, dropped particles, relaxed tone.",
-        "friendly": "Friendly/Peer: Casual or semi-formal. Used with classmates, coworkers, or equals. Informal but respectful tone; friendly pronouns.",
-        "respectful": "Respectful/Polite: Polite and formal. Used with strangers, elders, teachers, or clients. Uses honorifics, full grammar, and avoids slang.",
-        "formal": "Humble/Very Formal: Highly respectful. Used with seniors, officials, in ceremonies, or when showing deference. Uses humble language and elevated honorifics.",
-        "distant": "Distant/Neutral: Detached or clinical. Used in formal writing, legal contexts, or cold interactions. Impersonal tone, no slang, and grammatically precise."
+        "intimate": "Intimate/Familiar: Very casual relationship level. Used with close friends, romantic partners, younger siblings, or yourself. Informal pronouns, dropped particles, relaxed grammar. Note: This describes the relationship closeness, not emotional tone - you can be intimate with someone while being angry, sad, or any other emotion.",
+        "friendly": "Friendly/Peer: Casual relationship level. Used with classmates, coworkers, or equals. Informal but respectful grammar; friendly pronouns. Note: This describes the relationship closeness, not emotional tone - you can be friendly with someone while being frustrated, excited, or any other emotion.",
+        "respectful": "Respectful/Polite: Polite relationship level. Used with strangers, elders, teachers, or clients. Uses honorifics, full grammar, and avoids slang. Note: This describes the relationship respect level, not emotional tone - you can be respectful while being concerned, disappointed, or any other emotion.",
+        "formal": "Humble/Very Formal: Highly respectful relationship level. Used with seniors, officials, in ceremonies, or when showing deference. Uses humble language and elevated honorifics. Note: This describes the relationship deference level, not emotional tone - you can be formal while being worried, grateful, or any other emotion.",
+        "distant": "Distant/Neutral: Detached relationship level. Used in formal writing, legal contexts, or cold interactions. Impersonal grammar, no slang, and grammatically precise. Note: This describes the relationship distance, not emotional tone - you can be distant while being angry, indifferent, or any other emotion."
     }
 
     PROFICIENCY_LEVELS = {
@@ -74,7 +74,7 @@ class LanguageTutor:
         else:
             self.model = None
 
-    def get_conversational_response(self, user_input: str, context: str = "") -> str:
+    def get_conversational_response(self, user_input: str, context: str = "", description: str = None) -> str:
         """Generate a conversational response in the target language."""
         
         topics_guidance = ""
@@ -96,13 +96,28 @@ class LanguageTutor:
             goals_list = ', '.join(self.user_goals)
             goals_guidance = f"\n\nUSER'S LEARNING GOALS: {goals_list}"
 
+        description_guidance = ""
+        if description:
+            description_guidance = f"""
+AI PERSONALITY DESCRIPTION: {description}
+
+PERSONA ROLE-PLAYING INSTRUCTIONS:
+- CRITICAL: The description above defines YOUR personality, emotional tone, and communication style as the AI. This takes absolute priority over any default tone.
+- Embody this specific personality, background, and emotional state in your responses
+- Use the description to inform your emotional tone (happy, sad, angry, concerned, excited, etc.), vocabulary choices, and conversation topics
+- If the description mentions specific interests (e.g., travel, food, culture), naturally incorporate these into your responses
+- Maintain consistency with this personality throughout the conversation
+- The closeness level ({self.user_closeness}) determines your relationship grammar (formal/informal pronouns, honorifics, etc.), but your emotional tone comes from the description
+- Examples: You can be "friendly" with someone (using casual grammar) while being angry, sad, or excited based on your described personality"""
+
         prompt = f"""Conversational Heritage Language Tutor  
-You are a warm, culturally-aware AI tutor for a {self.user_level} heritage learner of {self.language_name}.
+You are a culturally-aware AI tutor for a {self.user_level} heritage learner of {self.language_name}.
 
 Your job is to engage users in natural, emotionally rich conversation that sounds like a real {self.language_name} speaker.
 You have a {self.user_closeness} closeness level with the user and they are a {self.user_level} learner.
-Adjust your tone, pronouns, and grammar to match this level of closeness: {self.CLOSENESS_LEVELS[self.user_closeness]}.
-Adjust your vocabulary and sentence structure to match this level of proficiency: {self.PROFICIENCY_LEVELS[self.user_level]}.
+- Use grammar, pronouns, and formality appropriate for this relationship level: {self.CLOSENESS_LEVELS[self.user_closeness]}
+- Adjust your vocabulary and sentence structure to match this level of proficiency: {self.PROFICIENCY_LEVELS[self.user_level]}
+- Your emotional tone and personality come from the conversation partner description (if provided)
 
 IMPORTANT: Do not refer to yourself as a tutor, teacher, AI, or bot. Respond as a natural conversation partner would.
 
@@ -118,6 +133,7 @@ Follow natural conversation patterns:
 {topics_guidance}
 {topic_integration_rules}
 {goals_guidance}
+{description_guidance}
 
 Current conversation context:  
 {context}
@@ -136,16 +152,21 @@ Reply naturally in {self.language_name}."""
             print(f"Error generating conversational response: {e}")
             return "Let's keep practicing together!"
 
-    def get_detailed_feedback(self, user_input: str, context: str = "") -> str:
+    def get_detailed_feedback(self, user_input: str, context: str = "", description: str = None) -> str:
         """Generate detailed feedback about grammar, pronunciation, etc."""
         if not self.model or not GOOGLE_AI_AVAILABLE:
             return "⚠️ Google AI not available for feedback."
         
         grammar_rules = self._get_grammar_rules()
         
+        # Determine tone based on description or default
+        tone_guidance = "culturally-aware"
+        if description:
+            tone_guidance = f"appropriate to your described personality: {description}. The description defines your emotional tone and personality - prioritize this over any default tone."
+        
         prompt = f"""
       
-You are a kind, culturally-aware language tutor helping a heritage speaker improve their {self.language_name}.
+You are a {tone_guidance} language tutor helping a heritage speaker improve their {self.language_name}.
 
 Your job is to identify and gently explain any grammar or phrasing mistakes in the user's message. 
 They are speaking with someone with a  {self.user_closeness} closeness level.
@@ -187,7 +208,7 @@ Always use {self.feedback_language} for explanations.
         """Return a script-language suggestion example for few-shot prompting. Override in subclasses."""
         return ""
 
-    def get_suggestions(self, context: str = "") -> list:
+    def get_suggestions(self, context: str = "", description: str = None) -> list:
         """Generate suggestions for what the user could say next."""
         if not getattr(self, 'model', None) or not GOOGLE_AI_AVAILABLE:
             return [{"text": "Keep practicing!", "translation": "Continue learning!"}]
@@ -203,6 +224,18 @@ Always use {self.feedback_language} for explanations.
 - The user wants to focus on the following topics: {topics_list}
 - CRITICAL: Connect replies to these topics whenever possible. If one has already been mentioned, expand naturally or ask a related question.
 - If the conversation becomes generic, gently steer it back toward these topics.
+"""
+
+        # Add description-aware guidance
+        description_guidance = ""
+        if description:
+            description_guidance = f"""
+- Your AI personality is described as: {description}
+- CRITICAL: The description defines your emotional tone and personality. Prioritize this over any default tone.
+- Consider your described background, interests, emotional state, and communication style when suggesting responses
+- Tailor suggestions to be appropriate for your described personality and current emotional state
+- If the description mentions specific interests or expertise, incorporate those naturally into the suggestions
+- Remember: Relationship closeness ({self.user_closeness}) determines grammar formality, but your emotional tone comes from the description
 """
 
         # Begin prompt
@@ -223,6 +256,7 @@ USER INFO:
 - Proficiency level: {self.user_level} ({level_guidance})
 - Target translation language: {self.feedback_language}
 {topics_guidance}
+{description_guidance}
 
 IMPORTANT:
 – Use vocabulary and sentence structure appropriate for a {self.user_level} learner: {level_guidance}
@@ -276,7 +310,7 @@ Explanation: [brief explanation here]
             print(f"Error generating suggestions: {e}")
             return self._get_fallback_suggestions()
 
-    def check_simple(self, user_input: str, main_response: str) -> str:
+    def check_simple(self, user_input: str, main_response: str, description: str = None) -> str:
         """Check and fix the tutor's response for grammar and naturalness using Gemini 2.5 Pro."""
         if not GOOGLE_AI_AVAILABLE:
             return main_response
@@ -291,6 +325,16 @@ Explanation: [brief explanation here]
         if self.language_code in self.SCRIPT_LANGUAGES:
             script_lang_instruction = f"Return ONLY the revised {self.language_name} response and the romanized version, with no explanation or formatting."
 
+        # Add description-aware guidance
+        description_guidance = ""
+        if description:
+            description_guidance = f"""
+- Your AI personality is described as: {description}
+- CRITICAL: The description defines your emotional tone and personality. Prioritize this over any default tone.
+- Ensure the response aligns with your described emotional state, personality, and communication style
+- Remember: Relationship closeness ({self.user_closeness}) determines grammar formality, but your emotional tone comes from the description
+"""
+
         checker_prompt = f"""
 Is the tutor's response grammatically, culturally, and pragmatically appropriate given the user's input?
 
@@ -301,6 +345,7 @@ USER INFO:
 - Proficiency level: {self.user_level} ({self.PROFICIENCY_LEVELS[self.user_level]})
 - Closeness level: {self.user_closeness} ({self.CLOSENESS_LEVELS[self.user_closeness]})
 - Topics: {self.user_topics}
+{description_guidance}
 
 Carefully check that:
 - The grammar, vocabulary, and tone match the user's fluency and relationship with the tutor.
@@ -322,7 +367,7 @@ Abide by these {self._get_grammar_rules()}:
             print(f"Error in check_and_fix_response: {e}")
             return main_response
 
-    def check_and_fix_response(self, user_input: str, main_response: str) -> str:
+    def check_and_fix_response(self, user_input: str, main_response: str, description: str = None) -> str:
         """Check and fix the tutor's response for grammar and naturalness using Gemini 2.5 Pro."""
         if not GOOGLE_AI_AVAILABLE:
             return main_response
@@ -337,6 +382,17 @@ Abide by these {self._get_grammar_rules()}:
         if self.language_code in self.SCRIPT_LANGUAGES:
             script_lang_instruction = f"\nReturn ONLY the revised {self.language_name} response and the romanized version, with no explanation or formatting.\n"
 
+        # Add description-aware guidance
+        description_guidance = ""
+        if description:
+            description_guidance = f"""
+AI PERSONALITY CONTEXT: Your personality is described as: {description}
+- CRITICAL: The description defines your emotional tone and personality. Prioritize this over any default tone.
+- Ensure the response aligns with your described emotional state, personality, and communication style
+- Adjust the response to be appropriate for your described personality and current emotional state
+- Remember: Relationship closeness ({self.user_closeness}) determines grammar formality, but your emotional tone comes from the description
+"""
+
         checker_prompt = f"""You are a native-level {self.language_name} speaker and cultural insider reviewing a language tutor's response to a learner.
 
 Your goal is to make sure the tutor's reply sounds natural, fluent, and culturally appropriate in everyday {self.language_name} conversation. The learner's original message and the tutor's response are shown below:
@@ -349,6 +405,7 @@ Revise the tutor's response if needed to:
 – Improve fluency to sound like natural, relaxed spoken {self.language_name}  
 - Adjust the tone, pronouns, and grammar to match this level of closeness: {self.CLOSENESS_LEVELS[self.user_closeness]}.
 
+{description_guidance}
 
 {self._get_grammar_rules()}
 {self._get_cultural_rules()}
@@ -375,12 +432,21 @@ If the response is already natural and grammatically accurate, return it unchang
             print(f"Error in check_and_fix_response: {e}")
             return main_response
 
-    def explain_llm_response(self, llm_response: str, user_input: str = "", context: str = "") -> str:
+    def explain_llm_response(self, llm_response: str, user_input: str = "", context: str = "", description: str = None) -> str:
         """Explain the LLM's response to the user in a structured way with separate overview and detailed breakdown."""
         if not self.model or not GOOGLE_AI_AVAILABLE:
             return f"Here's an explanation: {llm_response}"
 
         script_lang_instruction = "– [Romanized version]" if self.language_code in self.SCRIPT_LANGUAGES else ""
+        
+        # Add description-aware guidance
+        description_guidance = ""
+        if description:
+            description_guidance = f"""
+    CONVERSATION CONTEXT: The user is conversing with someone described as: {description}
+    - Consider this persona's background, interests, and communication style when explaining the response
+    - If the description specifies a particular tone or personality, explain how the response aligns with that persona
+    """
     
         prompt = f"""
         You are an expert {self.language_name} language tutor. Your job is to explain the following {self.language_name} response to a heritage learner at the {self.user_level} level.
@@ -389,6 +455,7 @@ If the response is already natural and grammatically accurate, return it unchang
     Feedback language: {self.feedback_language}
     Closeness level: {self.user_closeness} ({self.CLOSENESS_LEVELS.get(self.user_closeness, '')})
     Proficiency level: {self.user_level} ({self.PROFICIENCY_LEVELS[self.user_level]})
+    {description_guidance}
 
     CONTEXT (for reference only; do not include or explain it):
     {context}
@@ -506,13 +573,18 @@ If the response is already natural and grammatically accurate, return it unchang
         """Return the closeness level description for the given key."""
         return self.CLOSENESS_LEVELS.get(key, "")
 
-    def check_and_naturalize_feedback(self, user_input: str, feedback: str) -> str:
+    def check_and_naturalize_feedback(self, user_input: str, feedback: str, description: str = None) -> str:
         """Check and revise feedback to be more natural, conversational, and encouraging."""
         if not self.model or not GOOGLE_AI_AVAILABLE:
             return feedback
         
+        # Determine tone based on description or default
+        tone_guidance = "supportive"
+        if description:
+            tone_guidance = f"appropriate to your described personality: {description}. The description defines your emotional tone and personality - prioritize this over any default tone."
+        
         prompt = f"""
-You are a friendly, supportive language tutor. Your job is to review the following feedback given to a learner about their message and revise it ONLY if it sounds stiff, overly formal, robotic, or not like something a real, encouraging tutor would say in conversation.
+You are a {tone_guidance} language tutor. Your job is to review the following feedback given to a learner about their message and revise it ONLY if it sounds stiff, overly formal, robotic, or not like something a real, encouraging tutor would say in conversation.
 
 USER INPUT: "{user_input}"
 FEEDBACK: "{feedback}"
@@ -672,11 +744,11 @@ Example of unnatural vs. natural phrasing:
 
 class JapaneseHeritageTutor(LanguageTutor):
     CLOSENESS_LEVELS = {
-        "intimate": "Intimate/Familiar: Highly casual and emotionally close. Used with romantic partners, childhood friends, or younger siblings. Often omits particles and subjects, uses casual verbs and pronouns like 'あたし' or 'お前', and may include teasing or affectionate tone.",
-        "friendly": "Friendly/Peer: Casual but warm and respectful. Used with friends, classmates, or coworkers of the same rank. Informal contractions are okay, but speech stays kind. Pronouns like '僕', '私', '君' may be used depending on gender and context.",
-        "respectful": "Respectful/Polite: Standard polite speech. Used with new acquaintances, teachers, or older strangers. Uses 〜です/〜ます forms, full particles, and avoids slang. Pronouns like '私' and honorifics like 'さん' are expected.",
-        "formal": "Humble/Very Formal: Extra-deferential. Used in business, ceremonies, or with people of much higher status. Includes keigo (respect/humble forms), honorifics like '様', and often omits direct personal references. Very structured grammar.",
-        "distant": "Distant/Neutral: Emotionally neutral or detached. Used in news reporting, legal or academic writing, or conflict scenarios. Impersonal tone, avoids pronouns, no contractions or slang, strictly grammatical and objective."
+        "intimate": "Intimate/Familiar: Highly casual relationship level. Used with romantic partners, childhood friends, or younger siblings. Often omits particles and subjects, uses casual verbs and pronouns like 'あたし' or 'お前'. Note: This describes the relationship closeness, not emotional tone - you can be intimate with someone while being angry, sad, or any other emotion.",
+        "friendly": "Friendly/Peer: Casual relationship level. Used with friends, classmates, or coworkers of the same rank. Informal contractions are okay. Pronouns like '僕', '私', '君' may be used depending on gender and context. Note: This describes the relationship closeness, not emotional tone - you can be friendly with someone while being frustrated, excited, or any other emotion.",
+        "respectful": "Respectful/Polite: Polite relationship level. Used with new acquaintances, teachers, or older strangers. Uses 〜です/〜ます forms, full particles, and avoids slang. Pronouns like '私' and honorifics like 'さん' are expected. Note: This describes the relationship respect level, not emotional tone - you can be respectful while being concerned, disappointed, or any other emotion.",
+        "formal": "Humble/Very Formal: Highly respectful relationship level. Used in business, ceremonies, or with people of much higher status. Includes keigo (respect/humble forms), honorifics like '様', and often omits direct personal references. Very structured grammar. Note: This describes the relationship deference level, not emotional tone - you can be formal while being worried, grateful, or any other emotion.",
+        "distant": "Distant/Neutral: Detached relationship level. Used in news reporting, legal or academic writing, or conflict scenarios. Impersonal grammar, avoids pronouns, no contractions or slang, strictly grammatical and objective. Note: This describes the relationship distance, not emotional tone - you can be distant while being angry, indifferent, or any other emotion."
     }
     PROFICIENCY_LEVELS = {
         'beginner': "Japanese: Use extremely simple, short sentences. Stick to basic grammar and common words only.",
@@ -727,11 +799,11 @@ class JapaneseHeritageTutor(LanguageTutor):
 
 class KoreanHeritageTutor(LanguageTutor):
     CLOSENESS_LEVELS = {
-        "intimate": "Intimate/Familiar: Highly casual, used with close friends, romantic partners, or younger siblings. Frequent use of 반말 (banmal), omits honorifics, uses casual pronouns like '나' (I), '너' (you), and may include playful or affectionate tone.",
-        "friendly": "Friendly/Peer: Casual but polite, used with classmates, coworkers of similar age, or friends not extremely close. May use 반말 (banmal) or switch to 존댓말 (jondaetmal) as needed. Pronouns like '나', '너', and some polite endings.",
-        "respectful": "Respectful/Polite: Standard polite speech (존댓말), used with strangers, elders, teachers, or in most public situations. Uses full honorifics, polite verb endings like -요, and avoids slang. Pronouns like '저' (I), '당신' (you, rarely used), and honorifics like '씨', '님'.",
-        "formal": "Humble/Very Formal: Extra-deferential, used in business, ceremonies, or with people of much higher status. Uses highest honorifics, formal verb endings like -습니다, and avoids direct personal references. Very structured grammar.",
-        "distant": "Distant/Neutral: Emotionally neutral or detached, used in news, legal, or academic writing, or conflict. Impersonal tone, avoids pronouns, no contractions or slang, strictly grammatical and objective."
+        "intimate": "Intimate/Familiar: Highly casual relationship level. Used with close friends, romantic partners, or younger siblings. Frequent use of 반말 (banmal), omits honorifics, uses casual pronouns like '나' (I), '너' (you). Note: This describes the relationship closeness, not emotional tone - you can be intimate with someone while being angry, sad, or any other emotion.",
+        "friendly": "Friendly/Peer: Casual relationship level. Used with classmates, coworkers of similar age, or friends not extremely close. May use 반말 (banmal) or switch to 존댓말 (jondaetmal) as needed. Pronouns like '나', '너', and some polite endings. Note: This describes the relationship closeness, not emotional tone - you can be friendly with someone while being frustrated, excited, or any other emotion.",
+        "respectful": "Respectful/Polite: Polite relationship level. Used with strangers, elders, teachers, or in most public situations. Uses full honorifics, polite verb endings like -요, and avoids slang. Pronouns like '저' (I), '당신' (you, rarely used), and honorifics like '씨', '님'. Note: This describes the relationship respect level, not emotional tone - you can be respectful while being concerned, disappointed, or any other emotion.",
+        "formal": "Humble/Very Formal: Highly respectful relationship level. Used in business, ceremonies, or with people of much higher status. Uses highest honorifics, formal verb endings like -습니다, and avoids direct personal references. Very structured grammar. Note: This describes the relationship deference level, not emotional tone - you can be formal while being worried, grateful, or any other emotion.",
+        "distant": "Distant/Neutral: Detached relationship level. Used in news, legal, or academic writing, or conflict. Impersonal grammar, avoids pronouns, no contractions or slang, strictly grammatical and objective. Note: This describes the relationship distance, not emotional tone - you can be distant while being angry, indifferent, or any other emotion."
     }
     PROFICIENCY_LEVELS = {
         'beginner': "Korean: Use extremely simple, short sentences. Stick to basic grammar and common words only.",
@@ -779,11 +851,11 @@ class KoreanHeritageTutor(LanguageTutor):
 
 class MandarinChineseHeritageTutor(LanguageTutor):
     CLOSENESS_LEVELS = {
-        "intimate": "Intimate/Familiar: Highly casual, used with very close friends, romantic partners, or younger siblings. Frequent use of informal expressions, omission of subjects/particles, and relaxed tone.",
-        "friendly": "Friendly/Peer: Casual but polite, used with classmates, coworkers, or acquaintances of similar age/status. Allows informal language but keeps a respectful tone.",
-        "respectful": "Respectful/Polite: Standard polite speech, used with elders, teachers, strangers, or in formal social settings. Uses polite forms like 请 (qǐng), 您 (nín), avoids slang.",
-        "formal": "Humble/Very Formal: Extra-deferential, used in business, official, or ceremonial settings. Includes set phrases, humble speech (谦辞), and avoids direct personal references.",
-        "distant": "Distant/Neutral: Emotionally detached or objective, used in news reports, legal documents, or academic writing. Avoids pronouns, idioms, and contractions; emphasizes clarity and formality."
+        "intimate": "Intimate/Familiar: Highly casual relationship level. Used with very close friends, romantic partners, or younger siblings. Frequent use of informal expressions, omission of subjects/particles, and relaxed grammar. Note: This describes the relationship closeness, not emotional tone - you can be intimate with someone while being angry, sad, or any other emotion.",
+        "friendly": "Friendly/Peer: Casual relationship level. Used with classmates, coworkers, or acquaintances of similar age/status. Allows informal language but keeps respectful grammar. Note: This describes the relationship closeness, not emotional tone - you can be friendly with someone while being frustrated, excited, or any other emotion.",
+        "respectful": "Respectful/Polite: Polite relationship level. Used with elders, teachers, strangers, or in formal social settings. Uses polite forms like 请 (qǐng), 您 (nín), avoids slang. Note: This describes the relationship respect level, not emotional tone - you can be respectful while being concerned, disappointed, or any other emotion.",
+        "formal": "Humble/Very Formal: Highly respectful relationship level. Used in business, official, or ceremonial settings. Includes set phrases, humble speech (谦辞), and avoids direct personal references. Note: This describes the relationship deference level, not emotional tone - you can be formal while being worried, grateful, or any other emotion.",
+        "distant": "Distant/Neutral: Detached relationship level. Used in news reports, legal documents, or academic writing. Avoids pronouns, idioms, and contractions; emphasizes clarity and formality. Note: This describes the relationship distance, not emotional tone - you can be distant while being angry, indifferent, or any other emotion."
 }
 
     PROFICIENCY_LEVELS = {
@@ -826,10 +898,19 @@ class MandarinChineseHeritageTutor(LanguageTutor):
 我喜欢吃中国菜。 - Wǒ xǐhuān chī Zhōngguó cài. - I like to eat Chinese food.
 周末你有什么计划？ - Zhōumò nǐ yǒu shénme jìhuà? - Do you have any plans for the weekend?   """
 
-    def explain_llm_response(self, llm_response: str, user_input: str = "", context: str = "") -> str:
+    def explain_llm_response(self, llm_response: str, user_input: str = "", context: str = "", description: str = None) -> str:
         """Explain the LLM's response to the user in a strict, structured way, tailored to their proficiency and feedback language."""
         if not self.model or not GOOGLE_AI_AVAILABLE:
             return f"Here's an explanation: {llm_response}"
+        
+        # Add description-aware guidance
+        description_guidance = ""
+        if description:
+            description_guidance = f"""
+    AI PERSONALITY CONTEXT: Your personality is described as: {description}
+    - Consider your described background, interests, and communication style when explaining the response
+    - If the description specifies a particular tone or personality, explain how the response aligns with your described personality
+    """
     
         prompt = f"""
         You are an expert {self.language_name} language tutor. Your job is to explain the following {self.language_name} response to a heritage learner at the {self.user_level} level.
@@ -841,6 +922,7 @@ class MandarinChineseHeritageTutor(LanguageTutor):
     Closeness level: {self.user_closeness} ({self.CLOSENESS_LEVELS.get(self.user_closeness, '')})
 
     Proficiency level: {self.user_level} ({self.PROFICIENCY_LEVELS[self.user_level]})
+    {description_guidance}
 
     CONTEXT (for reference only; do not include or explain it):
     {context}
@@ -886,11 +968,11 @@ class MandarinChineseHeritageTutor(LanguageTutor):
 
 class HindiHeritageTutor(LanguageTutor):
     CLOSENESS_LEVELS = {
-        "intimate": "Intimate/Familiar: Highly casual, used with very close friends, romantic partners, or younger siblings. Frequent use of informal expressions, omission of subjects, and relaxed tone.",
-        "friendly": "Friendly/Peer: Casual but polite, used with classmates, coworkers, or acquaintances of similar age/status. Allows informal language but keeps a respectful tone.",
-        "respectful": "Respectful/Polite: Standard polite speech, used with elders, teachers, strangers, or in formal social settings. Uses polite forms like जी (ji), avoids slang.",
-        "formal": "Humble/Very Formal: Extra-deferential, used in business, official, or ceremonial settings. Includes set phrases, humble speech, and avoids direct personal references.",
-        "distant": "Distant/Neutral: Emotionally detached or objective, used in news reports, legal documents, or academic writing. Avoids pronouns, idioms, and contractions; emphasizes clarity and formality."
+        "intimate": "Intimate/Familiar: Highly casual relationship level. Used with very close friends, romantic partners, or younger siblings. Frequent use of informal expressions, omission of subjects, and relaxed grammar. Note: This describes the relationship closeness, not emotional tone - you can be intimate with someone while being angry, sad, or any other emotion.",
+        "friendly": "Friendly/Peer: Casual relationship level. Used with classmates, coworkers, or acquaintances of similar age/status. Allows informal language but keeps respectful grammar. Note: This describes the relationship closeness, not emotional tone - you can be friendly with someone while being frustrated, excited, or any other emotion.",
+        "respectful": "Respectful/Polite: Polite relationship level. Used with elders, teachers, strangers, or in formal social settings. Uses polite forms like जी (ji), avoids slang. Note: This describes the relationship respect level, not emotional tone - you can be respectful while being concerned, disappointed, or any other emotion.",
+        "formal": "Humble/Very Formal: Highly respectful relationship level. Used in business, official, or ceremonial settings. Includes set phrases, humble speech, and avoids direct personal references. Note: This describes the relationship deference level, not emotional tone - you can be formal while being worried, grateful, or any other emotion.",
+        "distant": "Distant/Neutral: Detached relationship level. Used in news reports, legal documents, or academic writing. Avoids pronouns, idioms, and contractions; emphasizes clarity and formality. Note: This describes the relationship distance, not emotional tone - you can be distant while being angry, indifferent, or any other emotion."
     }
     PROFICIENCY_LEVELS = {
         'beginner': "Hindi: Use extremely simple, short sentences. Stick to basic grammar and common words only.",
@@ -943,11 +1025,11 @@ class HindiHeritageTutor(LanguageTutor):
 
 class MalayalamHeritageTutor(LanguageTutor):
     CLOSENESS_LEVELS = {
-        "intimate": "Intimate/Familiar: Highly casual, used with very close friends, romantic partners, or younger siblings. Frequent use of informal expressions, relaxed tone, and sometimes omission of pronouns.",
-        "friendly": "Friendly/Peer: Casual but polite, used with classmates, coworkers, or acquaintances of similar age/status. Informal language but respectful tone.",
-        "respectful": "Respectful/Polite: Standard polite speech, used with elders, teachers, strangers, or in formal social settings. Uses polite forms, avoids slang.",
-        "formal": "Humble/Very Formal: Extra-deferential, used in business, official, or ceremonial settings. Includes set phrases, humble speech, and avoids direct personal references.",
-        "distant": "Distant/Neutral: Emotionally detached or objective, used in news reports, legal documents, or academic writing. Avoids pronouns, idioms, and contractions; emphasizes clarity and formality."
+        "intimate": "Intimate/Familiar: Highly casual relationship level. Used with very close friends, romantic partners, or younger siblings. Frequent use of informal expressions, relaxed grammar, and sometimes omission of pronouns. Note: This describes the relationship closeness, not emotional tone - you can be intimate with someone while being angry, sad, or any other emotion.",
+        "friendly": "Friendly/Peer: Casual relationship level. Used with classmates, coworkers, or acquaintances of similar age/status. Informal language but respectful grammar. Note: This describes the relationship closeness, not emotional tone - you can be friendly with someone while being frustrated, excited, or any other emotion.",
+        "respectful": "Respectful/Polite: Polite relationship level. Used with elders, teachers, strangers, or in formal social settings. Uses polite forms, avoids slang. Note: This describes the relationship respect level, not emotional tone - you can be respectful while being concerned, disappointed, or any other emotion.",
+        "formal": "Humble/Very Formal: Highly respectful relationship level. Used in business, official, or ceremonial settings. Includes set phrases, humble speech, and avoids direct personal references. Note: This describes the relationship deference level, not emotional tone - you can be formal while being worried, grateful, or any other emotion.",
+        "distant": "Distant/Neutral: Detached relationship level. Used in news reports, legal documents, or academic writing. Avoids pronouns, idioms, and contractions; emphasizes clarity and formality. Note: This describes the relationship distance, not emotional tone - you can be distant while being angry, indifferent, or any other emotion."
     }
     PROFICIENCY_LEVELS = {
         'beginner': "Malayalam: Use extremely simple, short sentences. Stick to basic grammar and common words only.",
@@ -987,11 +1069,11 @@ class MalayalamHeritageTutor(LanguageTutor):
 
 class TamilHeritageTutor(LanguageTutor):
     CLOSENESS_LEVELS = {
-        "intimate": "Intimate/Familiar: Highly casual, used with very close friends, romantic partners, or younger siblings. Frequent use of informal expressions, omission of subjects, and relaxed tone.",
-        "friendly": "Friendly/Peer: Casual but polite, used with classmates, coworkers, or acquaintances of similar age/status. Allows informal language but keeps a respectful tone.",
-        "respectful": "Respectful/Polite: Standard polite speech, used with elders, teachers, strangers, or in formal social settings. Uses polite forms, avoids slang.",
-        "formal": "Humble/Very Formal: Extra-deferential, used in business, official, or ceremonial settings. Includes set phrases, humble speech, and avoids direct personal references.",
-        "distant": "Distant/Neutral: Emotionally detached or objective, used in news reports, legal documents, or academic writing. Avoids pronouns, idioms, and contractions; emphasizes clarity and formality."
+        "intimate": "Intimate/Familiar: Highly casual relationship level. Used with very close friends, romantic partners, or younger siblings. Frequent use of informal expressions, omission of subjects, and relaxed grammar. Note: This describes the relationship closeness, not emotional tone - you can be intimate with someone while being angry, sad, or any other emotion.",
+        "friendly": "Friendly/Peer: Casual relationship level. Used with classmates, coworkers, or acquaintances of similar age/status. Allows informal language but keeps respectful grammar. Note: This describes the relationship closeness, not emotional tone - you can be friendly with someone while being frustrated, excited, or any other emotion.",
+        "respectful": "Respectful/Polite: Polite relationship level. Used with elders, teachers, strangers, or in formal social settings. Uses polite forms, avoids slang. Note: This describes the relationship respect level, not emotional tone - you can be respectful while being concerned, disappointed, or any other emotion.",
+        "formal": "Humble/Very Formal: Highly respectful relationship level. Used in business, official, or ceremonial settings. Includes set phrases, humble speech, and avoids direct personal references. Note: This describes the relationship deference level, not emotional tone - you can be formal while being worried, grateful, or any other emotion.",
+        "distant": "Distant/Neutral: Detached relationship level. Used in news reports, legal documents, or academic writing. Avoids pronouns, idioms, and contractions; emphasizes clarity and formality. Note: This describes the relationship distance, not emotional tone - you can be distant while being angry, indifferent, or any other emotion."
     }
 
     PROFICIENCY_LEVELS = {
@@ -1035,11 +1117,11 @@ class TamilHeritageTutor(LanguageTutor):
 
 class OdiaHeritageTutor(LanguageTutor):
     CLOSENESS_LEVELS = {
-        "intimate": "Intimate/Familiar: Highly casual, used with very close friends, romantic partners, or younger siblings. Frequent use of informal expressions, relaxed tone, and sometimes omission of pronouns.",
-        "friendly": "Friendly/Peer: Casual but polite, used with classmates, coworkers, or acquaintances of similar age/status. Informal language but respectful tone.",
-        "respectful": "Respectful/Polite: Standard polite speech, used with elders, teachers, strangers, or in formal social settings. Uses polite forms, avoids slang.",
-        "formal": "Humble/Very Formal: Extra-deferential, used in business, official, or ceremonial settings. Includes set phrases, humble speech, and avoids direct personal references.",
-        "distant": "Distant/Neutral: Emotionally detached or objective, used in news reports, legal documents, or academic writing. Avoids pronouns, idioms, and contractions; emphasizes clarity and formality."
+        "intimate": "Intimate/Familiar: Highly casual relationship level. Used with very close friends, romantic partners, or younger siblings. Frequent use of informal expressions, relaxed grammar, and sometimes omission of pronouns. Note: This describes the relationship closeness, not emotional tone - you can be intimate with someone while being angry, sad, or any other emotion.",
+        "friendly": "Friendly/Peer: Casual relationship level. Used with classmates, coworkers, or acquaintances of similar age/status. Informal language but respectful grammar. Note: This describes the relationship closeness, not emotional tone - you can be friendly with someone while being frustrated, excited, or any other emotion.",
+        "respectful": "Respectful/Polite: Polite relationship level. Used with elders, teachers, strangers, or in formal social settings. Uses polite forms, avoids slang. Note: This describes the relationship respect level, not emotional tone - you can be respectful while being concerned, disappointed, or any other emotion.",
+        "formal": "Humble/Very Formal: Highly respectful relationship level. Used in business, official, or ceremonial settings. Includes set phrases, humble speech, and avoids direct personal references. Note: This describes the relationship deference level, not emotional tone - you can be formal while being worried, grateful, or any other emotion.",
+        "distant": "Distant/Neutral: Detached relationship level. Used in news reports, legal documents, or academic writing. Avoids pronouns, idioms, and contractions; emphasizes clarity and formality. Note: This describes the relationship distance, not emotional tone - you can be distant while being angry, indifferent, or any other emotion."
     }
     PROFICIENCY_LEVELS = {
         'beginner': "Odia: Use extremely simple, short sentences. Stick to basic grammar and common words only.",
@@ -1096,11 +1178,11 @@ class OdiaHeritageTutor(LanguageTutor):
 
 class SpanishHeritageTutor(LanguageTutor):
     CLOSENESS_LEVELS = {
-        "intimate": "Intimate/Familiar: Highly casual, used with very close friends, romantic partners, or younger siblings. Frequent use of 'tú' or 'vos', informal expressions, and affectionate diminutives.",
-        "friendly": "Friendly/Peer: Casual but polite, used with classmates, coworkers, or acquaintances of similar age/status. Uses 'tú' or 'vos' depending on region, informal but respectful tone.",
-        "respectful": "Respectful/Polite: Standard polite speech, used with elders, teachers, strangers, or in formal social settings. Uses 'usted', full grammar, and avoids slang.",
-        "formal": "Humble/Very Formal: Extra-deferential, used in business, official, or ceremonial settings. Includes set phrases, humble speech, and avoids direct personal references.",
-        "distant": "Distant/Neutral: Emotionally detached or objective, used in news reports, legal documents, or academic writing. Avoids pronouns, idioms, and contractions; emphasizes clarity and formality."
+        "intimate": "Intimate/Familiar: Highly casual relationship level. Used with very close friends, romantic partners, or younger siblings. Frequent use of 'tú' or 'vos', informal expressions, and affectionate diminutives. Note: This describes the relationship closeness, not emotional tone - you can be intimate with someone while being angry, sad, or any other emotion.",
+        "friendly": "Friendly/Peer: Casual relationship level. Used with classmates, coworkers, or acquaintances of similar age/status. Uses 'tú' or 'vos' depending on region, informal but respectful grammar. Note: This describes the relationship closeness, not emotional tone - you can be friendly with someone while being frustrated, excited, or any other emotion.",
+        "respectful": "Respectful/Polite: Polite relationship level. Used with elders, teachers, strangers, or in formal social settings. Uses 'usted', full grammar, and avoids slang. Note: This describes the relationship respect level, not emotional tone - you can be respectful while being concerned, disappointed, or any other emotion.",
+        "formal": "Humble/Very Formal: Highly respectful relationship level. Used in business, official, or ceremonial settings. Includes set phrases, humble speech, and avoids direct personal references. Note: This describes the relationship deference level, not emotional tone - you can be formal while being worried, grateful, or any other emotion.",
+        "distant": "Distant/Neutral: Detached relationship level. Used in news reports, legal documents, or academic writing. Avoids pronouns, idioms, and contractions; emphasizes clarity and formality. Note: This describes the relationship distance, not emotional tone - you can be distant while being angry, indifferent, or any other emotion."
     }
     PROFICIENCY_LEVELS = {
         'beginner': "Spanish: Use extremely simple, short sentences. Stick to basic grammar and common words only.",
@@ -1218,7 +1300,7 @@ def get_language_name(language_code: str) -> str:
 _tutor_instances = {}
 
 # Main API functions using the modular approach with separate Gemini calls
-def get_conversational_response(transcription: str, chat_history: List[Dict], language: str = 'en', user_level: str = 'beginner', user_topics: List[str] = None, formality: str = 'friendly', feedback_language: str = 'en', user_goals: List[str] = None) -> str:
+def get_conversational_response(transcription: str, chat_history: List[Dict], language: str = 'en', user_level: str = 'beginner', user_topics: List[str] = None, formality: str = 'friendly', feedback_language: str = 'en', user_goals: List[str] = None, description: str = None) -> str:
     """Get conversational response using separate Gemini call."""
     if user_topics is None:
         user_topics = []
@@ -1243,9 +1325,9 @@ def get_conversational_response(transcription: str, chat_history: List[Dict], la
     context = "\n".join([f"{msg['sender']}: {msg['text']}" for msg in chat_history[-4:]]) if chat_history else ""
     
     # Make separate Gemini call for conversation
-    return tutor.get_conversational_response(transcription, context)
+    return tutor.get_conversational_response(transcription, context, description)
 
-def get_detailed_feedback(phoneme_analysis: str, reference_text: str, recognized_text: str, chat_history: List[Dict], language: str = 'en', user_level: str = 'beginner', user_topics: List[str] = None, feedback_language: str = 'en') -> str:
+def get_detailed_feedback(phoneme_analysis: str, reference_text: str, recognized_text: str, chat_history: List[Dict], language: str = 'en', user_level: str = 'beginner', user_topics: List[str] = None, feedback_language: str = 'en', description: str = None) -> str:
     """Get detailed feedback using separate Gemini call."""
     if user_topics is None:
         user_topics = []
@@ -1266,9 +1348,9 @@ def get_detailed_feedback(phoneme_analysis: str, reference_text: str, recognized
     context = "\n".join([f"{msg['sender']}: {msg['text']}" for msg in chat_history[-4:]]) if chat_history else ""
     
     # Make separate Gemini call for feedback
-    return tutor.get_detailed_feedback(recognized_text, context)
+    return tutor.get_detailed_feedback(recognized_text, context, description)
 
-def get_text_suggestions(chat_history: List[Dict], language: str = 'en', user_level: str = 'beginner', user_topics: List[str] = None, formality: str = 'friendly', feedback_language: str = 'en', user_goals: List[str] = None) -> list:
+def get_text_suggestions(chat_history: List[Dict], language: str = 'en', user_level: str = 'beginner', user_topics: List[str] = None, formality: str = 'friendly', feedback_language: str = 'en', user_goals: List[str] = None, description: str = None) -> list:
     """Get text suggestions using separate Gemini call."""
     if user_topics is None:
         user_topics = []
@@ -1293,9 +1375,9 @@ def get_text_suggestions(chat_history: List[Dict], language: str = 'en', user_le
     context = "\n".join([f"{msg['sender']}: {msg['text']}" for msg in chat_history[-4:]]) if chat_history else ""
     
     # Make separate Gemini call for suggestions
-    return tutor.get_suggestions(context)
+    return tutor.get_suggestions(context, description)
 
-def get_short_feedback(user_input: str, context: str = "", language: str = 'en', user_level: str = 'beginner', user_topics: list = None, feedback_language: str = 'en', user_goals: list = None) -> str:
+def get_short_feedback(user_input: str, context: str = "", language: str = 'en', user_level: str = 'beginner', user_topics: list = None, feedback_language: str = 'en', user_goals: list = None, description: str = None) -> str:
     """Generate a short, conversational feedback about grammar/style."""
     if not GOOGLE_AI_AVAILABLE:
         return "Short feedback ran (no Gemini API key configured)"
@@ -1309,12 +1391,17 @@ def get_short_feedback(user_input: str, context: str = "", language: str = 'en',
         goals_list = ', '.join(user_goals)
         goals_guidance = f"\nUser's learning goals: {goals_list}. Focus your feedback on helping them achieve these goals."
     
+    description_guidance = ""
+    if description:
+        description_guidance = f"\nConversation context: The user is talking with {description}. Consider this persona when giving feedback."
+    
     prompt = (
         f"You are a friendly language tutor. The user just said: \"{user_input}\".\n"
         f"Context: {context}\n"
         f"User level: {user_level}\n"
         f"Preferred topics: {', '.join(user_topics) if user_topics else 'none'}\n"
-        f"{goals_guidance}\n"
+        f"{goals_guidance}"
+        f"{description_guidance}\n"
         f"Give a very short (1-2 sentences) tip or correction about grammar or style, only if needed. "
         f"If there are no issues, say something encouraging. "
         f"Be brief and natural, like a quick chat comment. "
@@ -1464,7 +1551,7 @@ Synopsis: <your synopsis here>
         print(f"Error generating conversation summary: {e}")
         return {"title": "[Error]", "synopsis": str(e)}
 
-def get_detailed_breakdown(llm_response: str, user_input: str = "", context: str = "", language: str = 'en', user_level: str = 'beginner', user_topics: List[str] = None, formality: str = 'friendly', feedback_language: str = 'en', user_goals: List[str] = None) -> str:
+def get_detailed_breakdown(llm_response: str, user_input: str = "", context: str = "", language: str = 'en', user_level: str = 'beginner', user_topics: List[str] = None, formality: str = 'friendly', feedback_language: str = 'en', user_goals: List[str] = None, description: str = None) -> str:
     """Get detailed breakdown of an AI response using the explain_llm_response method."""
     if user_topics is None:
         user_topics = []
@@ -1486,4 +1573,4 @@ def get_detailed_breakdown(llm_response: str, user_input: str = "", context: str
     tutor.feedback_language = feedback_language
     
     # Use the explain_llm_response method to get detailed breakdown
-    return tutor.explain_llm_response(llm_response, user_input, context)
+    return tutor.explain_llm_response(llm_response, user_input, context, description)

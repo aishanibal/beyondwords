@@ -22,17 +22,22 @@ import {
   addMessage,
   updateConversationTitle,
   deleteConversation,
+  updateConversationPersona,
   createLanguageDashboard,
   getUserLanguageDashboards,
   getLanguageDashboard,
   updateLanguageDashboard,
   deleteLanguageDashboard,
   getUserStreak,
+  createPersona,
+  getUserPersonas,
+  deletePersona,
   User,
   LanguageDashboard,
   Session,
   Conversation,
-  Message
+  Message,
+  Persona
 } from './database';
 import { OAuth2Client } from 'google-auth-library';
 import path from 'path';
@@ -1023,10 +1028,12 @@ app.post('/api/admin/demote', authenticateJWT, async (req: Request, res: Respons
 // Conversation endpoints
 app.post('/api/conversations', authenticateJWT, async (req: Request, res: Response) => {
   try {
-    const { language, title, topics, formality } = req.body;
+    const { language, title, topics, formality, description, usesPersona, personaId } = req.body;
     console.log('🔄 SERVER: Creating conversation with formality:', formality);
+    console.log('🔄 SERVER: Creating conversation with description:', description);
+    console.log('🔄 SERVER: Creating conversation with persona info:', { usesPersona, personaId });
     console.log('🔄 SERVER: Full request body:', req.body);
-    const conversation = await createConversation(req.user.userId, language, title, topics, formality);
+    const conversation = await createConversation(req.user.userId, language, title, topics, formality, description, usesPersona, personaId);
     console.log('🔄 SERVER: Conversation creation result:', conversation);
     if (!conversation || !conversation.id) {
       console.error('❌ SERVER: Failed to create conversation');
@@ -1053,7 +1060,8 @@ app.post('/api/conversations', authenticateJWT, async (req: Request, res: Respon
           language,
           user_level: userLevel,
           user_topics: topicsToSend,
-          formality: formality || 'friendly'
+          formality: formality || 'friendly',
+          description: description || null
         }, {
           headers: { 'Content-Type': 'application/json' },
           timeout: 30000
@@ -1164,6 +1172,20 @@ app.delete('/api/conversations/:id', authenticateJWT, async (req: Request, res: 
   } catch (error: any) {
     console.error('Delete conversation error:', error);
     res.status(500).json({ error: 'Failed to delete conversation' });
+  }
+});
+
+app.patch('/api/conversations/:id', authenticateJWT, async (req: Request, res: Response) => {
+  try {
+    const conversationId = parseInt(req.params.id);
+    const { usesPersona, personaId } = req.body;
+    
+    // Update conversation with persona information
+    await updateConversationPersona(conversationId, usesPersona, personaId);
+    res.json({ message: 'Conversation updated successfully' });
+  } catch (error: any) {
+    console.error('Error updating conversation:', error);
+    res.status(500).json({ error: 'Failed to update conversation' });
   }
 });
 
@@ -1329,6 +1351,59 @@ app.post('/api/detailed_breakdown', authenticateJWT, async (req: Request, res: R
       error: 'Failed to get detailed breakdown',
       details: error.response?.data || error.message 
     });
+  }
+});
+
+// Personas endpoints
+app.post('/api/personas', authenticateJWT, async (req: Request, res: Response) => {
+  try {
+    const { name, description, topics, formality, language, conversationId } = req.body;
+    const userId = req.user.userId;
+
+    if (!name) {
+      return res.status(400).json({ error: 'Name is required' });
+    }
+
+    const persona = await createPersona(userId, {
+      name,
+      description: description || '',
+      topics: topics || [],
+      formality: formality || 'neutral',
+      language: language || 'en',
+      conversationId: conversationId
+    });
+
+    res.status(201).json({ persona });
+  } catch (error: any) {
+    console.error('Error creating persona:', error);
+    res.status(500).json({ error: 'Failed to create persona', details: error.message });
+  }
+});
+
+app.get('/api/personas', authenticateJWT, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user.userId;
+    const personas = await getUserPersonas(userId);
+    res.json({ personas });
+  } catch (error: any) {
+    console.error('Error fetching personas:', error);
+    res.status(500).json({ error: 'Failed to fetch personas', details: error.message });
+  }
+});
+
+app.delete('/api/personas/:id', authenticateJWT, async (req: Request, res: Response) => {
+  try {
+    const personaId = parseInt(req.params.id);
+    const result = await deletePersona(personaId);
+    
+    if (result.changes === 0) {
+      return res.status(404).json({ error: 'Persona not found' });
+    }
+    
+    res.json({ message: 'Persona deleted successfully' });
+  } catch (error: any) {
+    console.error('Error deleting persona:', error);
+    res.status(500).json({ error: 'Failed to delete persona', details: error.message });
   }
 });
 

@@ -411,7 +411,8 @@ def short_feedback():
         user_topics = data.get('user_topics', [])
         user_goals = data.get('user_goals', [])
         feedback_language = data.get('feedback_language', 'en')
-        feedback = get_short_feedback(user_input, context, language, user_level, user_topics, feedback_language, user_goals)
+        description = data.get('description', None)
+        feedback = get_short_feedback(user_input, context, language, user_level, user_topics, feedback_language, user_goals, description)
         return jsonify({"short_feedback": feedback})
     except Exception as e:
         print(f"Short feedback error: {e}")
@@ -429,6 +430,7 @@ def initial_message():
         user_goals = data.get('user_goals', [])
         formality = data.get('formality', 'friendly')
         feedback_language = data.get('feedback_language', 'en')
+        description = data.get('description', None)
         
         print(f"=== /initial_message called ===")
         print(f"Language: {language}")
@@ -439,7 +441,7 @@ def initial_message():
         print(f"Full request data: {data}")
         
         # Generate a welcoming initial message
-        ai_response = get_conversational_response("", chat_history, language, user_level, user_topics, formality, feedback_language, user_goals)
+        ai_response = get_conversational_response("", chat_history, language, user_level, user_topics, formality, feedback_language, user_goals, description)
         
         if not ai_response or not str(ai_response).strip():
             if not os.getenv('GOOGLE_API_KEY'):
@@ -470,6 +472,7 @@ def suggestions():
         user_goals = data.get('user_goals', [])
         formality = data.get('formality', 'friendly')
         feedback_language = data.get('feedback_language', 'en')
+        description = data.get('description', None)
 
         # If conversationId is provided but no chat_history, fetch from database
         if conversation_id and not chat_history:
@@ -496,7 +499,7 @@ def suggestions():
 
         # Call AI client for suggestions using Gemini
         print(f"Calling get_text_suggestions with: language={language}, history_len={len(chat_history)}")
-        suggestions = get_text_suggestions(chat_history, language, user_level, user_topics, formality, feedback_language, user_goals)
+        suggestions = get_text_suggestions(chat_history, language, user_level, user_topics, formality, feedback_language, user_goals, description)
         print(f"Generated {len(suggestions)} suggestions: {suggestions}")
         
         # Ensure suggestions is a list and format properly for frontend
@@ -553,6 +556,7 @@ def detailed_breakdown():
         user_goals = data.get('user_goals', [])
         formality = data.get('formality', 'friendly')
         feedback_language = data.get('feedback_language', 'en')
+        description = data.get('description', None)
         
         print(f"=== /detailed_breakdown called ===")
         print(f"Language: {language}")
@@ -566,7 +570,7 @@ def detailed_breakdown():
             return jsonify({"error": "No LLM response provided"}), 400
         
         # Call AI client for detailed breakdown
-        breakdown = get_detailed_breakdown(llm_response, user_input, context, language, user_level, user_topics, formality, feedback_language, user_goals)
+        breakdown = get_detailed_breakdown(llm_response, user_input, context, language, user_level, user_topics, formality, feedback_language, user_goals, description)
         print(f"Generated detailed breakdown: {breakdown[:100]}...")
         
         return jsonify({"breakdown": breakdown})

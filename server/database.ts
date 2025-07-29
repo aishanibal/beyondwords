@@ -52,7 +52,10 @@ export interface Conversation {
   title?: string;
   topics?: string[];
   formality?: string;
+  description?: string;
   message_count?: number;
+  uses_persona?: boolean;
+  persona_id?: number;
   created_at?: string;
   updated_at?: string;
 }
@@ -67,6 +70,19 @@ export interface Message {
   detailed_feedback?: string;
   message_order: number;
   created_at: string;
+}
+
+export interface Persona {
+  id: number;
+  user_id: number;
+  name: string;
+  description?: string;
+  topics: string[];
+  formality: string;
+  language: string;
+  conversation_id?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 // Database file path
@@ -131,11 +147,15 @@ function initDatabase() {
         title TEXT,
         topics TEXT,
         formality TEXT,
+        description TEXT,
         message_count INTEGER DEFAULT 0,
+        uses_persona BOOLEAN DEFAULT FALSE,
+        persona_id INTEGER,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users (id),
-        FOREIGN KEY (language_dashboard_id) REFERENCES language_dashboards (id)
+        FOREIGN KEY (language_dashboard_id) REFERENCES language_dashboards (id),
+        FOREIGN KEY (persona_id) REFERENCES personas (id)
       )
     `);
     db.run(`
@@ -150,6 +170,21 @@ function initDatabase() {
         message_order INTEGER NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (conversation_id) REFERENCES conversations (id)
+      )
+    `);
+    db.run(`
+      CREATE TABLE IF NOT EXISTS personas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        description TEXT,
+        topics TEXT,
+        formality TEXT DEFAULT 'neutral',
+        language TEXT DEFAULT 'en',
+        conversation_id TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users (id)
       )
     `);
     
@@ -173,7 +208,10 @@ function addColumnsIfNotExist() {
     'ALTER TABLE messages ADD COLUMN detailed_feedback TEXT',
     'ALTER TABLE language_dashboards ADD COLUMN feedback_language TEXT',
     'ALTER TABLE conversations ADD COLUMN formality TEXT',
-    'ALTER TABLE language_dashboards ADD COLUMN speak_speed REAL DEFAULT 1.0'
+    'ALTER TABLE conversations ADD COLUMN description TEXT',
+    'ALTER TABLE language_dashboards ADD COLUMN speak_speed REAL DEFAULT 1.0',
+    'ALTER TABLE conversations ADD COLUMN uses_persona BOOLEAN DEFAULT FALSE',
+    'ALTER TABLE conversations ADD COLUMN persona_id INTEGER'
   ];
   
   newColumns.forEach(sql => {
@@ -333,9 +371,9 @@ function getAllUsers() {
 }
 
 // Conversation functions
-function createConversation(userId: number, language: string, title?: string, topics?: string[], formality?: string) {
+function createConversation(userId: number, language: string, title?: string, topics?: string[], formality?: string, description?: string, usesPersona?: boolean, personaId?: number) {
   return new Promise<{ id: number }>((resolve, reject) => {
-    console.log('🗄️ DATABASE: Creating conversation:', { userId, language, title, topics, formality });
+    console.log('🗄️ DATABASE: Creating conversation:', { userId, language, title, topics, formality, description, usesPersona, personaId });
     
     const topicsJson = topics ? JSON.stringify(topics) : null;
     
@@ -351,11 +389,11 @@ function createConversation(userId: number, language: string, title?: string, to
         reject(new Error('Language dashboard not found'));
       } else {
         const sql = `
-          INSERT INTO conversations (user_id, language_dashboard_id, title, topics, formality)
-          VALUES (?, ?, ?, ?, ?)
+          INSERT INTO conversations (user_id, language_dashboard_id, title, topics, formality, description, uses_persona, persona_id)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `;
         
-        db.run(sql, [userId, (dashboard as { id: number }).id, title, topicsJson, formality], function(err) {
+        db.run(sql, [userId, (dashboard as { id: number }).id, title, topicsJson, formality, description, usesPersona || false, personaId || null], function(err) {
           if (err) {
             console.error('❌ DATABASE: Error creating conversation:', err);
             reject(err);
@@ -367,6 +405,9 @@ function createConversation(userId: number, language: string, title?: string, to
               title,
               topics: topicsJson,
               formality,
+              description,
+              uses_persona: usesPersona || false,
+              persona_id: personaId || null
             });
             resolve({ id: this.lastID });
           }
@@ -460,9 +501,10 @@ function getUserConversations(userId: number, language?: string) {
     if (language) {
       // Get conversations for specific language dashboard
       sql = `
-        SELECT c.id, c.title, ld.language, c.message_count, c.created_at, c.updated_at
+        SELECT c.id, c.title, ld.language, c.message_count, c.created_at, c.updated_at, c.uses_persona, c.persona_id, p.name as persona_name, p.description as persona_description
         FROM conversations c
         JOIN language_dashboards ld ON c.language_dashboard_id = ld.id
+        LEFT JOIN personas p ON c.persona_id = p.id
         WHERE c.user_id = ? AND ld.language = ?
         ORDER BY c.updated_at DESC
       `;
@@ -470,9 +512,10 @@ function getUserConversations(userId: number, language?: string) {
     } else {
       // Get all conversations for user
       sql = `
-        SELECT c.id, c.title, ld.language, c.message_count, c.created_at, c.updated_at
+        SELECT c.id, c.title, ld.language, c.message_count, c.created_at, c.updated_at, c.uses_persona, c.persona_id, p.name as persona_name, p.description as persona_description
         FROM conversations c
         JOIN language_dashboards ld ON c.language_dashboard_id = ld.id
+        LEFT JOIN personas p ON c.persona_id = p.id
         WHERE c.user_id = ?
         ORDER BY c.updated_at DESC
       `;
@@ -634,6 +677,19 @@ function deleteConversation(conversationId: number) {
             resolve({ changes: this.changes });
           }
         });
+      }
+    });
+  });
+}
+
+function updateConversationPersona(conversationId: number, usesPersona: boolean, personaId?: number) {
+  return new Promise<void>((resolve, reject) => {
+    const sql = `UPDATE conversations SET uses_persona = ?, persona_id = ? WHERE id = ?`;
+    db.run(sql, [usesPersona, personaId || null, conversationId], function(err) {
+      if (err) {
+        reject(err);
+      } else {
+        resolve();
       }
     });
   });
@@ -856,6 +912,82 @@ function getUserStreak(userId: number, language: string) {
   });
 }
 
+// Persona functions
+function createPersona(userId: number, personaData: {
+  name: string;
+  description?: string;
+  topics: string[];
+  formality: string;
+  language: string;
+  conversationId?: string;
+}) {
+  return new Promise<Persona>((resolve, reject) => {
+    const sql = `
+      INSERT INTO personas (user_id, name, description, topics, formality, language, conversation_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `;
+    const topicsJson = JSON.stringify(personaData.topics);
+    
+    db.run(sql, [
+      userId,
+      personaData.name,
+      personaData.description || null,
+      topicsJson,
+      personaData.formality,
+      personaData.language,
+      personaData.conversationId || null
+    ], function(err) {
+      if (err) {
+        reject(err);
+      } else {
+        // Get the created persona
+        const selectSql = `SELECT * FROM personas WHERE id = ?`;
+        db.get(selectSql, [this.lastID], (err, row) => {
+          if (err) {
+            reject(err);
+          } else {
+            const persona = row as any;
+            resolve({
+              ...persona,
+              topics: JSON.parse(persona.topics || '[]')
+            });
+          }
+        });
+      }
+    });
+  });
+}
+
+function getUserPersonas(userId: number) {
+  return new Promise<Persona[]>((resolve, reject) => {
+    const sql = `SELECT * FROM personas WHERE user_id = ? ORDER BY created_at DESC`;
+    db.all(sql, [userId], (err, rows) => {
+      if (err) {
+        reject(err);
+      } else {
+        const personas = (rows as any[]).map(row => ({
+          ...row,
+          topics: JSON.parse(row.topics || '[]')
+        }));
+        resolve(personas);
+      }
+    });
+  });
+}
+
+function deletePersona(personaId: number) {
+  return new Promise<{ changes: number }>((resolve, reject) => {
+    const sql = `DELETE FROM personas WHERE id = ?`;
+    db.run(sql, [personaId], function(err) {
+      if (err) {
+        reject(err);
+      } else {
+        resolve({ changes: this.changes });
+      }
+    });
+  });
+}
+
 export {
   db,
   createUser,
@@ -876,11 +1008,16 @@ export {
   getLatestConversation,
   updateConversationTitle,
   deleteConversation,
+  updateConversationPersona,
   // Language Dashboard functions
   createLanguageDashboard,
   getUserLanguageDashboards,
   getLanguageDashboard,
   updateLanguageDashboard,
   deleteLanguageDashboard,
-  getUserStreak
+  getUserStreak,
+  // Persona functions
+  createPersona,
+  getUserPersonas,
+  deletePersona
 }; 
