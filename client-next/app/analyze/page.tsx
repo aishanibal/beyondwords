@@ -1161,10 +1161,16 @@ function Analyze() {
       const section = sections[i];
       const trimmedSection = section.trim();
       
-      // Check if this section contains a sentence (marked with **)
-      const sentenceMatch = trimmedSection.match(/\*\*(.*?)\*\*/);
+      // Check if this section contains a sentence (the first line is usually the sentence)
+      // The backend doesn't use asterisks, so we need to identify sentences differently
+      const lines = trimmedSection.split('\n');
+      const firstLine = lines[0]?.trim();
       
-      if (sentenceMatch) {
+      // If this looks like a sentence (contains the target language text), treat it as a new sentence
+      if (firstLine && firstLine.length > 0 && !firstLine.startsWith('•') && 
+          !firstLine.includes('Literal translation') && 
+          !firstLine.includes('Sentence structure pattern')) {
+        
         // If we have a previous sentence, save it
         if (currentSentence) {
           sentences.push({
@@ -1174,13 +1180,13 @@ function Analyze() {
           });
         }
         
-        // Start new sentence
-        currentSentence = sentenceMatch[1].trim();
-        currentOverview = trimmedSection.replace(/\*\*.*?\*\*/, '').trim();
+        // Start new sentence - the first line is the sentence, rest is overview/details
+        currentSentence = firstLine;
+        currentOverview = lines.slice(1).join('\n').trim();
         currentDetails = [];
       } else {
         // This is a details section for the current sentence
-        if (currentSentence && (trimmedSection.startsWith('*   ') || 
+        if (currentSentence && (trimmedSection.startsWith('•') || 
             trimmedSection.includes('Literal translation') || 
             trimmedSection.includes('Sentence structure pattern'))) {
           currentDetails.push(trimmedSection);
@@ -1248,19 +1254,34 @@ function Analyze() {
       console.log('[DEBUG] Detailed breakdown type:', typeof detailedBreakdown);
       console.log('[DEBUG] Detailed breakdown length:', detailedBreakdown?.length);
       
+      if (!detailedBreakdown) {
+        console.error('[DEBUG] No detailed breakdown received from API');
+        setShortFeedback('Error: No detailed breakdown received from API');
+        return;
+      }
+      
       // Parse the breakdown response
       console.log('[DEBUG] Raw LLM response:', detailedBreakdown);
       const parsed = parseBreakdownResponse(detailedBreakdown);
       console.log('[DEBUG] Parsed breakdown structure:', parsed);
-      setParsedBreakdown(parsed);
-      setShowDetailedBreakdown({}); // Start collapsed
+      console.log('[DEBUG] Parsed breakdown length:', parsed.length);
+      
+      if (parsed.length === 0) {
+        console.error('[DEBUG] Failed to parse breakdown response');
+        setShortFeedback('Error: Failed to parse breakdown response');
+        return;
+      }
       
       // Show initial part (first sentence + overview) in left panel
       const initialDisplay = parsed.length > 0 && parsed[0].sentence 
-        ? `**${parsed[0].sentence}**\n\n${parsed[0].overview}` 
+        ? `${parsed[0].sentence}\n\n${parsed[0].overview}` 
         : parsed.length > 0 ? parsed[0].overview : '';
       console.log('[DEBUG] Setting initial display:', initialDisplay);
+      
+      // Update all states in the correct order
       setShortFeedback(initialDisplay);
+      setParsedBreakdown(parsed);
+      setShowDetailedBreakdown({}); // Start collapsed
       
       // Store the parsed breakdown in shortFeedbacks state for consistency
       console.log('[DEBUG] About to update shortFeedbacks state');
@@ -1624,9 +1645,9 @@ function Analyze() {
                   console.log('[DEBUG] Current chatHistory:', chatHistory);
                   console.log('[DEBUG] Current shortFeedbacks:', shortFeedbacks);
                   
-                  // Find the current AI message and get detailed breakdown
-                  const currentMessageIndex = chatHistory.findIndex(msg => 
-                    msg.sender === 'AI' && shortFeedbacks[chatHistory.indexOf(msg)] === shortFeedback
+                  // Find the current AI message that has short feedback
+                  const currentMessageIndex = chatHistory.findIndex((msg, index) => 
+                    msg.sender === 'AI' && shortFeedbacks[index] === shortFeedback
                   );
                   
                   console.log('[DEBUG] Found messageIndex:', currentMessageIndex);
@@ -1636,6 +1657,14 @@ function Analyze() {
                     requestDetailedBreakdownForMessage(currentMessageIndex);
                   } else {
                     console.log('[DEBUG] Could not find matching AI message for shortFeedback');
+                    // Fallback: try to find any AI message with short feedback
+                    const fallbackIndex = chatHistory.findIndex((msg, index) => 
+                      msg.sender === 'AI' && shortFeedbacks[index]
+                    );
+                    if (fallbackIndex !== -1) {
+                      console.log('[DEBUG] Using fallback messageIndex:', fallbackIndex);
+                      requestDetailedBreakdownForMessage(fallbackIndex);
+                    }
                   }
                 }}
                 disabled={isLoadingFeedback || !shortFeedback}
