@@ -75,7 +75,10 @@ function initDatabase() {
         learning_goals TEXT,
         practice_preference TEXT,
         feedback_language TEXT,
+<<<<<<< HEAD
         speak_speed REAL DEFAULT 1.0,
+=======
+>>>>>>> 0c464fd788673db7edd6395a4883719d12de7de9
         is_primary BOOLEAN DEFAULT FALSE,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,

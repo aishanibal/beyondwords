@@ -12,7 +12,7 @@ from transformers import Wav2Vec2ForCTC, Wav2Vec2Processor
 import librosa
 import numpy as np
 import datetime
-from gemini_client import get_conversational_response, get_detailed_feedback, get_text_suggestions, get_translation, is_gemini_ready, get_short_feedback
+from gemini_client import get_conversational_response, get_detailed_feedback, get_text_suggestions, get_translation, is_gemini_ready, get_short_feedback, get_detailed_breakdown
 # from dotenv import load_dotenv
 # load_dotenv()
 
@@ -537,6 +537,41 @@ def translate():
         return jsonify(translation_result)
     except Exception as e:
         print(f"Translation error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/detailed_breakdown', methods=['POST'])
+def detailed_breakdown():
+    """Get detailed breakdown of an AI response using explain_llm_response"""
+    try:
+        data = request.get_json()
+        llm_response = data.get('llm_response', '')
+        user_input = data.get('user_input', '')
+        context = data.get('context', '')
+        language = data.get('language', 'en')
+        user_level = data.get('user_level', 'beginner')
+        user_topics = data.get('user_topics', [])
+        user_goals = data.get('user_goals', [])
+        formality = data.get('formality', 'friendly')
+        feedback_language = data.get('feedback_language', 'en')
+        
+        print(f"=== /detailed_breakdown called ===")
+        print(f"Language: {language}")
+        print(f"User level: {user_level}")
+        print(f"User topics: {user_topics}")
+        print(f"User goals: {user_goals}")
+        print(f"Formality: {formality}")
+        print(f"LLM response length: {len(llm_response)}")
+        
+        if not llm_response:
+            return jsonify({"error": "No LLM response provided"}), 400
+        
+        # Call AI client for detailed breakdown
+        breakdown = get_detailed_breakdown(llm_response, user_input, context, language, user_level, user_topics, formality, feedback_language, user_goals)
+        print(f"Generated detailed breakdown: {breakdown[:100]}...")
+        
+        return jsonify({"breakdown": breakdown})
+    except Exception as e:
+        print(f"Detailed breakdown error: {e}")
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':

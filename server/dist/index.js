@@ -397,10 +397,20 @@ app.post('/api/analyze', authenticateJWT, upload.single('audio'), (req, res) => 
 app.post('/api/feedback', authenticateJWT, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         console.log('POST /api/feedback called');
+<<<<<<< HEAD
         const { user_input, context, language, user_level, user_topics } = req.body;
         if (!user_input || !context) {
             return res.status(400).json({ error: 'Missing user_input or context' });
         }
+=======
+        console.log('Request body:', req.body);
+        const { user_input, context, language, user_level, user_topics } = req.body;
+        if (!user_input || !context) {
+            console.log('Missing required fields:', { user_input: !!user_input, context: !!context });
+            return res.status(400).json({ error: 'Missing user_input or context' });
+        }
+        console.log('Parsed parameters:', { user_input, context: context.substring(0, 100) + '...', language, user_level, user_topics });
+>>>>>>> 0c464fd788673db7edd6395a4883719d12de7de9
         // Parse context string into chat_history array
         const chat_history = context
             .split('\n')
@@ -408,6 +418,10 @@ app.post('/api/feedback', authenticateJWT, (req, res) => __awaiter(void 0, void 
             const [sender, ...rest] = line.split(':');
             return { sender: sender.trim(), text: rest.join(':').trim() };
         });
+<<<<<<< HEAD
+=======
+        console.log('Parsed chat_history:', chat_history);
+>>>>>>> 0c464fd788673db7edd6395a4883719d12de7de9
         // Call Python API for detailed feedback
         let feedback = '';
         try {
@@ -417,7 +431,12 @@ app.post('/api/feedback', authenticateJWT, (req, res) => __awaiter(void 0, void 
                 last_transcription: user_input,
                 language,
                 user_level,
+<<<<<<< HEAD
                 user_topics
+=======
+                user_topics,
+                feedback_language: 'en' // Default to English for now
+>>>>>>> 0c464fd788673db7edd6395a4883719d12de7de9
             }, {
                 headers: { 'Content-Type': 'application/json' },
                 timeout: 120000
@@ -1137,6 +1156,35 @@ app.post('/api/short_feedback', authenticateJWT, (req, res) => __awaiter(void 0,
         res.status(((_a = error.response) === null || _a === void 0 ? void 0 : _a.status) || 500).json(((_b = error.response) === null || _b === void 0 ? void 0 : _b.data) || { error: error.message });
     }
 }));
+<<<<<<< HEAD
+=======
+// Proxy /api/detailed_breakdown to Python API
+app.post('/api/detailed_breakdown', authenticateJWT, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    try {
+        // Get user preferences from request body or fall back to database
+        const user = yield (0, database_1.findUserById)(req.user.userId);
+        const userLevel = req.body.user_level || (user === null || user === void 0 ? void 0 : user.proficiency_level) || 'beginner';
+        const userTopics = req.body.user_topics || ((user === null || user === void 0 ? void 0 : user.talk_topics) && typeof user.talk_topics === 'string' ? JSON.parse(user.talk_topics) : Array.isArray(user === null || user === void 0 ? void 0 : user.talk_topics) ? user.talk_topics : []);
+        const userGoals = req.body.user_goals || ((user === null || user === void 0 ? void 0 : user.learning_goals) && typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : Array.isArray(user === null || user === void 0 ? void 0 : user.learning_goals) ? user.learning_goals : []);
+        const formality = req.body.formality || 'friendly';
+        const feedbackLanguage = req.body.feedback_language || 'en';
+        const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5000';
+        const response = yield axios_1.default.post(`${pythonApiUrl}/detailed_breakdown`, Object.assign(Object.assign({}, req.body), { user_level: userLevel, user_topics: userTopics, user_goals: userGoals, formality: formality, feedback_language: feedbackLanguage }), {
+            headers: { 'Content-Type': 'application/json' },
+            timeout: 30000
+        });
+        res.json(response.data);
+    }
+    catch (error) {
+        console.error('Detailed breakdown error:', error);
+        res.status(500).json({
+            error: 'Failed to get detailed breakdown',
+            details: ((_a = error.response) === null || _a === void 0 ? void 0 : _a.data) || error.message
+        });
+    }
+}));
+>>>>>>> 0c464fd788673db7edd6395a4883719d12de7de9
 // Serve uploads directory statically for TTS audio
 app.use('/uploads', express_1.default.static(path_1.default.join(__dirname, 'uploads')));
 const PORT = process.env.PORT || 4000;

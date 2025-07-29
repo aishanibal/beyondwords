@@ -162,15 +162,13 @@ YOUR RESPONSE STRUCTURE (use {self.feedback_language} for explanations):
 "Correct, that sounds great!" or something similar with the same sentiment and length in {self.feedback_language}.
 
 - If there are errors, follow this format:
-  You said: "..."
-  Correction: "..."
 Explanation: Briefly explain why it was incorrect (e.g., verb tense, word order, unnatural phrasing, incorrect particle, politeness marker, closeness level, etc.) in {self.feedback_language}.
 
 TIPS:
 - Be encouraging and specific.
 - Focus on grammar, natural sentence structure, and phrasing that sounds native.
 - If the user used a non-{self.language_name} word that has a better equivalent, suggest a replacement like: "Instead of saying 'X', you'll sound more fluent if you say 'Y'." in {self.feedback_language}.
-
+- Do not include filler words like greetings, etc.
 Speak like a friendly older sibling or patient tutor. Keep your tone warm, supportive, and helpful.
 Always use {self.feedback_language} for explanations.
 """
@@ -230,6 +228,7 @@ IMPORTANT:
 – Use vocabulary and sentence structure appropriate for a {self.user_level} learner: {level_guidance}
 – Each suggestion should be roughly the same length as the user's last message (or up to 1.5× longer)
 – Do NOT use placeholders like [Song Title], [Artist's Name], or brackets
+– Do NOT use asterisks (*) for emphasis or formatting - provide clean text only
 – Always provide real, natural-sounding examples that a native speaker would say
 – The translation must always be in {self.feedback_language}. Only use English if {self.feedback_language} is English.
 
@@ -377,7 +376,7 @@ If the response is already natural and grammatically accurate, return it unchang
             return main_response
 
     def explain_llm_response(self, llm_response: str, user_input: str = "", context: str = "") -> str:
-        """Explain the LLM's response to the user in a strict, structured way, tailored to their proficiency and feedback language."""
+        """Explain the LLM's response to the user in a structured way with separate overview and detailed breakdown."""
         if not self.model or not GOOGLE_AI_AVAILABLE:
             return f"Here's an explanation: {llm_response}"
 
@@ -387,11 +386,8 @@ If the response is already natural and grammatically accurate, return it unchang
         You are an expert {self.language_name} language tutor. Your job is to explain the following {self.language_name} response to a heritage learner at the {self.user_level} level.
 
     USER INFO:
-
     Feedback language: {self.feedback_language}
-
     Closeness level: {self.user_closeness} ({self.CLOSENESS_LEVELS.get(self.user_closeness, '')})
-
     Proficiency level: {self.user_level} ({self.PROFICIENCY_LEVELS[self.user_level]})
 
     CONTEXT (for reference only; do not include or explain it):
@@ -401,33 +397,30 @@ If the response is already natural and grammatically accurate, return it unchang
     "{llm_response}"
 
     YOUR TASK:
-    Write a clear, step-by-step explanation of the response above to help a heritage learner deeply understand both the meaning and structure. Use the format below:
+    Provide a structured explanation where EACH SENTENCE gets its own complete breakdown. Format it like this:
 
-    [AI Response only characters]
-    Provide the full response in its original script.
+    For each sentence in the response, provide this exact structure:
 
-    For each sentence in the response, repeat:
-    [Sentence in original script] {script_lang_instruction}]
+    {self.language_name} sentence {script_lang_instruction}
+    [Brief explanation of the overall meaning, tone, and social context in {self.feedback_language}]
 
-    Briefly explain the overall meaning, tone, and social context. Do NOT mention or reference the user's info, closeness, or proficiency in your explanation. Do not say things like "this matches your user info" or similar. Only focus on the meaning, structure, and cultural/grammatical breakdown of the response itself.
+    • [Word/Phrase] ([Pronunciation if applicable]) – [Translation in {self.feedback_language}]
+    • [Continue for each word/phrase]
+    Literal translation – [Direct {self.feedback_language} rendering showing word order]
+    Sentence structure pattern – [Brief explanation of grammar structure and how it compares to {self.feedback_language}]
 
-    Then provide a word-by-word or phrase-by-phrase breakdown as a list, with each line in this format (no subheading):
-    e.g., नमस्ते (Namaste) – [your translation here in {self.feedback_language}]
-    Keep grammar notes minimal and very clear (e.g., "past tense marker", "polite form", etc.) in {self.feedback_language}.
+    [Then repeat the same structure for the next sentence]
 
-    After the word breakdown, include:
-    Literal translation – a direct {self.feedback_language} rendering that shows word order (e.g., "You called what name?" but in {self.feedback_language})
-    Sentence structure pattern – briefly explain the overall grammar structure (e.g., Subject–Verb–Object), and how it compares to {self.feedback_language}. Use simple terms suitable for the learner's level. Mention anything unusual the learner might not expect (e.g., omission of subjects, flexible word order, etc.).
-
-    DETAILS:
-    Keep your explanation concise, information-dense, and readable. Avoid fluff, labels, and unnecessary filler.
-    Only use {self.feedback_language}. Do not use English unless the feedback language is English.
-    Tailor your tone and depth of explanation based on the {self.user_level} and {self.user_closeness}.
-    Explain any cultural or pragmatic nuances that may not be obvious to a learner.
-    If the sentence is common in conversation, note that it's a typical phrase and whether it's used formally, informally, etc.
-    Do not include headings like "High-level meaning" or "Literal translation" — embed those naturally into your explanation.
-
-"""
+    IMPORTANT FORMATTING:
+    - Do NOT use asterisks (*) for formatting - provide clean text only
+    - Use "• " for each word/phrase breakdown (bullet point)
+    - Each sentence should have its own complete breakdown (overview + word breakdown + literal translation + sentence structure)
+    - Keep explanations concise and natural
+    - Only use {self.feedback_language} for explanations
+    - Do not include section headers or labels
+    - Focus on meaning, structure, and cultural context
+    - Do not reference user info or proficiency level in explanations
+    """
         try:
             response = self.model.generate_content(prompt)
             if response and response.text:
@@ -754,14 +747,20 @@ class KoreanHeritageTutor(LanguageTutor):
 
     def _get_grammar_rules(self) -> str:
         return """Korean grammar rules:
-        - Use the correct speech level (반말 banmal for casual, 존댓말 jondaetmal for polite/formal).
-        - Check verb endings for politeness and formality (-요, -습니다, etc.).
-        - Use appropriate particles (이/가, 은/는, 을/를, 에/에서, etc.).
-        - Avoid direct translations from English that sound unnatural in Korean.
-        - Confirm proper use of honorifics and address terms.
-        - Avoid overusing pronouns; Korean often omits the subject when understood.
-        - Use natural sentence-final forms and avoid redundant subjects.
-        - Avoid unnecessary interjections (e.g., 네, 음) unless they serve a clear conversational or emotional purpose."""
+- Use correct word order: Subject–Object–Verb (SOV).
+- Use appropriate particles (e.g., 은/는, 이/가, 을/를, 에, 에서, 와/과, 도, 부터, 까지) to mark grammatical roles.
+- Match verb endings and politeness level (casual: 반말, polite: -요, formal: -습니다).
+- Omit the subject or object when it is clear from context (common in natural conversation).
+- Use topic marker 은/는 to introduce or shift the topic, but avoid overusing it in short exchanges.
+- Use correct counters and numbers for counting objects, people, etc.
+- Use natural sentence-final particles (e.g., 네, 요, 까, 지) to convey nuance, but avoid overusing them.
+- Avoid direct, literal translations from English that sound unnatural in Korean.
+- Use appropriate pronouns (나, 저, 너, 당신, etc.) based on formality and relationship, but omit when possible.
+- Use natural contractions and colloquial forms in casual speech.
+- Avoid overusing personal pronouns; Korean often omits them when understood from context.
+- Use correct tense and aspect (e.g., -고 있다 for ongoing actions, -았/었 for completed actions).
+- Use honorifics (씨, 님, 선생님) appropriately based on relationship and context.
+"""
 
     def _get_cultural_rules(self) -> str:
         return """Korean Cultural and Conversational Norms:
@@ -850,31 +849,29 @@ class MandarinChineseHeritageTutor(LanguageTutor):
     "{llm_response}"
 
     YOUR TASK:
-    Write a clear, step-by-step explanation of the response above to help a heritage learner deeply understand both the meaning and structure. Use the format below:
+    Provide a structured explanation with TWO CLEARLY SEPARATED SECTIONS:
 
-    [AI Response only characters]
-    Provide the full response in its original script.
+    SECTION 1 - HIGH-LEVEL OVERVIEW (what will be shown initially):
+    For each sentence in the response, provide:
+    **{self.language_name} sentence** – [Romanized version]
+    [Brief explanation of the overall meaning, tone, and social context in {self.feedback_language}]
 
-    For each sentence in the response, repeat:
-    [Sentence in original script] – [Romanized version if applicable]
+    SECTION 2 - DETAILED BREAKDOWN (what will be shown when expanded):
+    For each sentence, provide:
+    *   [Word/Phrase] ([Pronunciation if applicable]) – [Translation in {self.feedback_language}]
+    *   [Continue for each word/phrase]
+    Literal translation – [Direct {self.feedback_language} rendering showing word order]
+    Sentence structure pattern – [Brief explanation of grammar structure and how it compares to {self.feedback_language}]
 
-    Briefly explain the overall meaning, tone, and social context. Do NOT mention or reference the user's info, closeness, or proficiency in your explanation. Do not say things like "this matches your user info" or similar. Only focus on the meaning, structure, and cultural/grammatical breakdown of the response itself.
-
-    Then provide a word-by-word or phrase-by-phrase breakdown as a list, with each line in this format (no subheading):
-    e.g., नमस्ते (Namaste) – [your translation here in {self.feedback_language}]
-    Keep grammar notes minimal and very clear (e.g., "past tense marker", "polite form", etc.) in {self.feedback_language}.
-
-    After the word breakdown, include:
-    Literal translation – a direct {self.feedback_language} rendering that shows word order (e.g., "You called what name?" but in {self.feedback_language})
-    Sentence structure pattern – briefly explain the overall grammar structure (e.g., Subject–Verb–Object), and how it compares to {self.feedback_language}. Use simple terms suitable for the learner's level. Mention anything unusual the learner might not expect (e.g., omission of subjects, flexible word order, etc.).
-
-    DETAILS:
-    Keep your explanation concise, information-dense, and readable. Avoid fluff, labels, and unnecessary filler.
-    Only use {self.feedback_language}. Do not use English unless the feedback language is English.
-    Tailor your tone and depth of explanation based on the {self.user_level} and {self.user_closeness}.
-    Explain any cultural or pragmatic nuances that may not be obvious to a learner.
-    If the sentence is common in conversation, note that it's a typical phrase and whether it's used formally, informally, etc.
-    Do not include headings like "High-level meaning" or "Literal translation" — embed those naturally into your explanation.
+    IMPORTANT FORMATTING:
+    - Use "**" around the {self.language_name} sentence in Section 1
+    - Use "*   " for each word/phrase breakdown in Section 2
+    - Separate Section 1 and Section 2 with a clear break
+    - Keep explanations concise and natural
+    - Only use {self.feedback_language} for explanations
+    - Do not include section headers or labels
+    - Focus on meaning, structure, and cultural context
+    - Do not reference user info or proficiency level in explanations
 
 """
         try:
@@ -886,7 +883,6 @@ class MandarinChineseHeritageTutor(LanguageTutor):
         except Exception as e:
             print(f"Error in explain_llm_response: {e}")
             return f"Here's an explanation: {llm_response}"
-
 
 class HindiHeritageTutor(LanguageTutor):
     CLOSENESS_LEVELS = {
@@ -1467,3 +1463,27 @@ Synopsis: <your synopsis here>
     except Exception as e:
         print(f"Error generating conversation summary: {e}")
         return {"title": "[Error]", "synopsis": str(e)}
+
+def get_detailed_breakdown(llm_response: str, user_input: str = "", context: str = "", language: str = 'en', user_level: str = 'beginner', user_topics: List[str] = None, formality: str = 'friendly', feedback_language: str = 'en', user_goals: List[str] = None) -> str:
+    """Get detailed breakdown of an AI response using the explain_llm_response method."""
+    if user_topics is None:
+        user_topics = []
+    if user_goals is None:
+        user_goals = []
+    
+    # Get or create tutor instance
+    tutor_key = f"{language}_{user_level}_{','.join(sorted(user_topics))}"
+    if tutor_key not in _tutor_instances:
+        _tutor_instances[tutor_key] = create_tutor(language, user_level, user_topics)
+    
+    tutor = _tutor_instances[tutor_key]
+    
+    # Update tutor with current context
+    tutor.user_level = user_level
+    tutor.user_topics = user_topics
+    tutor.user_goals = user_goals
+    tutor.user_closeness = formality
+    tutor.feedback_language = feedback_language
+    
+    # Use the explain_llm_response method to get detailed breakdown
+    return tutor.explain_llm_response(llm_response, user_input, context)

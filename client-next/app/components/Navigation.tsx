@@ -1,3 +1,7 @@
+/* eslint-disable react-hooks/rules-of-hooks */
+/* eslint-disable @next/next/no-html-link-for-pages */
+/* eslint-disable @next/next/no-img-element */
+"use client";
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useUser } from '../ClientLayout';

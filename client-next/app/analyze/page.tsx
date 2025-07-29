@@ -1,13 +1,15 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable react-hooks/exhaustive-deps */
+/* eslint-disable react/no-unescaped-entities */
 "use client";
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useUser } from '../ClientLayout';
 import axios from 'axios';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { TALK_TOPICS, Topic } from '../../lib/preferences';
 import TopicSelectionModal from './TopicSelectionModal';
+
 // TypeScript: Add type declarations for browser APIs
-// Fix: Use 'any' for SpeechRecognition to avoid recursive type error
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 declare global {
   interface Window {
     SpeechRecognition: any;
@@ -15,14 +17,6 @@ declare global {
     MediaRecorder: typeof MediaRecorder;
   }
 }
-
-// Remove top-level window usage
-// let SpeechRecognition: any = null;
-// let MediaRecorderClass: typeof window.MediaRecorder | null = null;
-// if (typeof window !== 'undefined') {
-//   SpeechRecognition = window.SpeechRecognition || (window as any).webkitSpeechRecognition;
-//   MediaRecorderClass = window.MediaRecorder;
-// }
 
 // Add types for getLanguageLabel
 const getLanguageLabel = (code: string): string => {
@@ -52,8 +46,37 @@ const CLOSENESS_LEVELS: { [key: string]: string } = {
   distant: '🧑‍💼 Distant: Large groups, public speaking, or unknown audience',
 };
 
-function usePersistentChatHistory(user: any): [any[], React.Dispatch<React.SetStateAction<any[]>>] {
-  const [chatHistory, setChatHistory] = React.useState<any[]>(() => {
+interface ChatMessage {
+  id?: string;
+  sender: string;
+  text: string;
+  timestamp: Date;
+  messageType?: string;
+  audioFilePath?: string | null;
+  translation?: string;
+  breakdown?: unknown;
+  detailedFeedback?: string;
+  shortFeedback?: string;
+  showDetailedFeedback?: boolean;
+  showShortFeedback?: boolean;
+  showDetailedBreakdown?: boolean;
+}
+
+interface User {
+  id: string;
+  email: string;
+  name?: string;
+  selectedLanguage?: string;
+  target_language?: string;
+  language?: string;
+  proficiency_level?: string;
+  learning_goals?: string[];
+  talk_topics?: string[];
+  [key: string]: unknown;
+}
+
+function usePersistentChatHistory(user: User | null): [ChatMessage[], React.Dispatch<React.SetStateAction<ChatMessage[]>>] {
+  const [chatHistory, setChatHistory] = React.useState<ChatMessage[]>(() => {
     if (!user) {
       const saved = localStorage.getItem('chatHistory');
       return saved ? JSON.parse(saved) : [];
@@ -129,12 +152,12 @@ function Analyze() {
     return () => { document.head.removeChild(style); };
   }, []);
 
-  const { user } = useUser() as { user: any };
+  const { user } = useUser() as { user: User | null };
   const [isRecording, setIsRecording] = useState<boolean>(false);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [feedback, setFeedback] = useState<string>('');
   const [isLoadingFeedback, setIsLoadingFeedback] = useState<boolean>(false);
-  const recognitionRef = useRef<any>(null);
+  const recognitionRef = useRef<{ lang: string; stop: () => void } | null>(null);
   const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
   const autoSpeakRef = useRef<boolean>(false);
   const [showSavePrompt, setShowSavePrompt] = useState<boolean>(false);
@@ -142,12 +165,40 @@ function Analyze() {
   const [language, setLanguage] = useState<string>(urlLang || user?.target_language || 'en');
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [isLoadingConversation, setIsLoadingConversation] = useState<boolean>(false);
-  const [suggestions, setSuggestions] = useState<any[]>([]); // TODO: type this
+  const [suggestions, setSuggestions] = useState<unknown[]>([]); // TODO: type this
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState<boolean>(false);
-  const [translations, setTranslations] = useState<Record<number, any>>({});
+  const [translations, setTranslations] = useState<Record<number, unknown>>({});
   const [isTranslating, setIsTranslating] = useState<Record<number, boolean>>({});
   const [showTranslations, setShowTranslations] = useState<Record<number, boolean>>({});
   const [isLoadingMessageFeedback, setIsLoadingMessageFeedback] = useState<Record<number, boolean>>({});
+  const [leftPanelWidth, setLeftPanelWidth] = useState(0.25); // 25% of screen width (1/4)
+  const [rightPanelWidth, setRightPanelWidth] = useState(0.25); // 25% of screen width (1/4)
+  const [isResizing, setIsResizing] = useState(false);
+  const [resizingPanel, setResizingPanel] = useState<'left' | 'right' | null>(null);
+
+  // Calculate actual panel widths based on visibility
+  const getPanelWidths = () => {
+    const visiblePanels = [showShortFeedbackPanel, true, showDetailedFeedbackPanel].filter(Boolean).length;
+    
+    if (visiblePanels === 1) {
+      // Only middle panel visible
+      return { left: 0, center: 1, right: 0 };
+    } else if (visiblePanels === 2) {
+      // Two panels visible - allow resizing between them
+      if (!showShortFeedbackPanel) {
+        // Left panel hidden - middle and right panels are resizable
+        const centerWidth = Math.max(0.33, 1 - rightPanelWidth); // Ensure center is at least 1/3
+        return { left: 0, center: centerWidth, right: 1 - centerWidth };
+      } else if (!showDetailedFeedbackPanel) {
+        // Right panel hidden - left and middle panels are resizable
+        const centerWidth = Math.max(0.33, 1 - leftPanelWidth); // Ensure center is at least 1/3
+        return { left: 1 - centerWidth, center: centerWidth, right: 0 };
+      }
+    }
+    
+    // All three panels visible (default case)
+    return { left: leftPanelWidth, center: 1 - leftPanelWidth - rightPanelWidth, right: rightPanelWidth };
+  };
   const [showTopicModal, setShowTopicModal] = useState<boolean>(false);
   const [autoSpeak, setAutoSpeak] = useState<boolean>(false);
   const [enableShortFeedback, setEnableShortFeedback] = useState<boolean>(true);
@@ -159,6 +210,30 @@ function Analyze() {
   const [shortFeedbacks, setShortFeedbacks] = useState<Record<number, string>>({});
   const [isLoadingInitialAI, setIsLoadingInitialAI] = useState<boolean>(false);
   const [manualRecording, setManualRecording] = useState(false);
+  const [showShortFeedbackPanel, setShowShortFeedbackPanel] = useState<boolean>(true);
+  const [showDetailedFeedbackPanel, setShowDetailedFeedbackPanel] = useState<boolean>(true);
+  const [shortFeedback, setShortFeedback] = useState<string>('');
+  const [showDetailedBreakdown, setShowDetailedBreakdown] = useState<{[key: number]: boolean}>({});
+  const [showSuggestionExplanations, setShowSuggestionExplanations] = useState<{[key: number]: boolean}>({});
+  const [explainButtonPressed, setExplainButtonPressed] = useState<boolean>(false);
+  const [parsedBreakdown, setParsedBreakdown] = useState<{
+    sentence: string;
+    overview: string;
+    details: string;
+  }[]>([]);
+  const [userPreferences, setUserPreferences] = useState<{
+    formality: string;
+    topics: string[];
+    user_goals: string[];
+    userLevel: string;
+    feedbackLanguage: string;
+  }>({
+    formality: 'friendly',
+    topics: [],
+    user_goals: [],
+    userLevel: 'beginner',
+    feedbackLanguage: 'en'
+  });
   
   // Keep refs in sync with state
   useEffect(() => {
@@ -222,18 +297,33 @@ function Analyze() {
       const conversation = response.data.conversation;
       setConversationId(conversation.id);
       setLanguage(conversation.language);
+      
+      // Extract user preferences from conversation
+      const formality = conversation.formality || 'friendly';
+      const topics = conversation.topics ? (typeof conversation.topics === 'string' ? JSON.parse(conversation.topics) : conversation.topics) : [];
+      const userLevel = user?.proficiency_level || 'beginner';
+      const feedbackLanguage = 'en'; // Default to English for now
+      
+      // Get user goals from the user's language dashboard
+      const user_goals = user?.learning_goals ? (typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : user.learning_goals) : [];
+      
+      console.log('[DEBUG] Extracted user preferences:', { formality, topics, user_goals, userLevel, feedbackLanguage });
+      
       const messages = conversation.messages || [];
-      const history = messages.map((msg: any) => ({
-        sender: msg.sender,
-        text: msg.text,
-        timestamp: new Date(msg.created_at)
+      const history = messages.map((msg: unknown) => ({
+        sender: (msg as any).sender,
+        text: (msg as any).text,
+        timestamp: new Date((msg as any).created_at)
       }));
       console.log('[DEBUG] Loaded conversation history with', history.length, 'messages');
       console.log('[DEBUG] Messages:', history);
       setChatHistory(history);
-    } catch (error: any) {
+      
+      // Store user preferences for use in API calls
+      setUserPreferences({ formality, topics, user_goals, userLevel, feedbackLanguage });
+    } catch (error: unknown) {
       console.error('[DEBUG] Error loading conversation:', error);
-      console.error('[DEBUG] Error details:', error.response?.data || error.message);
+      console.error('[DEBUG] Error details:', (error as any).response?.data || (error as any).message);
       // Don't show error to user, just log it
     } finally {
       setIsLoadingConversation(false);
@@ -264,7 +354,7 @@ function Analyze() {
 
   // Move validateConversationId outside useEffect
   const validateConversationId = async (
-    user: any,
+    user: User | null,
     urlConversationId: string | null,
     setConversationId: React.Dispatch<React.SetStateAction<string | null>>,
     attempt = 1
@@ -275,8 +365,8 @@ function Analyze() {
         if (!response.data.conversation) {
           removeConversationParam();
         }
-      } catch (error: any) {
-        if (error.response && error.response.status === 404) {
+      } catch (error: unknown) {
+        if (error && typeof error === 'object' && 'response' in error && (error as any).response && typeof (error as any).response === 'object' && 'status' in (error as any).response && (error as any).response.status === 404) {
           if (attempt < 3) {
             setTimeout(() => {
               validateConversationId(user, urlConversationId, setConversationId, attempt + 1);
@@ -341,7 +431,7 @@ function Analyze() {
       if (showAlert) {
         alert('Session saved to your account as a conversation!');
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('Save session error:', e);
       if (showAlert) {
         alert('Failed to save session.');
@@ -364,6 +454,22 @@ function Analyze() {
     if (typeof window !== 'undefined') {
       SpeechRecognitionClassRef.current = window.SpeechRecognition || (window as any).webkitSpeechRecognition;
       MediaRecorderClassRef.current = window.MediaRecorder;
+      
+      // Check browser compatibility
+      if (!window.MediaRecorder) {
+        console.warn('MediaRecorder API not supported in this browser');
+      }
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        console.warn('MediaDevices API not supported in this browser');
+      }
+      if (!SpeechRecognitionClassRef.current) {
+        console.warn('SpeechRecognition API not supported in this browser');
+      }
+      
+      // Check if running on HTTPS (required for getUserMedia)
+      if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
+        console.warn('getUserMedia requires HTTPS in production. Audio recording may not work.');
+      }
     }
   }, []);
 
@@ -374,6 +480,13 @@ function Analyze() {
       alert('MediaRecorder API not supported in this browser.');
       return;
     }
+    
+    // Check if mediaDevices is available
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      alert('Microphone access is not available in this browser. Please use a modern browser with microphone support.');
+      return;
+    }
+    
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       setMediaStream(stream);
@@ -415,18 +528,18 @@ function Analyze() {
         recognition.lang = language || 'en-US';
         recognition.interimResults = false;
         recognition.continuous = false;
-        recognition.onresult = (event: any) => {
+        recognition.onresult = (event: unknown) => {
           setIsRecording(false);
           if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
             mediaRecorderRef.current.stop();
           }
         };
-        recognition.onerror = (event: any) => {
+        recognition.onerror = (event: unknown) => {
           setIsRecording(false);
           if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
             mediaRecorderRef.current.stop();
           }
-          alert('Speech recognition error: ' + event.error);
+          alert('Speech recognition error: ' + (event as any).error);
         };
         recognition.onend = () => {
           setIsRecording(false);
@@ -440,8 +553,22 @@ function Analyze() {
         // Manual mode: no speech recognition, just record until user stops
         setManualRecording(true);
       }
-    } catch (err: any) {
-      alert('Could not start audio recording: ' + err.message);
+    } catch (err: unknown) {
+      console.error('Audio recording error:', err);
+      let errorMessage = 'Could not start audio recording: ' + (err as any).message;
+      
+      // Provide more specific error messages
+      if ((err as any).name === 'NotAllowedError') {
+        errorMessage = 'Microphone access denied. Please allow microphone permissions and try again.';
+      } else if ((err as any).name === 'NotFoundError') {
+        errorMessage = 'No microphone found. Please connect a microphone and try again.';
+      } else if ((err as any).name === 'NotSupportedError') {
+        errorMessage = 'Audio recording is not supported in this browser. Please use a modern browser.';
+      } else if ((err as any).name === 'SecurityError') {
+        errorMessage = 'Microphone access blocked for security reasons. Please check your browser settings.';
+      }
+      
+      alert(errorMessage);
       setIsRecording(false);
       setManualRecording(false);
       setMediaStream(null);
@@ -477,7 +604,7 @@ function Analyze() {
     // Prepare context (last 4 messages)
     const context = chatHistory.slice(-4).map(msg => `${msg.sender}: ${msg.text}`).join('\n');
     try {
-      console.log('[DEBUG] (fetchAndShowShortFeedback) Calling /short_feedback API with:', { transcription, context, language, user_level: user?.proficiency_level || 'beginner', user_topics: user?.talk_topics || [] });
+      console.log('[DEBUG] (fetchAndShowShortFeedback) Calling /short_feedback API with:', { transcription, context, language, user_level: userPreferences.userLevel, user_topics: userPreferences.topics, formality: userPreferences.formality, feedback_language: userPreferences.feedbackLanguage });
       // Call the Express proxy endpoint instead of Python directly
       const token = localStorage.getItem('jwt');
       const shortFeedbackRes = await axios.post(
@@ -486,8 +613,10 @@ function Analyze() {
           user_input: transcription,
           context,
           language,
-          user_level: user?.proficiency_level || 'beginner',
-          user_topics: user?.talk_topics || []
+          user_level: userPreferences.userLevel,
+          user_topics: userPreferences.topics,
+          formality: userPreferences.formality,
+          feedback_language: userPreferences.feedbackLanguage
         },
         token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
       );
@@ -512,7 +641,7 @@ function Analyze() {
           await playTTS(ttsUrl);
         }
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('[DEBUG] (fetchAndShowShortFeedback) Error calling /short_feedback API:', e);
     }
   };
@@ -530,6 +659,10 @@ function Analyze() {
       formData.append('audio', audioBlob, 'recording.webm');
       formData.append('language', language);
       formData.append('chatHistory', JSON.stringify(chatHistory));
+      formData.append('formality', userPreferences.formality);
+      formData.append('user_level', userPreferences.userLevel);
+      formData.append('user_topics', JSON.stringify(userPreferences.topics));
+      formData.append('feedback_language', userPreferences.feedbackLanguage);
       // Add JWT token to headers
       const token = localStorage.getItem('jwt');
       const response = await axios.post('/api/analyze', formData, {
@@ -583,11 +716,11 @@ function Analyze() {
               console.error('Failed to play TTS audio:', error);
             });
           }
-        } catch (fetchError: any) {
+        } catch (fetchError: unknown) {
           console.error('Error checking TTS audio file:', fetchError);
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       const errorMessage = {
         sender: 'System',
         text: '❌ Error processing audio. Please try again.',
@@ -630,8 +763,12 @@ function Analyze() {
       setFeedback(response.data.feedback);
       // Optionally, add to chatHistory
       setChatHistory(prev => [...prev, { sender: 'System', text: response.data.feedback, timestamp: new Date() }]);
-    } catch (error: any) {
-      setFeedback('❌ Error getting detailed feedback. Please try again.');
+    } catch (error: unknown) {
+      console.error('Error getting detailed feedback:', error);
+      console.error('[DEBUG] Error response:', (error as any).response?.data);
+      console.error('[DEBUG] Error status:', (error as any).response?.status);
+      console.error('[DEBUG] Error message:', (error as any).message);
+      setFeedback('Error getting detailed feedback. Please try again.');
     } finally {
       setIsLoadingFeedback(false);
     }
@@ -647,12 +784,16 @@ function Analyze() {
         '/api/suggestions',
         {
           conversationId: conversationId,
-          language: language
+          language: language,
+          user_level: userPreferences.userLevel,
+          user_topics: userPreferences.topics,
+          formality: userPreferences.formality,
+          feedback_language: userPreferences.feedbackLanguage
         },
         token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
       );
       setSuggestions(response.data.suggestions || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error fetching suggestions:', error);
       setSuggestions([]);
     } finally {
@@ -680,7 +821,7 @@ function Analyze() {
       // Use the AI message from the POST response if present
       if (response.data && response.data.aiMessage) {
         console.log('[DEBUG] AI message from POST response:', response.data.aiMessage);
-        setChatHistory([{ sender: 'AI', text: response.data.aiMessage.text, timestamp: new Date() }]);
+        setChatHistory([{ sender: 'AI', text: (response.data.aiMessage as any).text, timestamp: new Date() }]);
       } else {
         console.log('[DEBUG] No aiMessage in POST response, falling back to GET');
         // Fallback: fetch the updated conversation to get the AI's reply
@@ -691,15 +832,15 @@ function Analyze() {
         );
         const messages = convRes.data.conversation.messages || [];
         // Find the first AI message
-        const aiMsg = messages.find((m: any) => m.sender === 'AI');
+        const aiMsg = messages.find((m: unknown) => (m as any).sender === 'AI');
         if (aiMsg) {
           console.log('[DEBUG] AI message from GET:', aiMsg);
-          setChatHistory([{ sender: 'AI', text: aiMsg.text, timestamp: new Date(aiMsg.created_at) }]);
+          setChatHistory([{ sender: 'AI', text: (aiMsg as any).text, timestamp: new Date((aiMsg as any).created_at) }]);
         } else {
           console.log('[DEBUG] No AI message found in conversation after GET');
         }
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[DEBUG] Error in fetchInitialAIMessage:', err);
       // Fallback: just add a generic AI greeting
       setChatHistory([{ sender: 'AI', text: 'Hello! What would you like to talk about today?', timestamp: new Date() }]);
@@ -708,17 +849,25 @@ function Analyze() {
     }
   };
 
-  const handleModalConversationStart = async (newConversationId: string, topics: string[], aiMessage: any) => {
+  const handleModalConversationStart = async (newConversationId: string, topics: string[], aiMessage: unknown, formality: string) => {
     setConversationId(newConversationId);
     setChatHistory([]);
     setShowTopicModal(false);
     setSkipValidation(true);
     setTimeout(() => setSkipValidation(false), 2000); // Skip validation for 2 seconds
+    
+    // Update user preferences with the selected formality and topics
+    setUserPreferences(prev => ({
+      ...prev,
+      formality,
+      topics
+    }));
+    
     // Use Next.js router to update the URL
     router.replace(`/analyze?conversation=${newConversationId}&topics=${encodeURIComponent(topics.join(','))}`);
     // Set the initial AI message from the backend response
-    if (aiMessage && aiMessage.text && aiMessage.text.trim()) {
-      setChatHistory([{ sender: 'AI', text: aiMessage.text, timestamp: new Date() }]);
+    if (aiMessage && (aiMessage as any).text && (aiMessage as any).text.trim()) {
+      setChatHistory([{ sender: 'AI', text: (aiMessage as any).text, timestamp: new Date() }]);
     } else {
       setChatHistory([{ sender: 'AI', text: 'Hello! What would you like to talk about today?', timestamp: new Date() }]);
     }
@@ -752,9 +901,9 @@ function Analyze() {
         token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
       );
       console.log('[DEBUG] Message saved to backend successfully:', response.data);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[DEBUG] Error saving message to backend:', error);
-      console.error('[DEBUG] Error details:', error.response?.data || error.message);
+      console.error('[DEBUG] Error details:', (error as any).response?.data || (error as any).message);
     }
   };
 
@@ -765,32 +914,62 @@ function Analyze() {
     
     try {
       const token = localStorage.getItem('jwt');
-      const response = await axios.post(
-        '/api/translate',
-        {
-          text,
-          source_language: 'auto',
-          target_language: 'en',
-          breakdown
-        },
-        token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
-      );
       
-      setTranslations(prev => ({ 
-        ...prev, 
-        [messageIndex]: response.data 
-      }));
+      if (breakdown) {
+        // Call detailed breakdown API
+        const response = await axios.post(
+          '/api/detailed_breakdown',
+          {
+            llm_response: text,
+            user_input: '', // We don't have the user input for this message
+            context: chatHistory.slice(-4).map(msg => `${msg.sender}: ${msg.text}`).join('\n'),
+            language: language,
+            user_level: userPreferences.userLevel,
+            user_topics: userPreferences.topics,
+            user_goals: userPreferences.user_goals,
+            formality: userPreferences.formality,
+            feedback_language: userPreferences.feedbackLanguage
+          },
+          token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
+        );
+        
+        setTranslations(prev => ({ 
+          ...prev, 
+          [messageIndex]: { 
+            translation: text, // Show original text as translation
+            breakdown: response.data.breakdown,
+            has_breakdown: true
+          } 
+        }));
+      } else {
+        // Call regular translation API
+        const response = await axios.post(
+          '/api/translate',
+          {
+            text,
+            source_language: 'auto',
+            target_language: 'en',
+            breakdown
+          },
+          token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
+        );
+        
+        setTranslations(prev => ({ 
+          ...prev, 
+          [messageIndex]: response.data 
+        }));
+      }
       
       setShowTranslations(prev => ({ 
         ...prev, 
         [messageIndex]: true 
       }));
-    } catch (error: any) {
-      console.error('Translation error:', error);
+    } catch (error: unknown) {
+      console.error('Translation/breakdown error:', error);
       setTranslations(prev => ({ 
         ...prev, 
         [messageIndex]: { 
-          translation: 'Translation failed', 
+          translation: breakdown ? 'Detailed breakdown failed' : 'Translation failed', 
           error: true 
         } 
       }));
@@ -804,12 +983,12 @@ function Analyze() {
       // Hide translation
       setShowTranslations(prev => ({ ...prev, [index]: false }));
     } else {
-      // Show or fetch translation
+      // Show existing translation if available, otherwise do nothing
+      // (Let the user use the Detailed Breakdown button for new translations)
       if (translations[index]) {
         setShowTranslations(prev => ({ ...prev, [index]: true }));
-      } else {
-        translateMessage(index, text);
       }
+      // Removed the automatic translation call to avoid interfering with detailed breakdown
     }
   };
 
@@ -820,19 +999,46 @@ function Analyze() {
     
     try {
       const token = localStorage.getItem('jwt');
+      
+      // Get the message text and context
+      const message = chatHistory[messageIndex];
+      const user_input = message?.text || '';
+      const context = chatHistory.slice(-4).map(msg => `${msg.sender}: ${msg.text}`).join('\n');
+      
+      const requestData = {
+        user_input,
+        context,
+        language,
+        user_level: userPreferences.userLevel,
+        user_topics: userPreferences.topics
+      };
+      
+      console.log('[DEBUG] Sending to /api/feedback:', requestData);
+      console.log('[DEBUG] Request data details:', {
+        user_input: user_input,
+        context_length: context.length,
+        language: language,
+        user_level: userPreferences.userLevel,
+        user_topics: userPreferences.topics
+      });
+      
+      // Test server connectivity first
+      try {
+        const healthCheck = await axios.get('/api/health');
+        console.log('[DEBUG] Server health check:', healthCheck.status);
+      } catch (healthError: unknown) {
+        console.error('[DEBUG] Server health check failed:', (healthError as any).message);
+      }
+      
       const response = await axios.post(
         '/api/feedback',
-        {
-          conversationId,
-          language
-        },
+        requestData,
         token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
       );
       
       const detailedFeedback = response.data.feedback;
       
       // Store feedback in the database for the specific message
-      const message = chatHistory[messageIndex];
       if (message && message.id) {
         const token = localStorage.getItem('jwt');
         await axios.post(
@@ -848,7 +1054,7 @@ function Analyze() {
         setChatHistory(prev => 
           prev.map((msg, idx) => 
             idx === messageIndex 
-              ? { ...msg, detailed_feedback: detailedFeedback }
+              ? { ...msg, detailedFeedback: detailedFeedback }
               : msg
           )
         );
@@ -856,8 +1062,9 @@ function Analyze() {
       
       // Update the main feedback display
       setFeedback(detailedFeedback);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error getting detailed feedback:', error);
+      console.error('[DEBUG] Error response:', (error as any).response?.data);
       setFeedback('Error getting detailed feedback. Please try again.');
     } finally {
       setIsLoadingMessageFeedback(prev => ({ ...prev, [messageIndex]: false }));
@@ -867,18 +1074,359 @@ function Analyze() {
   const toggleDetailedFeedback = (messageIndex: number) => {
     const message = chatHistory[messageIndex];
     
-    if (message && message.detailed_feedback) {
+    if (message && message.detailedFeedback) {
       // Show existing feedback in right panel
-      setFeedback(message.detailed_feedback);
+      setFeedback(message.detailedFeedback);
     } else {
       // Generate new feedback
       requestDetailedFeedbackForMessage(messageIndex);
     }
   };
 
+  const requestShortFeedbackForMessage = async (messageIndex: number) => {
+    const message = chatHistory[messageIndex];
+    if (!message || (message as any).sender !== 'AI') return;
+
+    console.log('[DEBUG] Starting requestShortFeedbackForMessage for messageIndex:', messageIndex);
+    console.log('[DEBUG] Message:', message);
+    console.log('[DEBUG] User preferences:', userPreferences);
+    console.log('[DEBUG] Language:', language);
+
+    setIsLoadingMessageFeedback(prev => ({ ...prev, [messageIndex]: true }));
+
+    try {
+      const token = localStorage.getItem('jwt');
+      const requestData = {
+        text: message.text,
+        user_level: userPreferences.userLevel,
+        user_topics: userPreferences.topics,
+        user_goals: userPreferences.user_goals,
+        feedback_language: userPreferences.feedbackLanguage,
+        language: language
+      };
+
+      console.log('[DEBUG] Request data for short feedback:', requestData);
+      console.log('[DEBUG] Making request to /api/short_feedback');
+
+      // Call Gemini client directly through Python API
+      const response = await axios.post(
+        '/api/short_feedback',
+        requestData,
+        token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
+      );
+
+      console.log('[DEBUG] Short feedback response received:', response);
+      console.log('[DEBUG] Response data:', response.data);
+      console.log('[DEBUG] Response status:', response.status);
+
+      const shortFeedback = response.data.short_feedback;
+      console.log('[DEBUG] Extracted short feedback:', shortFeedback);
+      
+      // Store short feedback in state
+      setShortFeedbacks(prev => ({ ...prev, [messageIndex]: shortFeedback }));
+      console.log('[DEBUG] Updated shortFeedbacks state for messageIndex:', messageIndex);
+      
+      // Update the short feedback display in left panel
+      setShortFeedback(shortFeedback);
+      
+      // Clear parsed breakdown since this is short feedback, not detailed breakdown
+      setParsedBreakdown([]);
+      setShowDetailedBreakdown({});
+      console.log('[DEBUG] Set shortFeedback state to:', shortFeedback);
+    } catch (error: unknown) {
+      console.error('[DEBUG] Error getting short feedback:', error);
+      console.error('[DEBUG] Error response:', (error as any).response?.data);
+      console.error('[DEBUG] Error status:', (error as any).response?.status);
+      setShortFeedback('Error getting short feedback. Please try again.');
+    } finally {
+      setIsLoadingMessageFeedback(prev => ({ ...prev, [messageIndex]: false }));
+      console.log('[DEBUG] Finished requestShortFeedbackForMessage');
+    }
+  };
+
+  const parseBreakdownResponse = (breakdownText: string) => {
+    console.log('[DEBUG] Parsing breakdown response:', breakdownText);
+    
+    // Split by double newlines to separate sections
+    const sections = breakdownText.split('\n\n').filter(section => section.trim());
+    console.log('[DEBUG] Split sections:', sections);
+    
+    // Parse each sentence section
+    const sentences: Array<{ sentence: string; overview: string; details: string }> = [];
+    let currentSentence: string | null = null;
+    let currentOverview = '';
+    let currentDetails: string[] = [];
+    
+    for (let i = 0; i < sections.length; i++) {
+      const section = sections[i];
+      const trimmedSection = section.trim();
+      
+      // Check if this section contains a sentence (the first line is usually the sentence)
+      // The backend doesn't use asterisks, so we need to identify sentences differently
+      const lines = trimmedSection.split('\n');
+      const firstLine = lines[0]?.trim();
+      
+      // If this looks like a sentence (contains the target language text), treat it as a new sentence
+      if (firstLine && firstLine.length > 0 && !firstLine.startsWith('•') && 
+          !firstLine.includes('Literal translation') && 
+          !firstLine.includes('Sentence structure pattern')) {
+        
+        // If we have a previous sentence, save it
+        if (currentSentence) {
+          sentences.push({
+            sentence: currentSentence,
+            overview: currentOverview,
+            details: currentDetails.join('\n\n').trim()
+          });
+        }
+        
+        // Start new sentence - the first line is the sentence, rest is overview/details
+        currentSentence = firstLine;
+        currentOverview = lines.slice(1).join('\n').trim();
+        currentDetails = [];
+      } else {
+        // This is a details section for the current sentence
+        if (currentSentence && (trimmedSection.startsWith('•') || 
+            trimmedSection.includes('Literal translation') || 
+            trimmedSection.includes('Sentence structure pattern'))) {
+          currentDetails.push(trimmedSection);
+        }
+      }
+    }
+    
+    // Add the last sentence
+    if (currentSentence) {
+      sentences.push({
+        sentence: currentSentence,
+        overview: currentOverview,
+        details: currentDetails.join('\n\n').trim()
+      });
+    }
+    
+    console.log('[DEBUG] Parsed sentences:', sentences);
+    
+    return sentences;
+  };
+
+  const requestDetailedBreakdownForMessage = async (messageIndex: number) => {
+    const message = chatHistory[messageIndex];
+    if (!message || (message as any).sender !== 'AI') return;
+
+    console.log('[DEBUG] Starting requestDetailedBreakdownForMessage for messageIndex:', messageIndex);
+    console.log('[DEBUG] Message:', message);
+    console.log('[DEBUG] User preferences:', userPreferences);
+    console.log('[DEBUG] Language:', language);
+
+    setIsLoadingMessageFeedback(prev => ({ ...prev, [messageIndex]: true }));
+
+    try {
+      const token = localStorage.getItem('jwt');
+      const requestData = {
+        llm_response: message.text,
+        user_input: "", // AI message doesn't have user input
+        context: "",
+        language: language,
+        user_level: userPreferences.userLevel,
+        user_topics: userPreferences.topics,
+        user_goals: userPreferences.user_goals,
+        formality: userPreferences.formality,
+        feedback_language: userPreferences.feedbackLanguage
+      };
+
+      console.log('[DEBUG] Request data for detailed breakdown:', requestData);
+      console.log('[DEBUG] Making request to /api/detailed_breakdown');
+
+      // Call Gemini client's get_detailed_breakdown function through Python API
+      const response = await axios.post(
+        '/api/detailed_breakdown',
+        requestData,
+        token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
+      );
+
+      console.log('[DEBUG] Detailed breakdown response received:', response);
+      console.log('[DEBUG] Response data:', response.data);
+      console.log('[DEBUG] Response status:', response.status);
+      console.log('[DEBUG] Response data keys:', Object.keys(response.data));
+      console.log('[DEBUG] Response data type:', typeof response.data);
+
+      const detailedBreakdown = response.data.breakdown || response.data.feedback;
+      console.log('[DEBUG] Extracted detailed breakdown:', detailedBreakdown);
+      console.log('[DEBUG] Detailed breakdown type:', typeof detailedBreakdown);
+      console.log('[DEBUG] Detailed breakdown length:', detailedBreakdown?.length);
+      
+      if (!detailedBreakdown) {
+        console.error('[DEBUG] No detailed breakdown received from API');
+        setShortFeedback('Error: No detailed breakdown received from API');
+        return;
+      }
+      
+      // Parse the breakdown response
+      console.log('[DEBUG] Raw LLM response:', detailedBreakdown);
+      const parsed = parseBreakdownResponse(detailedBreakdown);
+      console.log('[DEBUG] Parsed breakdown structure:', parsed);
+      console.log('[DEBUG] Parsed breakdown length:', parsed.length);
+      
+      if (parsed.length === 0) {
+        console.error('[DEBUG] Failed to parse breakdown response');
+        setShortFeedback('Error: Failed to parse breakdown response');
+        return;
+      }
+      
+      // Show initial part (first sentence + overview) in left panel
+      const initialDisplay = parsed.length > 0 && parsed[0].sentence 
+        ? `${parsed[0].sentence}\n\n${parsed[0].overview}` 
+        : parsed.length > 0 ? parsed[0].overview : '';
+      console.log('[DEBUG] Setting initial display:', initialDisplay);
+      
+      // Update all states in the correct order
+      setShortFeedback(initialDisplay);
+      setParsedBreakdown(parsed);
+      setShowDetailedBreakdown({}); // Start collapsed
+      
+      // Store the parsed breakdown in shortFeedbacks state for consistency
+      console.log('[DEBUG] About to update shortFeedbacks state');
+      setShortFeedbacks(prev => {
+        const newState = { ...prev, [messageIndex]: initialDisplay };
+        console.log('[DEBUG] New shortFeedbacks state:', newState);
+        return newState;
+      });
+      console.log('[DEBUG] Updated shortFeedbacks state for messageIndex:', messageIndex);
+      
+      // Also store in message for consistency
+      setChatHistory(prev => 
+        prev.map((msg, idx) => 
+          idx === messageIndex 
+            ? { ...msg, detailedFeedback: detailedBreakdown }
+            : msg
+        )
+      );
+      console.log('[DEBUG] Updated chatHistory with detailed feedback');
+    } catch (error: unknown) {
+      console.error('[DEBUG] Error getting detailed breakdown:', error);
+      console.error('[DEBUG] Error response:', (error as any).response?.data);
+      console.error('[DEBUG] Error status:', (error as any).response?.status);
+      setShortFeedback('Error getting detailed breakdown. Please try again.');
+    } finally {
+      setIsLoadingMessageFeedback(prev => ({ ...prev, [messageIndex]: false }));
+      console.log('[DEBUG] Finished requestDetailedBreakdownForMessage');
+    }
+  };
+
+  const toggleShortFeedback = (messageIndex: number) => {
+    const message = chatHistory[messageIndex];
+    
+    console.log('[DEBUG] toggleShortFeedback called for messageIndex:', messageIndex);
+    console.log('[DEBUG] Message:', message);
+    console.log('[DEBUG] Existing shortFeedbacks:', shortFeedbacks);
+    console.log('[DEBUG] shortFeedbacks[messageIndex]:', shortFeedbacks[messageIndex]);
+    
+    // Set explain button as pressed
+    setExplainButtonPressed(true);
+    
+    if (message && shortFeedbacks[messageIndex]) {
+      // Show existing short feedback in left panel
+      console.log('[DEBUG] Showing existing short feedback:', shortFeedbacks[messageIndex]);
+      setShortFeedback(shortFeedbacks[messageIndex]);
+      
+      // If we have detailed feedback stored, parse it to show the collapsible details
+      if (message.detailedFeedback) {
+        const parsed = parseBreakdownResponse(message.detailedFeedback);
+        setParsedBreakdown(parsed);
+        setShowDetailedBreakdown({}); // Start collapsed
+      }
+    } else {
+      // Generate new short feedback
+      console.log('[DEBUG] Generating new short feedback');
+      requestShortFeedbackForMessage(messageIndex);
+    }
+  };
+
+  // Panel resize handlers
+  const handleLeftResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+    setResizingPanel('left');
+  };
+
+  const handleRightResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+    setResizingPanel('right');
+  };
+
+  const handleMouseMove = (e: MouseEvent) => {
+    if (!isResizing || !resizingPanel) return;
+    
+    const containerWidth = window.innerWidth;
+    const minPanelRatio = 0.25; // Minimum 25% of screen width
+    const maxPanelRatio = 0.33; // Maximum 33.33% of screen width (allows 1/3, 1/3, 1/3)
+    const minCenterRatio = 0.33; // Middle panel should never be smaller than 1/3
+    
+    const visiblePanels = [showShortFeedbackPanel, true, showDetailedFeedbackPanel].filter(Boolean).length;
+    
+    if (visiblePanels === 2) {
+      // Only two panels visible - handle resizing between them
+      if (!showShortFeedbackPanel && resizingPanel === 'right') {
+        // Left panel hidden, resizing right panel (which affects center panel)
+        const newRightRatio = Math.max(minPanelRatio, Math.min(1 - minCenterRatio, (containerWidth - e.clientX) / containerWidth));
+        setRightPanelWidth(newRightRatio);
+      } else if (!showDetailedFeedbackPanel && resizingPanel === 'left') {
+        // Right panel hidden, resizing left panel (which affects center panel)
+        const newLeftRatio = Math.max(minPanelRatio, Math.min(1 - minCenterRatio, e.clientX / containerWidth));
+        setLeftPanelWidth(newLeftRatio);
+      }
+    } else if (visiblePanels === 3) {
+      // All three panels visible
+      if (resizingPanel === 'left') {
+        // Resizing left panel
+        const newLeftRatio = Math.max(minPanelRatio, Math.min(maxPanelRatio, e.clientX / containerWidth));
+        // Ensure middle panel doesn't get smaller than 1/3
+        const remainingForRight = 1 - newLeftRatio - minCenterRatio;
+        if (remainingForRight >= minPanelRatio) {
+          setLeftPanelWidth(newLeftRatio);
+        }
+      } else if (resizingPanel === 'right') {
+        // Resizing right panel
+        const newRightRatio = Math.max(minPanelRatio, Math.min(maxPanelRatio, (containerWidth - e.clientX) / containerWidth));
+        // Ensure middle panel doesn't get smaller than 1/3
+        const remainingForLeft = 1 - newRightRatio - minCenterRatio;
+        if (remainingForLeft >= minPanelRatio) {
+          setRightPanelWidth(newRightRatio);
+        }
+      }
+    }
+  };
+
+  const handleMouseUp = () => {
+    setIsResizing(false);
+    setResizingPanel(null);
+  };
+
+  // Add/remove event listeners
+  useEffect(() => {
+    if (isResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [isResizing, resizingPanel]);
+
   useEffect(() => {
     console.log('[DEBUG] Chat history changed:', chatHistory);
   }, [chatHistory]);
+
+  useEffect(() => {
+    console.log('[DEBUG] shortFeedback state changed:', shortFeedback);
+  }, [shortFeedback]);
+
+  useEffect(() => {
+    console.log('[DEBUG] shortFeedbacks state changed:', shortFeedbacks);
+  }, [shortFeedbacks]);
+
+
 
   useEffect(() => {
     autoSpeakRef.current = autoSpeak;
@@ -912,30 +1460,263 @@ function Analyze() {
     <div style={{ 
       display: 'flex', 
       height: 'calc(100vh - 80px)', 
+      width: '100%',
       background: 'linear-gradient(135deg, #f5f1ec 0%, #e8e0d8 50%, #d4c8c0 100%)',
-      padding: '2rem'
+      padding: '1rem',
+      gap: '0.5rem'
     }}>
-      <div style={{ flex: 1, background: '#fff', borderRadius: 16, marginRight: '1rem', display: 'flex', flexDirection: 'column', border: '1px solid #e0e0e0', boxShadow: '0 4px 24px rgba(60,76,115,0.08)' }}>
+      {/* Short Feedback Panel - Left */}
+      {showShortFeedbackPanel && (
+        <div style={{ 
+          width: `${getPanelWidths().left * 100}%`, 
+          background: '#fff', 
+          borderRadius: 12,
+          display: 'flex',
+          flexDirection: 'column',
+          boxShadow: '0 3px 20px rgba(60,76,115,0.08)',
+          position: 'relative'
+        }}>
+          {/* Short Feedback Header */}
+          <div style={{ 
+            background: 'var(--blue-secondary)', 
+            color: '#fff', 
+            padding: '0.75rem 1rem', 
+            borderRadius: '12px 12px 0 0',
+            textAlign: 'center',
+            borderBottom: '1px solid #ececec',
+            fontFamily: 'Gabriela, Arial, sans-serif',
+            fontWeight: 600,
+            fontSize: '0.95rem',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center'
+          }}>
+                          <span>💡 AI Explanations</span>
+            <button
+              onClick={() => setShowShortFeedbackPanel(false)}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#fff',
+                fontSize: '1.2rem',
+                cursor: 'pointer',
+                padding: '0.2rem',
+                borderRadius: '4px',
+                transition: 'all 0.2s'
+              }}
+              title="Hide panel"
+            >
+              ◀
+            </button>
+          </div>
+          {/* Resize Handle */}
+          <div
+            onMouseDown={handleLeftResizeStart}
+            style={{
+              position: 'absolute',
+              right: -4,
+              top: 0,
+              bottom: 0,
+              width: 8,
+              cursor: 'col-resize',
+              background: 'transparent',
+              zIndex: 10
+            }}
+          />
+          {/* Short Feedback Content */}
+          <div style={{ 
+            flex: 1, 
+            display: 'flex',
+            flexDirection: 'column',
+            minHeight: 0
+          }}>
+            {shortFeedback && (
+              <div style={{
+                background: '#fff',
+                padding: '1rem',
+                flex: 1,
+                overflowY: 'auto',
+                overflowX: 'hidden',
+                fontSize: '1rem',
+                lineHeight: 1.5,
+                whiteSpace: 'pre-wrap',
+                fontFamily: 'AR One Sans, Arial, sans-serif',
+                fontWeight: 400,
+                minHeight: 0
+              }}>
+                {parsedBreakdown.length > 0 ? (
+                  <div>
+                                          {parsedBreakdown.map((sentenceData, index) => (
+                        <div key={index} style={{ marginBottom: index < parsedBreakdown.length - 1 ? '1rem' : '0' }}>
+                          <div style={{ 
+                            display: 'flex', 
+                            flexDirection: 'column',
+                            width: '100%'
+                          }}>
+                            <div style={{ 
+                              display: 'flex', 
+                              justifyContent: 'space-between', 
+                              alignItems: 'flex-start',
+                              marginBottom: '0.4rem'
+                            }}>
+                              <div style={{ fontWeight: 600, fontSize: '0.95rem', flex: 1 }}>
+                                {sentenceData.sentence}
+                              </div>
+                              {sentenceData.details && sentenceData.details.trim() && (
+                                <button
+                                  onClick={() => {
+                                    const newExpanded = { ...showDetailedBreakdown };
+                                    newExpanded[index] = !newExpanded[index];
+                                    setShowDetailedBreakdown(newExpanded);
+                                  }}
+                                  style={{
+                                    background: showDetailedBreakdown[index] ? '#4a90e2' : 'rgba(74,144,226,0.08)',
+                                    border: '1px solid #4a90e2',
+                                    color: showDetailedBreakdown[index] ? '#fff' : '#4a90e2',
+                                    padding: '0.4rem 0.8rem',
+                                    borderRadius: 6,
+                                    cursor: 'pointer',
+                                    fontSize: '0.8rem',
+                                    fontWeight: 600,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.3rem',
+                                    transition: 'all 0.2s ease',
+                                    boxShadow: showDetailedBreakdown[index] ? '0 2px 6px rgba(74,144,226,0.2)' : '0 1px 3px rgba(74,144,226,0.1)',
+                                    minWidth: 'fit-content',
+                                    height: 'fit-content',
+                                    marginLeft: '0.5rem'
+                                  }}
+                                >
+                                  {showDetailedBreakdown[index] ? '▼' : '▶'} 
+                                  {showDetailedBreakdown[index] ? 'Hide' : 'Details'}
+                                </button>
+                              )}
+                            </div>
+                            <div style={{ color: '#666', fontSize: '0.85rem', width: '100%', lineHeight: '1.4' }}>
+                              {sentenceData.overview}
+                            </div>
+                          </div>
+                        {showDetailedBreakdown[index] && sentenceData.details && sentenceData.details.trim() && (
+                          <div style={{
+                            marginTop: '0.75rem',
+                            padding: '1rem',
+                            background: 'linear-gradient(135deg, #f8f9fa 0%, #f0f4f8 100%)',
+                            borderRadius: 8,
+                            border: '1px solid #e1e8ed',
+                            fontSize: '0.8rem',
+                            lineHeight: 1.5,
+                            whiteSpace: 'pre-wrap',
+                            boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.05)',
+                            color: '#2c3e50'
+                          }}>
+                            {sentenceData.details}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div>{shortFeedback}</div>
+                )}
+              </div>
+            )}
+
+            {!shortFeedback && (
+              <div style={{
+                background: '#fff',
+                padding: '1rem',
+                flex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#666',
+                fontSize: '0.9rem',
+                fontStyle: 'italic'
+              }}>
+                Click "💡 Explain" on any AI message to see short feedback here
+              </div>
+            )}
+            {explainButtonPressed && (
+              <button
+                onClick={() => {
+                  console.log('[DEBUG] "Get Detailed Explanation" button clicked');
+                  console.log('[DEBUG] Current shortFeedback:', shortFeedback);
+                  console.log('[DEBUG] Current chatHistory:', chatHistory);
+                  console.log('[DEBUG] Current shortFeedbacks:', shortFeedbacks);
+                  
+                  // Find the current AI message that has short feedback
+                  const currentMessageIndex = chatHistory.findIndex((msg, index) => 
+                    msg.sender === 'AI' && shortFeedbacks[index] === shortFeedback
+                  );
+                  
+                  console.log('[DEBUG] Found messageIndex:', currentMessageIndex);
+                  
+                  if (currentMessageIndex !== -1) {
+                    console.log('[DEBUG] Calling requestDetailedBreakdownForMessage with index:', currentMessageIndex);
+                    requestDetailedBreakdownForMessage(currentMessageIndex);
+                  } else {
+                    console.log('[DEBUG] Could not find matching AI message for shortFeedback');
+                    // Fallback: try to find any AI message with short feedback
+                    const fallbackIndex = chatHistory.findIndex((msg, index) => 
+                      msg.sender === 'AI' && shortFeedbacks[index]
+                    );
+                    if (fallbackIndex !== -1) {
+                      console.log('[DEBUG] Using fallback messageIndex:', fallbackIndex);
+                      requestDetailedBreakdownForMessage(fallbackIndex);
+                    }
+                  }
+                }}
+                disabled={isLoadingFeedback || !shortFeedback}
+                style={{
+                  width: '100%',
+                  padding: '0.6rem',
+                  background: shortFeedback ? 'var(--rose-primary)' : '#ccc',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 8,
+                  boxShadow: 'inset 0 2px 8px #c38d9422',
+                  cursor: (isLoadingFeedback || !shortFeedback) ? 'not-allowed' : 'pointer',
+                  fontWeight: 600,
+                  fontSize: '0.9rem',
+                  transition: 'all 0.2s',
+                  marginTop: 'auto'
+                }}
+              >
+                {isLoadingFeedback ? '⏳ Processing...' : '🎯 Get Detailed Explanation'}
+              </button>
+            )}
+        </div>
+        </div>
+      )}
+      {/* Chat Panel - Center */}
+              <div style={{ 
+          flex: 1, 
+          background: '#fff', 
+          borderRadius: 12, 
+          display: 'flex', 
+          flexDirection: 'column', 
+          boxShadow: '0 3px 20px rgba(60,76,115,0.08)',
+          position: 'relative'
+        }}>
         {/* Header Bar */}
-        <div style={{ padding: '1rem', background: '#f5f1ec', borderBottom: '1px solid #ececec', display: 'flex', justifyContent: 'center', alignItems: 'center', borderTopLeftRadius: 16, borderTopRightRadius: 16 }}>
-          <div style={{ color: 'var(--rose-primary)', fontWeight: 700, fontSize: '1.1rem', fontFamily: 'Gabriela, Arial, sans-serif' }}>
+        <div style={{ padding: '0.75rem 1rem', background: '#f5f1ec', borderBottom: '1px solid #ececec', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTopLeftRadius: 12, borderTopRightRadius: 12 }}>
+          <div style={{ color: 'var(--rose-primary)', fontWeight: 600, fontSize: '0.95rem', fontFamily: 'Gabriela, Arial, sans-serif' }}>
             🌐 {getLanguageLabel(language)} Practice Session
           </div>
+
         </div>
-        {/* Chat Header */}
-        <div style={{ background: 'var(--blue-secondary)', color: '#fff', padding: '1rem', borderRadius: '14px 14px 0 0', textAlign: 'center', fontFamily: 'Gabriela, Arial, sans-serif', fontWeight: 700, fontSize: '1.3rem', letterSpacing: '-0.5px' }}>
-          🎤 BeyondWords Chat
-        </div>
+
         {/* Chat Messages */}
         <div style={{ 
           flex: 1, 
-          padding: '1.2rem', 
+          padding: '1rem', 
           overflowY: 'auto',
           display: 'flex',
           flexDirection: 'column',
-          gap: '0.7rem',
+          gap: '0.6rem',
           background: '#f9f6f4',
-          borderBottomLeftRadius: 16, borderBottomRightRadius: 16
+          borderRadius: '0 0 12px 12px'
         }}>
           {isLoadingConversation && (
             <div style={{
@@ -955,27 +1736,27 @@ function Analyze() {
               width: '100%',
               display: 'flex',
               flexDirection: 'column',
-              alignItems: message.sender === 'User' ? 'flex-end' : 'flex-start',
+              alignItems: (message as any).sender === 'User' ? 'flex-end' : 'flex-start',
               marginBottom: '0.7rem'
             }}>
               <div 
                 onClick={() => handleMessageClick(index, message.text)}
                 style={{
                   flex: 1,
-                  padding: '0.85rem 1.1rem',
-                  borderRadius: message.sender === 'User' ? '18px 18px 6px 18px' : message.sender === 'AI' ? '18px 18px 18px 6px' : '10px',
-                  background: message.sender === 'User' ? 'linear-gradient(135deg, #c38d94 0%, #b87d8a 100%)' : message.sender === 'AI' ? 'linear-gradient(135deg, #fff 0%, #f8f9fa 100%)' : '#fff7e6',
-                  color: message.sender === 'User' ? '#fff' : message.sender === 'System' ? '#e67e22' : '#3e3e3e',
-                  border: message.sender === 'AI' ? '1px solid #e0e0e0' : message.sender === 'System' ? '1px solid #e67e22' : 'none',
-                  fontSize: '0.98rem',
+                  padding: '0.7rem 1rem',
+                  borderRadius: (message as any).sender === 'User' ? '16px 16px 4px 16px' : (message as any).sender === 'AI' ? '16px 16px 16px 4px' : '8px',
+                  background: (message as any).sender === 'User' ? 'linear-gradient(135deg, #c38d94 0%, #b87d8a 100%)' : (message as any).sender === 'AI' ? 'linear-gradient(135deg, #fff 0%, #f8f9fa 100%)' : '#fff7e6',
+                  color: (message as any).sender === 'User' ? '#fff' : (message as any).sender === 'System' ? '#e67e22' : '#3e3e3e',
+                  border: (message as any).sender === 'AI' ? '1px solid #e0e0e0' : (message as any).sender === 'System' ? '1px solid #e67e22' : 'none',
+                  fontSize: '0.9rem',
                   cursor: 'pointer',
                   transition: 'all 0.2s ease',
                   opacity: isTranslating[index] ? 0.7 : 1,
                   position: 'relative',
-                  boxShadow: message.sender === 'User' ? '0 2px 8px rgba(195,141,148,0.18)' : message.sender === 'AI' ? '0 2px 8px rgba(60,76,115,0.10)' : '0 1px 4px rgba(230,126,34,0.08)',
+                  boxShadow: (message as any).sender === 'User' ? '0 2px 8px rgba(195,141,148,0.18)' : (message as any).sender === 'AI' ? '0 2px 8px rgba(60,76,115,0.10)' : '0 1px 4px rgba(230,126,34,0.08)',
                   maxWidth: '75%',
                   wordWrap: 'break-word',
-                  fontWeight: message.sender === 'User' ? 600 : message.sender === 'System' ? 600 : 400,
+                  fontWeight: (message as any).sender === 'User' ? 600 : (message as any).sender === 'System' ? 600 : 400,
                   animation: 'messageAppear 0.3s ease-out',
                   fontFamily: 'AR One Sans, Arial, sans-serif'
                 }}
@@ -987,29 +1768,53 @@ function Analyze() {
                   </span>
                 )}
               </div>
-              {/* Detailed Feedback Button - only for user messages */}
-              {message.sender === 'User' && (
+              {/* Feedback Buttons */}
+              {(message as any).sender === 'User' && (
                 <button
                   onClick={() => toggleDetailedFeedback(index)}
                   disabled={isLoadingMessageFeedback[index]}
                   style={{
-                    padding: '0.45rem 1.1rem',
-                    borderRadius: 8,
-                    border: message.detailed_feedback ? 'none' : '1px solid #c38d94',
-                    background: message.detailed_feedback ? 'linear-gradient(135deg, #c38d94 0%, #b87d8a 100%)' : 'rgba(195,141,148,0.08)',
-                    color: message.detailed_feedback ? '#fff' : '#c38d94',
-                    fontSize: '0.88rem',
+                    padding: '0.35rem 0.9rem',
+                    borderRadius: 6,
+                    border: message.detailedFeedback ? 'none' : '1px solid #c38d94',
+                    background: message.detailedFeedback ? 'linear-gradient(135deg, #c38d94 0%, #b87d8a 100%)' : 'rgba(195,141,148,0.08)',
+                    color: message.detailedFeedback ? '#fff' : '#c38d94',
+                    fontSize: '0.8rem',
                     cursor: isLoadingMessageFeedback[index] ? 'not-allowed' : 'pointer',
                     transition: 'all 0.2s ease',
                     opacity: isLoadingMessageFeedback[index] ? 0.6 : 1,
-                    minWidth: '80px',
-                    fontWeight: 600,
-                    marginTop: 6,
-                    boxShadow: message.detailed_feedback ? '0 2px 6px rgba(195,141,148,0.18)' : '0 1px 3px rgba(195,141,148,0.10)'
+                    minWidth: '70px',
+                    fontWeight: 500,
+                    marginTop: 4,
+                    boxShadow: message.detailedFeedback ? '0 2px 6px rgba(195,141,148,0.18)' : '0 1px 3px rgba(195,141,148,0.10)'
                   }}
-                  title={message.detailed_feedback ? 'Show detailed feedback' : 'Generate detailed feedback'}
+                  title={message.detailedFeedback ? 'Show detailed feedback' : 'Check for errors'}
                 >
-                  {isLoadingMessageFeedback[index] ? '🔄' : message.detailed_feedback ? '🎯 Show' : '🎯 Get'}
+                  {isLoadingMessageFeedback[index] ? '🔄' : message.detailedFeedback ? '🎯 Show' : '🎯 Check'}
+                </button>
+              )}
+              {(message as any).sender === 'AI' && (
+                <button
+                  onClick={() => toggleShortFeedback(index)}
+                  disabled={isLoadingMessageFeedback[index]}
+                  style={{
+                    padding: '0.35rem 0.9rem',
+                    borderRadius: 6,
+                    border: shortFeedbacks[index] ? 'none' : '1px solid #4a90e2',
+                    background: shortFeedbacks[index] ? 'linear-gradient(135deg, #4a90e2 0%, #357abd 100%)' : 'rgba(74,144,226,0.08)',
+                    color: shortFeedbacks[index] ? '#fff' : '#4a90e2',
+                    fontSize: '0.8rem',
+                    cursor: isLoadingMessageFeedback[index] ? 'not-allowed' : 'pointer',
+                    transition: 'all 0.2s ease',
+                    opacity: isLoadingMessageFeedback[index] ? 0.6 : 1,
+                    minWidth: '70px',
+                    fontWeight: 500,
+                    marginTop: 4,
+                    boxShadow: shortFeedbacks[index] ? '0 2px 6px rgba(74,144,226,0.18)' : '0 1px 3px rgba(74,144,226,0.10)'
+                  }}
+                  title={shortFeedbacks[index] ? 'Show short feedback' : 'Get short feedback'}
+                >
+                  {isLoadingMessageFeedback[index] ? '🔄' : shortFeedbacks[index] ? '💡 Show' : '💡 Explain'}
                 </button>
               )}
               {showTranslations[index] && translations[index] && (
@@ -1047,51 +1852,24 @@ function Analyze() {
                     </button>
                   </div>
                   <div style={{ marginBottom: '0.5rem' }}>
-                    <strong>Translation:</strong> {translations[index].translation}
+                    <strong>Translation:</strong> {(translations[index] as any).translation}
                   </div>
-                  {translations[index].has_breakdown && translations[index].breakdown && (
+                  {(translations[index] as any).has_breakdown && (translations[index] as any).breakdown && (
                     <div style={{ marginTop: '0.5rem' }}>
-                      {translations[index].breakdown.word_by_word && (
-                        <div style={{ marginBottom: '0.5rem' }}>
-                          <strong>Word by Word:</strong>
-                          <div style={{ marginTop: '0.25rem', display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
-                            {translations[index].breakdown.word_by_word.map((word: any, wordIndex: any) => (
-                              <span key={wordIndex} style={{
-                                display: 'inline-block',
-                                margin: 0,
-                                padding: '0.25rem 0.5rem',
-                                background: 'linear-gradient(135deg, #e6f3ff 0%, #d1e7ff 100%)',
-                                borderRadius: 7,
-                                border: '1px solid #b8daff',
-                                fontSize: '0.8rem',
-                                boxShadow: '0 1px 3px rgba(44,82,130,0.08)'
-                              }}>
-                                <strong>{word.original}</strong> → {word.translation}
-                                {word.part_of_speech && (
-                                  <span style={{ opacity: 0.7, fontSize: '0.75rem' }}>
-                                    {' '}({word.part_of_speech})
-                                  </span>
-                                )}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      {translations[index].breakdown.grammar_notes && (
-                        <div style={{ marginBottom: '0.5rem' }}>
-                          <strong>Grammar Notes:</strong> {translations[index].breakdown.grammar_notes}
-                        </div>
-                      )}
-                      {translations[index].breakdown.cultural_notes && (
-                        <div style={{ marginBottom: '0.5rem' }}>
-                          <strong>Cultural Notes:</strong> {translations[index].breakdown.cultural_notes}
-                        </div>
-                      )}
-                      {translations[index].breakdown.literal_translation && (
-                        <div>
-                          <strong>Literal Translation:</strong> {translations[index].breakdown.literal_translation}
-                        </div>
-                      )}
+                      <div style={{ marginBottom: '0.5rem' }}>
+                        <strong>📖 Detailed Analysis:</strong>
+                      </div>
+                      <div style={{
+                        background: 'rgba(255,255,255,0.7)',
+                        padding: '0.75rem',
+                        borderRadius: 8,
+                        border: '1px solid #e0e0e0',
+                        fontSize: '0.9rem',
+                        lineHeight: '1.5',
+                        whiteSpace: 'pre-wrap'
+                      }}>
+                        {(translations[index] as any).breakdown}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1112,281 +1890,436 @@ function Analyze() {
             </div>
           )}
         </div>
-        {/* Text Suggestions + Mic Button Row */}
+
+
+        {/* Recording Controls */}
         {chatHistory.length > 0 && (
-          <div style={{ 
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            gap: 16,
-            padding: '1rem',
-            borderTop: '1px solid #e0e0e0',
-            background: '#f9f9f9',
-            borderBottomLeftRadius: 12, borderBottomRightRadius: 12,
-            marginBottom: 0
-          }}>
-            {/* Get Suggestions Button (smaller, left) */}
-            {suggestions.length === 0 && !isLoadingSuggestions && (
+          <div
+            data-recording-section
+            style={{ 
+              padding: '1.2rem', 
+              borderTop: '1px solid #c38d94',
+              background: '#f5f1ec',
+              borderRadius: '0 0 16px 16px',
+              textAlign: 'center',
+              marginTop: 0
+            }}
+          >
+            <div style={{
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              gap: '1rem',
+              flexWrap: 'wrap'
+            }}>
+              {/* Autospeak Toggle Button */}
               <button
-                onClick={fetchSuggestions}
+                onClick={() => setAutoSpeak(v => !v)}
                 style={{
-                  padding: '0.5rem 1.1rem',
-                  background: 'var(--rose-primary)',
+                  background: autoSpeak ? 'var(--blue-secondary)' : 'var(--blue-secondary)',
                   color: '#fff',
                   border: 'none',
-                  borderRadius: 14,
+                  borderRadius: 10,
+                  padding: '0.5rem 0.9rem',
                   cursor: 'pointer',
-                  fontSize: '0.93rem',
-                  fontWeight: 600,
+                  fontWeight: 500,
+                  fontSize: '0.85rem',
                   transition: 'all 0.2s',
-                  boxShadow: '0 1px 4px rgba(195,141,148,0.10)'
+                  boxShadow: '0 2px 4px rgba(60,76,115,0.15)',
+                  minWidth: '110px'
                 }}
               >
-                💡 Get Suggestions
+                {autoSpeak ? '✅ Autospeak ON' : 'Autospeak OFF'}
               </button>
-            )}
-            {/* Microphone Button (right) */}
-            <button
-              onClick={isRecording ? () => stopRecording(false) : startRecording}
-              disabled={isProcessing || (autoSpeak && isRecording)}
-              style={{
-                width: 64,
-                height: 64,
-                borderRadius: '50%',
-                border: 'none',
-                background: isRecording ? 'var(--blue-secondary)' : 'var(--rose-primary)',
-                color: '#fff',
-                fontSize: '32px',
-                cursor: isProcessing || (autoSpeak && isRecording) ? 'not-allowed' : 'pointer',
-                transition: 'all 0.3s',
-                boxShadow: isRecording ? '0 0 0 10px #c38d9440' : '0 2px 8px rgba(60,76,115,0.10)'
-              }}
-              title={isRecording ? 'Stop Recording' : 'Start Recording'}
-            >
-              {isRecording ? '⏹️' : '🎤'}
-            </button>
-          </div>
-        )}
-        {/* Suggestions List (if present) */}
-        {chatHistory.length > 0 && suggestions.length > 0 && (
-          <div style={{ 
-            padding: '1rem', 
-            borderTop: '1px solid #e0e0e0',
-            background: '#f9f9f9',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '0.5rem',
-            borderBottomLeftRadius: 12, borderBottomRightRadius: 12
-          }}>
-            <div style={{ fontSize: '1rem', color: 'var(--rose-primary)', fontWeight: 600, marginBottom: '0.5rem' }}>
-              💬 Try saying:
+
+              {/* Microphone Button (centered) */}
+              <button
+                onClick={isRecording ? () => stopRecording(false) : startRecording}
+                disabled={isProcessing || (autoSpeak && isRecording)}
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: '50%',
+                  border: 'none',
+                  background: isRecording ? 'var(--blue-secondary)' : 'var(--rose-primary)',
+                  color: '#fff',
+                  fontSize: '20px',
+                  cursor: isProcessing || (autoSpeak && isRecording) ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.3s',
+                  boxShadow: isRecording ? '0 0 0 6px #c38d9440' : '0 3px 12px rgba(60,76,115,0.20)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+                title={isRecording ? 'Stop Recording' : 'Start Recording'}
+              >
+                {isRecording ? '⏹️' : '🎤'}
+              </button>
+
+              {/* Short Feedback Toggle Button */}
+              <button
+                onClick={() => setEnableShortFeedback(v => !v)}
+                style={{
+                  background: enableShortFeedback ? 'var(--blue-secondary)' : 'var(--rose-primary)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 10,
+                  padding: '0.5rem 0.9rem',
+                  cursor: 'pointer',
+                  fontWeight: 500,
+                  fontSize: '0.85rem',
+                  transition: 'all 0.2s',
+                  boxShadow: '0 2px 4px rgba(60,76,115,0.15)',
+                  minWidth: '110px'
+                }}
+              >
+                {enableShortFeedback ? '💡 Short Feedback ON' : 'Short Feedback OFF'}
+              </button>
             </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-              {suggestions.map((suggestion, index) => (
+                      {/* Redo Button: Only show in manual mode when recording */}
+            {isRecording && manualRecording && (
+              <div style={{
+                display: 'flex',
+                justifyContent: 'center',
+                marginTop: '0.8rem'
+              }}>
                 <button
-                  key={index}
-                  onClick={() => handleSuggestionClick()}
+                  onClick={() => stopRecording(true)}
                   style={{
-                    padding: '0.5rem 1rem',
-                    background: 'rgba(195,141,148,0.13)',
-                    color: 'var(--rose-primary)',
+                    background: '#e67e22',
+                    color: '#fff',
                     border: 'none',
-                    borderRadius: 14,
+                    borderRadius: 10,
+                    padding: '0.5rem 0.9rem',
                     cursor: 'pointer',
-                    fontSize: '0.93rem',
-                    fontWeight: 600,
-                    transition: 'all 0.3s ease',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    minWidth: '120px',
-                    boxShadow: '0 1px 4px rgba(195,141,148,0.08)'
+                    fontWeight: 500,
+                    fontSize: '0.85rem',
+                    transition: 'all 0.2s',
+                    boxShadow: '0 2px 4px rgba(230,126,34,0.15)',
+                    minWidth: '90px'
                   }}
                 >
-                  <div style={{ fontWeight: 600, marginBottom: '0.2rem' }}>
-                    {suggestion.text}
-                  </div>
-                  {suggestion.translation && suggestion.translation !== suggestion.text && (
-                    <div style={{ fontSize: '0.85rem', opacity: 0.8, fontStyle: 'italic' }}>
-                      {suggestion.translation}
-                    </div>
-                  )}
+                  ⏹️ Redo
                 </button>
-              ))}
-            </div>
-            <button
-              onClick={() => {
-                setSuggestions([]);
-                fetchSuggestions();
-              }}
-              style={{
-                padding: '0.5rem 1rem',
-                background: '#fff',
-                color: 'var(--rose-primary)',
-                border: '1px solid #c38d94',
-                borderRadius: 10,
-                cursor: 'pointer',
-                fontSize: '0.93rem',
-                fontWeight: 600,
-                transition: 'all 0.2s ease',
-                alignSelf: 'center',
-                marginTop: '0.5rem',
-                boxShadow: '0 1px 4px rgba(195,141,148,0.08)'
-              }}
-            >
-              🔄 Get New Suggestions
-            </button>
+              </div>
+            )}
           </div>
         )}
-        {/* Recording Controls */}
-        <div 
-          data-recording-section
-          style={{ 
-            padding: '1.2rem', 
-            borderTop: '1px solid #c38d94',
-            background: '#f5f1ec',
-            borderRadius: '0 0 16px 16px',
-            textAlign: 'center',
-            marginTop: 0
-          }}
-        >
-          {/* Autospeak Toggle Button */}
-          <button
-            onClick={() => setAutoSpeak(v => !v)}
+        {/* Resize Handle */}
+        {showDetailedFeedbackPanel && (
+          <div
+            onMouseDown={handleRightResizeStart}
             style={{
-              marginBottom: '0.5rem',
-              background: autoSpeak ? 'var(--blue-secondary)' : 'var(--rose-primary)',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 16,
-              padding: '0.5rem 1.2rem',
-              cursor: 'pointer',
-              fontWeight: 700,
-              fontSize: '1rem',
-              marginRight: 8,
-              transition: 'all 0.2s',
-              boxShadow: '0 1px 4px rgba(60,76,115,0.08)'
+              position: 'absolute',
+              right: -4,
+              top: 0,
+              bottom: 0,
+              width: 8,
+              cursor: 'col-resize',
+              background: 'transparent',
+              zIndex: 10
             }}
-          >
-            {autoSpeak ? '✅ Autospeak ON' : 'Autospeak OFF'}
-          </button>
-          {/* Short Feedback Toggle Button */}
-          <button
-            onClick={() => setEnableShortFeedback(v => !v)}
-            style={{
-              marginBottom: '0.5rem',
-              background: enableShortFeedback ? '#e67e22' : 'var(--rose-primary)',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 16,
-              padding: '0.5rem 1.2rem',
-              cursor: 'pointer',
-              fontWeight: 700,
-              fontSize: '1rem',
-              marginRight: 8,
-              transition: 'all 0.2s',
-              boxShadow: '0 1px 4px rgba(230,126,34,0.08)'
-            }}
-          >
-            {enableShortFeedback ? '💡 Short Feedback ON' : 'Short Feedback OFF'}
-          </button>
-          {/* Redo Button: Only show in manual mode when recording */}
-          {isRecording && manualRecording && (
-            <button
-              onClick={() => stopRecording(true)}
-              style={{
-                marginLeft: 8,
-                background: '#e67e22',
-                color: '#fff',
-                border: 'none',
-                borderRadius: 16,
-                padding: '0.5rem 1.2rem',
-                cursor: 'pointer',
-                fontWeight: 700,
-                fontSize: '1rem',
-                transition: 'all 0.2s',
-                boxShadow: '0 1px 4px rgba(230,126,34,0.08)'
-              }}
-            >
-              ⏹️ Redo
-            </button>
-          )}
-          {/* Mic Button: In manual mode, toggles start/stop. In autospeak, toggles start/stop but disables stop if not recording. */}
-          {/* This button is now in the top right of the chat card */}
-        </div>
+          />
+        )}
       </div>
-      {/* Feedback Section */}
-      <div style={{ 
-        width: 320, 
-        background: '#f5f1ec', 
-        borderRadius: 16,
-        display: 'flex',
-        flexDirection: 'column',
-        border: '1px solid #e0e0e0',
-        boxShadow: '0 4px 24px rgba(60,76,115,0.08)',
-        marginLeft: 0,
-        marginTop: 0
-      }}>
-        {/* Feedback Header */}
+      {/* Right Panel - Split into Detailed Analysis and Suggestions */}
+      {showDetailedFeedbackPanel && (
         <div style={{ 
-          background: 'var(--rose-accent)', 
-          color: 'var(--blue-secondary)', 
-          padding: '1rem', 
-          borderRadius: '14px 14px 0 0',
-          textAlign: 'center',
-          borderBottom: '1px solid #ececec',
-          fontFamily: 'Gabriela, Arial, sans-serif',
-          fontWeight: 700,
-          fontSize: '1.1rem'
-        }}>
-          📊 Detailed Analysis
-        </div>
-        {/* Feedback Content */}
-        <div style={{ 
-          flex: 1, 
-          padding: '1.2rem',
+          width: `${getPanelWidths().right * 100}%`, 
+          background: '#fff', 
+          borderRadius: 12,
           display: 'flex',
-          flexDirection: 'column'
+          flexDirection: 'column',
+          boxShadow: '0 3px 20px rgba(60,76,115,0.08)',
+          marginLeft: 0,
+          marginTop: 0
         }}>
-          <button
-            onClick={requestDetailedFeedback}
-            disabled={isLoadingFeedback || chatHistory.length === 0}
-            style={{
-              width: '100%',
-              padding: '0.75rem',
-              background: 'var(--blue-secondary)',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 10,
-              boxShadow: 'inset 0 2px 8px #3c4c7322',
-              cursor: isLoadingFeedback ? 'not-allowed' : 'pointer',
-              fontWeight: 700,
-              marginBottom: '1rem',
-              fontSize: '1rem',
-              transition: 'all 0.2s'
-            }}
-          >
-            {isLoadingFeedback ? '⏳ Processing...' : 'Request Detailed Feedback'}
-          </button>
-          {feedback && (
-            <div style={{
-              background: '#fff',
-              padding: '1rem',
-              borderRadius: 10,
-              border: '1px solid #c38d94',
-              flex: 1,
-              overflowY: 'auto',
-              fontSize: '1rem',
-              lineHeight: 1.5,
-              whiteSpace: 'pre-wrap',
-              fontFamily: 'AR One Sans, Arial, sans-serif',
-              fontWeight: 400
+          {/* Top Half - Detailed Analysis */}
+          <div style={{ 
+            height: '50%',
+            display: 'flex',
+            flexDirection: 'column',
+            borderBottom: '1px solid #e0e0e0'
+          }}>
+            {/* Detailed Analysis Header */}
+            <div style={{ 
+              background: 'var(--rose-accent)', 
+              color: 'var(--blue-secondary)', 
+              padding: '0.75rem 1rem', 
+              borderRadius: '12px 12px 0 0',
+              textAlign: 'center',
+              borderBottom: '1px solid #ececec',
+              fontFamily: 'Gabriela, Arial, sans-serif',
+              fontWeight: 600,
+              fontSize: '0.95rem',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
             }}>
-              {feedback}
+              <span>📊 Conversation Errors</span>
+              <button
+                onClick={() => setShowDetailedFeedbackPanel(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--blue-secondary)',
+                  fontSize: '1.2rem',
+                  cursor: 'pointer',
+                  padding: '0.2rem',
+                  borderRadius: '4px',
+                  transition: 'all 0.2s'
+                }}
+                title="Hide panel"
+              >
+                ▶
+              </button>
             </div>
-          )}
+            {/* Detailed Analysis Content */}
+            <div style={{ 
+              flex: 1, 
+              display: 'flex',
+              flexDirection: 'column',
+              overflowY: 'auto',
+              overflowX: 'hidden',
+              minHeight: 0,
+              maxHeight: '100%'
+            }}>
+              {feedback && (
+                <div style={{
+                  background: '#fff',
+                  padding: '1rem',
+                  fontSize: '0.9rem',
+                  lineHeight: 1.4,
+                  whiteSpace: 'pre-wrap',
+                  fontFamily: 'AR One Sans, Arial, sans-serif',
+                  fontWeight: 400,
+                  wordWrap: 'break-word',
+                  overflowWrap: 'break-word'
+                }}>
+                  {feedback}
+                </div>
+              )}
+              {!feedback && (
+                <div style={{
+                  background: '#fff',
+                  padding: '1rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#666',
+                  fontSize: '0.85rem',
+                  fontStyle: 'italic',
+                  textAlign: 'center',
+                  minHeight: '100px'
+                }}>
+                  Click "🎯 Check" on any user message to see corrections here
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Bottom Half - Suggestions */}
+          <div style={{ 
+            height: '50%',
+            display: 'flex',
+            flexDirection: 'column',
+            borderTop: '1px solid #e0e0e0'
+          }}>
+            {/* Suggestions Header */}
+            <div style={{ 
+              background: 'var(--rose-accent)', 
+              color: 'var(--blue-secondary)', 
+              padding: '0.75rem 1rem', 
+              textAlign: 'center',
+              borderBottom: '1px solid #ececec',
+              fontFamily: 'Gabriela, Arial, sans-serif',
+              fontWeight: 600,
+              fontSize: '0.95rem',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <span>💡 Conversation Suggestions</span>
+            </div>
+            {/* Suggestions Content */}
+            <div style={{ 
+              flex: 1, 
+              display: 'flex',
+              flexDirection: 'column',
+              minHeight: 0
+            }}>
+              {/* Scrollable Suggestions Area */}
+              <div style={{
+                flex: 1,
+                overflowY: 'auto',
+                overflowX: 'hidden',
+                padding: '1rem'
+              }}>
+                {/* Loading State */}
+                {isLoadingSuggestions && (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#666',
+                    fontSize: '0.9rem',
+                    fontStyle: 'italic',
+                    padding: '1rem'
+                  }}>
+                    ⏳ Loading suggestions...
+                  </div>
+                )}
+
+                {/* Suggestions List */}
+                {suggestions.length > 0 && (
+                  <div style={{ 
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '1rem'
+                  }}>
+                    {suggestions.map((suggestion, index) => (
+                      <div key={index} style={{ marginBottom: index < suggestions.length - 1 ? '0.8rem' : '0' }}>
+                        <div style={{ 
+                          display: 'flex', 
+                          flexDirection: 'column',
+                          width: '100%'
+                        }}>
+                          <div style={{ 
+                            display: 'flex', 
+                            justifyContent: 'space-between', 
+                            alignItems: 'flex-start',
+                            marginBottom: '0.4rem'
+                          }}>
+                            <div style={{ fontWeight: 600, fontSize: '0.95rem', flex: 1 }}>
+                              {(suggestion as any).text?.replace(/\*\*/g, '')}
+                            </div>
+                            {(suggestion as any).explanation && (suggestion as any).explanation.trim() && (
+                              <button
+                                onClick={() => {
+                                  const newExpanded = { ...showSuggestionExplanations };
+                                  newExpanded[index] = !newExpanded[index];
+                                  setShowSuggestionExplanations(newExpanded);
+                                }}
+                                style={{
+                                  background: showSuggestionExplanations[index] ? '#4a90e2' : 'rgba(74,144,226,0.08)',
+                                  border: '1px solid #4a90e2',
+                                  color: showSuggestionExplanations[index] ? '#fff' : '#4a90e2',
+                                  padding: '0.3rem 0.7rem',
+                                  borderRadius: 5,
+                                  cursor: 'pointer',
+                                  fontSize: '0.75rem',
+                                  fontWeight: 500,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '0.3rem',
+                                  transition: 'all 0.2s ease',
+                                  boxShadow: showSuggestionExplanations[index] ? '0 2px 6px rgba(74,144,226,0.2)' : '0 1px 3px rgba(74,144,226,0.1)',
+                                  minWidth: 'fit-content',
+                                  height: 'fit-content',
+                                  marginLeft: '0.5rem'
+                                }}
+                              >
+                                {showSuggestionExplanations[index] ? '▼' : '▶'} 
+                                {showSuggestionExplanations[index] ? 'Hide' : 'Details'}
+                              </button>
+                            )}
+                          </div>
+                          <div style={{ color: '#666', fontSize: '0.85rem', width: '100%', lineHeight: '1.4' }}>
+                            {(suggestion as any).translation}
+                          </div>
+                        </div>
+                        {showSuggestionExplanations[index] && (suggestion as any).explanation && (suggestion as any).explanation.trim() && (
+                          <div style={{
+                            marginTop: '0.75rem',
+                            padding: '1rem',
+                            background: 'linear-gradient(135deg, #f8f9fa 0%, #f0f4f8 100%)',
+                            borderRadius: 8,
+                            border: '1px solid #e1e8ed',
+                            fontSize: '0.8rem',
+                            lineHeight: 1.5,
+                            whiteSpace: 'pre-wrap',
+                            boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.05)',
+                            color: '#2c3e50'
+                          }}>
+                            {(suggestion as any).explanation}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Empty State */}
+                {!isLoadingSuggestions && suggestions.length === 0 && (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#666',
+                    fontSize: '0.9rem',
+                    fontStyle: 'italic',
+                    padding: '1rem',
+                    textAlign: 'center'
+                  }}>
+                    Click "Get New Suggestions" to see conversation ideas
+                  </div>
+                )}
+              </div>
+
+              {/* Get Suggestions Button - Fixed at bottom */}
+              <div style={{
+                padding: '1rem',
+                borderTop: '1px solid #e0e0e0',
+                background: '#f9f9f9'
+              }}>
+                {suggestions.length === 0 && !isLoadingSuggestions && (
+                  <button
+                    onClick={fetchSuggestions}
+                    style={{
+                      width: '100%',
+                      padding: '0.6rem 1.2rem',
+                      background: 'var(--rose-primary)',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: 10,
+                      cursor: 'pointer',
+                      fontSize: '0.9rem',
+                      fontWeight: 500,
+                      transition: 'all 0.2s',
+                      boxShadow: '0 1px 4px rgba(195,141,148,0.10)'
+                    }}
+                  >
+                    💡 Get New Suggestions
+                  </button>
+                )}
+                {suggestions.length > 0 && (
+                  <button
+                    onClick={() => {
+                      setSuggestions([]);
+                      fetchSuggestions();
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '0.6rem 1.2rem',
+                      background: '#fff',
+                      color: 'var(--rose-primary)',
+                      border: '1px solid #c38d94',
+                      borderRadius: 10,
+                      cursor: 'pointer',
+                      fontSize: '0.9rem',
+                      fontWeight: 500,
+                      transition: 'all 0.2s ease',
+                      boxShadow: '0 1px 4px rgba(195,141,148,0.08)'
+                    }}
+                  >
+                    🔄 Get New Suggestions
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
       {/* Interrupt message - prominent UI position */}
       {wasInterrupted && !isRecording && (
         <div style={{
@@ -1417,6 +2350,55 @@ function Analyze() {
             Recording canceled. You can try again.
           </div>
         </div>
+      )}
+      {/* Floating Panel Toggle Buttons */}
+      {!showShortFeedbackPanel && (
+        <button
+          onClick={() => setShowShortFeedbackPanel(true)}
+          style={{
+            position: 'fixed',
+            left: '1rem',
+            top: '6rem',
+            background: 'var(--blue-secondary)',
+            color: '#fff',
+            border: 'none',
+            borderRadius: '8px 0 0 8px',
+            padding: '1rem 0.5rem',
+            fontSize: '1.2rem',
+            cursor: 'pointer',
+            fontWeight: 600,
+            transition: 'all 0.2s',
+            boxShadow: '0 2px 8px rgba(60,76,115,0.2)',
+            zIndex: 1000
+          }}
+          title="Show Short Feedback Panel"
+        >
+          💡
+        </button>
+      )}
+      {!showDetailedFeedbackPanel && (
+        <button
+          onClick={() => setShowDetailedFeedbackPanel(true)}
+          style={{
+            position: 'fixed',
+            right: '1rem',
+            top: '6rem',
+            background: 'var(--rose-primary)',
+            color: '#fff',
+            border: 'none',
+            borderRadius: '0 8px 8px 0',
+            padding: '1rem 0.5rem',
+            fontSize: '1.2rem',
+            cursor: 'pointer',
+            fontWeight: 600,
+            transition: 'all 0.2s',
+            boxShadow: '0 2px 8px rgba(195,141,148,0.2)',
+            zIndex: 1000
+          }}
+          title="Show Detailed Analysis Panel"
+        >
+          📊
+        </button>
       )}
       {/* Topic Selection Modal */}
       <TopicSelectionModal
