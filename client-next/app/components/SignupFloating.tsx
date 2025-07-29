@@ -1,6 +1,6 @@
 "use client";
 import React from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useUser } from '../ClientLayout';
 import logo from '../../assets/logo.png';
 
@@ -13,8 +13,11 @@ const floatKeyframes = `
 
 export default function SignupFloating() {
   const router = useRouter();
+  const pathname = usePathname();
   const { user } = useUser ? useUser() : { user: null };
-  if (user) return null;
+  
+  // Only show on landing page (root path) and not on signup page
+  if (user || pathname !== '/') return null;
   return (
     <>
       <style>{floatKeyframes}</style>

@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { FaUserCircle } from 'react-icons/fa';
 import Navigation from "./components/Navigation";
+import SignupFloating from "./components/SignupFloating";
 
 const translucentBg = 'rgba(60,76,115,0.06)';
 const translucentRose = 'rgba(195,141,148,0.08)';
@@ -96,6 +97,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       <UserContext.Provider value={{ user, setUser, logout }}>
         <Navigation />
         {children}
+        <SignupFloating />
       </UserContext.Provider>
     </GoogleOAuthProvider>
   );

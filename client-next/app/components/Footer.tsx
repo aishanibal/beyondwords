@@ -44,8 +44,8 @@ export default function Footer() {
             viewport={{ once: true }}
           >
             <div className="flex items-center mb-4">
-              <div className="w-12 h-12 bg-rose-primary/20 rounded-lg flex items-center justify-center">
-                <img src={logo.src} alt="BeyondWords Logo" className="h-8 w-8 object-contain" />
+              <div className="w-24 h-24 bg-blue-secondary/20 rounded-2xl flex items-center justify-center">
+                <img src={logo.src} alt="BeyondWords Logo" className="h-16 w-16 object-contain" />
               </div>
               <span className="ml-2 text-lg font-heading font-semibold">BeyondWords</span>
             </div>
@@ -108,7 +108,7 @@ export default function Footer() {
           viewport={{ once: true }}
         >
           <p className="text-white/70 font-body">
-            © 2024 BeyondWords. All rights reserved.
+            © 2025 BeyondWords. All rights reserved.
           </p>
 
           <div className="flex space-x-6 mt-4 md:mt-0">

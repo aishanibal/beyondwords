@@ -4,8 +4,10 @@ import { useUser } from '../ClientLayout';
 import axios from 'axios';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Topic } from '../../lib/preferences';
+import { motion } from 'framer-motion';
 import LanguageOnboarding from '../components/LanguageOnboarding';
+import DashboardSettingsModal from '../components/DashboardSettingsModal';
+import { LEARNING_GOALS } from '../../lib/preferences';
 
 // Type definitions
 interface DashboardType {
@@ -13,7 +15,7 @@ interface DashboardType {
   proficiency_level: string;
   talk_topics: string[];
   learning_goals: string[];
-  is_primary?: boolean;
+  speak_speed?: number;
 }
 
 interface ConversationType {
@@ -23,27 +25,9 @@ interface ConversationType {
   message_count?: number;
 }
 
-interface DashboardSettingsModalProps {
-  dashboard: DashboardType;
-  isOpen: boolean;
-  onClose: () => void;
-  onUpdate: (dashboard: DashboardType) => void;
-}
 
-const TALK_TOPICS: Topic[] = [
-  { id: 'family', label: 'Family and relationships', icon: '👨‍👩‍👧‍👦' },
-  { id: 'travel', label: 'Travel experiences and cultures', icon: '✈️' },
-  { id: 'heritage', label: 'Cultural heritage and traditions', icon: '🏛️' },
-  { id: 'business', label: 'Work and professional life', icon: '💼' },
-  { id: 'media', label: 'Movies, music, and media', icon: '🎬' },
-  { id: 'food', label: 'Food and cooking', icon: '🍽️' },
-  { id: 'hobbies', label: 'Hobbies and leisure activities', icon: '🎨' },
-  { id: 'news', label: 'News and current events', icon: '📰' },
-  { id: 'sports', label: 'Sports and fitness', icon: '⚽️' },
-  { id: 'education', label: 'Education and learning', icon: '📚' },
-  { id: 'technology', label: 'Technology and innovation', icon: '💻' },
-  { id: 'health', label: 'Health and wellness', icon: '🏥' }
-];
+
+
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -85,14 +69,14 @@ export default function DashboardPage() {
         const processedDashboards: DashboardType[] = dashboards.map((dashboard: DashboardType) => ({
           ...dashboard,
           talk_topics: dashboard.talk_topics || [],
-          learning_goals: dashboard.learning_goals || []
+          learning_goals: dashboard.learning_goals || [],
+          speak_speed: dashboard.speak_speed || 1.0
         }));
         setLanguageDashboards(processedDashboards);
-        const primaryDashboard = processedDashboards.find((d: DashboardType) => d.is_primary);
         let currentLanguage = selectedLanguage;
         // Only set selectedLanguage if not already set (from localStorage or onboarding)
-        if (primaryDashboard && !selectedLanguage) {
-          currentLanguage = primaryDashboard.language;
+        if (!selectedLanguage && processedDashboards.length > 0) {
+          currentLanguage = processedDashboards[0].language;
           setSelectedLanguage(currentLanguage);
         }
       } catch (err) {
@@ -124,30 +108,7 @@ export default function DashboardPage() {
     fetchConversations();
   }, [selectedLanguage, user?.id]);
 
-  const getLanguageInfo = (code: string): { label: string; flag: string } => {
-    const languages: Record<string, { label: string; flag: string }> = {
-      'es': { label: 'Spanish', flag: '🇪🇸' },
-      'hi': { label: 'Hindi', flag: '🇮🇳' },
-      'ja': { label: 'Japanese', flag: '🇯🇵' },
-      'tl': { label: 'Tagalog', flag: '🇵🇭' },
-      'ta': { label: 'Tamil', flag: '🇮🇳' },
-      'ar': { label: 'Arabic', flag: '🇸🇦' },
-      'zh': { label: 'Mandarin', flag: '🇨🇳' },
-      'ko': { label: 'Korean', flag: '🇰🇷' }
-    };
-    return languages[code] || { label: code, flag: '🌍' };
-  };
 
-  const getProficiencyDisplay = (level: string): { label: string; icon: string } => {
-    const levels: Record<string, { label: string; icon: string }> = {
-      'beginner': { label: 'Beginner', icon: '🌱' },
-      'elementary': { label: 'Elementary', icon: '🌿' },
-      'intermediate': { label: 'Intermediate', icon: '🌳' },
-      'advanced': { label: 'Advanced', icon: '🏔️' },
-      'fluent': { label: 'Fluent', icon: '🗝️' }
-    };
-    return levels[level] || { label: level, icon: '🌱' };
-  };
 
   const deleteConversation = async (conversationId: string) => {
     if (!window.confirm('Are you sure you want to delete this conversation? This action cannot be undone.')) {
@@ -165,7 +126,8 @@ export default function DashboardPage() {
     const processedDashboard: DashboardType = {
       ...newDashboard,
       talk_topics: newDashboard.talk_topics || [],
-      learning_goals: newDashboard.learning_goals || []
+      learning_goals: newDashboard.learning_goals || [],
+      speak_speed: newDashboard.speak_speed || 1.0
     };
     setLanguageDashboards((prev: DashboardType[]) => [...prev, processedDashboard]);
     setShowLanguageOnboarding(false);
@@ -195,102 +157,33 @@ export default function DashboardPage() {
     fetchStreak();
   }, [user?.id, selectedLanguage]);
 
-  const DashboardSettingsModal: React.FC<DashboardSettingsModalProps> = ({ dashboard, isOpen, onClose, onUpdate }) => {
-    const [editedDashboard, setEditedDashboard] = useState<DashboardType>(dashboard);
-    const [isSaving, setIsSaving] = useState<boolean>(false);
-    const [isDeleting, setIsDeleting] = useState<boolean>(false);
-    const [saveError, setSaveError] = useState<string>('');
-
-    useEffect(() => {
-      if (dashboard) {
-        setEditedDashboard({
-          ...dashboard,
-          talk_topics: dashboard.talk_topics || [],
-          learning_goals: dashboard.learning_goals || []
-        });
-      }
-    }, [dashboard]);
-
-    const handleTopicToggle = (topicId: string) => {
-      setEditedDashboard((prev: DashboardType) => ({
-        ...prev,
-        talk_topics: prev.talk_topics.includes(topicId)
-          ? prev.talk_topics.filter((id: string) => id !== topicId)
-          : [...prev.talk_topics, topicId]
-      }));
+  const getLanguageInfo = (code: string): { label: string; flag: string } => {
+    const languages: Record<string, { label: string; flag: string }> = {
+      'en': { label: 'English', flag: '🇺🇸' },
+      'es': { label: 'Spanish', flag: '🇪🇸' },
+      'fr': { label: 'French', flag: '🇫🇷' },
+      'zh': { label: 'Mandarin', flag: '🇨🇳' },
+      'ja': { label: 'Japanese', flag: '🇯🇵' },
+      'ko': { label: 'Korean', flag: '🇰🇷' },
+      'tl': { label: 'Tagalog', flag: '🇵🇭' },
+      'hi': { label: 'Hindi', flag: '🇮🇳' },
+      'ml': { label: 'Malayalam', flag: '🇮🇳' },
+      'ta': { label: 'Tamil', flag: '🇮🇳' },
+      'or': { label: 'Odia', flag: '🇮🇳' },
+      'ar': { label: 'Arabic', flag: '🇸🇦' }
     };
+    return languages[code] || { label: code, flag: '🌍' };
+  };
 
-    const handleSave = async () => {
-      setIsSaving(true);
-      setSaveError('');
-      try {
-        const response = await axios.put(`/api/user/language-dashboards/${dashboard.language}`, {
-          proficiency_level: editedDashboard.proficiency_level,
-          talk_topics: editedDashboard.talk_topics,
-          learning_goals: editedDashboard.learning_goals
-        });
-        onUpdate(response.data.dashboard);
-        onClose();
-      } catch (err: any) {
-        setSaveError('Failed to update dashboard settings. Please try again.');
-      } finally {
-        setIsSaving(false);
-      }
+  const getProficiencyDisplay = (level: string): { label: string; icon: string } => {
+    const levels: Record<string, { label: string; icon: string }> = {
+      'beginner': { label: 'Beginner', icon: '🌱' },
+      'elementary': { label: 'Elementary', icon: '🌿' },
+      'intermediate': { label: 'Intermediate', icon: '🌳' },
+      'advanced': { label: 'Advanced', icon: '🏔️' },
+      'fluent': { label: 'Fluent', icon: '🗝️' }
     };
-
-    const handleDelete = async () => {
-      const confirmMessage = `Are you sure you want to delete your ${getLanguageInfo(dashboard.language).label} dashboard? This will permanently delete all conversations and messages in this language. This action cannot be undone.`;
-      if (!window.confirm(confirmMessage)) {
-        return;
-      }
-      setIsDeleting(true);
-      setSaveError('');
-      try {
-        await axios.delete(`/api/user/language-dashboards/${dashboard.language}`);
-        setLanguageDashboards((prev: DashboardType[]) => prev.filter((d: DashboardType) => d.language !== dashboard.language));
-        if (selectedLanguage === dashboard.language) {
-          const remainingDashboards = languageDashboards.filter((d: DashboardType) => d.language !== dashboard.language);
-          const newSelectedLanguage = remainingDashboards.find((d: DashboardType) => d.is_primary)?.language || remainingDashboards[0]?.language;
-          setSelectedLanguage(newSelectedLanguage);
-        }
-        onClose();
-      } catch (err: any) {
-        setSaveError('Failed to delete dashboard. Please try again.');
-      } finally {
-        setIsDeleting(false);
-      }
-    };
-
-    if (!isOpen) return null;
-
-    return (
-      <div style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        background: 'rgba(0,0,0,0.7)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 9999,
-        padding: '1rem'
-      }}>
-        <div style={{
-          background: '#fff',
-          borderRadius: 20,
-          padding: '1.5rem',
-          boxShadow: '0 20px 60px rgba(60,76,115,0.25)',
-          maxWidth: 'min(600px, 90vw)',
-          width: '100%',
-          maxHeight: '90vh',
-          overflowY: 'auto'
-        }}>
-          {/* ...modal content as before... */}
-        </div>
-      </div>
-    );
+    return levels[level] || { label: level, icon: '🌱' };
   };
 
   const handleDashboardUpdate = (updatedDashboard: DashboardType) => {
@@ -313,22 +206,32 @@ export default function DashboardPage() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #f5f1ec 0%, #e8e0d8 50%, #d4c8c0 100%)', padding: '2rem' }}>
-      <div style={{ maxWidth: 1000, margin: '0 auto' }}>
+    <div className="min-h-screen bg-cream">
+      <div className="max-w-6xl mx-auto px-6 py-8">
         {/* Header */}
-        <div style={{ background: '#fff', borderRadius: 20, boxShadow: '0 8px 32px rgba(60,76,115,0.12)', padding: '2.5rem 2rem', marginBottom: '2rem' }}>
-          <h1 style={{ color: '#3c4c73', fontFamily: 'Grandstander, Arial, sans-serif', fontWeight: 700, fontSize: '2rem', marginBottom: '1rem' }}>
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-8"
+        >
+          <h1 className="text-4xl font-heading font-bold text-rose-primary mb-2">
             Welcome back, {user?.name?.split(' ')[0]}!
           </h1>
-          <p style={{ color: '#7e5a75', fontSize: '1rem', marginBottom: '2rem' }}>
+          <p className="text-rose-accent font-body">
             Your multilingual journey dashboard
           </p>
-          {/* Language Selection */}
-          <div style={{ marginBottom: '2rem' }}>
-            <h3 style={{ color: '#3c4c73', fontSize: '1.1rem', fontWeight: 600, marginBottom: '1rem' }}>
-              📚 Your Language Dashboards
-            </h3>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', alignItems: 'center' }}>
+        </motion.div>
+                  {/* Language Selection */}
+        <motion.div
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.1 }}
+          className="bg-white rounded-lg shadow-lg p-8 mb-8 border border-gray-200"
+        >
+          <h3 className="text-2xl font-heading font-semibold text-rose-primary mb-4">
+            📚 Your Language Dashboards
+          </h3>
+          <div className="flex flex-wrap gap-6 items-center">
               {(languageDashboards || []).map((dashboard: DashboardType) => {
                 const langInfo = getLanguageInfo(dashboard.language);
                 const profInfo = getProficiencyDisplay(dashboard.proficiency_level);
@@ -338,31 +241,35 @@ export default function DashboardPage() {
                     key={dashboard.language}
                     onClick={() => setSelectedLanguage(dashboard.language)}
                     style={{
-                      background: isSelected ? 'linear-gradient(135deg, #7e5a75 0%, #8a6a7a 100%)' : '#f8f6f4',
-                      color: isSelected ? '#fff' : '#3c4c73',
-                      border: `2px solid ${isSelected ? '#7e5a75' : 'rgba(126,90,117,0.2)'}`,
-                      borderRadius: 12,
-                      padding: '1rem 1.5rem',
-                      cursor: 'pointer',
-                      transition: 'all 0.3s ease',
-                      fontWeight: 600,
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '0.5rem'
+                      gap: '1.5rem',
+                      padding: '2rem 2.5rem',
+                      borderRadius: '0.5rem',
+                      fontWeight: 600,
+                      transition: 'all 0.3s ease',
+                      background: isSelected ? 'var(--rose-primary)' : 'var(--cream)',
+                      color: isSelected ? '#fff' : 'var(--rose-primary)',
+                      border: `2px solid ${isSelected ? 'var(--rose-accent)' : 'transparent'}`,
+                      boxShadow: isSelected ? '0 4px 15px rgba(126,90,117,0.3)' : 'none'
                     }}
                   >
-                    <span style={{ fontSize: '1.2rem' }}>{langInfo.flag}</span>
+                    <span className="text-2xl">{langInfo.flag}</span>
                     <div style={{ textAlign: 'left' }}>
-                      <div>{langInfo.label}</div>
-                      <div style={{ fontSize: '0.75rem', opacity: 0.8, color: isSelected ? '#f8f6f4' : '#7e5a75' }}>
+                      <div style={{ 
+                        color: isSelected ? '#fff' : 'var(--rose-primary)',
+                        fontFamily: 'Gabriela, Arial, sans-serif',
+                        fontWeight: 600
+                      }}>{langInfo.label}</div>
+                      <div style={{ 
+                        color: isSelected ? '#fff' : 'var(--rose-accent)',
+                        fontSize: '0.875rem',
+                        opacity: 0.8,
+                        fontFamily: 'AR One Sans, Arial, sans-serif'
+                      }}>
                         {profInfo.icon} {profInfo.label}
                       </div>
                     </div>
-                    {dashboard.is_primary && (
-                      <span style={{ background: isSelected ? 'rgba(248,246,244,0.3)' : 'rgba(126,90,117,0.1)', color: isSelected ? '#f8f6f4' : '#7e5a75', padding: '0.2rem 0.5rem', borderRadius: 4, fontSize: '0.7rem', fontWeight: 600 }}>
-                        PRIMARY
-                      </span>
-                    )}
                   </button>
                 );
               })}
@@ -370,42 +277,70 @@ export default function DashboardPage() {
               <button
                 onClick={() => setShowLanguageOnboarding(true)}
                 style={{
-                  background: 'transparent',
-                  color: '#7e5a75',
-                  border: '2px dashed rgba(126,90,117,0.4)',
-                  borderRadius: 12,
-                  padding: '1rem 1.5rem',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease',
-                  fontWeight: 600,
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '0.5rem'
+                  gap: '1.5rem',
+                  padding: '2rem 2.5rem',
+                  borderRadius: '0.5rem',
+                  fontWeight: 600,
+                  transition: 'all 0.3s ease',
+                  border: '2px dashed rgba(126,90,117,0.4)',
+                  color: 'var(--rose-primary)',
+                  background: 'transparent',
+                  cursor: 'pointer'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(126,90,117,0.05)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'transparent';
                 }}
               >
-                <span style={{ fontSize: '1.2rem' }}>➕</span>
+                <span style={{ fontSize: '1.5rem' }}>➕</span>
                 Add Language
               </button>
             </div>
-          </div>
-        </div>
+          </motion.div>
         {/* Current Language Dashboard */}
         {currentDashboard && currentDashboard.language && (
           <>
             {/* Dashboard Header */}
-            <div style={{ background: '#fff', borderRadius: 16, boxShadow: '0 4px 20px rgba(60,76,115,0.1)', padding: '2rem', marginBottom: '2rem' }}>
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.2 }}
+              className="bg-white rounded-lg shadow-lg p-8 mb-8 border border-gray-200"
+            >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
                     <span style={{ fontSize: '2rem' }}>{getLanguageInfo(currentDashboard.language).flag}</span>
-                    <h2 style={{ color: '#3c4c73', fontSize: '1.5rem', fontWeight: 700, margin: 0 }}>
+                    <h2 style={{ 
+                      color: 'var(--blue-secondary)', 
+                      fontSize: '1.5rem', 
+                      fontWeight: 700, 
+                      margin: 0,
+                      fontFamily: 'Gabriela, Arial, sans-serif'
+                    }} className="font-heading">
                       {getLanguageInfo(currentDashboard.language).label}
                     </h2>
-                    <span style={{ background: '#7e5a75', color: '#fff', padding: '0.3rem 0.75rem', borderRadius: 6, fontSize: '0.8rem', fontWeight: 600 }}>
+                    <span style={{ 
+                      background: 'var(--rose-primary)', 
+                      color: '#fff', 
+                      padding: '0.3rem 0.75rem', 
+                      borderRadius: 6, 
+                      fontSize: '0.8rem', 
+                      fontWeight: 600,
+                      fontFamily: 'Montserrat, Arial, sans-serif'
+                    }}>
                       {getProficiencyDisplay(currentDashboard.proficiency_level).label}
                     </span>
                   </div>
-                  <div style={{ color: '#7e5a75', fontSize: '0.9rem' }}>
+                  <div style={{ 
+                    color: 'var(--rose-primary)', 
+                    fontSize: '0.9rem',
+                    fontFamily: 'AR One Sans, Arial, sans-serif'
+                  }} className="font-body">
                     {(currentDashboard.talk_topics?.length || 0)} topics • {(currentDashboard.learning_goals?.length || 0)} goals
                   </div>
                 </div>
@@ -414,7 +349,7 @@ export default function DashboardPage() {
                     onClick={() => setShowDashboardSettings(true)}
                     style={{
                       background: 'transparent',
-                      color: '#7e5a75',
+                      color: 'var(--rose-primary)',
                       border: '2px solid rgba(126,90,117,0.3)',
                       borderRadius: 8,
                       padding: '0.5rem 1rem',
@@ -424,7 +359,8 @@ export default function DashboardPage() {
                       fontSize: '0.9rem',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '0.5rem'
+                      gap: '0.5rem',
+                      fontFamily: 'Montserrat, Arial, sans-serif'
                     }}
                   >
                     ⚙️ Settings
@@ -433,7 +369,7 @@ export default function DashboardPage() {
                     href={`/analyze?language=${currentDashboard.language}`}
                     style={{
                       display: 'inline-block',
-                      background: 'linear-gradient(135deg, #7e5a75 0%, #8a6a7a 100%)',
+                      background: 'linear-gradient(135deg, var(--rose-primary) 0%, #8a6a7a 100%)',
                       color: '#fff',
                       padding: '0.75rem 1.5rem',
                       borderRadius: 10,
@@ -441,89 +377,230 @@ export default function DashboardPage() {
                       fontWeight: 600,
                       fontSize: '1rem',
                       transition: 'all 0.3s ease',
-                      boxShadow: '0 4px 15px rgba(126,90,117,0.3)'
+                      boxShadow: '0 4px 15px rgba(126,90,117,0.3)',
+                      fontFamily: 'Montserrat, Arial, sans-serif'
                     }}
                   >
                     🎤 Practice Now
                   </Link>
                 </div>
               </div>
-            </div>
+            </motion.div>
             {/* Stats Grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
-              <div style={{ background: '#fff', borderRadius: 12, boxShadow: '0 4px 20px rgba(60,76,115,0.1)', padding: '1.5rem', textAlign: 'center' }}>
-                <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>🔥</div>
-                <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#c38d94', marginBottom: '0.25rem' }}>{streak}</div>
-                <div style={{ color: '#7e5a75', fontSize: '0.8rem' }}>Day Streak</div>
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.3 }}
+              className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8"
+            >
+                              <div className="bg-white rounded-lg shadow-lg p-8 text-center min-h-[180px] flex flex-col justify-center border border-gray-200">
+                  <div className="text-4xl mb-4">🔥</div>
+                  <div className="text-4xl font-bold text-rose-accent mb-3 font-heading">{streak}</div>
+                  <div className="text-rose-primary text-base font-body">Day Streak</div>
+                </div>
+                              <div className="bg-white rounded-lg shadow-lg p-8 text-center min-h-[180px] flex flex-col justify-center border border-gray-200">
+                  <div className="text-4xl mb-4">💬</div>
+                  <div className="text-4xl font-bold text-rose-primary mb-3 font-heading">{(conversations || []).length}</div>
+                  <div className="text-rose-primary text-base font-base">Conversations</div>
+                </div>
+                              <div className="bg-white rounded-lg shadow-lg p-8 min-h-[220px] border border-gray-200">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+                  <div style={{ fontSize: '1.5rem' }}>🎯</div>
+                  <div style={{ 
+                    color: 'var(--blue-secondary)', 
+                    fontSize: '1.1rem', 
+                    fontWeight: 600,
+                    fontFamily: 'Gabriela, Arial, sans-serif'
+                  }}>Learning Goals</div>
+                </div>
+                {currentDashboard.learning_goals && currentDashboard.learning_goals.length > 0 ? (
+                  <div style={{ 
+                    height: '140px', 
+                    overflowY: 'auto',
+                    scrollbarWidth: 'thin',
+                    scrollbarColor: 'var(--rose-accent) transparent'
+                  }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                      {currentDashboard.learning_goals.map((goalId: string, index: number) => {
+                        const goal = LEARNING_GOALS.find(g => g.id === goalId);
+                        return (
+                          <div key={index} style={{ 
+                            background: 'rgba(126,90,117,0.05)', 
+                            borderRadius: 8, 
+                            padding: '0.5rem', 
+                            border: '1px solid rgba(126,90,117,0.1)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.5rem'
+                          }}>
+                            <div style={{ 
+                              background: 'var(--rose-primary)', 
+                              color: '#fff', 
+                              borderRadius: '50%', 
+                              width: '20px', 
+                              height: '20px', 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              justifyContent: 'center', 
+                              fontSize: '0.7rem',
+                              fontWeight: 600,
+                              flexShrink: 0,
+                              fontFamily: 'Montserrat, Arial, sans-serif'
+                            }}>
+                              {index + 1}
+                            </div>
+                            <div style={{ 
+                              color: 'var(--blue-secondary)', 
+                              fontWeight: 500,
+                              fontSize: '0.8rem',
+                              lineHeight: '1.3',
+                              fontFamily: 'Montserrat, Arial, sans-serif',
+                              flex: 1
+                            }}>
+                              {goal ? goal.label : goalId}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ 
+                    color: 'var(--rose-primary)', 
+                    fontSize: '0.8rem',
+                    textAlign: 'center',
+                    fontFamily: 'AR One Sans, Arial, sans-serif'
+                  }}>
+                    No goals set yet
+                  </div>
+                )}
               </div>
-              <div style={{ background: '#fff', borderRadius: 12, boxShadow: '0 4px 20px rgba(60,76,115,0.1)', padding: '1.5rem', textAlign: 'center' }}>
-                <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>💬</div>
-                <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#7e5a75', marginBottom: '0.25rem' }}>{(conversations || []).length}</div>
-                <div style={{ color: '#7e5a75', fontSize: '0.8rem' }}>Conversations</div>
-              </div>
-              <div style={{ background: '#fff', borderRadius: 12, boxShadow: '0 4px 20px rgba(60,76,115,0.1)', padding: '1.5rem', textAlign: 'center' }}>
-                <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>🎯</div>
-                <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#3c4c73', marginBottom: '0.25rem' }}>{currentDashboard.learning_goals?.length || 0}</div>
-                <div style={{ color: '#7e5a75', fontSize: '0.8rem' }}>Active Goals</div>
-              </div>
-            </div>
+            </motion.div>
+
             {/* Recent Conversations */}
-            <div style={{ background: '#fff', borderRadius: 16, boxShadow: '0 4px 20px rgba(60,76,115,0.1)', padding: '2rem' }}>
-              <h3 style={{ color: '#3c4c73', fontSize: '1.3rem', fontWeight: 600, marginBottom: '1rem' }}>
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.4 }}
+              className="bg-white rounded-lg shadow-lg p-8 border border-gray-200"
+            >
+              <h3 style={{ 
+                color: 'var(--blue-secondary)', 
+                fontSize: '1.3rem', 
+                fontWeight: 600, 
+                marginBottom: '1rem',
+                fontFamily: 'Gabriela, Arial, sans-serif'
+              }} className="font-heading">
                 Recent Conversations
               </h3>
               {loading ? (
-                <div style={{ textAlign: 'center', padding: '2rem', color: '#7e5a75' }}>Loading conversations...</div>
+                <div style={{ 
+                  textAlign: 'center', 
+                  padding: '2rem', 
+                  color: 'var(--rose-primary)',
+                  fontFamily: 'AR One Sans, Arial, sans-serif'
+                }} className="font-body">Loading conversations...</div>
               ) : error ? (
-                <div style={{ color: '#dc3545', textAlign: 'center', padding: '2rem' }}>{error}</div>
+                <div style={{ 
+                  color: '#dc3545', 
+                  textAlign: 'center', 
+                  padding: '2rem',
+                  fontFamily: 'Montserrat, Arial, sans-serif'
+                }} className="font-body">{error}</div>
               ) : (conversations || []).length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '2rem', color: '#7e5a75', background: 'rgba(126,90,117,0.05)', borderRadius: 12, border: '2px dashed rgba(126,90,117,0.2)' }}>
-                  <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🎤</div>
-                  <div style={{ fontWeight: 600, marginBottom: '0.5rem' }}>Start your first conversation!</div>
-                  <div style={{ fontSize: '0.9rem', opacity: 0.8 }}>
-                    Click &quot;Practice Now&quot; to begin learning {getLanguageInfo(currentDashboard.language).label}
+                                  <div style={{ 
+                    textAlign: 'center', 
+                    padding: '2rem', 
+                    color: 'var(--rose-primary)', 
+                    background: 'rgba(126,90,117,0.05)', 
+                    borderRadius: 12, 
+                    border: '2px dashed rgba(126,90,117,0.2)',
+                    fontFamily: 'AR One Sans, Arial, sans-serif'
+                  }} className="font-body">
+                    <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🎤</div>
+                    <div style={{ 
+                      fontWeight: 600, 
+                      marginBottom: '0.5rem',
+                      fontFamily: 'Gabriela, Arial, sans-serif'
+                    }}>Start your first conversation!</div>
+                    <div style={{ fontSize: '0.9rem', opacity: 0.8 }}>
+                      Click &quot;Practice Now&quot; to begin learning {getLanguageInfo(currentDashboard.language).label}
+                    </div>
                   </div>
-                </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                   {(conversations || []).slice(0, 5).map((conversation: ConversationType) => (
                     <div key={conversation.id} style={{ background: 'rgba(126,90,117,0.05)', borderRadius: 12, padding: '1rem', border: '1px solid rgba(126,90,117,0.1)', transition: 'all 0.3s ease' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                          <div style={{ fontWeight: 600, color: '#3c4c73' }}>
+                          <div style={{ 
+                            fontWeight: 600, 
+                            color: 'var(--blue-secondary)',
+                            fontFamily: 'Montserrat, Arial, sans-serif'
+                          }} className="font-body">
                             {conversation.title || 'Untitled Conversation'}
                           </div>
-                          <div style={{ color: '#7e5a75', fontSize: '0.8rem' }}>
+                          <div style={{ 
+                            color: 'var(--rose-primary)', 
+                            fontSize: '0.8rem',
+                            fontFamily: 'AR One Sans, Arial, sans-serif'
+                          }} className="font-body">
                             {new Date(conversation.created_at).toLocaleDateString()}
                           </div>
                         </div>
                         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                           <Link 
                             href={`/analyze?conversation=${conversation.id}&language=${currentDashboard.language}`}
-                            style={{ color: '#7e5a75', fontWeight: 600, textDecoration: 'none', fontSize: '0.9rem', padding: '0.25rem 0.75rem', borderRadius: 6, background: 'rgba(126,90,117,0.1)', transition: 'all 0.3s ease' }}
+                            style={{ 
+                              color: 'var(--rose-primary)', 
+                              fontWeight: 600, 
+                              textDecoration: 'none', 
+                              fontSize: '0.9rem', 
+                              padding: '0.25rem 0.75rem', 
+                              borderRadius: 6, 
+                              background: 'rgba(126,90,117,0.1)', 
+                              transition: 'all 0.3s ease',
+                              fontFamily: 'Montserrat, Arial, sans-serif'
+                            }}
                           >
                             Continue →
                           </Link>
                           <button
                             onClick={() => deleteConversation(conversation.id)}
-                            style={{ color: '#dc3545', background: 'rgba(220,53,69,0.1)', border: 'none', borderRadius: 6, padding: '0.25rem 0.5rem', fontSize: '0.8rem', cursor: 'pointer', transition: 'all 0.3s ease' }}
+                            style={{ 
+                              color: '#dc3545', 
+                              background: 'rgba(220,53,69,0.1)', 
+                              border: 'none', 
+                              borderRadius: 6, 
+                              padding: '0.25rem 0.5rem', 
+                              fontSize: '0.8rem', 
+                              cursor: 'pointer', 
+                              transition: 'all 0.3s ease',
+                              fontFamily: 'Montserrat, Arial, sans-serif'
+                            }}
                             title="Delete conversation"
                           >
                             🗑️
                           </button>
                         </div>
                       </div>
-                      <div style={{ color: '#7e5a75', fontSize: '0.9rem', opacity: 0.8 }}>
+                      <div style={{ 
+                        color: 'var(--rose-primary)', 
+                        fontSize: '0.9rem', 
+                        opacity: 0.8,
+                        fontFamily: 'AR One Sans, Arial, sans-serif'
+                      }} className="font-body">
                         💬 {conversation.message_count || 0} messages
                       </div>
                     </div>
                   ))}
                 </div>
               )}
-            </div>
+            </motion.div>
           </>
         )}
       </div>
+      
       {/* Dashboard Settings Modal */}
       {currentDashboard && (
         <DashboardSettingsModal
@@ -531,6 +608,14 @@ export default function DashboardPage() {
           isOpen={showDashboardSettings}
           onClose={() => setShowDashboardSettings(false)}
           onUpdate={handleDashboardUpdate}
+          onDelete={(language: string) => {
+            setLanguageDashboards((prev: DashboardType[]) => prev.filter((d: DashboardType) => d.language !== language));
+            if (selectedLanguage === language) {
+              const remainingDashboards = languageDashboards.filter((d: DashboardType) => d.language !== language);
+              const newSelectedLanguage = remainingDashboards[0]?.language;
+              setSelectedLanguage(newSelectedLanguage);
+            }
+          }}
         />
       )}
     </div>

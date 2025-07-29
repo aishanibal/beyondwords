@@ -82,20 +82,21 @@ export default function LoginPage() {
       minHeight: '100vh',
       background: 'linear-gradient(135deg, #f5f1ec 0%, #e8e0d8 50%, #d4c8c0 100%)',
       display: 'flex',
-      alignItems: 'center',
+      alignItems: 'flex-start',
       justifyContent: 'center',
-      padding: '2rem'
+      padding: '2rem',
+      paddingTop: '1rem'
     }}>
-      <div style={{
-        background: '#fff',
-        borderRadius: 20,
-        padding: '3rem',
-        boxShadow: '0 20px 60px rgba(60,76,115,0.15)',
-        maxWidth: 450,
-        width: '100%',
-        position: 'relative',
-        overflow: 'hidden'
-      }}>
+              <div style={{
+          background: '#fff',
+          borderRadius: 20,
+          padding: '2rem',
+          boxShadow: '0 20px 60px rgba(60,76,115,0.15)',
+          maxWidth: 700,
+          width: '100%',
+          position: 'relative',
+          overflow: 'hidden'
+        }}>
         {/* Decorative background elements */}
         <div style={{
           position: 'absolute',
@@ -118,31 +119,32 @@ export default function LoginPage() {
 
         <div style={{ position: 'relative', zIndex: 1 }}>
           {/* Header */}
-          <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
+          <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+            <div style={{ marginBottom: '-0.9rem', display: 'flex', justifyContent: 'center' }}>
               <img 
-          src="/favicon/favicon.svg" 
-          alt="BeyondWords Logo" 
-          style={{ 
-            height: '8.2rem', 
-            width: 'auto', 
-            marginRight: 0, 
-            verticalAlign: 'middle' 
-          }} 
-        />
+                src="/favicon/favicon.svg" 
+                alt="BeyondWords Logo" 
+                style={{ 
+                  height: '7rem', 
+                  width: 'auto'
+                }} 
+              />
+            </div>
             <h1 style={{
               color: '#3c4c73',
-              fontSize: '2.2rem',
+              fontSize: '1.5rem',
               fontWeight: 600,
-              marginBottom: '0.5rem',
-              fontFamily: 'Grandstander, Arial, sans-serif',
+              marginBottom: '0.1rem',
+              fontFamily: 'Gabriela, Arial, sans-serif',
               letterSpacing: 1
             }}>
               Welcome Back
             </h1>
             <p style={{
               color: '#7e5a75',
-              fontSize: '1.1rem',
-              opacity: 0.8
+              fontSize: '1rem',
+              opacity: 0.8,
+              fontFamily: 'AR One Sans, Arial, sans-serif'
             }}>
               Login to continue your speech journey
             </p>
@@ -164,7 +166,7 @@ export default function LoginPage() {
           )}
 
           {/* Google Login */}
-          <div style={{ marginBottom: '2rem' }}>
+          <div style={{ marginBottom: '1.5rem' }}>
             <div style={{ width: '100%' }}>
               <GoogleLogin
                 onSuccess={handleGoogleSuccess}
@@ -184,7 +186,7 @@ export default function LoginPage() {
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            marginBottom: '2rem'
+            marginBottom: '1.5rem'
           }}>
             <div style={{
               flex: 1,
@@ -208,7 +210,7 @@ export default function LoginPage() {
 
           {/* Email/Password Form */}
           <form onSubmit={handleEmailLogin}>
-            <div style={{ marginBottom: '1.5rem' }}>
+            <div style={{ marginBottom: '1rem' }}>
               <label style={{
                 display: 'block',
                 marginBottom: '0.5rem',
@@ -226,7 +228,7 @@ export default function LoginPage() {
                 required
                 style={{
                   width: '100%',
-                  padding: '0.875rem 1rem',
+                  padding: '0.75rem 1rem',
                   borderRadius: 10,
                   border: '2px solid rgba(126,90,117,0.2)',
                   fontSize: '1rem',
@@ -239,7 +241,7 @@ export default function LoginPage() {
               />
             </div>
 
-            <div style={{ marginBottom: '2rem' }}>
+            <div style={{ marginBottom: '1.5rem' }}>
               <label style={{
                 display: 'block',
                 marginBottom: '0.5rem',
@@ -257,7 +259,7 @@ export default function LoginPage() {
                 required
                 style={{
                   width: '100%',
-                  padding: '0.875rem 1rem',
+                  padding: '0.75rem 1rem',
                   borderRadius: 10,
                   border: '2px solid rgba(126,90,117,0.2)',
                   fontSize: '1rem',
@@ -275,7 +277,7 @@ export default function LoginPage() {
               disabled={isLoading}
               style={{
                 width: '100%',
-                padding: '0.875rem',
+                padding: '0.75rem',
                 borderRadius: 10,
                 border: 'none',
                 background: 'linear-gradient(135deg, #7e5a75 0%, #8a6a7a 100%)',
@@ -285,7 +287,7 @@ export default function LoginPage() {
                 cursor: isLoading ? 'not-allowed' : 'pointer',
                 transition: 'all 0.3s ease',
                 opacity: isLoading ? 0.7 : 1,
-                marginBottom: '1.5rem'
+                marginBottom: '1rem'
               }}
             >
               {isLoading ? 'Logging In...' : 'Login'}

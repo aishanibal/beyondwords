@@ -35,19 +35,18 @@ export interface FeedbackLanguage {
   code: string;
   label: string;
 }
-
 export const LANGUAGES: Language[] = [
-  { code: 'en', label: 'English', flag: '🇺🇸', description: 'Practice English with AI feedback' },
-  { code: 'es', label: 'Spanish', flag: '🇪🇸', description: 'Practice español with AI feedback' },
-  { code: 'fr', label: 'French', flag: '🇫🇷', description: 'Améliorez votre français avec l’IA' },
-  { code: 'zh', label: 'Mandarin', flag: '🇨🇳', description: 'Learn 中文 pronunciation' },
-  { code: 'ja', label: 'Japanese', flag: '🇯🇵', description: 'Master 日本語 speaking skills' },
-  { code: 'ko', label: 'Korean', flag: '🇰🇷', description: 'Master 한국어 speaking' },
-  { code: 'tl', label: 'Tagalog', flag: '🇵🇭', description: 'Connect with Filipino heritage' },
-  { code: 'hi', label: 'Hindi', flag: '🇮🇳', description: 'Learn हिंदी pronunciation and conversation' },
-  { code: 'ml', label: 'Malayalam', flag: '🇮🇳', description: 'Practice മലയാളം conversation' },
-  { code: 'ta', label: 'Tamil', flag: '🇮🇳', description: 'Explore தமிழ் language and culture' },
-  { code: 'or', label: 'Odia', flag: '🇮🇳', description: 'Practice ଓଡ଼ିଆ conversation' },
+  { code: 'en', label: 'English', flag: '🇺🇸', description: 'Practice English with AI' },
+  { code: 'es', label: 'Spanish', flag: '🇪🇸', description: 'Practica español con IA' },
+  { code: 'fr', label: 'French', flag: '🇫🇷', description: 'Pratiquez le français avec l’IA' },
+  { code: 'zh', label: 'Mandarin', flag: '🇨🇳', description: '用AI练习中文' },
+  { code: 'ja', label: 'Japanese', flag: '🇯🇵', description: 'AIで日本語を練習する' },
+  { code: 'ko', label: 'Korean', flag: '🇰🇷', description: 'AI와 함께 한국어 연습하기' },
+  { code: 'tl', label: 'Tagalog', flag: '🇵🇭', description: 'Mag-practice ng Filipino gamit ang AI' },
+  { code: 'hi', label: 'Hindi', flag: '🇮🇳', description: 'AI के साथ हिंदी का अभ्यास करें' },
+  { code: 'ml', label: 'Malayalam', flag: '🇮🇳', description: 'AI ഉപയോഗിച്ച് മലയാളം പരിശീലിക്കുക' },
+  { code: 'ta', label: 'Tamil', flag: '🇮🇳', description: 'AI உடன் தமிழ் பயிற்சி' },
+  { code: 'or', label: 'Odia', flag: '🇮🇳', description: 'AI ସହିତ ଓଡ଼ିଆ ଅଭ୍ୟାସ କରନ୍ତୁ' },
 ];
 
 export const PROFICIENCY_LEVELS: ProficiencyLevel[] = [
@@ -99,12 +98,71 @@ export const TALK_TOPICS: Topic[] = [
 ];
 
 export const LEARNING_GOALS: LearningGoal[] = [
-  { id: 'confidence',   label: 'Build speaking confidence',        icon: '💪' },
-  { id: 'pronunciation',label: 'Improve pronunciation and accent',icon: '🗣️' },
-  { id: 'fluency',      label: 'Achieve conversational fluency',   icon: '💬' },
-  { id: 'vocabulary',   label: 'Expand vocabulary',                icon: '📚' },
-  { id: 'grammar',      label: 'Master grammar structures',        icon: '🔤' },
-  { id: 'listening',    label: 'Enhance listening comprehension',  icon: '👂' }
+  {
+    id: 'confidence',
+    label: 'Speak without freezing or second-guessing',
+    icon: '💪',
+  },
+  {
+    id: 'pronunciation',
+    label: 'Be clearly understood by native speakers',
+    icon: '🗣️',
+  },
+  {
+    id: 'fluency',
+    label: 'Hold flowing, back-and-forth conversations',
+    icon: '💬',
+  },
+  {
+    id: 'vocabulary',
+    label: 'Use the right words in daily conversations',
+    icon: '📚',
+  },
+  {
+    id: 'grammar',
+    label: 'Use correct verb tenses and sentence patterns',
+    icon: '🔤',
+  },
+  {
+    id: 'listening',
+    label: 'Catch what people say the first time',
+    icon: '👂',
+  },
+  {
+    id: 'response_speed',
+    label: 'Respond quickly without translating in your head',
+    icon: '⚡',
+  },
+  {
+    id: 'everyday_phrases',
+    label: 'Learn common expressions used in real life',
+    icon: '🛒',
+  },
+  {
+    id: 'question_asking',
+    label: 'Get better at asking natural follow-up questions',
+    icon: '❓',
+  },
+  {
+    id: 'storytelling',
+    label: 'Tell personal stories clearly and confidently',
+    icon: '📖',
+  },
+  {
+    id: 'code_switching',
+    label: 'Switch smoothly between languages when needed',
+    icon: '🔁',
+  },
+  {
+    id: 'emotion_expressing',
+    label: 'Express emotions naturally and culturally appropriately',
+    icon: '😊',
+  },
+  {
+    id: 'cultural_clarity',
+    label: 'Avoid misunderstandings tied to cultural context',
+    icon: '🌍',
+  },
 ];
 
 export const PRACTICE_PREFERENCES: PracticePreference[] = [

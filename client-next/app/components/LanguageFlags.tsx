@@ -1,68 +1,78 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion, useAnimationFrame } from "framer-motion";
+import { useRef } from "react";
 
-const languages = [
-  { flag: "🇨🇳", name: "Chinese" },
-  { flag: "🇪🇸", name: "Spanish" },
-  { flag: "🇫🇷", name: "French" },
-  { flag: "🇩🇪", name: "German" },
-  { flag: "🇮🇹", name: "Italian" },
-  { flag: "🇯🇵", name: "Japanese" },
-  { flag: "🇰🇷", name: "Korean" },
-  { flag: "🇷🇺", name: "Russian" },
-  { flag: "🇵🇹", name: "Portuguese" },
-  { flag: "🇮🇳", name: "Hindi" },
-  { flag: "🇸🇦", name: "Arabic" },
-  { flag: "🇹🇷", name: "Turkish" },
+type Language = {
+  code: string;
+  label: string;
+  flag: string;
+  description: string;
+};
+
+export const LANGUAGES: Language[] = [
+  { code: 'en', label: 'English', flag: '🇺🇸', description: 'Practice English with AI' },
+  { code: 'es', label: 'Spanish', flag: '🇪🇸', description: 'Practica español con IA' },
+  { code: 'fr', label: 'French', flag: '🇫🇷', description: 'Pratiquez le français avec l’IA' },
+  { code: 'zh', label: 'Mandarin', flag: '🇨🇳', description: '用AI练习中文' },
+  { code: 'ja', label: 'Japanese', flag: '🇯🇵', description: 'AIで日本語を練習する' },
+  { code: 'ko', label: 'Korean', flag: '🇰🇷', description: 'AI와 함께 한국어 연습하기' },
+  { code: 'tl', label: 'Tagalog', flag: '🇵🇭', description: 'Mag-practice ng Filipino gamit ang AI' },
+  { code: 'hi', label: 'Hindi', flag: '🇮🇳', description: 'AI के साथ हिंदी का अभ्यास करें' },
+  { code: 'ml', label: 'Malayalam', flag: '🇮🇳', description: 'AI ഉപയോഗിച്ച് മലയാളം പരിശീലിക്കുക' },
+  { code: 'ta', label: 'Tamil', flag: '🇮🇳', description: 'AI உடன் தமிழ் பயிற்சி' },
+  { code: 'or', label: 'Odia', flag: '🇮🇳', description: 'AI ସହିତ ଓଡ଼ିଆ ଅଭ୍ୟାସ କରନ୍ତୁ' },
 ];
 
+// Duplicate once for seamless loop
+const looped = [...LANGUAGES, ...LANGUAGES];
+
 export default function LanguageFlags() {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const x = useRef(0);
+  const speed = 1.0; // Adjust for scroll speed
+
+  useAnimationFrame((_, delta) => {
+    if (containerRef.current) {
+      x.current -= (speed * delta) / 16; // Normalize for frame rate
+      const containerWidth = containerRef.current.scrollWidth / 2;
+      if (Math.abs(x.current) >= containerWidth) {
+        x.current = 0;
+      }
+      containerRef.current.style.transform = `translateX(${x.current}px)`;
+    }
+  });
+
   return (
-    <section className="py-12 bg-white/50">
+    <section className="py-12 bg-white/50 overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Heading */}
-        <motion.div
-          className="text-center mb-8"
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          viewport={{ once: true }}
-        >
+        <div className="text-center mb-8">
           <h3 className="text-4xl font-heading font-semibold text-rose-primary mb-2">
             Supporting Heritage Languages Worldwide
           </h3>
-        </motion.div>
+        </div>
 
-        {/* Flags grid */}
-        <motion.div
-          className="flex flex-wrap justify-center items-center gap-8 shadow-card rounded-4xl p-4"
-          initial={{ opacity: 0 }}
-          whileInView={{ opacity: 1 }}
-          transition={{ duration: 0.8 }}
-          viewport={{ once: true }}
-        >
-          {languages.map((language, index) => (
-            <motion.div
-              key={language.name}
-              className="text-5xl cursor-pointer"
-              initial={{ opacity: 0, scale: 0.5 }}
-              whileInView={{ opacity: 1, scale: 1 }}
-              whileHover={{ scale: 1.25, rotate: 8, boxShadow: "0 4px 24px rgba(80,80,120,0.18)" }}
-              transition={{
-                duration: 0.3,
-                delay: index * 0.1,
-                type: "spring",
-                stiffness: 200,
-                damping: 10,
-              }}
-              viewport={{ once: true }}
-              title={language.name}
-            >
-              {language.flag}
-            </motion.div>
-          ))}
-        </motion.div>
+        {/* Seamless Looping Carousel */}
+        <div className="relative w-full overflow-hidden">
+          <div
+            ref={containerRef}
+            className="flex gap-16 items-center whitespace-nowrap will-change-transform"
+          >
+            {looped.map((lang, index) => (
+              <div
+                key={`${lang.code}-${index}`}
+                className="flex-shrink-0 flex flex-col items-center text-center min-w-[160px] max-w-[200px]"
+              >
+                <div className="text-4xl sm:text-5xl">{lang.flag}</div>
+                <div className="mt-1 text-sm font-semibold text-gray-800">{lang.label}</div>
+                <div className="text-xs sm:text-sm text-gray-600 break-words leading-tight">
+                  {lang.description}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </section>
   );

@@ -39,6 +39,7 @@ export interface LanguageDashboard {
   learning_goals?: string[];
   practice_preference?: string;
   feedback_language?: string;
+  speak_speed?: number;
   is_primary?: boolean;
   created_at?: string;
   updated_at?: string;
@@ -114,6 +115,7 @@ function initDatabase() {
         learning_goals TEXT,
         practice_preference TEXT,
         feedback_language TEXT,
+        speak_speed REAL DEFAULT 1.0,
         is_primary BOOLEAN DEFAULT FALSE,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -150,6 +152,9 @@ function initDatabase() {
         FOREIGN KEY (conversation_id) REFERENCES conversations (id)
       )
     `);
+    
+    // Add any missing columns to existing tables
+    addColumnsIfNotExist();
   });
 }
 
@@ -167,7 +172,8 @@ function addColumnsIfNotExist() {
     'ALTER TABLE conversations ADD COLUMN language_dashboard_id INTEGER',
     'ALTER TABLE messages ADD COLUMN detailed_feedback TEXT',
     'ALTER TABLE language_dashboards ADD COLUMN feedback_language TEXT',
-    'ALTER TABLE conversations ADD COLUMN formality TEXT'
+    'ALTER TABLE conversations ADD COLUMN formality TEXT',
+    'ALTER TABLE language_dashboards ADD COLUMN speak_speed REAL DEFAULT 1.0'
   ];
   
   newColumns.forEach(sql => {
@@ -651,11 +657,11 @@ function createLanguageDashboard(userId: number, language: string, proficiencyLe
     const goalsJson = learningGoals ? JSON.stringify(learningGoals) : null;
     
     const sql = `
-      INSERT INTO language_dashboards (user_id, language, proficiency_level, talk_topics, learning_goals, practice_preference, feedback_language, is_primary)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO language_dashboards (user_id, language, proficiency_level, talk_topics, learning_goals, practice_preference, feedback_language, speak_speed, is_primary)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
     
-    db.run(sql, [userId, language, proficiencyLevel, topicsJson, goalsJson, practicePreference, feedbackLanguage, isPrimary], function(err) {
+    db.run(sql, [userId, language, proficiencyLevel, topicsJson, goalsJson, practicePreference, feedbackLanguage, 1.0, isPrimary], function(err) {
       if (err) {
         reject(err);
       } else {
@@ -668,6 +674,7 @@ function createLanguageDashboard(userId: number, language: string, proficiencyLe
           learning_goals: learningGoals, 
           practice_preference: practicePreference, 
           feedback_language: feedbackLanguage,
+          speak_speed: 1.0,
           is_primary: isPrimary 
         });
       }
@@ -678,7 +685,7 @@ function createLanguageDashboard(userId: number, language: string, proficiencyLe
 function getUserLanguageDashboards(userId: number) {
   return new Promise<LanguageDashboard[]>((resolve, reject) => {
     const sql = `
-      SELECT id, language, proficiency_level, talk_topics, learning_goals, practice_preference, feedback_language, is_primary, created_at, updated_at
+      SELECT id, language, proficiency_level, talk_topics, learning_goals, practice_preference, feedback_language, speak_speed, is_primary, created_at, updated_at
       FROM language_dashboards 
       WHERE user_id = ?
       ORDER BY is_primary DESC, created_at ASC
@@ -702,7 +709,7 @@ function getUserLanguageDashboards(userId: number) {
 function getLanguageDashboard(userId: number, language: string) {
   return new Promise<LanguageDashboard | null>((resolve, reject) => {
     const sql = `
-      SELECT id, language, proficiency_level, talk_topics, learning_goals, practice_preference, feedback_language, is_primary, created_at, updated_at
+      SELECT id, language, proficiency_level, talk_topics, learning_goals, practice_preference, feedback_language, speak_speed, is_primary, created_at, updated_at
       FROM language_dashboards 
       WHERE user_id = ? AND language = ?
     `;

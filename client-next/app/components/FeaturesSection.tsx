@@ -14,42 +14,42 @@ const features = [
   {
     icon: Languages,
     title: "Cultural Context AI",
-    description: "AI that understands cultural nuances and heritage language patterns.",
+    description: "Speak more naturally with AI that understands your cultural and language background.",
     bgColor: "bg-rose-primary/20",
     textColor: "text-rose-primary",
   },
   {
     icon: Users,
     title: "Conversational Practice",
-    description: "Chat naturally with AI to build fluency judgement-free.",
+    description: "Build fluency by chatting freely with AI in a judgment-free space.",
     bgColor: "bg-blue-secondary/20",
     textColor: "text-blue-secondary",
   },
   {
     icon: Edit,
     title: "Detailed Feedback",
-    description: "Personalized feedback on grammar, pronunciation, and cultural context.",
+    description: "Get clear, personalized tips on how to improve your speaking.",
     bgColor: "bg-accent/20",
     textColor: "text-accent",
   },
   {
     icon: Globe,
     title: "On-the-Go Learning",
-    description: "Easily integrate your language into your daily life.",
+    description: "Practice in short moments throughout your day without extra effort.",
     bgColor: "bg-rose-primary/20",
     textColor: "text-rose-primary",
   },
   {
     icon: TrendingUp,
     title: "Progress Tracking",
-    description: "Track your progress and see how your fluency improves over time.",
+    description: "See your growth and stay motivated as your fluency improves.",
     bgColor: "bg-blue-secondary/20",
     textColor: "text-blue-secondary",
   },
   {
     icon: Book,
     title: "Personalized Review",
-    description: "Tracks your toughest words and delivers targeted drills to reinforce retention.",
+    description: "Review what you struggle with most for faster, focused learning.",
     bgColor: "bg-accent/20",
     textColor: "text-accent",
   },
@@ -100,11 +100,15 @@ export default function FeaturesSection() {
                   whileHover={{ scale: 1.1, rotate: 5 }}
                   transition={{ duration: 0.3 }}
                 >
-                  <IconComponent className={`${feature.textColor} h-8 w-8`} />
+                  <IconComponent 
+                    className={`h-8 w-8 ${feature.title !== "Detailed Feedback" && feature.title !== "Personalized Review" ? feature.textColor : ''}`}
+                    style={{ color: feature.title === "Detailed Feedback" || feature.title === "Personalized Review" ? '#d6b6b6' : undefined }}
+                  />
                 </motion.div>
 
                 <h3
-                  className={`text-xl font-heading font-semibold ${feature.textColor} mb-4`}
+                  className={`text-xl font-heading font-semibold mb-4 ${feature.title !== "Detailed Feedback" && feature.title !== "Personalized Review" ? feature.textColor : ''}`}
+                  style={{ color: feature.title === "Detailed Feedback" || feature.title === "Personalized Review" ? '#d6b6b6' : undefined }}
                 >
                   {feature.title}
                 </h3>

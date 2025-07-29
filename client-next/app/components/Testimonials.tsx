@@ -77,7 +77,11 @@ export default function SurveyResponsesSection() {
         </motion.div>
 
         {/* Static vertical list of wide cards */}
-        <div className="flex flex-col items-center space-y-8">
+        <motion.div 
+          className="flex flex-col items-center space-y-8"
+          layout
+          transition={{ duration: 0.6, ease: "easeInOut" }}
+        >
           {surveyResponses.slice(0, visibleCount).map((resp, idx) => (
             <motion.div
               key={resp.name}
@@ -86,6 +90,7 @@ export default function SurveyResponsesSection() {
               whileInView={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: idx * 0.1 }}
               viewport={{ once: true }}
+              layout
             >
               <div className="flex items-center mb-4">
                 <div
@@ -105,24 +110,30 @@ export default function SurveyResponsesSection() {
               </p>
             </motion.div>
           ))}
-        </div>
+        </motion.div>
 
         <div className="flex justify-center mt-8 space-x-4">
           {visibleCount < surveyResponses.length && (
-            <button
+            <span
               onClick={loadMore}
-              className="rounded-lg font-semibold bg-rose-primary text-white px-6 py-3 hover:bg-rose-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2"
+              className="font-semibold cursor-pointer"
+              style={{ color: '#84546d' }}
+              onMouseEnter={(e) => e.currentTarget.style.color = '#7e5a75'}
+              onMouseLeave={(e) => e.currentTarget.style.color = '#84546d'}
             >
               Read More
-            </button>
+            </span>
           )}
           {visibleCount > INITIAL_COUNT && (
-            <button
+            <span
               onClick={collapseAll}
-              className="rounded-lg font-semibold bg-gray-200 text-foreground px-6 py-3 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2"
+              className="font-semibold cursor-pointer"
+              style={{ color: '#84546d' }}
+              onMouseEnter={(e) => e.currentTarget.style.color = '#7e5a75'}
+              onMouseLeave={(e) => e.currentTarget.style.color = '#84546d'}
             >
               Read Less
-            </button>
+            </span>
           )}
         </div>
       </div>

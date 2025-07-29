@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { GoogleLogin } from '@react-oauth/google';
 import axios from 'axios';
 import { useUser } from '../ClientLayout';
+import logo from '../../assets/logo.png';
 
 export default function SignupPage() {
   const router = useRouter();
@@ -127,9 +128,9 @@ export default function SignupPage() {
       <div style={{
         background: '#fff',
         borderRadius: 20,
-        padding: '3rem',
+        padding: '2rem',
         boxShadow: '0 20px 60px rgba(60,76,115,0.15)',
-        maxWidth: 450,
+        maxWidth: 700,
         width: '100%',
         position: 'relative',
         overflow: 'hidden'
@@ -156,22 +157,25 @@ export default function SignupPage() {
 
         <div style={{ position: 'relative', zIndex: 1 }}>
           {/* Header */}
-          <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
-            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🗝️</div>
+          <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+            <div style={{ marginBottom: '-0.9rem', display: 'flex', justifyContent: 'center' }}>
+              <img src={logo.src} alt="BeyondWords Logo" style={{ height: '7rem', width: 'auto' }} />
+            </div>
             <h1 style={{
               color: '#3c4c73',
-              fontSize: '2.2rem',
+              fontSize: '1.5rem',
               fontWeight: 600,
-              marginBottom: '0.5rem',
-              fontFamily: 'Grandstander, Arial, sans-serif',
+              marginBottom: '0.1rem',
+              fontFamily: 'Gabriela, Arial, sans-serif',
               letterSpacing: 1
             }}>
               Join BeyondWords
             </h1>
             <p style={{
               color: '#7e5a75',
-              fontSize: '1.1rem',
-              opacity: 0.8
+              fontSize: '1rem',
+              opacity: 0.8,
+              fontFamily: 'AR One Sans, Arial, sans-serif'
             }}>
               Start your speech journey today
             </p>
@@ -396,7 +400,7 @@ export default function SignupPage() {
                 fontWeight: 600,
                 textDecoration: 'none'
               }}>
-                Sign in
+                Log in
               </Link>
             </p>
             <Link href="/" style={{

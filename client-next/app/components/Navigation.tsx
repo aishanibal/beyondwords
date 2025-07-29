@@ -14,9 +14,28 @@ function XIcon({ className = "" }) {
   );
 }
 
+function UserIcon({ className = "" }) {
+  return (
+    <svg className={className} width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+    </svg>
+  );
+}
+
+function SettingsIcon({ className = "" }) {
+  return (
+    <svg className={className} width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>
+  );
+}
+
 export default function Navigation() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isAtTop, setIsAtTop] = useState(true);
+  const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
+  const [profileDropdownTimeout, setProfileDropdownTimeout] = useState<NodeJS.Timeout | null>(null);
   const { user, logout } = useUser ? useUser() : { user: null, logout: () => {} };
 
   useEffect(() => {
@@ -37,7 +56,7 @@ export default function Navigation() {
 
   return (
     <nav
-      className={`bg-cream/95 backdrop-blur-lg bg-border-rose-accent sticky top-0 z-50 border-b border-rose-accent/20 transition-all duration-300 ${isAtTop ? "h-24" : "h-16"}`}
+      className={`bg-cream/95 backdrop-blur-lg bg-border-rose-accent sticky top-0 z-50 border-b border-rose-accent/20 transition-all duration-300 font-general ${isAtTop ? "h-24" : "h-16"}`}
       style={{ minHeight: isAtTop ? '6rem' : '4rem' }}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -60,24 +79,16 @@ export default function Navigation() {
             {user != null && (
               <motion.a
                 href="/dashboard"
-                className="text-text-dark hover:text-rose-primary transition-colors cursor-pointer"
+                className="text-rose-primary hover:text-rose-accent transition-colors cursor-pointer font-body"
                 whileHover={{ scale: 1.05 }}
               >
                 Dashboard
               </motion.a>
             )}
+
             <motion.a 
-              href="#features" 
-              onClick={(e) => { e.preventDefault(); scrollToSection('features'); }}
-              className="text-text-dark hover:text-rose-primary transition-colors cursor-pointer"
-              whileHover={{ scale: 1.05 }}
-            >
-              Features
-            </motion.a>
-            <motion.a 
-              href="#contact" 
-              onClick={(e) => { e.preventDefault(); scrollToSection('contact'); }}
-              className="text-text-dark hover:text-rose-primary transition-colors cursor-pointer"
+              href="/contact" 
+              className="text-rose-primary hover:text-rose-accent transition-colors cursor-pointer font-body"
               whileHover={{ scale: 1.05 }}
             >
               Contact
@@ -86,14 +97,14 @@ export default function Navigation() {
               <>
                 <motion.a
                   href="/login"
-                  className="text-text-dark hover:text-rose-primary transition-colors cursor-pointer"
+                  className="text-rose-primary hover:text-rose-accent transition-colors cursor-pointer font-body"
                   whileHover={{ scale: 1.05 }}
                 >
                   Login
                 </motion.a>
                 <motion.a
                   href="/signup"
-                  className="text-text-dark hover:text-rose-primary transition-colors cursor-pointer"
+                  className="text-rose-primary hover:text-rose-accent transition-colors cursor-pointer font-body"
                   whileHover={{ scale: 1.05 }}
                 >
                   Sign Up
@@ -101,15 +112,73 @@ export default function Navigation() {
               </>
             )}
             {user != null && (
-              <>
-                <motion.button
-                  onClick={logout}
-                  className="text-text-dark hover:text-rose-primary transition-colors cursor-pointer bg-transparent border-none outline-none px-2"
-                  whileHover={{ scale: 1.05 }}
+              <div className="relative">
+                <motion.div 
+                  className="relative"
+                  onMouseEnter={() => {
+                    if (profileDropdownTimeout) {
+                      clearTimeout(profileDropdownTimeout);
+                      setProfileDropdownTimeout(null);
+                    }
+                    setIsProfileDropdownOpen(true);
+                  }}
+                  onMouseLeave={() => {
+                    const timeout = setTimeout(() => {
+                      setIsProfileDropdownOpen(false);
+                    }, 150);
+                    setProfileDropdownTimeout(timeout);
+                  }}
                 >
-                  Log Out
-                </motion.button>
-              </>
+                  <motion.button
+                    className="text-rose-primary hover:text-rose-accent transition-colors cursor-pointer bg-transparent border-none outline-none p-2 rounded-full hover:bg-rose-accent/10"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    <UserIcon className="h-6 w-6" />
+                  </motion.button>
+                  
+                  {/* Profile Dropdown */}
+                  {isProfileDropdownOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                      transition={{ duration: 0.2 }}
+                      className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-rose-accent/20 py-2 z-50"
+                      onMouseEnter={() => {
+                        if (profileDropdownTimeout) {
+                          clearTimeout(profileDropdownTimeout);
+                          setProfileDropdownTimeout(null);
+                        }
+                        setIsProfileDropdownOpen(true);
+                      }}
+                      onMouseLeave={() => {
+                        const timeout = setTimeout(() => {
+                          setIsProfileDropdownOpen(false);
+                        }, 150);
+                        setProfileDropdownTimeout(timeout);
+                      }}
+                    >
+                      <a
+                        href="/dashboard/settings"
+                        className="flex items-center px-4 py-2 text-rose-primary hover:bg-rose-accent/10 transition-colors cursor-pointer font-body"
+                      >
+                        <SettingsIcon className="mr-3" />
+                        Settings
+                      </a>
+                      <button
+                        onClick={logout}
+                        className="w-full flex items-center px-4 py-2 text-rose-primary hover:bg-rose-accent/10 transition-colors cursor-pointer bg-transparent border-none outline-none text-left font-body"
+                      >
+                        <svg className="mr-3 h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                        </svg>
+                        Log Out
+                      </button>
+                    </motion.div>
+                  )}
+                </motion.div>
+              </div>
             )}
             <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
 
@@ -137,29 +206,22 @@ export default function Navigation() {
             {user != null && (
               <a
                 href="/dashboard"
-                className="block text-text-dark hover:text-rose-primary transition-colors cursor-pointer"
+                className="block text-rose-primary hover:text-rose-accent transition-colors cursor-pointer font-body"
               >
                 Dashboard
               </a>
             )}
-            <a 
-              href="#features" 
-              onClick={(e) => { e.preventDefault(); scrollToSection('features'); }}
-              className="block text-text-dark hover:text-rose-primary transition-colors cursor-pointer"
-            >
-              Features
-            </a>
+
             <a 
               href="#testimonials" 
               onClick={(e) => { e.preventDefault(); scrollToSection('testimonials'); }}
-              className="block text-text-dark hover:text-rose-primary transition-colors cursor-pointer"
+              className="block text-rose-primary hover:text-rose-accent transition-colors cursor-pointer font-body"
             >
               Testimonials
             </a>
             <a 
-              href="#contact" 
-              onClick={(e) => { e.preventDefault(); scrollToSection('contact'); }}
-              className="block text-text-dark hover:text-rose-primary transition-colors cursor-pointer"
+              href="/contact" 
+              className="block text-rose-primary hover:text-rose-accent transition-colors cursor-pointer font-body"
             >
               Contact
             </a>
@@ -167,13 +229,13 @@ export default function Navigation() {
               <>
                 <a
                   href="/login"
-                  className="block text-text-dark hover:text-rose-primary transition-colors cursor-pointer"
+                  className="block text-rose-primary hover:text-rose-accent transition-colors cursor-pointer font-body"
                 >
                   Login
                 </a>
                 <a
                   href="/signup"
-                  className="block text-text-dark hover:text-rose-primary transition-colors cursor-pointer"
+                  className="block text-rose-primary hover:text-rose-accent transition-colors cursor-pointer font-body"
                 >
                   Sign Up
                 </a>
@@ -181,9 +243,15 @@ export default function Navigation() {
             )}
             {user != null && (
               <>
+                <a
+                  href="/dashboard/settings"
+                  className="block text-rose-primary hover:text-rose-accent transition-colors cursor-pointer font-body"
+                >
+                  Settings
+                </a>
                 <button
                   onClick={logout}
-                  className="block text-text-dark hover:text-rose-primary transition-colors cursor-pointer bg-transparent border-none outline-none px-2 w-full text-left"
+                  className="block text-rose-primary hover:text-rose-accent transition-colors cursor-pointer bg-transparent border-none outline-none px-2 w-full text-left font-body"
                 >
                   Log Out
                 </button>
@@ -191,7 +259,7 @@ export default function Navigation() {
             )}
             <button 
               onClick={() => scrollToSection('waitlist')}
-              className="w-full bg-rose-primary text-white hover:bg-rose-primary/90 px-6 py-2 rounded-lg font-semibold transition"
+              className="w-full bg-rose-primary text-white hover:bg-rose-primary/90 px-6 py-2 rounded-lg font-semibold transition font-body"
             >
               Join Waitlist
             </button>

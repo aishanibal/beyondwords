@@ -19,7 +19,7 @@ const multer_1 = __importDefault(require("multer"));
 const database_1 = require("./database");
 const google_auth_library_1 = require("google-auth-library");
 const path_1 = __importDefault(require("path"));
-const promises_1 = __importDefault(require("fs/promises"));
+const fs_1 = __importDefault(require("fs")); // Use fs, not fs/promises
 const child_process_1 = require("child_process");
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
@@ -38,13 +38,18 @@ app.use((0, cors_1.default)({ origin: 'http://localhost:3000', credentials: fals
 // Multer configuration for file uploads
 const storage = multer_1.default.diskStorage({
     destination: function (req, file, cb) {
-        cb(null, 'uploads/');
+        cb(null, uploadsDir); // Use absolute path
     },
     filename: function (req, file, cb) {
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
         cb(null, file.fieldname + '-' + uniqueSuffix + '.wav');
     }
 });
+// Ensure uploads directory exists using absolute path
+const uploadsDir = path_1.default.join(__dirname, 'uploads');
+if (!fs_1.default.existsSync(uploadsDir)) {
+    fs_1.default.mkdirSync(uploadsDir, { recursive: true });
+}
 const upload = (0, multer_1.default)({
     storage: storage,
     fileFilter: (req, file, cb) => {
@@ -59,9 +64,6 @@ const upload = (0, multer_1.default)({
         fileSize: 10 * 1024 * 1024 // 10MB limit
     }
 });
-// Ensure uploads directory exists
-const uploadsDir = path_1.default.join(__dirname, 'uploads');
-promises_1.default.mkdir(uploadsDir, { recursive: true }).catch(console.error);
 // MongoDB connection (commented out for now)
 // mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/beyondwords_speech', {
 //   useNewUrlParser: true,
@@ -158,7 +160,17 @@ function authenticateJWT(req, res, next) {
 // Routes
 app.get('/api/user', authenticateJWT, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const user = yield (0, database_1.findUserById)(req.user.userId);
+        let user = yield (0, database_1.findUserById)(req.user.userId);
+        if (!user) {
+            // Create a new user record if not found
+            user = yield (0, database_1.createUser)({
+                // id is auto-incremented, so don't set it
+                email: req.user.email || '',
+                name: req.user.name || '',
+                role: 'user',
+                onboarding_complete: false
+            });
+        }
         // Parse arrays from JSON strings
         if (user && typeof user.talk_topics === 'string') {
             try {
@@ -214,13 +226,14 @@ app.post('/api/analyze', authenticateJWT, upload.single('audio'), (req, res) => 
     var _a;
     try {
         console.log('POST /api/analyze called');
+        console.log('req.file:', req.file);
         if (!req.file) {
             console.error('No audio file provided');
             return res.status(400).json({ error: 'No audio file provided' });
         }
-        // Use absolute path for audio file
-        const audioFilePath = path_1.default.resolve(req.file.path);
-        console.log('Received audio file:', audioFilePath);
+        // Use the path from multer
+        const audioFilePath = req.file.path;
+        console.log('Audio file saved at:', audioFilePath);
         // Accept chatHistory from request body (for context-aware fast response)
         let chatHistory = [];
         if (req.body.chatHistory) {
@@ -233,12 +246,18 @@ app.post('/api/analyze', authenticateJWT, upload.single('audio'), (req, res) => 
             }
         }
         globalAny.lastChatHistory = chatHistory; // Optionally store for session continuity
-        // Get user data for personalized prompts
+        // Get user preferences from form data (preferred) or fall back to database
         const user = yield (0, database_1.findUserById)(req.user.userId);
-        const userLevel = (user === null || user === void 0 ? void 0 : user.proficiency_level) || 'beginner';
-        const userTopics = (user === null || user === void 0 ? void 0 : user.talk_topics) && typeof user.talk_topics === 'string' ? JSON.parse(user.talk_topics) : Array.isArray(user === null || user === void 0 ? void 0 : user.talk_topics) ? user.talk_topics : [];
+        const userLevel = req.body.user_level || (user === null || user === void 0 ? void 0 : user.proficiency_level) || 'beginner';
+        const userTopics = req.body.user_topics ? JSON.parse(req.body.user_topics) : ((user === null || user === void 0 ? void 0 : user.talk_topics) && typeof user.talk_topics === 'string' ? JSON.parse(user.talk_topics) : Array.isArray(user === null || user === void 0 ? void 0 : user.talk_topics) ? user.talk_topics : []);
+        const userGoals = req.body.user_goals ? JSON.parse(req.body.user_goals) : ((user === null || user === void 0 ? void 0 : user.learning_goals) && typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : Array.isArray(user === null || user === void 0 ? void 0 : user.learning_goals) ? user.learning_goals : []);
+        const formality = req.body.formality || 'friendly';
+        const feedbackLanguage = req.body.feedback_language || 'en';
+        console.log('🔄 SERVER: /api/analyze received formality:', formality);
+        console.log('🔄 SERVER: /api/analyze received user_goals:', userGoals);
+        console.log('🔄 SERVER: /api/analyze form data:', req.body);
         // Call Python API for transcription and AI response (using ollama_client)
-        const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5001';
+        const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5000';
         console.log('Calling Python API for transcription and AI response:', `${pythonApiUrl}/transcribe`);
         let transcription = 'Speech recorded';
         let aiResponse = 'Thank you for your speech!';
@@ -250,18 +269,20 @@ app.post('/api/analyze', authenticateJWT, upload.single('audio'), (req, res) => 
             console.log('Chat history length:', chatHistory.length);
             console.log('Language:', req.body.language || 'en');
             // Check if audio file exists before sending to Python API
-            const fs = require('fs');
-            if (!fs.existsSync(audioFilePath)) {
+            if (!fs_1.default.existsSync(audioFilePath)) {
                 throw new Error(`Audio file does not exist: ${audioFilePath}`);
             }
-            const fileStats = fs.statSync(audioFilePath);
+            const fileStats = fs_1.default.statSync(audioFilePath);
             console.log('Audio file size:', fileStats.size, 'bytes');
             const transcriptionResponse = yield axios_1.default.post(`${pythonApiUrl}/transcribe`, {
-                audio_file: audioFilePath,
+                audio_file: audioFilePath, // Use multer's saved file path
                 chat_history: chatHistory,
                 language: req.body.language || 'en',
                 user_level: userLevel,
-                user_topics: userTopics
+                user_topics: userTopics,
+                user_goals: userGoals,
+                formality: formality,
+                feedback_language: feedbackLanguage
             }, {
                 headers: { 'Content-Type': 'application/json' },
                 timeout: 30000
@@ -328,9 +349,8 @@ app.post('/api/analyze', authenticateJWT, upload.single('audio'), (req, res) => 
                 });
             });
             // Check if file was created
-            const fs = require('fs');
-            if (fs.existsSync(ttsFilePath)) {
-                const stats = fs.statSync(ttsFilePath);
+            if (fs_1.default.existsSync(ttsFilePath)) {
+                const stats = fs_1.default.statSync(ttsFilePath);
                 console.log('TTS file created, size:', stats.size, 'bytes');
                 ttsUrl = `/uploads/${ttsFileName}`;
                 console.log('TTS audio generated at:', ttsUrl);
@@ -377,41 +397,27 @@ app.post('/api/analyze', authenticateJWT, upload.single('audio'), (req, res) => 
 app.post('/api/feedback', authenticateJWT, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         console.log('POST /api/feedback called');
-        const { conversationId, language } = req.body;
-        if (!conversationId) {
-            return res.status(400).json({ error: 'No conversation ID provided' });
+        const { user_input, context, language, user_level, user_topics } = req.body;
+        if (!user_input || !context) {
+            return res.status(400).json({ error: 'Missing user_input or context' });
         }
-        // Fetch conversation and messages from DB
-        const conversation = yield (0, database_1.getConversationWithMessages)(Number(conversationId));
-        if (!conversation) {
-            return res.status(404).json({ error: 'Conversation not found' });
-        }
-        const chatHistory = (conversation.messages || []).map(msg => ({
-            sender: msg.sender,
-            text: msg.text,
-            timestamp: msg.created_at
-        }));
-        // Get the most recent user message (last recording)
-        const userMessages = chatHistory.filter(msg => msg.sender === 'User');
-        const lastUserMessage = userMessages[userMessages.length - 1];
-        if (!lastUserMessage) {
-            return res.status(400).json({ error: 'No user speech found' });
-        }
-        const lastTranscription = lastUserMessage.text;
-        // Get user data for personalized feedback
-        const user = yield (0, database_1.findUserById)(req.user.userId);
-        const userLevel = (user === null || user === void 0 ? void 0 : user.proficiency_level) || 'beginner';
-        const userTopics = (user === null || user === void 0 ? void 0 : user.talk_topics) && typeof user.talk_topics === 'string' ? JSON.parse(user.talk_topics) : Array.isArray(user === null || user === void 0 ? void 0 : user.talk_topics) ? user.talk_topics : [];
+        // Parse context string into chat_history array
+        const chat_history = context
+            .split('\n')
+            .map((line) => {
+            const [sender, ...rest] = line.split(':');
+            return { sender: sender.trim(), text: rest.join(':').trim() };
+        });
         // Call Python API for detailed feedback
         let feedback = '';
         try {
-            const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5001';
+            const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5000';
             const pythonResponse = yield axios_1.default.post(`${pythonApiUrl}/feedback`, {
-                chat_history: chatHistory,
-                last_transcription: lastTranscription,
-                language: language || conversation.language || 'en',
-                user_level: userLevel,
-                user_topics: userTopics
+                chat_history,
+                last_transcription: user_input,
+                language,
+                user_level,
+                user_topics
             }, {
                 headers: { 'Content-Type': 'application/json' },
                 timeout: 120000
@@ -781,7 +787,7 @@ app.get('/api/health', (req, res) => {
     res.json({
         status: 'healthy',
         timestamp: new Date().toISOString(),
-        pythonApiUrl: process.env.PYTHON_API_URL || 'http://localhost:5001'
+        pythonApiUrl: process.env.PYTHON_API_URL || 'http://localhost:5000'
     });
 });
 // Test TTS endpoint
@@ -804,9 +810,8 @@ app.get('/api/test-tts', (req, res) => __awaiter(void 0, void 0, void 0, functio
                 }
             });
         });
-        const fs = require('fs');
-        if (fs.existsSync(ttsFilePath)) {
-            const stats = fs.statSync(ttsFilePath);
+        if (fs_1.default.existsSync(ttsFilePath)) {
+            const stats = fs_1.default.statSync(ttsFilePath);
             console.log('Test TTS file created, size:', stats.size, 'bytes');
             res.json({
                 success: true,
@@ -877,21 +882,29 @@ app.post('/api/admin/demote', authenticateJWT, (req, res) => __awaiter(void 0, v
 // Conversation endpoints
 app.post('/api/conversations', authenticateJWT, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        console.log('🔄 SERVER: Creating conversation request:', {
-            userId: req.user.userId,
-            body: req.body
-        });
         const { language, title, topics, formality } = req.body;
+        console.log('🔄 SERVER: Creating conversation with formality:', formality);
+        console.log('🔄 SERVER: Full request body:', req.body);
         const conversation = yield (0, database_1.createConversation)(req.user.userId, language, title, topics, formality);
-        console.log('✅ SERVER: Conversation created successfully:', conversation);
+        console.log('🔄 SERVER: Conversation creation result:', conversation);
+        if (!conversation || !conversation.id) {
+            console.error('❌ SERVER: Failed to create conversation');
+            return res.status(500).json({ error: 'Failed to create conversation' });
+        }
+        // Immediately try to fetch the conversation from the DB
+        const verify = yield (0, database_1.getConversationWithMessages)(conversation.id);
+        if (!verify) {
+            console.error('❌ SERVER: Conversation not found after creation:', conversation.id);
+            return res.status(500).json({ error: 'Conversation not found after creation' });
+        }
         // Generate and save AI intro message
         let aiMessage = null;
+        let aiIntro = 'Hello! What would you like to talk about today?';
         try {
             const user = yield (0, database_1.findUserById)(req.user.userId);
             const userLevel = (user === null || user === void 0 ? void 0 : user.proficiency_level) || 'beginner';
             const userTopics = (user === null || user === void 0 ? void 0 : user.talk_topics) && typeof user.talk_topics === 'string' ? JSON.parse(user.talk_topics) : Array.isArray(user === null || user === void 0 ? void 0 : user.talk_topics) ? user.talk_topics : [];
-            const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5001';
-            let aiIntro = 'Hello! What would you like to talk about today?';
+            const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5000';
             const topicsToSend = topics && topics.length > 0 ? topics : userTopics;
             try {
                 const aiRes = yield axios_1.default.post(`${pythonApiUrl}/initial_message`, {
@@ -904,6 +917,7 @@ app.post('/api/conversations', authenticateJWT, (req, res) => __awaiter(void 0, 
                     headers: { 'Content-Type': 'application/json' },
                     timeout: 30000
                 });
+                console.log('DEBUG: Sending formality to /initial_message:', formality || 'friendly');
                 console.log('DEBUG: Received ai_response from Python API:', aiRes.data.ai_response);
                 aiIntro = aiRes.data.ai_response && aiRes.data.ai_response.trim() ? aiRes.data.ai_response : 'Hello! What would you like to talk about today?';
             }
@@ -916,7 +930,8 @@ app.post('/api/conversations', authenticateJWT, (req, res) => __awaiter(void 0, 
         catch (err) {
             console.error('Error generating/saving AI intro message:', err);
         }
-        res.json({ conversation, aiMessage });
+        // Return the actual AI intro text for the frontend
+        res.json({ conversation, aiMessage: { text: aiIntro } });
     }
     catch (error) {
         console.error('❌ SERVER: Create conversation error:', error);
@@ -956,6 +971,7 @@ app.get('/api/conversations/:id', authenticateJWT, (req, res) => __awaiter(void 
             id: conversation.id,
             title: conversation.title,
             language: conversation.language,
+            formality: conversation.formality,
             messageCount: conversation.message_count,
             messagesLength: ((_b = conversation.messages) === null || _b === void 0 ? void 0 : _b.length) || 0
         });
@@ -972,10 +988,10 @@ app.get('/api/conversations/:id', authenticateJWT, (req, res) => __awaiter(void 
 app.post('/api/conversations/:id/messages', authenticateJWT, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         console.log('🔄 SERVER: Adding message to conversation:', req.params.id);
-        const { sender, text, messageType, audioFilePath, detailedFeedback } = req.body;
-        console.log('📝 SERVER: Message details:', { sender, text: text.substring(0, 50) + '...', messageType });
-        const message = yield (0, database_1.addMessage)(Number(req.params.id), sender, text, messageType, audioFilePath, detailedFeedback);
-        // Default: just return the user message
+        const { sender, text, messageType, audioFilePath, detailedFeedback, message_order } = req.body;
+        console.log('📝 SERVER: Message details:', { sender, text: text.substring(0, 50) + '...', messageType, message_order });
+        const message = yield (0, database_1.addMessage)(Number(req.params.id), sender, text, messageType, audioFilePath, detailedFeedback, message_order // <-- pass it here
+        );
         res.json({ message });
     }
     catch (error) {
@@ -1011,8 +1027,9 @@ app.post('/api/suggestions', authenticateJWT, (req, res) => __awaiter(void 0, vo
         const { conversationId, language } = req.body;
         // Get user data for personalized suggestions
         const user = yield (0, database_1.findUserById)(req.user.userId);
-        const userLevel = (user === null || user === void 0 ? void 0 : user.proficiency_level) || 'beginner';
-        const userTopics = (user === null || user === void 0 ? void 0 : user.talk_topics) && typeof user.talk_topics === 'string' ? JSON.parse(user.talk_topics) : Array.isArray(user === null || user === void 0 ? void 0 : user.talk_topics) ? user.talk_topics : [];
+        const userLevel = req.body.user_level || (user === null || user === void 0 ? void 0 : user.proficiency_level) || 'beginner';
+        const userTopics = req.body.user_topics || ((user === null || user === void 0 ? void 0 : user.talk_topics) && typeof user.talk_topics === 'string' ? JSON.parse(user.talk_topics) : Array.isArray(user === null || user === void 0 ? void 0 : user.talk_topics) ? user.talk_topics : []);
+        const userGoals = req.body.user_goals || ((user === null || user === void 0 ? void 0 : user.learning_goals) && typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : Array.isArray(user === null || user === void 0 ? void 0 : user.learning_goals) ? user.learning_goals : []);
         let chatHistory = [];
         if (conversationId) {
             // Get conversation history
@@ -1027,12 +1044,13 @@ app.post('/api/suggestions', authenticateJWT, (req, res) => __awaiter(void 0, vo
         }
         // Call Python API for suggestions
         try {
-            const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5001';
+            const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5000';
             const pythonResponse = yield axios_1.default.post(`${pythonApiUrl}/suggestions`, {
                 chat_history: chatHistory,
                 language: language || (user === null || user === void 0 ? void 0 : user.target_language) || 'en',
                 user_level: userLevel,
-                user_topics: userTopics
+                user_topics: userTopics,
+                user_goals: userGoals
             }, {
                 headers: { 'Content-Type': 'application/json' },
                 timeout: 30000
@@ -1068,7 +1086,7 @@ app.post('/api/translate', authenticateJWT, (req, res) => __awaiter(void 0, void
         const finalTargetLanguage = target_language || 'en';
         // Call Python API for translation
         try {
-            const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5001';
+            const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5000';
             const pythonResponse = yield axios_1.default.post(`${pythonApiUrl}/translate`, {
                 text: text,
                 source_language: source_language || 'auto',
@@ -1098,11 +1116,32 @@ app.post('/api/translate', authenticateJWT, (req, res) => __awaiter(void 0, void
         res.status(500).json({ error: 'Error getting translation', details: error.message });
     }
 }));
+// Proxy /api/short_feedback to Python API
+app.post('/api/short_feedback', authenticateJWT, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a, _b;
+    try {
+        // Get user preferences from request body or fall back to database
+        const user = yield (0, database_1.findUserById)(req.user.userId);
+        const userLevel = req.body.user_level || (user === null || user === void 0 ? void 0 : user.proficiency_level) || 'beginner';
+        const userTopics = req.body.user_topics || ((user === null || user === void 0 ? void 0 : user.talk_topics) && typeof user.talk_topics === 'string' ? JSON.parse(user.talk_topics) : Array.isArray(user === null || user === void 0 ? void 0 : user.talk_topics) ? user.talk_topics : []);
+        const userGoals = req.body.user_goals || ((user === null || user === void 0 ? void 0 : user.learning_goals) && typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : Array.isArray(user === null || user === void 0 ? void 0 : user.learning_goals) ? user.learning_goals : []);
+        const feedbackLanguage = req.body.feedback_language || 'en';
+        const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5000';
+        const response = yield axios_1.default.post(`${pythonApiUrl}/short_feedback`, Object.assign(Object.assign({}, req.body), { user_level: userLevel, user_topics: userTopics, user_goals: userGoals }), {
+            headers: { 'Content-Type': 'application/json' },
+            timeout: 30000
+        });
+        res.status(response.status).json(response.data);
+    }
+    catch (error) {
+        res.status(((_a = error.response) === null || _a === void 0 ? void 0 : _a.status) || 500).json(((_b = error.response) === null || _b === void 0 ? void 0 : _b.data) || { error: error.message });
+    }
+}));
 // Serve uploads directory statically for TTS audio
 app.use('/uploads', express_1.default.static(path_1.default.join(__dirname, 'uploads')));
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
-    console.log(`Python API URL: ${process.env.PYTHON_API_URL || 'http://localhost:5001'}`);
+    console.log(`Python API URL: ${process.env.PYTHON_API_URL || 'http://localhost:5000'}`);
     console.log('Note: Using SQLite database for temporary storage');
 });

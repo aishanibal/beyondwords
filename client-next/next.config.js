@@ -24,6 +24,22 @@ module.exports = {
       {
         source: '/api/translate',
         destination: 'http://localhost:4000/api/translate', // Express backend
+      },
+      {
+        source: '/api/user/:path*',
+        destination: 'http://localhost:4000/api/user/:path*', // Express backend
+      },
+      {
+        source: '/api/auth/:path*',
+        destination: 'http://localhost:4000/api/auth/:path*', // Express backend
+      },
+      {
+        source: '/api/conversations/:path*',
+        destination: 'http://localhost:4000/api/conversations/:path*', // Express backend
+      },
+      {
+        source: '/api/messages/:path*',
+        destination: 'http://localhost:4000/api/messages/:path*', // Express backend
       }
     ];
   },

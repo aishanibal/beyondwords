@@ -61,4 +61,23 @@ h1 {
 
 .shadow-card {
   box-shadow: 0 4px 32px 0 rgba(60, 60, 60, 0.10);
-} 
+}
+
+/* Custom scrollbar styling */
+.goals-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.goals-scroll::-webkit-scrollbar-track {
+  background: rgba(126, 90, 117, 0.1);
+  border-radius: 3px;
+}
+
+.goals-scroll::-webkit-scrollbar-thumb {
+  background: var(--rose-accent);
+  border-radius: 3px;
+}
+
+.goals-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--rose-primary);
+}

@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import Link from "next/link";
 
 // Inline SVGs for icons
 function Rocket({ className = "" }: { className?: string }) {
@@ -100,15 +101,17 @@ export default function HeroSection() {
               transition={{ duration: 0.8, delay: 0.6 }}
             >
               <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                <button
-                  onClick={scrollToWaitlist}
-                  className="flex items-center justify-center rounded-lg font-semibold transition focus:outline-none focus:ring-2 focus:ring-offset-2 bg-rose-primary text-white hover:bg-rose-primary/90 px-8 py-4 text-lg border border-rose-primary/50"
-                >
-                  <span className="inline-flex items-center justify-center bg-rose-primary/20 p-2 rounded-full mr-2">
-                    <Rocket className="h-5 w-5 text-white" />
-                  </span>
-                  Join Waitlist
-                </button>
+                <Link href="/signup">
+                  <button
+                    className="flex items-center justify-center rounded-lg font-semibold transition focus:outline-none focus:ring-2 focus:ring-offset-2 text-white hover:bg-[#84546d]/90 px-8 py-4 text-lg border border-[#84546d]/50"
+                    style={{ backgroundColor: '#84546d' }}
+                  >
+                    <span className="inline-flex items-center justify-center p-2 rounded-full mr-2" style={{ backgroundColor: 'rgba(132, 84, 109, 0.2)' }}>
+                      <Rocket className="h-5 w-5 text-white" />
+                    </span>
+                    Sign Up Now!
+                  </button>
+                </Link>
               </motion.div>
             </motion.div>
           </motion.div>

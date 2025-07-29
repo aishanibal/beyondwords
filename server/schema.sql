@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS language_dashboards (
   learning_goals TEXT,
   practice_preference TEXT,
   feedback_language TEXT,
+  speak_speed REAL DEFAULT 1.0,
   is_primary BOOLEAN DEFAULT FALSE,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,

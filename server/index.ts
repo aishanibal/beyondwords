@@ -728,7 +728,8 @@ app.post('/api/user/onboarding', authenticateJWT, async (req: Request, res: Resp
       talkTopics,
       learningGoals,
       practicePreference,
-      'true' // isPrimary as string
+      'en', // feedbackLanguage
+      true // isPrimary as boolean
     );
     
     // Update user to mark onboarding as complete
@@ -854,7 +855,8 @@ app.post('/api/user/language-dashboards', authenticateJWT, async (req: Request, 
       talkTopics,
       learningGoals,
       practicePreference,
-      isPrimary ? 'true' : 'false'
+      'en', // feedbackLanguage
+      isPrimary // isPrimary as boolean
     );
     
     res.json({ dashboard });
