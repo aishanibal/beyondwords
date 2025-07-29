@@ -1793,7 +1793,7 @@ function Analyze() {
                   {isLoadingMessageFeedback[index] ? '🔄' : message.detailedFeedback ? '🎯 Show' : '🎯 Check'}
                 </button>
               )}
-              {(message as any).sender === 'AI' && (
+              {(message as ChatMessage).sender === 'AI' && (
                 <button
                   onClick={() => toggleShortFeedback(index)}
                   disabled={isLoadingMessageFeedback[index]}
