@@ -182,6 +182,7 @@ function Analyze() {
   const [isSavingPersona, setIsSavingPersona] = useState(false);
   const [conversationDescription, setConversationDescription] = useState<string>('');
   const [isUsingPersona, setIsUsingPersona] = useState<boolean>(false);
+  const [isNewPersona, setIsNewPersona] = useState<boolean>(false);
 
   // Calculate actual panel widths based on visibility
   const getPanelWidths = () => {
@@ -314,7 +315,16 @@ function Analyze() {
       // Get user goals from the user's language dashboard
       const user_goals = user?.learning_goals ? (typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : user.learning_goals) : [];
       
-      console.log('[DEBUG] Extracted user preferences:', { formality, topics, user_goals, userLevel, feedbackLanguage });
+      // Check if conversation uses a persona
+      const usesPersona = conversation.uses_persona || false;
+      const personaDescription = conversation.description || '';
+      
+      console.log('[DEBUG] Extracted user preferences:', { formality, topics, user_goals, userLevel, feedbackLanguage, usesPersona, personaDescription });
+      
+      // Set persona flags
+      setIsUsingPersona(usesPersona);
+      setIsNewPersona(false); // Existing conversations are not new personas
+      setConversationDescription(personaDescription);
       
       const messages = conversation.messages || [];
       const history = messages.map((msg: unknown) => ({
@@ -856,7 +866,7 @@ function Analyze() {
     }
   };
 
-  const handleModalConversationStart = async (newConversationId: string, topics: string[], aiMessage: unknown, formality: string, description?: string) => {
+  const handleModalConversationStart = async (newConversationId: string, topics: string[], aiMessage: unknown, formality: string, description?: string, isUsingExistingPersona?: boolean) => {
     setConversationId(newConversationId);
     setChatHistory([]);
     setShowTopicModal(false);
@@ -865,6 +875,20 @@ function Analyze() {
     
     // Set the conversation description
     setConversationDescription(description || '');
+    
+    // Check if this is a persona-based conversation (has a description)
+    const isPersonaConversation = !!(description && description.trim());
+    setIsUsingPersona(isPersonaConversation);
+    
+    // Mark this as a new persona only if not using an existing persona
+    setIsNewPersona(!isUsingExistingPersona);
+    
+    console.log('[DEBUG] Starting conversation with persona:', { 
+      description, 
+      isPersonaConversation, 
+      formality, 
+      topics 
+    });
     
     // Update user preferences with the selected formality and topics
     setUserPreferences(prev => ({
@@ -1414,11 +1438,11 @@ function Analyze() {
 
   // Persona-related functions
   const handleEndChat = () => {
-    // If conversation is already using a persona, don't ask to create a new one
-    if (isUsingPersona) {
-      router.push('/dashboard');
-    } else {
+    // Only show persona modal if this is a new persona (not using an existing one)
+    if (isNewPersona) {
       setShowPersonaModal(true);
+    } else {
+      router.push('/dashboard');
     }
   };
 
@@ -1555,8 +1579,9 @@ function Analyze() {
               const topics = persona.topics || [];
               const formality = persona.formality || 'neutral';
               
-              // Set the persona flag
+              // Set the persona flag - this is an existing persona, not a new one
               setIsUsingPersona(true);
+              setIsNewPersona(false);
               
               // Create conversation with persona information
               const token = localStorage.getItem('jwt');

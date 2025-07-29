@@ -32,6 +32,7 @@ const path_1 = __importDefault(require("path"));
 // Database file path
 const dbPath = path_1.default.join(__dirname, 'users.db');
 console.log('USING DATABASE FILE:', dbPath);
+console.log('USING DATABASE FILE:', dbPath);
 // Create database connection
 const db = new sqlite3_1.default.Database(dbPath, (err) => {
     if (err) {
@@ -75,10 +76,7 @@ function initDatabase() {
         learning_goals TEXT,
         practice_preference TEXT,
         feedback_language TEXT,
-<<<<<<< HEAD
         speak_speed REAL DEFAULT 1.0,
-=======
->>>>>>> 0c464fd788673db7edd6395a4883719d12de7de9
         is_primary BOOLEAN DEFAULT FALSE,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -323,6 +321,8 @@ function createConversation(userId, language, title, topics, formality) {
 }
 function addMessage(conversationId, sender, text, messageType = 'text', audioFilePath, detailedFeedback, messageOrder // <-- add this parameter
 ) {
+function addMessage(conversationId, sender, text, messageType = 'text', audioFilePath, detailedFeedback, messageOrder // <-- add this parameter
+) {
     return new Promise((resolve, reject) => {
         console.log('🗄️ DATABASE: Adding message:', {
             conversationId,
@@ -331,7 +331,65 @@ function addMessage(conversationId, sender, text, messageType = 'text', audioFil
             messageType,
             audioFilePath,
             messageOrder
+            audioFilePath,
+            messageOrder
         });
+        // If messageOrder is provided, use it; otherwise, auto-increment
+        const getOrder = (cb) => {
+            if (typeof messageOrder === 'number') {
+                cb(messageOrder);
+            }
+            else {
+                const getOrderSql = `
+          SELECT COALESCE(MAX(message_order), 0) + 1 as next_order
+          FROM messages WHERE conversation_id = ?
+        `;
+                db.get(getOrderSql, [conversationId], (err, row) => {
+                    if (err) {
+                        console.error('❌ DATABASE: Error getting message order:', err);
+                        reject(err);
+                    }
+                    else {
+                        cb(row.next_order);
+                    }
+                });
+            }
+        };
+        getOrder((finalOrder) => {
+            const insertSql = `
+        INSERT INTO messages (conversation_id, sender, text, message_type, audio_file_path, detailed_feedback, message_order)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `;
+            db.run(insertSql, [conversationId, sender, text, messageType, audioFilePath, detailedFeedback, finalOrder], function (err) {
+                if (err) {
+                    console.error('❌ DATABASE: Error inserting message:', err);
+                    reject(err);
+                }
+                else {
+                    console.log('✅ DATABASE: Message inserted successfully:', {
+                        id: this.lastID,
+                        conversationId,
+                        sender,
+                        messageOrder: finalOrder
+                    });
+                    // Update conversation message count
+                    const updateSql = `
+            UPDATE conversations 
+            SET message_count = message_count + 1, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+          `;
+                    db.run(updateSql, [conversationId], (err) => {
+                        if (err) {
+                            console.error('❌ DATABASE: Error updating conversation message count:', err);
+                            reject(err);
+                        }
+                        else {
+                            console.log('✅ DATABASE: Conversation message count updated for ID:', conversationId);
+                            resolve({ id: this.lastID });
+                        }
+                    });
+                }
+            });
         // If messageOrder is provided, use it; otherwise, auto-increment
         const getOrder = (cb) => {
             if (typeof messageOrder === 'number') {

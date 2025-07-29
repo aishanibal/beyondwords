@@ -17,6 +17,7 @@ export interface Topic {
   id: string;
   label: string;
   icon: string;
+  subtopics?: string[];
 }
 
 export interface LearningGoal {
@@ -49,53 +50,142 @@ export const LANGUAGES: Language[] = [
   { code: 'or', label: 'Odia', flag: '🇮🇳', description: 'AI ସହିତ ଓଡ଼ିଆ ଅଭ୍ୟାସ କରନ୍ତୁ' },
 ];
 
-export const PROFICIENCY_LEVELS: ProficiencyLevel[] = [
-  { 
-    level: 'beginner', 
-    label: 'Beginner',
-    description: 'I can use simple greetings and a handful of words, but struggle to form sentences.',
-    icon: '🌱'
+export const TALK_TOPICS: Topic[] = [
+  {
+    id: 'family',
+    label: 'Family and relationships',
+    icon: '👨‍👩‍👧‍👦',
+    subtopics: [
+      'Sharing a nostalgic memory with a sibling',
+      'Explaining family holiday traditions with pride',
+      'Reflecting thoughtfully on generational differences',
+      'Talking emotionally about someone who inspires you'
+    ]
   },
-  { 
-    level: 'elementary', 
-    label: 'Elementary',
-    description: 'I can handle basic everyday interactions in short, simple sentences.',
-    icon: '🌿'
+  {
+    id: 'travel',
+    label: 'Travel experiences and cultures',
+    icon: '✈️',
+    subtopics: [
+      'Describing an adventurous past trip',
+      'Planning an excited dream vacation',
+      'Comparing hometowns with curiosity',
+      'Laughing about a humorous travel mishap'
+    ]
   },
-  { 
-    level: 'intermediate', 
-    label: 'Intermediate',
-    description: 'I can discuss familiar topics, understand main points, and ask questions.',
-    icon: '🌳'
+  {
+    id: 'heritage',
+    label: 'Cultural heritage and traditions',
+    icon: '🏛️',
+    subtopics: [
+      'Explaining a cultural tradition with pride',
+      'Describing a joyful holiday celebration',
+      'Reflecting thoughtfully on your cultural identity',
+      'Sharing a sentimental story passed down in your family'
+    ]
   },
-  { 
-    level: 'advanced', 
-    label: 'Advanced',
-    description: 'I can express detailed ideas, adapt my language, and engage comfortably in conversation.',
-    icon: '🏔️'
+  {
+    id: 'business',
+    label: 'Work and professional life',
+    icon: '💼',
+    subtopics: [
+      'Describing a neutral typical workday',
+      'Imagining your dream job with aspiration',
+      'Talking collaboratively about a team project',
+      'Expressing frustration about a workplace challenge'
+    ]
   },
-  { 
-    level: 'fluent', 
-    label: 'Fluent',
-    description: 'I speak effortlessly, understand nuances, and participate in complex discussions.',
-    icon: '🗝️'
+  {
+    id: 'media',
+    label: 'Movies, music, and media',
+    icon: '🎬',
+    subtopics: [
+      'Talking enthusiastically about a favorite movie',
+      'Sharing an emotional music memory',
+      'Comparing old and modern media analytically',
+      'Recommending a show or artist in a friendly way'
+    ]
+  },
+  {
+    id: 'food',
+    label: 'Food and cooking',
+    icon: '🍽️',
+    subtopics: [
+      'Explaining how to make a dish with confidence',
+      'Sharing a nostalgic memorable meal',
+      'Comparing cultural cuisines with curiosity',
+      'Talking warmly about food from your childhood'
+    ]
+  },
+  {
+    id: 'hobbies',
+    label: 'Hobbies and leisure activities',
+    icon: '🎨',
+    subtopics: [
+      'Talking passionately about a favorite hobby',
+      'Describing a new activity with excitement',
+      'Explaining a relaxed weekend routine',
+      'Sharing how you got into a hobby with personal reflection'
+    ]
+  },
+  {
+    id: 'news',
+    label: 'News and current events',
+    icon: '📰',
+    subtopics: [
+      'Discussing a recent news story with awareness',
+      'Explaining your view on an issue with conviction',
+      'Comparing news coverage in a critical tone',
+      'Talking about staying informed in a practical way'
+    ]
+  },
+  {
+    id: 'sports',
+    label: 'Sports and fitness',
+    icon: '⚽️',
+    subtopics: [
+      'Telling a sports memory with pride',
+      'Describing a fitness routine in a motivated way',
+      'Explaining a popular sport with excitement',
+      'Talking about team spirit with enthusiasm'
+    ]
+  },
+  {
+    id: 'education',
+    label: 'Education and learning',
+    icon: '📚',
+    subtopics: [
+      'Talking about a favorite subject with interest',
+      'Sharing a mentor story with gratitude',
+      'Describing a learning goal with determination',
+      'Reflecting on learning styles thoughtfully'
+    ]
+  },
+  {
+    id: 'technology',
+    label: 'Technology and innovation',
+    icon: '💻',
+    subtopics: [
+      'Explaining a helpful app with clarity',
+      'Talking about essential tech with appreciation',
+      'Imagining future technology with curiosity',
+      'Discussing social media impact critically'
+    ]
+  },
+  {
+    id: 'health',
+    label: 'Health and wellness',
+    icon: '🏥',
+    subtopics: [
+      'Describing a health routine calmly',
+      'Talking about managing stress with honesty',
+      'Discussing mental health with care',
+      'Sharing advice for staying well supportively'
+    ]
   }
 ];
 
-export const TALK_TOPICS: Topic[] = [
-  { id: 'family',    label: 'Family and relationships',            icon: '👨‍👩‍👧‍👦' },
-  { id: 'travel',    label: 'Travel experiences and cultures',      icon: '✈️' },
-  { id: 'heritage',  label: 'Cultural heritage and traditions',     icon: '🏛️' },
-  { id: 'business',  label: 'Work and professional life',           icon: '💼' },
-  { id: 'media',     label: 'Movies, music, and media',             icon: '🎬' },
-  { id: 'food',      label: 'Food and cooking',                     icon: '🍽️' },
-  { id: 'hobbies',   label: 'Hobbies and leisure activities',       icon: '🎨' },
-  { id: 'news',      label: 'News and current events',              icon: '📰' },
-  { id: 'sports',    label: 'Sports and fitness',                   icon: '⚽️' },
-  { id: 'education', label: 'Education and learning',               icon: '📚' },
-  { id: 'technology', label: 'Technology and innovation',           icon: '💻' },
-  { id: 'health',    label: 'Health and wellness',                  icon: '🏥' }
-];
+
 
 export const LEARNING_GOALS: LearningGoal[] = [
   {

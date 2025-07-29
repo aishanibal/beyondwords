@@ -542,167 +542,11 @@ export default function DashboardPage() {
               </div>
             </motion.div>
 
-            {/* Recent Conversations */}
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.4 }}
-              className="bg-white rounded-lg shadow-lg p-8 border border-gray-200"
-            >
-              <h3 style={{ 
-                color: 'var(--blue-secondary)', 
-                fontSize: '1.3rem', 
-                fontWeight: 600, 
-                marginBottom: '1rem',
-                fontFamily: 'Gabriela, Arial, sans-serif'
-              }} className="font-heading">
-                Recent Conversations
-              </h3>
-              {loading ? (
-                <div style={{ 
-                  textAlign: 'center', 
-                  padding: '2rem', 
-                  color: 'var(--rose-primary)',
-                  fontFamily: 'AR One Sans, Arial, sans-serif'
-                }} className="font-body">Loading conversations...</div>
-              ) : error ? (
-                <div style={{ 
-                  color: '#dc3545', 
-                  textAlign: 'center', 
-                  padding: '2rem',
-                  fontFamily: 'Montserrat, Arial, sans-serif'
-                }} className="font-body">{error}</div>
-              ) : (conversations || []).length === 0 ? (
-                                  <div style={{ 
-                    textAlign: 'center', 
-                    padding: '2rem', 
-                    color: 'var(--rose-primary)', 
-                    background: 'rgba(126,90,117,0.05)', 
-                    borderRadius: 12, 
-                    border: '2px dashed rgba(126,90,117,0.2)',
-                    fontFamily: 'AR One Sans, Arial, sans-serif'
-                  }} className="font-body">
-                    <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🎤</div>
-                    <div style={{ 
-                      fontWeight: 600, 
-                      marginBottom: '0.5rem',
-                      fontFamily: 'Gabriela, Arial, sans-serif'
-                    }}>Start your first conversation!</div>
-                    <div style={{ fontSize: '0.9rem', opacity: 0.8 }}>
-                      Click &quot;Practice Now&quot; to begin learning {getLanguageInfo(currentDashboard.language).label}
-                    </div>
-                  </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                  {(conversations || []).slice(0, 5).map((conversation: ConversationType) => (
-                    <div key={conversation.id} style={{ background: 'rgba(126,90,117,0.05)', borderRadius: 12, padding: '1rem', border: '1px solid rgba(126,90,117,0.1)', transition: 'all 0.3s ease' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
-                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', flex: 1 }}>
-                          {/* Persona Indicator */}
-                          {conversation.uses_persona && (
-                            <div style={{ 
-                              display: 'flex', 
-                              alignItems: 'center', 
-                              gap: '0.25rem',
-                              background: 'rgba(126,90,117,0.1)',
-                              padding: '0.2rem 0.5rem',
-                              borderRadius: 8,
-                              fontSize: '0.7rem',
-                              color: 'var(--rose-primary)',
-                              fontWeight: 500,
-                              fontFamily: 'Montserrat, Arial, sans-serif',
-                              flexShrink: 0
-                            }}>
-                              🎭 {conversation.persona_name || 'Persona'}
-                            </div>
-                          )}
-                          
-                          <div style={{ flex: 1 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.25rem' }}>
-                              <div style={{ 
-                                fontWeight: 600, 
-                                color: 'var(--blue-secondary)',
-                                fontFamily: 'Montserrat, Arial, sans-serif'
-                              }} className="font-body">
-                                {conversation.title || 'Untitled Conversation'}
-                              </div>
-                              <div style={{ 
-                                color: 'var(--rose-primary)', 
-                                fontSize: '0.8rem',
-                                fontFamily: 'AR One Sans, Arial, sans-serif'
-                              }} className="font-body">
-                                {new Date(conversation.created_at).toLocaleDateString()}
-                              </div>
-                            </div>
-                            {conversation.persona_description && (
-                              <div style={{ 
-                                color: 'var(--rose-accent)', 
-                                fontSize: '0.8rem', 
-                                marginBottom: '0.25rem',
-                                fontFamily: 'AR One Sans, Arial, sans-serif',
-                                fontStyle: 'italic'
-                              }} className="font-body">
-                                "{conversation.persona_description}"
-                              </div>
-                            )}
-                            <div style={{ 
-                              color: 'var(--rose-primary)', 
-                              fontSize: '0.9rem', 
-                              opacity: 0.8,
-                              fontFamily: 'AR One Sans, Arial, sans-serif'
-                            }} className="font-body">
-                              💬 {conversation.message_count || 0} messages
-                            </div>
-                          </div>
-                        </div>
-                        
-                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                          <Link 
-                            href={`/analyze?conversation=${conversation.id}&language=${currentDashboard.language}`}
-                            style={{ 
-                              color: 'var(--rose-primary)', 
-                              fontWeight: 600, 
-                              textDecoration: 'none', 
-                              fontSize: '0.9rem', 
-                              padding: '0.25rem 0.75rem', 
-                              borderRadius: 6, 
-                              background: 'rgba(126,90,117,0.1)', 
-                              transition: 'all 0.3s ease',
-                              fontFamily: 'Montserrat, Arial, sans-serif'
-                            }}
-                          >
-                            Continue →
-                          </Link>
-                          <button
-                            onClick={() => deleteConversation(conversation.id)}
-                            style={{ 
-                              color: '#dc3545', 
-                              background: 'rgba(220,53,69,0.1)', 
-                              border: 'none', 
-                              borderRadius: 6, 
-                              padding: '0.25rem 0.5rem', 
-                              fontSize: '0.8rem', 
-                              cursor: 'pointer', 
-                              transition: 'all 0.3s ease',
-                              fontFamily: 'Montserrat, Arial, sans-serif'
-                            }}
-                            title="Delete conversation"
-                          >
-                            🗑️
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </motion.div>
-
             {/* Saved Personas */}
             <motion.div
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.5 }}
+              transition={{ delay: 0.4 }}
               className="bg-white rounded-lg shadow-lg p-8 border border-gray-200"
             >
               <h3 style={{ 
@@ -901,6 +745,164 @@ export default function DashboardPage() {
                       >
                         ×
                       </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </motion.div>
+
+            {/* Recent Conversations */}
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.5 }}
+              className="bg-white rounded-lg shadow-lg p-8 border border-gray-200"
+            >
+              <h3 style={{ 
+                color: 'var(--blue-secondary)', 
+                fontSize: '1.3rem', 
+                fontWeight: 600, 
+                marginBottom: '1rem',
+                fontFamily: 'Gabriela, Arial, sans-serif'
+              }} className="font-heading">
+                Recent Conversations
+              </h3>
+              {loading ? (
+                <div style={{ 
+                  textAlign: 'center', 
+                  padding: '2rem', 
+                  color: 'var(--rose-primary)',
+                  fontFamily: 'AR One Sans, Arial, sans-serif'
+                }} className="font-body">Loading conversations...</div>
+              ) : error ? (
+                <div style={{ 
+                  color: '#dc3545', 
+                  textAlign: 'center', 
+                  padding: '2rem',
+                  fontFamily: 'Montserrat, Arial, sans-serif'
+                }} className="font-body">{error}</div>
+              ) : (conversations || []).length === 0 ? (
+                <div style={{ 
+                  textAlign: 'center', 
+                  padding: '2rem', 
+                  color: 'var(--rose-primary)', 
+                  background: 'rgba(126,90,117,0.05)', 
+                  borderRadius: 12, 
+                  border: '2px dashed rgba(126,90,117,0.2)',
+                  fontFamily: 'AR One Sans, Arial, sans-serif'
+                }} className="font-body">
+                  <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🎤</div>
+                  <div style={{ 
+                    fontWeight: 600, 
+                    marginBottom: '0.5rem',
+                    fontFamily: 'Gabriela, Arial, sans-serif'
+                  }}>Start your first conversation!</div>
+                  <div style={{ fontSize: '0.9rem', opacity: 0.8 }}>
+                    Click &quot;Practice Now&quot; to begin learning {currentDashboard ? getLanguageInfo(currentDashboard.language).label : 'your language'}
+                  </div>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  {(conversations || []).slice(0, 5).map((conversation: ConversationType) => (
+                    <div key={conversation.id} style={{ background: 'rgba(126,90,117,0.05)', borderRadius: 12, padding: '1rem', border: '1px solid rgba(126,90,117,0.1)', transition: 'all 0.3s ease' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', flex: 1 }}>
+                          {/* Persona Indicator */}
+                          {conversation.uses_persona && (
+                            <div style={{ 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              gap: '0.25rem',
+                              background: 'rgba(126,90,117,0.1)',
+                              padding: '0.2rem 0.5rem',
+                              borderRadius: 8,
+                              fontSize: '0.7rem',
+                              color: 'var(--rose-primary)',
+                              fontWeight: 500,
+                              fontFamily: 'Montserrat, Arial, sans-serif',
+                              flexShrink: 0
+                            }}>
+                              🎭 {conversation.persona_name || 'Persona'}
+                            </div>
+                          )}
+                          
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.25rem' }}>
+                              <div style={{ 
+                                fontWeight: 600, 
+                                color: 'var(--blue-secondary)',
+                                fontFamily: 'Montserrat, Arial, sans-serif'
+                              }} className="font-body">
+                                {conversation.title || 'Untitled Conversation'}
+                              </div>
+                              <div style={{ 
+                                color: 'var(--rose-primary)', 
+                                fontSize: '0.8rem',
+                                fontFamily: 'AR One Sans, Arial, sans-serif'
+                              }} className="font-body">
+                                {new Date(conversation.created_at).toLocaleDateString()}
+                              </div>
+                            </div>
+                            {conversation.persona_description && (
+                              <div style={{ 
+                                color: 'var(--rose-accent)', 
+                                fontSize: '0.8rem', 
+                                marginBottom: '0.25rem',
+                                fontFamily: 'AR One Sans, Arial, sans-serif',
+                                fontStyle: 'italic'
+                              }} className="font-body">
+                                "{conversation.persona_description}"
+                              </div>
+                            )}
+                            {conversation.message_count && conversation.message_count > 0 && (
+                              <div style={{ 
+                                color: 'var(--rose-primary)', 
+                                fontSize: '0.9rem', 
+                                opacity: 0.8,
+                                fontFamily: 'AR One Sans, Arial, sans-serif'
+                              }} className="font-body">
+                                💬 {conversation.message_count} messages
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        
+                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                          <Link 
+                            href={`/analyze?conversation=${conversation.id}&language=${currentDashboard.language}`}
+                            style={{ 
+                              color: 'var(--rose-primary)', 
+                              fontWeight: 600, 
+                              textDecoration: 'none', 
+                              fontSize: '0.9rem', 
+                              padding: '0.25rem 0.75rem', 
+                              borderRadius: 6, 
+                              background: 'rgba(126,90,117,0.1)', 
+                              transition: 'all 0.3s ease',
+                              fontFamily: 'Montserrat, Arial, sans-serif'
+                            }}
+                          >
+                            Continue →
+                          </Link>
+                          <button
+                            onClick={() => deleteConversation(conversation.id)}
+                            style={{ 
+                              color: '#dc3545', 
+                              background: 'rgba(220,53,69,0.1)', 
+                              border: 'none', 
+                              borderRadius: 6, 
+                              padding: '0.25rem 0.5rem', 
+                              fontSize: '0.8rem', 
+                              cursor: 'pointer', 
+                              transition: 'all 0.3s ease',
+                              fontFamily: 'Montserrat, Arial, sans-serif'
+                            }}
+                            title="Delete conversation"
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>

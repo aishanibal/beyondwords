@@ -397,12 +397,6 @@ app.post('/api/analyze', authenticateJWT, upload.single('audio'), (req, res) => 
 app.post('/api/feedback', authenticateJWT, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         console.log('POST /api/feedback called');
-<<<<<<< HEAD
-        const { user_input, context, language, user_level, user_topics } = req.body;
-        if (!user_input || !context) {
-            return res.status(400).json({ error: 'Missing user_input or context' });
-        }
-=======
         console.log('Request body:', req.body);
         const { user_input, context, language, user_level, user_topics } = req.body;
         if (!user_input || !context) {
@@ -410,7 +404,6 @@ app.post('/api/feedback', authenticateJWT, (req, res) => __awaiter(void 0, void 
             return res.status(400).json({ error: 'Missing user_input or context' });
         }
         console.log('Parsed parameters:', { user_input, context: context.substring(0, 100) + '...', language, user_level, user_topics });
->>>>>>> 0c464fd788673db7edd6395a4883719d12de7de9
         // Parse context string into chat_history array
         const chat_history = context
             .split('\n')
@@ -418,10 +411,7 @@ app.post('/api/feedback', authenticateJWT, (req, res) => __awaiter(void 0, void 
             const [sender, ...rest] = line.split(':');
             return { sender: sender.trim(), text: rest.join(':').trim() };
         });
-<<<<<<< HEAD
-=======
         console.log('Parsed chat_history:', chat_history);
->>>>>>> 0c464fd788673db7edd6395a4883719d12de7de9
         // Call Python API for detailed feedback
         let feedback = '';
         try {
@@ -431,12 +421,8 @@ app.post('/api/feedback', authenticateJWT, (req, res) => __awaiter(void 0, void 
                 last_transcription: user_input,
                 language,
                 user_level,
-<<<<<<< HEAD
-                user_topics
-=======
                 user_topics,
                 feedback_language: 'en' // Default to English for now
->>>>>>> 0c464fd788673db7edd6395a4883719d12de7de9
             }, {
                 headers: { 'Content-Type': 'application/json' },
                 timeout: 120000
@@ -1156,8 +1142,6 @@ app.post('/api/short_feedback', authenticateJWT, (req, res) => __awaiter(void 0,
         res.status(((_a = error.response) === null || _a === void 0 ? void 0 : _a.status) || 500).json(((_b = error.response) === null || _b === void 0 ? void 0 : _b.data) || { error: error.message });
     }
 }));
-<<<<<<< HEAD
-=======
 // Proxy /api/detailed_breakdown to Python API
 app.post('/api/detailed_breakdown', authenticateJWT, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     var _a;
@@ -1184,7 +1168,6 @@ app.post('/api/detailed_breakdown', authenticateJWT, (req, res) => __awaiter(voi
         });
     }
 }));
->>>>>>> 0c464fd788673db7edd6395a4883719d12de7de9
 // Serve uploads directory statically for TTS audio
 app.use('/uploads', express_1.default.static(path_1.default.join(__dirname, 'uploads')));
 const PORT = process.env.PORT || 4000;

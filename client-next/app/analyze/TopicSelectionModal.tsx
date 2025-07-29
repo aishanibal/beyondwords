@@ -1,18 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
-import { TALK_TOPICS, CLOSENESS_LEVELS } from '../../lib/preferences';
-
-interface Topic {
-  id: string;
-  label: string;
-  icon: string;
-}
+import { TALK_TOPICS, CLOSENESS_LEVELS, Topic } from '../../lib/preferences';
 
 interface TopicSelectionModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onStartConversation: (id: string, topics: string[], aiMessage: any, formality: string, description?: string) => void;
+  onStartConversation: (id: string, topics: string[], aiMessage: any, formality: string, description?: string, isUsingExistingPersona?: boolean) => void;
   currentLanguage?: string;
 }
 
@@ -24,63 +18,20 @@ function getAuthHeaders() {
 export default function TopicSelectionModal({ isOpen, onClose, onStartConversation, currentLanguage }: TopicSelectionModalProps) {
   const [currentDashboard, setCurrentDashboard] = useState<any>(null);
   const [dashboardExists, setDashboardExists] = useState<boolean>(false);
-  const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
+  const [selectedTopic, setSelectedTopic] = useState<string>('');
+  const [selectedSubtopics, setSelectedSubtopics] = useState<string[]>([]);
   const [useCustomTopic, setUseCustomTopic] = useState<boolean>(false);
   const [customTopic, setCustomTopic] = useState<string>('');
+  const [customSubtopic, setCustomSubtopic] = useState<string>('');
   const [selectedFormality, setSelectedFormality] = useState<string>('friendly');
-  const [hasProgressed, setHasProgressed] = useState(false);
-  const [conversationDescription, setConversationDescription] = useState<string>('');
-  const [selectedPersona, setSelectedPersona] = useState<string>('');
   const [savedPersonas, setSavedPersonas] = useState<any[]>([]);
   const [isLoadingPersonas, setIsLoadingPersonas] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
-
-  // Default personas for different conversation types
-  const DEFAULT_PERSONAS = [
-    {
-      id: 'travel_buddy',
-      name: 'Travel Buddy',
-      description: 'A friendly local who loves sharing travel tips, restaurant recommendations, and cultural insights',
-      icon: '✈️',
-      formality: 'friendly'
-    },
-    {
-      id: 'language_exchange_partner',
-      name: 'Language Exchange Partner',
-      description: 'A patient conversation partner who helps you practice and corrects your mistakes gently',
-      icon: '🗣️',
-      formality: 'friendly'
-    },
-    {
-      id: 'business_colleague',
-      name: 'Business Colleague',
-      description: 'A professional colleague for discussing work projects, industry trends, and career development',
-      icon: '💼',
-      formality: 'formal'
-    },
-    {
-      id: 'cultural_guide',
-      name: 'Cultural Guide',
-      description: 'A knowledgeable local who shares traditions, customs, and helps you understand the culture',
-      icon: '🏛️',
-      formality: 'respectful'
-    },
-    {
-      id: 'casual_friend',
-      name: 'Casual Friend',
-      description: 'A close friend for relaxed conversations about daily life, hobbies, and personal interests',
-      icon: '😊',
-      formality: 'intimate'
-    },
-    {
-      id: 'custom',
-      name: 'Custom',
-      description: 'Describe your own conversation partner or scenario',
-      icon: '✍️',
-      formality: 'friendly'
-    }
-  ];
+  const [hasShownScenarios, setHasShownScenarios] = useState<boolean>(false);
+  const [hasShownFormality, setHasShownFormality] = useState<boolean>(false);
+  const [isUsingExistingPersona, setIsUsingExistingPersona] = useState<boolean>(false);
+  const [selectedPersonaId, setSelectedPersonaId] = useState<string | null>(null);
 
   const fetchLanguageDashboard = useCallback(async () => {
     if (!currentLanguage) return;
@@ -122,11 +73,11 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
   }, [currentLanguage, isOpen, fetchLanguageDashboard, fetchSavedPersonas]);
 
   const handleTopicSelect = (topicId: string) => {
-    setSelectedTopics(prev => 
-      prev.includes(topicId) 
-        ? prev.filter(id => id !== topicId)
-        : [...prev, topicId]
-    );
+    setSelectedTopic(topicId);
+    setSelectedSubtopics([]);
+    setCustomSubtopic('');
+    setIsUsingExistingPersona(false);
+    setSelectedPersonaId(null);
     setError('');
   };
 
@@ -134,33 +85,52 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
     setUseCustomTopic(!useCustomTopic);
     if (useCustomTopic) {
       setCustomTopic('');
+      setCustomSubtopic('');
     }
+    setSelectedTopic('');
+    setSelectedSubtopics([]);
+    setIsUsingExistingPersona(false);
+    setSelectedPersonaId(null);
     setError('');
   };
 
-  const handlePersonaSelect = (personaId: string) => {
-    setSelectedPersona(personaId);
-    const persona = DEFAULT_PERSONAS.find(p => p.id === personaId);
-    if (persona && personaId !== 'custom') {
-      setSelectedFormality(persona.formality);
-      setConversationDescription(persona.description);
-    } else if (personaId === 'custom') {
-      setConversationDescription('');
-    }
+  const handleSubtopicSelect = (subtopic: string) => {
+    setSelectedSubtopics(prev => 
+      prev.includes(subtopic) 
+        ? prev.filter(s => s !== subtopic)
+        : [...prev, subtopic]
+    );
     setError('');
   };
+
+  // Check if scenarios section should be shown
+  useEffect(() => {
+    if (selectedTopic || (useCustomTopic && customTopic.trim())) {
+      setHasShownScenarios(true);
+    }
+  }, [selectedTopic, useCustomTopic, customTopic]);
+
+  // Check if formality section should be shown
+  useEffect(() => {
+    if (customSubtopic.trim() || selectedSubtopics.length > 0) {
+      setHasShownFormality(true);
+    }
+  }, [customSubtopic, selectedSubtopics]);
 
   const handleStartConversation = async () => {
     if (!dashboardExists) {
-      setError('No language dashboard found for this language. Please complete onboarding or add this language in your dashboard.');
+      setError('No language dashboard found. Complete onboarding or add this language.');
       return;
     }
-    const topics: string[] = [...selectedTopics];
-    if (useCustomTopic && customTopic.trim()) {
-      topics.push(customTopic.trim());
+    
+    // Collect all selected subtopics and custom subtopic
+    const allSubtopics = [...selectedSubtopics];
+    if (customSubtopic.trim()) {
+      allSubtopics.push(customSubtopic);
     }
-    if (topics.length === 0) {
-      setError('Please select at least one topic or enter a custom topic.');
+    
+    if (allSubtopics.length === 0) {
+      setError('Please select at least one scenario or enter a custom scenario.');
       return;
     }
     setIsLoading(true);
@@ -168,24 +138,24 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
     try {
       const token = localStorage.getItem('jwt');
       const dashboardLanguage = currentDashboard?.language || currentLanguage || 'en';
-      // Check if using a saved persona
-      const isUsingSavedPersona = selectedPersona && selectedPersona.startsWith('saved_');
-      const savedPersonaId = isUsingSavedPersona ? selectedPersona.replace('saved_', '') : null;
+      
+      // Create description from selected subtopics
+      const subtopicDescription = allSubtopics.join(', ');
       
       const response = await axios.post('/api/conversations', {
         language: dashboardLanguage,
-        title: topics.length === 1 ? `${topics[0]} Discussion` : 'Multi-topic Discussion',
-        topics: topics,
+        title: allSubtopics.length === 1 ? `${allSubtopics[0]} Discussion` : 'Multi-topic Discussion',
+        topics: allSubtopics,
         formality: selectedFormality,
-        description: conversationDescription,
-        usesPersona: isUsingSavedPersona || selectedPersona !== 'custom',
-        personaId: savedPersonaId
+        description: subtopicDescription,
+        usesPersona: false,
+        personaId: null
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const { conversation, aiMessage } = response.data;
       if (!conversation || !conversation.id) {
-        setError('Failed to create conversation. Please check your language dashboard for this language.');
+        setError('Failed to create conversation. Check your language dashboard.');
         setIsLoading(false);
         return;
       }
@@ -202,15 +172,23 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
         }
       }
       if (verified) {
-        onStartConversation(conversation.id, topics, aiMessage, selectedFormality, conversationDescription);
+        // Start the conversation directly without showing persona modal
+        onStartConversation(
+          conversation.id, 
+          allSubtopics, 
+          aiMessage, 
+          selectedFormality, 
+          subtopicDescription,
+          isUsingExistingPersona
+        );
         onClose();
       } else {
-        setError('Failed to verify new conversation. Please try again.');
+        setError('Failed to verify conversation. Try again.');
+        setIsLoading(false);
       }
     } catch (err: any) {
       console.error('Error creating conversation:', err);
-      setError('Failed to start conversation. Please try again.');
-    } finally {
+      setError('Failed to start conversation. Try again.');
       setIsLoading(false);
     }
   };
@@ -220,10 +198,29 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
   return (
     <>
       <style>{`
-        @media (max-width: 600px) {
-          .responsive-modal {
+        @media (max-width: 768px) {
+          .modal-container {
+            width: 95vw !important;
+            max-width: 95vw !important;
             padding: 1rem !important;
-            border-radius: 10px !important;
+          }
+          .modal-content {
+            font-size: 0.9rem !important;
+          }
+          .topic-grid {
+            grid-template-columns: 1fr !important;
+          }
+          .formality-grid {
+            grid-template-columns: repeat(2, 1fr) !important;
+          }
+        }
+        @media (max-width: 480px) {
+          .modal-container {
+            width: 98vw !important;
+            padding: 0.75rem !important;
+          }
+          .formality-grid {
+            grid-template-columns: 1fr !important;
           }
         }
       `}</style>
@@ -241,50 +238,50 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
         padding: '1rem'
       }}>
         <div
+          className="modal-container"
           style={{
             position: 'relative',
             background: '#fff',
             borderRadius: 20,
-            padding: '2rem',
+            padding: '1.5rem',
             boxShadow: '0 20px 60px rgba(60,76,115,0.25)',
-            width: 'auto',
-            minWidth: 320,
+            width: '600px',
             maxWidth: '90vw',
-            height: 'auto',
-            overflow: 'visible',
+            maxHeight: '90vh',
+            overflowY: 'auto',
             boxSizing: 'border-box',
             transition: 'all 0.3s cubic-bezier(0.4,0,0.2,1)',
           }}
         >
           {/* Header */}
-          <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+          <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
             <h2 style={{
               color: '#3c4c73',
-              fontSize: '1.5rem',
+              fontSize: '1.3rem',
               fontWeight: 700,
-              marginBottom: '0.5rem',
+              marginBottom: '0.25rem',
               fontFamily: 'Montserrat, Arial, sans-serif'
             }}>
               Start a Practice Session
             </h2>
             <p style={{
               color: '#7e5a75',
-              fontSize: '0.95rem',
-              lineHeight: 1.5,
+              fontSize: '0.85rem',
+              lineHeight: 1.4,
               fontFamily: 'AR One Sans, Arial, sans-serif'
             }}>
-              Choose your topics, conversation style, and partner to begin practicing
+              Choose your topic, scenarios, and conversation style
             </p>
           </div>
 
           {/* Saved Personas Section */}
           {savedPersonas.length > 0 && (
-            <div style={{ marginBottom: '2rem' }}>
+            <div style={{ marginBottom: '1.5rem' }}>
               <h3 style={{
                 color: '#3c4c73',
-                fontSize: '1.1rem',
+                fontSize: '1rem',
                 fontWeight: 600,
-                marginBottom: '1rem',
+                marginBottom: '0.75rem',
                 fontFamily: 'Montserrat, Arial, sans-serif',
                 textAlign: 'center'
               }}>
@@ -292,49 +289,55 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
               </h3>
               <div style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-                gap: '0.75rem',
-                maxHeight: '200px',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+                gap: '0.5rem',
+                maxHeight: '150px',
                 overflowY: 'auto',
-                padding: '0.5rem'
+                padding: '0.25rem'
               }}>
                 {savedPersonas.map((persona) => (
                   <div
                     key={persona.id}
                     onClick={() => {
-                      setSelectedPersona(`saved_${persona.id}`);
-                      setSelectedFormality(persona.formality);
-                      setConversationDescription(persona.description || '');
-                      setSelectedTopics(persona.topics || []);
+                      // Load persona data into current selections
+                      if (persona.topics && persona.topics.length > 0) {
+                        setSelectedSubtopics(persona.topics);
+                      }
+                      if (persona.formality) {
+                        setSelectedFormality(persona.formality);
+                      }
+                      // Mark that we're using an existing persona
+                      setIsUsingExistingPersona(true);
+                      setSelectedPersonaId(persona.id);
                       setError('');
                     }}
                     style={{
-                      padding: '0.75rem',
-                      border: '2px solid #e9ecef',
+                      padding: '0.5rem',
+                      border: `2px solid ${selectedPersonaId === persona.id ? '#7e5a75' : '#e9ecef'}`,
                       borderRadius: 8,
                       cursor: 'pointer',
                       transition: 'all 0.2s ease',
-                      background: selectedPersona === `saved_${persona.id}` ? 'rgba(126,90,117,0.1)' : '#fff',
-                      borderColor: selectedPersona === `saved_${persona.id}` ? 'var(--rose-primary)' : '#e9ecef',
+                      background: selectedPersonaId === persona.id ? 'rgba(126,90,117,0.1)' : '#fff',
+                      borderColor: selectedPersonaId === persona.id ? '#7e5a75' : '#e9ecef',
                       display: 'flex',
                       alignItems: 'center',
                       gap: '0.5rem'
                     }}
                   >
-                    <div style={{ fontSize: '1.2rem' }}>🎭</div>
+                    <div style={{ fontSize: '1rem' }}>🎭</div>
                     <div style={{ flex: 1 }}>
                       <div style={{
                         fontWeight: 600,
-                        fontSize: '0.9rem',
+                        fontSize: '0.8rem',
                         color: '#3c4c73',
-                        marginBottom: '0.25rem'
+                        marginBottom: '0.1rem'
                       }}>
                         {persona.name}
                       </div>
                       <div style={{
-                        fontSize: '0.8rem',
+                        fontSize: '0.7rem',
                         color: '#6c757d',
-                        lineHeight: 1.3
+                        lineHeight: 1.2
                       }}>
                         {persona.description || 'No description'}
                       </div>
@@ -350,11 +353,12 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
             <div style={{
               background: 'rgba(220,53,69,0.1)',
               color: '#dc3545',
-              padding: '0.75rem',
+              padding: '0.5rem',
               borderRadius: 8,
-              marginBottom: '1.5rem',
+              marginBottom: '1rem',
               border: '1px solid rgba(220,53,69,0.2)',
-              textAlign: 'center'
+              textAlign: 'center',
+              fontSize: '0.85rem'
             }}>
               {error}
             </div>
@@ -365,15 +369,16 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
             <div style={{
               background: 'rgba(255, 215, 0, 0.15)',
               color: '#b8860b',
-              padding: '1rem',
+              padding: '0.75rem',
               borderRadius: 8,
-              marginBottom: '1.5rem',
+              marginBottom: '1rem',
               border: '1px solid #ffe066',
               textAlign: 'center',
-              fontWeight: 600
+              fontWeight: 600,
+              fontSize: '0.85rem'
             }}>
-              No language dashboard found for this language.<br />
-              Please complete onboarding or add this language in your dashboard settings before starting a conversation.
+              No language dashboard found.<br />
+              Complete onboarding or add this language in dashboard settings.
             </div>
           )}
 
@@ -383,72 +388,75 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
               color: '#3c4c73', 
               fontSize: '1rem', 
               fontWeight: 600, 
-              marginBottom: '0.5rem'
+              marginBottom: '0.25rem'
             }}>
-              📚 Your Topics
+              📚 Choose Your Topic
             </h3>
             <p style={{ 
               color: '#7e5a75', 
-              fontSize: '0.85rem', 
-              marginBottom: '1rem',
-              lineHeight: 1.4
+              fontSize: '0.8rem', 
+              marginBottom: '0.75rem',
+              lineHeight: 1.3
             }}>
-              Choose one or more topics to focus on in this practice session. You can add or remove topics in your profile settings.
+              Select one topic for this practice session
             </p>
-            {currentDashboard?.talk_topics && currentDashboard.talk_topics.length > 0 ? (
-              <div style={{ 
-                display: 'flex',
-                flexWrap: 'wrap',
-                gap: '0.5rem',
-              }}>
-                {currentDashboard.talk_topics.map((topicId: string) => {
-                  const topic: Topic | undefined = TALK_TOPICS.find((t: Topic) => t.id === topicId);
-                  if (!topic) return null;
-                  const isSelected = selectedTopics.includes(topic.id);
-                  return (
-                    <div
-                      key={topic.id}
-                      onClick={() => handleTopicSelect(topic.id)}
-                      style={{
-                        padding: '0.5rem 1rem',
-                        borderRadius: '16px',
-                        border: `2px solid ${isSelected ? '#7e5a75' : 'rgba(126,90,117,0.2)'}`,
-                        backgroundColor: isSelected ? 'rgba(126,90,117,0.1)' : '#f8f6f4',
-                        cursor: 'pointer',
-                        transition: 'all 0.3s',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '0.5rem',
-                        fontWeight: 500,
-                        color: '#3c4c73',
-                        fontSize: '0.95rem',
-                        marginBottom: '0.5rem',
-                      }}
-                    >
-                      <span style={{ fontSize: '1rem' }}>{topic.icon}</span> {topic.label}
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div style={{
-                padding: '1.5rem',
-                background: 'rgba(126,90,117,0.1)',
-                borderRadius: '8px',
-                textAlign: 'center',
-                color: '#7e5a75',
-                fontSize: '0.9rem'
-              }}>
-                No topics available. Please add topics in your language dashboard settings.
+            
+            {/* Default Topics - Show first */}
+            {!useCustomTopic && currentDashboard?.talk_topics && currentDashboard.talk_topics.length > 0 && (
+              <div style={{ marginBottom: '1rem' }}>
+                <h4 style={{
+                  color: '#3c4c73',
+                  fontSize: '0.9rem',
+                  fontWeight: 600,
+                  marginBottom: '0.5rem'
+                }}>
+                  📋 Suggested Topics
+                </h4>
+                <div className="topic-grid" style={{ 
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                  gap: '0.5rem',
+                }}>
+                  {currentDashboard.talk_topics.map((topicId: string) => {
+                    const topic: Topic | undefined = TALK_TOPICS.find((t: Topic) => t.id === topicId);
+                    if (!topic) return null;
+                    
+                    return (
+                      <div
+                        key={topic.id}
+                        onClick={() => handleTopicSelect(topic.id)}
+                        style={{
+                          padding: '0.75rem',
+                          borderRadius: '8px',
+                          border: `2px solid ${selectedTopic === topic.id ? '#7e5a75' : 'rgba(126,90,117,0.2)'}`,
+                          backgroundColor: selectedTopic === topic.id ? 'rgba(126,90,117,0.1)' : '#f8f6f4',
+                          cursor: 'pointer',
+                          transition: 'all 0.3s',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.5rem',
+                          fontWeight: 500,
+                          color: '#3c4c73',
+                          fontSize: '0.85rem',
+                          minHeight: 45,
+                        }}
+                      >
+                        <span style={{ fontSize: '1rem' }}>{topic.icon}</span> 
+                        <span>{topic.label}</span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
+
             {/* Custom Topic Toggle */}
-            <div style={{ marginTop: '1rem' }}>
+            <div style={{ marginBottom: '0.75rem' }}>
               <button
                 onClick={handleCustomTopicToggle}
                 style={{
-                  padding: '0.5rem 1rem',
-                  borderRadius: '8px',
+                  padding: '0.5rem 0.75rem',
+                  borderRadius: '6px',
                   border: `2px solid ${useCustomTopic ? '#7e5a75' : 'rgba(126,90,117,0.2)'}`,
                   backgroundColor: useCustomTopic ? 'rgba(126,90,117,0.1)' : '#f8f6f4',
                   cursor: 'pointer',
@@ -458,15 +466,24 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
                   gap: '0.5rem',
                   fontWeight: 500,
                   color: '#3c4c73',
-                  fontSize: '0.9rem'
+                  fontSize: '0.85rem'
                 }}
               >
-                <span>✍️</span> Add Custom Topic
+                <span>✍️</span> Use Custom Topic
               </button>
             </div>
-            {/* Custom Topic Input */}
+
+            {/* Custom Topic Input - Show after custom toggle */}
             {useCustomTopic && (
-              <div style={{ marginTop: '1rem' }}>
+              <div style={{ marginBottom: '0.75rem' }}>
+                <h4 style={{
+                  color: '#3c4c73',
+                  fontSize: '0.9rem',
+                  fontWeight: 600,
+                  marginBottom: '0.25rem'
+                }}>
+                  ✍️ Custom Topic
+                </h4>
                 <input
                   type="text"
                   placeholder="Enter your custom topic..."
@@ -474,10 +491,10 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
                   onChange={(e) => setCustomTopic(e.target.value)}
                   style={{
                     width: '100%',
-                    padding: '0.75rem',
-                    borderRadius: '8px',
+                    padding: '0.5rem 0.75rem',
+                    borderRadius: '6px',
                     border: '2px solid rgba(126,90,117,0.3)',
-                    fontSize: '0.9rem',
+                    fontSize: '0.85rem',
                     fontFamily: 'inherit',
                     background: '#f8f6f4',
                     color: '#3c4c73'
@@ -486,274 +503,193 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
                 />
               </div>
             )}
-          </div>
 
-          {/* 2. Formality Selection Section */}
-          <div style={{ marginBottom: '1.5rem' }}>
-            <h3 style={{ color: '#3c4c73', fontSize: '1rem', fontWeight: 600, marginBottom: '0.5rem' }}>
-              🏷️ Conversation Formality
-            </h3>
-            <p style={{ color: '#7e5a75', fontSize: '0.85rem', marginBottom: '1rem', lineHeight: 1.4 }}>
-              Choose the level of formality or closeness for this session. This affects the AI's tone, pronouns, and style.
-            </p>
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-              gap: '0.5rem'
-            }}>
-              {Object.entries(CLOSENESS_LEVELS).map(([key, desc]) => {
-                const iconMatch = desc.match(/([\uD800-\uDBFF][\uDC00-\uDFFF]|[\u2600-\u27BF])/);
-                const icon = iconMatch ? iconMatch[0] : '';
-                const label = desc.split(':')[0];
-                const detail = desc.split(':').slice(1).join(':').trim();
-                return (
-                  <div
-                    key={key}
-                    onClick={() => setSelectedFormality(key)}
-                    style={{
-                      padding: '0.4rem 0.7rem',
-                      borderRadius: '8px',
-                      border: `2px solid ${selectedFormality === key ? '#7e5a75' : 'rgba(126,90,117,0.2)'}`,
-                      backgroundColor: selectedFormality === key ? 'rgba(126,90,117,0.1)' : '#f8f6f4',
-                      cursor: 'pointer',
-                      transition: 'all 0.3s ease',
-                      display: 'flex',
-                      alignItems: 'flex-start',
-                      gap: '0.5rem',
-                      minHeight: 36,
-                      fontSize: '0.92rem',
-                      boxShadow: selectedFormality === key ? '0 2px 8px rgba(126,90,117,0.12)' : 'none',
-                    }}
-                  >
-                    <div style={{ fontSize: '1.1rem', marginTop: 2 }}>{icon}</div>
-                    <div>
-                      <div style={{ fontWeight: 600, color: '#3c4c73', fontSize: '0.95rem', marginBottom: 2 }}>{label}</div>
-                      <div style={{ color: '#7e5a75', fontSize: '0.8rem', opacity: 0.85 }}>{detail}</div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* 3. Conversation Partner Section */}
-          <div style={{ marginBottom: '1.5rem' }}>
-            <h3 style={{ 
-              color: '#3c4c73', 
-              fontSize: '1rem', 
-              fontWeight: 600, 
-              marginBottom: '0.5rem'
-            }}>
-              🎭 Conversation Partner
-            </h3>
-            <p style={{ 
-              color: '#7e5a75', 
-              fontSize: '0.85rem', 
-              marginBottom: '1rem',
-              lineHeight: 1.4
-            }}>
-              Choose who you'd like to talk to, or describe your own conversation partner
-            </p>
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-              gap: '0.75rem'
-            }}>
-              {DEFAULT_PERSONAS.map((persona) => (
-                <div
-                  key={persona.id}
-                  onClick={() => handlePersonaSelect(persona.id)}
-                  style={{
-                    padding: '1rem',
-                    borderRadius: '12px',
-                    border: `2px solid ${selectedPersona === persona.id ? '#7e5a75' : 'rgba(126,90,117,0.2)'}`,
-                    backgroundColor: selectedPersona === persona.id ? 'rgba(126,90,117,0.1)' : '#f8f6f4',
-                    cursor: 'pointer',
-                    transition: 'all 0.3s ease',
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    gap: '0.75rem',
-                    minHeight: 80,
-                    boxShadow: selectedPersona === persona.id ? '0 4px 12px rgba(126,90,117,0.15)' : '0 2px 4px rgba(126,90,117,0.05)',
-                  }}
-                >
-                  <div style={{ fontSize: '1.5rem', marginTop: 2 }}>{persona.icon}</div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ 
-                      fontWeight: 600, 
-                      color: '#3c4c73', 
-                      fontSize: '1rem', 
-                      marginBottom: '0.25rem' 
-                    }}>
-                      {persona.name}
-                    </div>
-                    <div style={{ 
-                      color: '#7e5a75', 
-                      fontSize: '0.85rem', 
-                      lineHeight: 1.4 
-                    }}>
-                      {persona.description}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-            {/* Custom Description Input */}
-            {selectedPersona === 'custom' && (
-              <div style={{ marginTop: '1rem' }}>
-                <textarea
-                  placeholder="Describe your conversation partner or scenario (e.g., 'A friendly neighbor who loves gardening', 'A university professor discussing literature')"
-                  value={conversationDescription}
-                  onChange={(e) => setConversationDescription(e.target.value)}
-                  rows={3}
-                  style={{
-                    width: '100%',
-                    padding: '0.75rem',
-                    borderRadius: '8px',
-                    border: '2px solid rgba(126,90,117,0.3)',
-                    fontSize: '0.9rem',
-                    fontFamily: 'inherit',
-                    background: '#f8f6f4',
-                    color: '#3c4c73',
-                    resize: 'vertical'
-                  }}
-                />
+            {/* No topics available message */}
+            {!useCustomTopic && (!currentDashboard?.talk_topics || currentDashboard.talk_topics.length === 0) && (
+              <div style={{
+                padding: '1rem',
+                background: 'rgba(126,90,117,0.1)',
+                borderRadius: '6px',
+                textAlign: 'center',
+                color: '#7e5a75',
+                fontSize: '0.8rem'
+              }}>
+                No topics available. Add topics in dashboard settings.
               </div>
             )}
           </div>
 
-          {/* Selected Tags Display (Topics → Formality → Persona) */}
-          {(selectedTopics.length > 0 || (useCustomTopic && customTopic.trim()) || selectedFormality || selectedPersona) && (
-            <div style={{
-              background: 'rgba(126,90,117,0.1)',
-              padding: '1rem',
-              borderRadius: '8px',
-              marginBottom: '1.5rem',
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: '0.5rem',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              {/* Topic tags */}
-              {selectedTopics.map((topicId: string) => {
-                const topic: Topic | undefined = TALK_TOPICS.find((t: Topic) => t.id === topicId);
-                if (topic) {
-                  // Standard topic from TALK_TOPICS
-                  return (
-                    <span key={topicId} style={{
-                      background: '#7e5a75',
-                      color: '#fff',
-                      padding: '0.5rem 1rem',
-                      borderRadius: '12px',
-                      fontSize: '0.9rem',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '0.5rem',
-                      fontWeight: 500
-                    }}>
-                      {topic.icon} {topic.label}
-                    </span>
-                  );
-                } else {
-                  // Custom topic (not in TALK_TOPICS)
-                  return (
-                    <span key={topicId} style={{
-                      background: '#e67e22',
-                      color: '#fff',
-                      padding: '0.5rem 1rem',
-                      borderRadius: '12px',
-                      fontSize: '0.9rem',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '0.5rem',
-                      fontWeight: 500
-                    }}>
-                      ✍️ {topicId}
-                    </span>
-                  );
+          {/* 2. Scenario Selection Section - Show once topic is selected, then stay visible */}
+          {hasShownScenarios && (
+            <div style={{ marginBottom: '1.5rem' }}>
+              <h3 style={{ 
+                color: '#3c4c73', 
+                fontSize: '1rem', 
+                fontWeight: 600, 
+                marginBottom: '0.25rem'
+              }}>
+                📝 Choose Scenarios
+              </h3>
+              <p style={{ 
+                color: '#7e5a75', 
+                fontSize: '0.8rem', 
+                marginBottom: '0.75rem',
+                lineHeight: 1.3
+              }}>
+                {useCustomTopic 
+                  ? `Select scenarios for "${customTopic}"`
+                  : `Select scenarios for "${TALK_TOPICS.find(t => t.id === selectedTopic)?.label}"`
                 }
-              })}
-              {/* Custom topic tag */}
-              {useCustomTopic && customTopic.trim() && (
-                <span style={{
-                  background: '#e67e22',
-                  color: '#fff',
-                  padding: '0.5rem 1rem',
-                  borderRadius: '12px',
-                  fontSize: '0.9rem',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  fontWeight: 500
-                }}>
-                  ✍️ {customTopic.trim()}
-                </span>
+              </p>
+              
+              {/* Predefined Scenarios - Only show for default topics */}
+              {!useCustomTopic && TALK_TOPICS.find(t => t.id === selectedTopic)?.subtopics && (
+                <div style={{ marginBottom: '1rem' }}>
+                  <h4 style={{
+                    color: '#3c4c73',
+                    fontSize: '0.9rem',
+                    fontWeight: 600,
+                    marginBottom: '0.5rem'
+                  }}>
+                    📋 Suggested Scenarios
+                  </h4>
+                  <div style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: '0.4rem'
+                  }}>
+                    {TALK_TOPICS.find(t => t.id === selectedTopic)?.subtopics?.map((subtopic) => {
+                      const isSelected = selectedSubtopics.includes(subtopic);
+                      return (
+                        <div
+                          key={subtopic}
+                          onClick={() => handleSubtopicSelect(subtopic)}
+                          style={{
+                            padding: '0.5rem 0.75rem',
+                            borderRadius: '6px',
+                            border: `2px solid ${isSelected ? '#7e5a75' : 'rgba(126,90,117,0.2)'}`,
+                            backgroundColor: isSelected ? 'rgba(126,90,117,0.1)' : '#f8f6f4',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                            fontSize: '0.8rem',
+                            fontWeight: 500,
+                            color: '#3c4c73',
+                          }}
+                        >
+                          {subtopic}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               )}
-              {/* Formality tag */}
-              {selectedFormality && (
-                <span style={{
-                  background: '#3c4c73',
-                  color: '#fff',
-                  padding: '0.5rem 1rem',
-                  borderRadius: '12px',
+
+              {/* Custom Scenario Input - Always available, now after suggestions */}
+              <div style={{ marginBottom: '0.75rem' }}>
+                <h4 style={{
+                  color: '#3c4c73',
                   fontSize: '0.9rem',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  fontWeight: 500
+                  fontWeight: 600,
+                  marginBottom: '0.25rem'
                 }}>
-                  🏷️ {CLOSENESS_LEVELS[selectedFormality].split(':')[0]}
-                </span>
-              )}
-              {/* Persona tag */}
-              {selectedPersona && (
-                <span style={{
-                  background: '#e67e22',
-                  color: '#fff',
-                  padding: '0.5rem 1rem',
-                  borderRadius: '12px',
-                  fontSize: '0.9rem',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  fontWeight: 500
-                }}>
-                  🎭 {selectedPersona.startsWith('saved_') ? 'Saved Persona' : DEFAULT_PERSONAS.find(p => p.id === selectedPersona)?.name || 'Custom'}
-                </span>
-              )}
+                  ✍️ Custom Scenario
+                </h4>
+                <input
+                  type="text"
+                  placeholder="Enter your custom scenario..."
+                  value={customSubtopic}
+                  onChange={(e) => setCustomSubtopic(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '0.5rem 0.75rem',
+                    borderRadius: '6px',
+                    border: '2px solid rgba(126,90,117,0.3)',
+                    fontSize: '0.85rem',
+                    fontFamily: 'inherit',
+                    background: '#f8f6f4',
+                    color: '#3c4c73'
+                  }}
+                />
+              </div>
             </div>
           )}
 
-          {/* Action Button */}
-          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginTop: 16 }}>
-            <button
-              onClick={handleStartConversation}
-              disabled={isLoading || (!selectedTopics.length && (!useCustomTopic || !customTopic.trim())) || !dashboardExists || !selectedPersona}
-              style={{
-                padding: '0.75rem 1.5rem',
-                borderRadius: 10,
-                border: 'none',
-                background: isLoading || (!selectedTopics.length && (!useCustomTopic || !customTopic.trim())) || !dashboardExists || !selectedPersona ? '#ccc' : 
-                           'linear-gradient(135deg, #7e5a75 0%, #8a6a7a 100%)',
-                color: '#fff',
-                fontSize: '1rem',
-                fontWeight: 700,
-                cursor: isLoading || (!selectedTopics.length && (!useCustomTopic || !customTopic.trim())) || !dashboardExists || !selectedPersona ? 'not-allowed' : 'pointer',
-                transition: 'all 0.3s ease',
-                boxShadow: !isLoading && (selectedTopics.length > 0 || (useCustomTopic && customTopic.trim())) && dashboardExists && selectedPersona ? '0 0 16px 4px #eec1d1, 0 4px 16px rgba(60,76,115,0.15)' : 'none',
-                animation: !isLoading && (selectedTopics.length > 0 || (useCustomTopic && customTopic.trim())) && dashboardExists && selectedPersona ? 'glowPulse 1.8s infinite alternate' : 'none',
-              }}
-            >
-              {isLoading ? '🔄 Starting...' : '🎤 Start Practice Session'}
-            </button>
-            <style>{`
-              @keyframes glowPulse {
-                0% { box-shadow: 0 0 16px 4px #eec1d1, 0 4px 16px rgba(60,76,115,0.15); }
-                100% { box-shadow: 0 0 32px 8px #eec1d1, 0 8px 32px rgba(60,76,115,0.18); }
-              }
-            `}</style>
-          </div>
+          {/* 3. Formality Selection Section - Show once scenarios are selected, then stay visible */}
+          {hasShownFormality && (
+            <div style={{ marginBottom: '1.5rem' }}>
+              <h3 style={{ color: '#3c4c73', fontSize: '1rem', fontWeight: 600, marginBottom: '0.25rem' }}>
+                🏷️ Conversation Formality
+              </h3>
+              <p style={{ color: '#7e5a75', fontSize: '0.8rem', marginBottom: '0.75rem', lineHeight: 1.3 }}>
+                Set the conversation tone and formality level
+              </p>
+              <div className="formality-grid" style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+                gap: '0.4rem'
+              }}>
+                {Object.entries(CLOSENESS_LEVELS).map(([key, desc]) => {
+                  const iconMatch = desc.match(/([\uD800-\uDBFF][\uDC00-\uDFFF]|[\u2600-\u27BF])/);
+                  const icon = iconMatch ? iconMatch[0] : '';
+                  const label = desc.split(':')[0];
+                  return (
+                    <div
+                      key={key}
+                      onClick={() => setSelectedFormality(key)}
+                      style={{
+                        padding: '0.5rem',
+                        borderRadius: '6px',
+                        border: `2px solid ${selectedFormality === key ? '#7e5a75' : 'rgba(126,90,117,0.2)'}`,
+                        backgroundColor: selectedFormality === key ? 'rgba(126,90,117,0.1)' : '#f8f6f4',
+                        cursor: 'pointer',
+                        transition: 'all 0.3s ease',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.4rem',
+                        fontSize: '0.8rem',
+                        boxShadow: selectedFormality === key ? '0 2px 8px rgba(126,90,117,0.12)' : 'none',
+                      }}
+                    >
+                      <div style={{ fontSize: '1rem' }}>{icon}</div>
+                      <div style={{ fontWeight: 600, color: '#3c4c73' }}>{label}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Action Button - Only show if all required fields are filled */}
+          {((customSubtopic.trim()) || selectedSubtopics.length > 0) && (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginTop: '1.5rem' }}>
+              <button
+                onClick={handleStartConversation}
+                disabled={isLoading || !dashboardExists}
+                style={{
+                  padding: '0.75rem 1.5rem',
+                  borderRadius: 10,
+                  border: 'none',
+                  background: isLoading || !dashboardExists ? '#ccc' : 
+                             'linear-gradient(135deg, #7e5a75 0%, #8a6a7a 100%)',
+                  color: '#fff',
+                  fontSize: '1rem',
+                  fontWeight: 700,
+                  cursor: isLoading || !dashboardExists ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.3s ease',
+                  boxShadow: !isLoading && dashboardExists ? '0 0 16px 4px #eec1d1, 0 4px 16px rgba(60,76,115,0.15)' : 'none',
+                  animation: !isLoading && dashboardExists ? 'glowPulse 1.8s infinite alternate' : 'none',
+                }}
+              >
+                {isLoading ? '🔄 Starting...' : '🎤 Start Practice Session'}
+              </button>
+              <style>{`
+                @keyframes glowPulse {
+                  0% { box-shadow: 0 0 16px 4px #eec1d1, 0 4px 16px rgba(60,76,115,0.15); }
+                  100% { box-shadow: 0 0 32px 8px #eec1d1, 0 8px 32px rgba(60,76,115,0.18); }
+                }
+              `}</style>
+            </div>
+          )}
         </div>
       </div>
     </>

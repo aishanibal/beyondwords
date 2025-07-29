@@ -38,7 +38,7 @@ module.exports = {
         destination: 'http://localhost:4000/api/auth/:path*', // Express backend
       },
       {
-        source: '/api/conversations/:path*',
+        source: '/api/conversations/:path*',            
         destination: 'http://localhost:4000/api/conversations/:path*', // Express backend
       },
       {
