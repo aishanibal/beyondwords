@@ -55,7 +55,7 @@ interface ChatMessage {
   messageType?: string;
   audioFilePath?: string | null;
   translation?: string;
-  breakdown?: unknown;
+  breakdown?: string;
   detailedFeedback?: string;
   shortFeedback?: string;
   showDetailedFeedback?: boolean;
@@ -83,7 +83,7 @@ function usePersistentChatHistory(user: User | null): [ChatMessage[], React.Disp
   const [chatHistory, setChatHistory] = React.useState<ChatMessage[]>(() => {
     if (!user) {
       const saved = localStorage.getItem('chatHistory');
-      return saved ? JSON.parse(saved) : [];
+      return saved ? (JSON.parse(saved) as ChatMessage[]) : [];
     }
     return [];
   });
@@ -176,7 +176,7 @@ function Analyze() {
   const [currentSuggestionIndex, setCurrentSuggestionIndex] = useState<number>(0);
   const [showSuggestionCarousel, setShowSuggestionCarousel] = useState<boolean>(false);
   const [suggestionMessages, setSuggestionMessages] = useState<ChatMessage[]>([]);
-  const [translations, setTranslations] = useState<Record<number, unknown>>({});
+  const [translations, setTranslations] = useState<Record<number, { translation?: string; breakdown?: string; has_breakdown?: boolean }>>({});
   const [isTranslating, setIsTranslating] = useState<Record<number, boolean>>({});
   const [showTranslations, setShowTranslations] = useState<Record<number, boolean>>({});
   const [isLoadingMessageFeedback, setIsLoadingMessageFeedback] = useState<Record<number, boolean>>({});
@@ -1974,7 +1974,7 @@ function Analyze() {
               width: '100%',
               display: 'flex',
               flexDirection: 'column',
-              alignItems: (message as any).sender === 'User' ? 'flex-end' : 'flex-start',
+              alignItems: message.sender === 'User' ? 'flex-end' : 'flex-start',
               marginBottom: '0.7rem'
             }}>
               <div 
@@ -2114,9 +2114,9 @@ function Analyze() {
                     </button>
                   </div>
                   <div style={{ marginBottom: '0.5rem' }}>
-                    <strong>Translation:</strong> {translations[index] && typeof translations[index] === 'object' && 'translation' in translations[index] ? (translations[index] as any).translation : ''}
+                    <strong>Translation:</strong> {translations[index]?.translation || ''}
                   </div>
-                  {translations[index] && typeof translations[index] === 'object' && 'has_breakdown' in translations[index] && (translations[index] as any).has_breakdown && (translations[index] as any).breakdown && (
+                  {translations[index]?.has_breakdown && translations[index]?.breakdown && (
                     <div style={{ marginTop: '0.5rem' }}>
                       <div style={{ marginBottom: '0.5rem' }}>
                         <strong>📖 Detailed Analysis:</strong>
@@ -2130,7 +2130,7 @@ function Analyze() {
                         lineHeight: '1.5',
                         whiteSpace: 'pre-wrap'
                       }}>
-                        {(translations[index] as any).breakdown}
+                        {translations[index].breakdown}
                       </div>
                     </div>
                   )}
