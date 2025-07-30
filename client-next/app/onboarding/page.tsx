@@ -452,7 +452,7 @@ export default function OnboardingPage() {
                 color: 'var(--blue-secondary)', 
                 fontSize: '0.9rem',
                 fontFamily: 'Gabriela, Arial, sans-serif'
-              }}>{goal.label}</div>
+              }}>{goal.goal}</div>
             </div>
           ))}
         </div>

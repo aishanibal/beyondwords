@@ -6,36 +6,8 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '../ClientLayout';
 import axios from 'axios';
-import { LANGUAGES, LEARNING_GOALS, FEEDBACK_LANGUAGES, Language, ProficiencyLevel, Topic, LearningGoal, PracticePreference, FeedbackLanguage } from '../../lib/preferences';
+import { LANGUAGES, PROFICIENCY_LEVELS, TALK_TOPICS, LEARNING_GOALS, PRACTICE_PREFERENCES, FEEDBACK_LANGUAGES, Language, ProficiencyLevel, Topic, LearningGoal, PracticePreference, FeedbackLanguage } from '../../lib/preferences';
 
-const PROFICIENCY_LEVELS: ProficiencyLevel[] = [
-  { level: 'beginner', label: 'Beginner', description: 'I can use simple greetings and a handful of words, but struggle to form sentences.', icon: '🌱' },
-  { level: 'elementary', label: 'Elementary', description: 'I can handle basic everyday interactions in short, simple sentences.', icon: '🌿' },
-  { level: 'intermediate', label: 'Intermediate', description: 'I can discuss familiar topics, understand main points, and ask questions.', icon: '🌳' },
-  { level: 'advanced', label: 'Advanced', description: 'I can express detailed ideas, adapt my language, and engage comfortably in conversation.', icon: '🏔️' },
-  { level: 'fluent', label: 'Fluent', description: 'I speak effortlessly, understand nuances, and participate in complex discussions.', icon: '🗝️' }
-];
-
-const TALK_TOPICS: Topic[] = [
-  { id: 'family', label: 'Family and relationships', icon: '👨‍👩‍👧‍👦' },
-  { id: 'travel', label: 'Travel experiences and cultures', icon: '✈️' },
-  { id: 'heritage', label: 'Cultural heritage and traditions', icon: '🏛️' },
-  { id: 'business', label: 'Work and professional life', icon: '💼' },
-  { id: 'media', label: 'Movies, music, and media', icon: '🎬' },
-  { id: 'food', label: 'Food and cooking', icon: '🍽️' },
-  { id: 'hobbies', label: 'Hobbies and leisure activities', icon: '🎨' },
-  { id: 'news', label: 'News and current events', icon: '📰' },
-  { id: 'sports', label: 'Sports and fitness', icon: '⚽️' }
-];
-
-
-
-const PRACTICE_PREFERENCES: PracticePreference[] = [
-  { id: 'daily_short', label: 'Daily short sessions (5-15 minutes)', description: 'Perfect for busy schedules - quick daily practice with focused exercises' },
-  { id: 'few_times_week', label: 'Few times a week (20-30 minutes)', description: 'Balanced approach with deeper practice sessions when you have time' },
-  { id: 'weekly_long', label: 'Weekly longer sessions (45+ minutes)', description: 'Intensive practice with comprehensive lessons and conversations' },
-  { id: 'flexible', label: 'Flexible scheduling', description: 'Adapt to your schedule - practice when you can, for as long as you want' }
-];
 
 interface LanguageOnboardingProps {
   onComplete: (dashboard: any) => void;
@@ -470,7 +442,7 @@ function LanguageOnboarding({ onComplete, existingLanguages = [] }: LanguageOnbo
                 color: 'var(--blue-secondary)', 
                 fontSize: '0.9rem',
                 fontFamily: 'Gabriela, Arial, sans-serif'
-              }}>{goal.label}</div>
+              }}>{goal.goal}</div>
             </div>
           ))}
         </div>

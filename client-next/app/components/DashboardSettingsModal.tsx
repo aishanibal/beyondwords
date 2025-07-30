@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Topic, LEARNING_GOALS, LearningGoal } from '../../lib/preferences';
+import { Topic, TALK_TOPICS, PROFICIENCY_LEVELS, LEARNING_GOALS, LearningGoal, ProficiencyLevel } from '../../lib/preferences';
 
 // Type definitions
 interface DashboardType {
@@ -20,21 +20,6 @@ interface DashboardSettingsModalProps {
   onUpdate: (dashboard: DashboardType) => void;
   onDelete?: (language: string) => void;
 }
-
-const TALK_TOPICS: Topic[] = [
-  { id: 'family', label: 'Family and relationships', icon: '👨‍👩‍👧‍👦' },
-  { id: 'travel', label: 'Travel experiences and cultures', icon: '✈️' },
-  { id: 'heritage', label: 'Cultural heritage and traditions', icon: '🏛️' },
-  { id: 'business', label: 'Work and professional life', icon: '💼' },
-  { id: 'media', label: 'Movies, music, and media', icon: '🎬' },
-  { id: 'food', label: 'Food and cooking', icon: '🍽️' },
-  { id: 'hobbies', label: 'Hobbies and leisure activities', icon: '🎨' },
-  { id: 'news', label: 'News and current events', icon: '📰' },
-  { id: 'sports', label: 'Sports and fitness', icon: '⚽️' },
-  { id: 'education', label: 'Education and learning', icon: '📚' },
-  { id: 'technology', label: 'Technology and innovation', icon: '💻' },
-  { id: 'health', label: 'Health and wellness', icon: '🏥' }
-];
 
 const getLanguageInfo = (code: string): { label: string; flag: string } => {
   const languages: Record<string, { label: string; flag: string }> = {
@@ -221,14 +206,14 @@ export default function DashboardSettingsModal({
             gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', 
             gap: '0.5rem'
           }}>
-            {['beginner', 'elementary', 'intermediate', 'advanced', 'fluent'].map(level => {
-              const isSelected = editedDashboard.proficiency_level === level;
-              const profInfo = getProficiencyDisplay(level);
-              
-              return (
-                <button
-                  key={level}
-                  onClick={() => setEditedDashboard((prev: DashboardType) => ({ ...prev, proficiency_level: level }))}
+                         {PROFICIENCY_LEVELS.map(level => {
+               const isSelected = editedDashboard.proficiency_level === level.level;
+               const profInfo = getProficiencyDisplay(level.level);
+               
+               return (
+                 <button
+                   key={level.level}
+                   onClick={() => setEditedDashboard((prev: DashboardType) => ({ ...prev, proficiency_level: level.level }))}
                   style={{
                     background: isSelected ? '#7e5a75' : 'rgba(126,90,117,0.1)',
                     color: isSelected ? '#fff' : '#3c4c73',
@@ -361,7 +346,7 @@ export default function DashboardSettingsModal({
                     fontSize: '0.85rem',
                     flex: 1
                   }} className="font-body">
-                    {goal.label}
+                                         {goal.goal}
                   </div>
                   {isSelected && (
                     <div style={{ color: '#7e5a75', fontSize: '1rem' }}>✓</div>

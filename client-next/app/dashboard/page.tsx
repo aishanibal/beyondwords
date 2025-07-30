@@ -10,7 +10,8 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import LanguageOnboarding from '../components/LanguageOnboarding';
 import DashboardSettingsModal from '../components/DashboardSettingsModal';
-import { LEARNING_GOALS } from '../../lib/preferences';
+
+import { LEARNING_GOALS, LearningGoal } from '../../lib/preferences';
 
 // Type definitions
 interface DashboardType {
@@ -41,6 +42,180 @@ interface PersonaType {
   language: string;
   conversation_id: string;
   created_at: string;
+}
+
+// Learning Goal Card Component
+interface LearningGoalCardProps {
+  goal: LearningGoal;
+  index: number;
+}
+
+function LearningGoalCard({ goal, index }: LearningGoalCardProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  return (
+    <div style={{ 
+      background: 'rgba(126,90,117,0.05)', 
+      borderRadius: 12, 
+      border: '1px solid rgba(126,90,117,0.1)',
+      overflow: 'hidden',
+      transition: 'all 0.3s ease'
+    }}>
+      {/* Goal Header */}
+      <div 
+        onClick={() => setIsExpanded(!isExpanded)}
+        style={{ 
+          padding: '0.75rem', 
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.75rem',
+          cursor: 'pointer',
+          transition: 'background-color 0.2s ease'
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.backgroundColor = 'rgba(126,90,117,0.08)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.backgroundColor = 'transparent';
+        }}
+      >
+        <div style={{ 
+          background: 'var(--rose-primary)', 
+          color: '#fff', 
+          borderRadius: '50%', 
+          width: '24px', 
+          height: '24px', 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center', 
+          fontSize: '0.8rem',
+          fontWeight: 600,
+          flexShrink: 0,
+          fontFamily: 'Montserrat, Arial, sans-serif'
+        }}>
+          {index + 1}
+        </div>
+        <div style={{ 
+          fontSize: '1.2rem',
+          marginRight: '0.5rem'
+        }}>
+          {goal.icon}
+        </div>
+        <div style={{ 
+          color: 'var(--blue-secondary)', 
+          fontWeight: 600,
+          fontSize: '0.9rem',
+          lineHeight: '1.3',
+          fontFamily: 'Gabriela, Arial, sans-serif',
+          flex: 1
+        }}>
+          {goal.goal}
+        </div>
+        <div style={{ 
+          transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+          transition: 'transform 0.3s ease',
+          fontSize: '1rem',
+          color: 'var(--rose-primary)',
+          fontWeight: 600
+        }}>
+          ▼
+        </div>
+      </div>
+
+      {/* Subgoals Dropdown */}
+      {isExpanded && (
+        <div style={{ 
+          background: 'rgba(126,90,117,0.02)',
+          borderTop: '1px solid rgba(126,90,117,0.1)',
+          padding: '0.75rem',
+          opacity: 1,
+          maxHeight: '500px',
+          transition: 'all 0.3s ease-out'
+        }}>
+          <div style={{ 
+            color: 'var(--rose-primary)', 
+            fontSize: '0.8rem',
+            fontWeight: 600,
+            marginBottom: '0.5rem',
+            fontFamily: 'Montserrat, Arial, sans-serif'
+          }}>
+            Progress Indicators:
+          </div>
+          {goal.subgoals && goal.subgoals.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {goal.subgoals.map((subgoal, subIndex) => (
+                <div key={subgoal.id} style={{ 
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '0.5rem',
+                  padding: '0.5rem',
+                  background: 'rgba(255,255,255,0.5)',
+                  borderRadius: 8,
+                  border: '1px solid rgba(126,90,117,0.1)'
+                }}>
+                  <div style={{ 
+                    background: 'var(--rose-accent)', 
+                    color: '#fff', 
+                    borderRadius: '50%', 
+                    width: '16px', 
+                    height: '16px', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    fontSize: '0.6rem',
+                    fontWeight: 600,
+                    flexShrink: 0,
+                    fontFamily: 'Montserrat, Arial, sans-serif',
+                    marginTop: '0.1rem'
+                  }}>
+                    {subIndex + 1}
+                  </div>
+                  <div style={{ 
+                    color: 'var(--blue-secondary)', 
+                    fontSize: '0.75rem',
+                    lineHeight: '1.4',
+                    fontFamily: 'AR One Sans, Arial, sans-serif',
+                    flex: 1
+                  }}>
+                    {subgoal.description}
+                  </div>
+                  {/* Placeholder for future progress bar */}
+                  <div style={{ 
+                    width: '60px',
+                    height: '6px',
+                    background: 'rgba(126,90,117,0.1)',
+                    borderRadius: 3,
+                    marginTop: '0.2rem',
+                    position: 'relative',
+                    overflow: 'hidden'
+                  }}>
+                    <div style={{ 
+                      width: '0%', // This will be dynamic based on progress
+                      height: '100%',
+                      background: 'var(--rose-primary)',
+                      borderRadius: 3,
+                      transition: 'width 0.3s ease'
+                    }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ 
+              color: 'var(--rose-primary)', 
+              fontSize: '0.75rem',
+              fontStyle: 'italic',
+              textAlign: 'center',
+              padding: '1rem',
+              fontFamily: 'AR One Sans, Arial, sans-serif'
+            }}>
+              No progress indicators available for this goal yet.
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 
@@ -118,14 +293,17 @@ export default function DashboardPage() {
           const conversationsRes = await axios.get(`/api/conversations?language=${selectedLanguage}`, {
             headers: { Authorization: `Bearer ${token}` }
           });
-          setConversations(conversationsRes.data.conversations || []);
+          
+          const conversations = conversationsRes.data.conversations || [];
+          
+          setConversations(conversations);
         } catch (err) {
           setConversations([]);
         }
       }
     }
     fetchConversations();
-  }, [selectedLanguage, user?.id]);
+  }, [selectedLanguage, user?.id, languageDashboards]);
 
   useEffect(() => {
     async function fetchPersonas() {
@@ -456,19 +634,19 @@ export default function DashboardPage() {
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.3 }}
-              className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8"
+              className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8"
             >
-                              <div className="bg-white rounded-lg shadow-lg p-8 text-center min-h-[180px] flex flex-col justify-center border border-gray-200">
-                  <div className="text-4xl mb-4">🔥</div>
-                  <div className="text-4xl font-bold text-rose-accent mb-3 font-heading">{streak}</div>
-                  <div className="text-rose-primary text-base font-body">Day Streak</div>
+                              <div className="bg-white rounded-lg shadow-lg p-6 text-center min-h-[140px] flex flex-col justify-center border border-gray-200">
+                  <div className="text-3xl mb-3">🔥</div>
+                  <div className="text-3xl font-bold text-rose-accent mb-2 font-heading">{streak}</div>
+                  <div className="text-rose-primary text-sm font-body">Day Streak</div>
                 </div>
-                              <div className="bg-white rounded-lg shadow-lg p-8 text-center min-h-[180px] flex flex-col justify-center border border-gray-200">
-                  <div className="text-4xl mb-4">💬</div>
-                  <div className="text-4xl font-bold text-rose-primary mb-3 font-heading">{(conversations || []).length}</div>
-                  <div className="text-rose-primary text-base font-base">Conversations</div>
+                              <div className="bg-white rounded-lg shadow-lg p-6 text-center min-h-[140px] flex flex-col justify-center border border-gray-200">
+                  <div className="text-3xl mb-3">💬</div>
+                  <div className="text-3xl font-bold text-rose-primary mb-2 font-heading">{(conversations || []).length}</div>
+                  <div className="text-rose-primary text-sm font-base">Conversations</div>
                 </div>
-                              <div className="bg-white rounded-lg shadow-lg p-8 min-h-[220px] border border-gray-200">
+                              <div className="bg-white rounded-lg shadow-lg p-8 min-h-[300px] border border-gray-200 md:col-span-2">
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
                   <div style={{ fontSize: '1.5rem' }}>🎯</div>
                   <div style={{ 
@@ -478,53 +656,20 @@ export default function DashboardPage() {
                     fontFamily: 'Gabriela, Arial, sans-serif'
                   }}>Learning Goals</div>
                 </div>
-                {currentDashboard.learning_goals && currentDashboard.learning_goals.length > 0 ? (
+                                {currentDashboard.learning_goals && currentDashboard.learning_goals.length > 0 ? (
                   <div style={{ 
-                    height: '140px', 
+                    maxHeight: '300px', 
                     overflowY: 'auto',
                     scrollbarWidth: 'thin',
                     scrollbarColor: 'var(--rose-accent) transparent'
                   }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                       {currentDashboard.learning_goals.map((goalId: string, index: number) => {
                         const goal = LEARNING_GOALS.find(g => g.id === goalId);
+                        if (!goal) return null;
+                        
                         return (
-                          <div key={index} style={{ 
-                            background: 'rgba(126,90,117,0.05)', 
-                            borderRadius: 8, 
-                            padding: '0.5rem', 
-                            border: '1px solid rgba(126,90,117,0.1)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.5rem'
-                          }}>
-                            <div style={{ 
-                              background: 'var(--rose-primary)', 
-                              color: '#fff', 
-                              borderRadius: '50%', 
-                              width: '20px', 
-                              height: '20px', 
-                              display: 'flex', 
-                              alignItems: 'center', 
-                              justifyContent: 'center', 
-                              fontSize: '0.7rem',
-                              fontWeight: 600,
-                              flexShrink: 0,
-                              fontFamily: 'Montserrat, Arial, sans-serif'
-                            }}>
-                              {index + 1}
-                            </div>
-                            <div style={{ 
-                              color: 'var(--blue-secondary)', 
-                              fontWeight: 500,
-                              fontSize: '0.8rem',
-                              lineHeight: '1.3',
-                              fontFamily: 'Montserrat, Arial, sans-serif',
-                              flex: 1
-                            }}>
-                              {goal ? goal.label : goalId}
-                            </div>
-                          </div>
+                          <LearningGoalCard key={goalId} goal={goal} index={index} />
                         );
                       })}
                     </div>
@@ -902,6 +1047,14 @@ export default function DashboardPage() {
                             🗑️
                           </button>
                         </div>
+                      </div>
+                      <div style={{ 
+                        color: 'var(--rose-primary)', 
+                        fontSize: '0.9rem', 
+                        opacity: 0.8,
+                        fontFamily: 'AR One Sans, Arial, sans-serif'
+                      }} className="font-body">
+                        💬 {conversation.message_count || 0} messages
                       </div>
                     </div>
                   ))}

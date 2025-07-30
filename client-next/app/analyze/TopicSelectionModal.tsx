@@ -1,12 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
-import { TALK_TOPICS, CLOSENESS_LEVELS, Topic } from '../../lib/preferences';
+import { TALK_TOPICS, CLOSENESS_LEVELS, LEARNING_GOALS, Topic, LearningGoal } from '../../lib/preferences';
 
 interface TopicSelectionModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onStartConversation: (id: string, topics: string[], aiMessage: any, formality: string, description?: string, isUsingExistingPersona?: boolean) => void;
+  onStartConversation: (id: string, topics: string[], aiMessage: any, formality: string, learningGoals: string[], description?: string, isUsingExistingPersona?: boolean) => void;
   currentLanguage?: string;
 }
 
@@ -24,12 +24,14 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
   const [customTopic, setCustomTopic] = useState<string>('');
   const [customSubtopic, setCustomSubtopic] = useState<string>('');
   const [selectedFormality, setSelectedFormality] = useState<string>('friendly');
+  const [selectedGoals, setSelectedGoals] = useState<string[]>([]);
   const [savedPersonas, setSavedPersonas] = useState<any[]>([]);
   const [isLoadingPersonas, setIsLoadingPersonas] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
   const [hasShownScenarios, setHasShownScenarios] = useState<boolean>(false);
   const [hasShownFormality, setHasShownFormality] = useState<boolean>(false);
+  const [hasShownGoals, setHasShownGoals] = useState<boolean>(false);
   const [isUsingExistingPersona, setIsUsingExistingPersona] = useState<boolean>(false);
   const [selectedPersonaId, setSelectedPersonaId] = useState<string | null>(null);
 
@@ -103,6 +105,15 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
     setError('');
   };
 
+  const handleGoalSelect = (goalId: string) => {
+    setSelectedGoals(prev => 
+      prev.includes(goalId) 
+        ? prev.filter(id => id !== goalId)
+        : [...prev, goalId]
+    );
+    setError('');
+  };
+
   // Check if scenarios section should be shown
   useEffect(() => {
     if (selectedTopic || (useCustomTopic && customTopic.trim())) {
@@ -116,6 +127,18 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
       setHasShownFormality(true);
     }
   }, [customSubtopic, selectedSubtopics]);
+
+  // Check if goals section should be shown
+  useEffect(() => {
+    // Only show goals after topic, scenarios, and formality are all selected
+    const hasTopic = selectedTopic || (useCustomTopic && customTopic.trim());
+    const hasScenarios = customSubtopic.trim() || selectedSubtopics.length > 0;
+    const hasFormality = selectedFormality;
+    
+    if (hasTopic && hasScenarios && hasFormality) {
+      setHasShownGoals(true);
+    }
+  }, [selectedTopic, useCustomTopic, customTopic, customSubtopic, selectedSubtopics, selectedFormality]);
 
   const handleStartConversation = async () => {
     if (!dashboardExists) {
@@ -147,6 +170,7 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
         title: allSubtopics.length === 1 ? `${allSubtopics[0]} Discussion` : 'Multi-topic Discussion',
         topics: allSubtopics,
         formality: selectedFormality,
+        learningGoals: selectedGoals,
         description: subtopicDescription,
         usesPersona: false,
         personaId: null
@@ -178,6 +202,7 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
           allSubtopics, 
           aiMessage, 
           selectedFormality, 
+          selectedGoals,
           subtopicDescription,
           isUsingExistingPersona
         );
@@ -404,14 +429,6 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
             {/* Default Topics - Show first */}
             {!useCustomTopic && currentDashboard?.talk_topics && currentDashboard.talk_topics.length > 0 && (
               <div style={{ marginBottom: '1rem' }}>
-                <h4 style={{
-                  color: '#3c4c73',
-                  fontSize: '0.9rem',
-                  fontWeight: 600,
-                  marginBottom: '0.5rem'
-                }}>
-                  📋 Suggested Topics
-                </h4>
                 <div className="topic-grid" style={{ 
                   display: 'grid',
                   gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
@@ -545,14 +562,6 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
               {/* Predefined Scenarios - Only show for default topics */}
               {!useCustomTopic && TALK_TOPICS.find(t => t.id === selectedTopic)?.subtopics && (
                 <div style={{ marginBottom: '1rem' }}>
-                  <h4 style={{
-                    color: '#3c4c73',
-                    fontSize: '0.9rem',
-                    fontWeight: 600,
-                    marginBottom: '0.5rem'
-                  }}>
-                    📋 Suggested Scenarios
-                  </h4>
                   <div style={{
                     display: 'flex',
                     flexWrap: 'wrap',
@@ -586,14 +595,6 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
 
               {/* Custom Scenario Input - Always available, now after suggestions */}
               <div style={{ marginBottom: '0.75rem' }}>
-                <h4 style={{
-                  color: '#3c4c73',
-                  fontSize: '0.9rem',
-                  fontWeight: 600,
-                  marginBottom: '0.25rem'
-                }}>
-                  ✍️ Custom Scenario
-                </h4>
                 <input
                   type="text"
                   placeholder="Enter your custom scenario..."
@@ -659,8 +660,55 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
             </div>
           )}
 
+          {/* 4. Learning Goals Selection Section - Show once formality is selected, then stay visible */}
+          {hasShownGoals && currentDashboard?.learning_goals && currentDashboard.learning_goals.length > 0 && (
+            <div style={{ marginBottom: '1.5rem' }}>
+              <h3 style={{ color: '#3c4c73', fontSize: '1rem', fontWeight: 600, marginBottom: '0.25rem' }}>
+                🎯 Focus on Learning Goals
+              </h3>
+              <p style={{ color: '#7e5a75', fontSize: '0.8rem', marginBottom: '0.75rem', lineHeight: 1.3 }}>
+                Choose which skills you want to work on during this session
+              </p>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                gap: '0.5rem'
+              }}>
+                {currentDashboard.learning_goals.map((goalId: string) => {
+                  const goal: LearningGoal | undefined = LEARNING_GOALS.find((g: LearningGoal) => g.id === goalId);
+                  if (!goal) return null;
+                  
+                  return (
+                    <div
+                      key={goal.id}
+                      onClick={() => handleGoalSelect(goal.id)}
+                      style={{
+                        padding: '0.75rem',
+                        borderRadius: '8px',
+                        border: `2px solid ${selectedGoals.includes(goal.id) ? '#7e5a75' : 'rgba(126,90,117,0.2)'}`,
+                        backgroundColor: selectedGoals.includes(goal.id) ? 'rgba(126,90,117,0.1)' : '#f8f6f4',
+                        cursor: 'pointer',
+                        transition: 'all 0.3s',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                        fontWeight: 500,
+                        color: '#3c4c73',
+                        fontSize: '0.85rem',
+                        minHeight: 45,
+                      }}
+                    >
+                      <span style={{ fontSize: '1rem' }}>{goal.icon}</span> 
+                      <span>{goal.goal}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Action Button - Only show if all required fields are filled */}
-          {((customSubtopic.trim()) || selectedSubtopics.length > 0) && (
+          {((customSubtopic.trim()) || selectedSubtopics.length > 0) && selectedGoals.length > 0 && (
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginTop: '1.5rem' }}>
               <button
                 onClick={handleStartConversation}

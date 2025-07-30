@@ -61,6 +61,9 @@ interface ChatMessage {
   showDetailedFeedback?: boolean;
   showShortFeedback?: boolean;
   showDetailedBreakdown?: boolean;
+  isSuggestion?: boolean;
+  suggestionIndex?: number;
+  totalSuggestions?: number;
 }
 
 interface User {
@@ -170,6 +173,9 @@ function Analyze() {
   const [isLoadingConversation, setIsLoadingConversation] = useState<boolean>(false);
   const [suggestions, setSuggestions] = useState<unknown[]>([]); // TODO: type this
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState<boolean>(false);
+  const [currentSuggestionIndex, setCurrentSuggestionIndex] = useState<number>(0);
+  const [showSuggestionCarousel, setShowSuggestionCarousel] = useState<boolean>(false);
+  const [suggestionMessages, setSuggestionMessages] = useState<ChatMessage[]>([]);
   const [translations, setTranslations] = useState<Record<number, unknown>>({});
   const [isTranslating, setIsTranslating] = useState<Record<number, boolean>>({});
   const [showTranslations, setShowTranslations] = useState<Record<number, boolean>>({});
@@ -690,6 +696,10 @@ function Analyze() {
       });
       // Prepare new chat messages
       const transcription = response.data.transcription || 'Speech recorded';
+      
+      // Clear suggestion carousel when user sends a message
+      clearSuggestionCarousel();
+      
       // Use callback form to ensure chatHistory is updated before fetching feedback
       setChatHistory(prev => {
         const updated = [...prev, { sender: 'User', text: transcription, timestamp: new Date() }];
@@ -818,6 +828,69 @@ function Analyze() {
     }
   };
 
+  const handleSuggestionButtonClick = async () => {
+    if (!user) return;
+    
+    setIsLoadingSuggestions(true);
+    try {
+      const token = localStorage.getItem('jwt');
+      const response = await axios.post(
+        '/api/suggestions',
+        {
+          conversationId: conversationId,
+          language: language,
+          user_level: userPreferences.userLevel,
+          user_topics: userPreferences.topics,
+          formality: userPreferences.formality,
+          feedback_language: userPreferences.feedbackLanguage
+        },
+        token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
+      );
+      
+      const suggestions = response.data.suggestions || [];
+      if (suggestions.length > 0) {
+        // Create temporary suggestion messages
+        const tempMessages = suggestions.map((suggestion: any, index: number) => ({
+          sender: 'User',
+          text: suggestion.text?.replace(/\*\*/g, '') || '',
+          timestamp: new Date(),
+          messageType: 'text',
+          isSuggestion: true,
+          suggestionIndex: index,
+          totalSuggestions: suggestions.length
+        }));
+        
+        setSuggestionMessages(tempMessages);
+        setCurrentSuggestionIndex(0);
+        setShowSuggestionCarousel(true);
+      }
+    } catch (error: unknown) {
+      console.error('Error fetching suggestions:', error);
+    } finally {
+      setIsLoadingSuggestions(false);
+    }
+  };
+
+  const navigateSuggestion = (direction: 'prev' | 'next') => {
+    if (suggestionMessages.length === 0) return;
+    
+    if (direction === 'prev') {
+      setCurrentSuggestionIndex(prev => 
+        prev === 0 ? suggestionMessages.length - 1 : prev - 1
+      );
+    } else {
+      setCurrentSuggestionIndex(prev => 
+        prev === suggestionMessages.length - 1 ? 0 : prev + 1
+      );
+    }
+  };
+
+  const clearSuggestionCarousel = () => {
+    setShowSuggestionCarousel(false);
+    setSuggestionMessages([]);
+    setCurrentSuggestionIndex(0);
+  };
+
   // Helper to get initial AI message
   const fetchInitialAIMessage = async (convId: string, topics: string[]) => {
     setIsLoadingInitialAI(true);
@@ -866,7 +939,7 @@ function Analyze() {
     }
   };
 
-  const handleModalConversationStart = async (newConversationId: string, topics: string[], aiMessage: unknown, formality: string, description?: string, isUsingExistingPersona?: boolean) => {
+  const handleModalConversationStart = async (newConversationId: string, topics: string[], aiMessage: unknown, formality: string, learningGoals: string[], description?: string, isUsingExistingPersona?: boolean) => {
     setConversationId(newConversationId);
     setChatHistory([]);
     setShowTopicModal(false);
@@ -890,11 +963,12 @@ function Analyze() {
       topics 
     });
     
-    // Update user preferences with the selected formality and topics
+    // Update user preferences with the selected formality, topics, and learning goals
     setUserPreferences(prev => ({
       ...prev,
       formality,
-      topics
+      topics,
+      user_goals: learningGoals
     }));
     
     // Use Next.js router to update the URL
@@ -1600,7 +1674,7 @@ function Analyze() {
               const { conversation, aiMessage } = response.data;
               if (conversation && conversation.id) {
                 // Start the conversation immediately
-                await handleModalConversationStart(conversation.id, topics, aiMessage, formality, persona.description);
+                await handleModalConversationStart(conversation.id, topics, aiMessage, formality, [], persona.description);
               }
               
               // Clear the persona data from localStorage
@@ -1895,7 +1969,7 @@ function Analyze() {
               📂 Loading conversation...
             </div>
           )}
-          {chatHistory.map((message, index) => (
+          {chatHistory.map((message: ChatMessage, index) => (
             <div key={index} style={{
               width: '100%',
               display: 'flex',
@@ -1908,19 +1982,19 @@ function Analyze() {
                 style={{
                   flex: 1,
                   padding: '0.7rem 1rem',
-                  borderRadius: (message as any).sender === 'User' ? '16px 16px 4px 16px' : (message as any).sender === 'AI' ? '16px 16px 16px 4px' : '8px',
-                  background: (message as any).sender === 'User' ? 'linear-gradient(135deg, #c38d94 0%, #b87d8a 100%)' : (message as any).sender === 'AI' ? 'linear-gradient(135deg, #fff 0%, #f8f9fa 100%)' : '#fff7e6',
-                  color: (message as any).sender === 'User' ? '#fff' : (message as any).sender === 'System' ? '#e67e22' : '#3e3e3e',
-                  border: (message as any).sender === 'AI' ? '1px solid #e0e0e0' : (message as any).sender === 'System' ? '1px solid #e67e22' : 'none',
+                  borderRadius: message.sender === 'User' ? '16px 16px 4px 16px' : message.sender === 'AI' ? '16px 16px 16px 4px' : '8px',
+                  background: message.sender === 'User' ? 'linear-gradient(135deg, #c38d94 0%, #b87d8a 100%)' : message.sender === 'AI' ? 'linear-gradient(135deg, #fff 0%, #f8f9fa 100%)' : '#fff7e6',
+                  color: message.sender === 'User' ? '#fff' : message.sender === 'System' ? '#e67e22' : '#3e3e3e',
+                  border: message.sender === 'AI' ? '1px solid #e0e0e0' : message.sender === 'System' ? '1px solid #e67e22' : 'none',
                   fontSize: '0.9rem',
                   cursor: 'pointer',
                   transition: 'all 0.2s ease',
                   opacity: isTranslating[index] ? 0.7 : 1,
                   position: 'relative',
-                  boxShadow: (message as any).sender === 'User' ? '0 2px 8px rgba(195,141,148,0.18)' : (message as any).sender === 'AI' ? '0 2px 8px rgba(60,76,115,0.10)' : '0 1px 4px rgba(230,126,34,0.08)',
+                  boxShadow: message.sender === 'User' ? '0 2px 8px rgba(195,141,148,0.18)' : message.sender === 'AI' ? '0 2px 8px rgba(60,76,115,0.10)' : '0 1px 4px rgba(230,126,34,0.08)',
                   maxWidth: '75%',
                   wordWrap: 'break-word',
-                  fontWeight: (message as any).sender === 'User' ? 600 : (message as any).sender === 'System' ? 600 : 400,
+                  fontWeight: message.sender === 'User' ? 600 : message.sender === 'System' ? 600 : 400,
                   animation: 'messageAppear 0.3s ease-out',
                   fontFamily: 'AR One Sans, Arial, sans-serif'
                 }}
@@ -1933,7 +2007,7 @@ function Analyze() {
                 )}
               </div>
               {/* Feedback Buttons */}
-              {(message as any).sender === 'User' && (
+              {message.sender === 'User' && (
                 <button
                   onClick={() => toggleDetailedFeedback(index)}
                   disabled={isLoadingMessageFeedback[index]}
@@ -1957,29 +2031,53 @@ function Analyze() {
                   {isLoadingMessageFeedback[index] ? '🔄' : message.detailedFeedback ? '🎯 Show' : '🎯 Check'}
                 </button>
               )}
-              {(message as any).sender === 'AI' && (
-                <button
-                  onClick={() => toggleShortFeedback(index)}
-                  disabled={isLoadingMessageFeedback[index]}
-                  style={{
-                    padding: '0.35rem 0.9rem',
-                    borderRadius: 6,
-                    border: shortFeedbacks[index] ? 'none' : '1px solid #4a90e2',
-                    background: shortFeedbacks[index] ? 'linear-gradient(135deg, #4a90e2 0%, #357abd 100%)' : 'rgba(74,144,226,0.08)',
-                    color: shortFeedbacks[index] ? '#fff' : '#4a90e2',
-                    fontSize: '0.8rem',
-                    cursor: isLoadingMessageFeedback[index] ? 'not-allowed' : 'pointer',
-                    transition: 'all 0.2s ease',
-                    opacity: isLoadingMessageFeedback[index] ? 0.6 : 1,
-                    minWidth: '70px',
-                    fontWeight: 500,
-                    marginTop: 4,
-                    boxShadow: shortFeedbacks[index] ? '0 2px 6px rgba(74,144,226,0.18)' : '0 1px 3px rgba(74,144,226,0.10)'
-                  }}
-                  title={shortFeedbacks[index] ? 'Show short feedback' : 'Get short feedback'}
-                >
-                  {isLoadingMessageFeedback[index] ? '🔄' : shortFeedbacks[index] ? '💡 Show' : '💡 Explain'}
-                </button>
+              {message.sender === 'AI' && (
+                <div style={{ display: 'flex', gap: '0.5rem', marginTop: 4 }}>
+                  <button
+                    onClick={() => toggleShortFeedback(index)}
+                    disabled={isLoadingMessageFeedback[index]}
+                    style={{
+                      padding: '0.35rem 0.9rem',
+                      borderRadius: 6,
+                      border: shortFeedbacks[index] ? 'none' : '1px solid #4a90e2',
+                      background: shortFeedbacks[index] ? 'linear-gradient(135deg, #4a90e2 0%, #357abd 100%)' : 'rgba(74,144,226,0.08)',
+                      color: shortFeedbacks[index] ? '#fff' : '#4a90e2',
+                      fontSize: '0.8rem',
+                      cursor: isLoadingMessageFeedback[index] ? 'not-allowed' : 'pointer',
+                      transition: 'all 0.2s ease',
+                      opacity: isLoadingMessageFeedback[index] ? 0.6 : 1,
+                      minWidth: '70px',
+                      fontWeight: 500,
+                      boxShadow: shortFeedbacks[index] ? '0 2px 6px rgba(74,144,226,0.18)' : '0 1px 3px rgba(74,144,226,0.10)'
+                    }}
+                    title={shortFeedbacks[index] ? 'Show short feedback' : 'Get short feedback'}
+                  >
+                    {isLoadingMessageFeedback[index] ? '🔄' : shortFeedbacks[index] ? '💡 Show' : '💡 Explain'}
+                  </button>
+                  {/* Show suggestions button only for the most recent AI message */}
+                  {index === chatHistory.length - 1 && (
+                    <button
+                      onClick={handleSuggestionButtonClick}
+                      disabled={isLoadingSuggestions}
+                      style={{
+                        padding: '0.35rem 0.9rem',
+                        border: 'none',
+                        background: 'none',
+                        color: '#c38d94',
+                        fontSize: '0.8rem',
+                        cursor: isLoadingSuggestions ? 'not-allowed' : 'pointer',
+                        transition: 'all 0.2s ease',
+                        opacity: isLoadingSuggestions ? 0.6 : 1,
+                        fontWeight: 500,
+                        textDecoration: 'underline',
+                        textDecorationColor: '#c38d94'
+                      }}
+                      title="Get conversation suggestions"
+                    >
+                      {isLoadingSuggestions ? 'Loading...' : 'Suggestions'}
+                    </button>
+                  )}
+                </div>
               )}
               {showTranslations[index] && translations[index] && (
                 <div style={{
@@ -2016,9 +2114,9 @@ function Analyze() {
                     </button>
                   </div>
                   <div style={{ marginBottom: '0.5rem' }}>
-                    <strong>Translation:</strong> {(translations[index] as any).translation}
+                    <strong>Translation:</strong> {translations[index] && typeof translations[index] === 'object' && 'translation' in translations[index] ? (translations[index] as any).translation : ''}
                   </div>
-                  {(translations[index] as any).has_breakdown && (translations[index] as any).breakdown && (
+                  {translations[index] && typeof translations[index] === 'object' && 'has_breakdown' in translations[index] && (translations[index] as any).has_breakdown && (translations[index] as any).breakdown && (
                     <div style={{ marginTop: '0.5rem' }}>
                       <div style={{ marginBottom: '0.5rem' }}>
                         <strong>📖 Detailed Analysis:</strong>
@@ -2051,6 +2149,82 @@ function Analyze() {
               fontWeight: 500
             }}>
               ⏳ Processing your speech...
+            </div>
+          )}
+          
+          {/* Suggestion Carousel */}
+          {showSuggestionCarousel && suggestionMessages.length > 0 && (
+            <div style={{
+              width: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'flex-end',
+              marginBottom: '0.7rem'
+            }}>
+              <div style={{
+                maxWidth: '75%',
+                padding: '0.7rem 1rem',
+                background: 'linear-gradient(135deg, #fdf2f2 0%, #fce7e7 100%)',
+                color: '#3e3e3e',
+                borderRadius: '16px 16px 4px 16px',
+                border: '2px dashed #c38d94',
+                fontSize: '0.9rem',
+                fontWeight: 600,
+                position: 'relative',
+                boxShadow: '0 2px 8px rgba(195,141,148,0.18)',
+                fontFamily: 'AR One Sans, Arial, sans-serif'
+              }}>
+                                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginBottom: '0.5rem',
+                    fontSize: '0.8rem',
+                    color: '#c38d94'
+                  }}>
+                    <span>💭 Suggestion ({currentSuggestionIndex + 1}/{suggestionMessages.length})</span>
+                    <div style={{ display: 'flex', gap: '0.3rem' }}>
+                      <button
+                        onClick={() => navigateSuggestion('prev')}
+                        disabled={suggestionMessages.length <= 1}
+                        style={{
+                          padding: '0.2rem 0.4rem',
+                          borderRadius: 3,
+                          border: '1px solid #c38d94',
+                          background: 'rgba(195,141,148,0.08)',
+                          color: '#c38d94',
+                          cursor: suggestionMessages.length <= 1 ? 'not-allowed' : 'pointer',
+                          fontSize: '0.7rem',
+                          opacity: suggestionMessages.length <= 1 ? 0.5 : 1
+                        }}
+                      >
+                        ←
+                      </button>
+                      <button
+                        onClick={() => navigateSuggestion('next')}
+                        disabled={suggestionMessages.length <= 1}
+                        style={{
+                          padding: '0.2rem 0.4rem',
+                          borderRadius: 3,
+                          border: '1px solid #c38d94',
+                          background: 'rgba(195,141,148,0.08)',
+                          color: '#c38d94',
+                          cursor: suggestionMessages.length <= 1 ? 'not-allowed' : 'pointer',
+                          fontSize: '0.7rem',
+                          opacity: suggestionMessages.length <= 1 ? 0.5 : 1
+                        }}
+                      >
+                        →
+                      </button>
+                    </div>
+                  </div>
+                <div style={{
+                  lineHeight: '1.4',
+                  wordWrap: 'break-word'
+                }}>
+                  {suggestionMessages[currentSuggestionIndex]?.text}
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -2226,12 +2400,11 @@ function Analyze() {
           marginLeft: 0,
           marginTop: 0
         }}>
-          {/* Top Half - Detailed Analysis */}
+          {/* Full Height - Detailed Analysis */}
           <div style={{ 
-            height: '50%',
+            height: '100%',
             display: 'flex',
-            flexDirection: 'column',
-            borderBottom: '1px solid #e0e0e0'
+            flexDirection: 'column'
           }}>
             {/* Detailed Analysis Header */}
             <div style={{ 
@@ -2310,206 +2483,7 @@ function Analyze() {
             </div>
           </div>
 
-          {/* Bottom Half - Suggestions */}
-          <div style={{ 
-            height: '50%',
-            display: 'flex',
-            flexDirection: 'column',
-            borderTop: '1px solid #e0e0e0'
-          }}>
-            {/* Suggestions Header */}
-            <div style={{ 
-              background: 'var(--rose-accent)', 
-              color: 'var(--blue-secondary)', 
-              padding: '0.75rem 1rem', 
-              textAlign: 'center',
-              borderBottom: '1px solid #ececec',
-              fontFamily: 'Gabriela, Arial, sans-serif',
-              fontWeight: 600,
-              fontSize: '0.95rem',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center'
-            }}>
-              <span>💡 Conversation Suggestions</span>
-            </div>
-            {/* Suggestions Content */}
-            <div style={{ 
-              flex: 1, 
-              display: 'flex',
-              flexDirection: 'column',
-              minHeight: 0
-            }}>
-              {/* Scrollable Suggestions Area */}
-              <div style={{
-                flex: 1,
-                overflowY: 'auto',
-                overflowX: 'hidden',
-                padding: '1rem'
-              }}>
-                {/* Loading State */}
-                {isLoadingSuggestions && (
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#666',
-                    fontSize: '0.9rem',
-                    fontStyle: 'italic',
-                    padding: '1rem'
-                  }}>
-                    ⏳ Loading suggestions...
-                  </div>
-                )}
 
-                {/* Suggestions List */}
-                {suggestions.length > 0 && (
-                  <div style={{ 
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '1rem'
-                  }}>
-                    {suggestions.map((suggestion, index) => (
-                      <div key={index} style={{ marginBottom: index < suggestions.length - 1 ? '0.8rem' : '0' }}>
-                        <div style={{ 
-                          display: 'flex', 
-                          flexDirection: 'column',
-                          width: '100%'
-                        }}>
-                          <div style={{ 
-                            display: 'flex', 
-                            justifyContent: 'space-between', 
-                            alignItems: 'flex-start',
-                            marginBottom: '0.4rem'
-                          }}>
-                            <div style={{ fontWeight: 600, fontSize: '0.95rem', flex: 1 }}>
-                              {(suggestion as any).text?.replace(/\*\*/g, '')}
-                            </div>
-                            {(suggestion as any).explanation && (suggestion as any).explanation.trim() && (
-                              <button
-                                onClick={() => {
-                                  const newExpanded = { ...showSuggestionExplanations };
-                                  newExpanded[index] = !newExpanded[index];
-                                  setShowSuggestionExplanations(newExpanded);
-                                }}
-                                style={{
-                                  background: showSuggestionExplanations[index] ? '#4a90e2' : 'rgba(74,144,226,0.08)',
-                                  border: '1px solid #4a90e2',
-                                  color: showSuggestionExplanations[index] ? '#fff' : '#4a90e2',
-                                  padding: '0.3rem 0.7rem',
-                                  borderRadius: 5,
-                                  cursor: 'pointer',
-                                  fontSize: '0.75rem',
-                                  fontWeight: 500,
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '0.3rem',
-                                  transition: 'all 0.2s ease',
-                                  boxShadow: showSuggestionExplanations[index] ? '0 2px 6px rgba(74,144,226,0.2)' : '0 1px 3px rgba(74,144,226,0.1)',
-                                  minWidth: 'fit-content',
-                                  height: 'fit-content',
-                                  marginLeft: '0.5rem'
-                                }}
-                              >
-                                {showSuggestionExplanations[index] ? '▼' : '▶'} 
-                                {showSuggestionExplanations[index] ? 'Hide' : 'Details'}
-                              </button>
-                            )}
-                          </div>
-                          <div style={{ color: '#666', fontSize: '0.85rem', width: '100%', lineHeight: '1.4' }}>
-                            {(suggestion as any).translation}
-                          </div>
-                        </div>
-                        {showSuggestionExplanations[index] && (suggestion as any).explanation && (suggestion as any).explanation.trim() && (
-                          <div style={{
-                            marginTop: '0.75rem',
-                            padding: '1rem',
-                            background: 'linear-gradient(135deg, #f8f9fa 0%, #f0f4f8 100%)',
-                            borderRadius: 8,
-                            border: '1px solid #e1e8ed',
-                            fontSize: '0.8rem',
-                            lineHeight: 1.5,
-                            whiteSpace: 'pre-wrap',
-                            boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.05)',
-                            color: '#2c3e50'
-                          }}>
-                            {(suggestion as any).explanation}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Empty State */}
-                {!isLoadingSuggestions && suggestions.length === 0 && (
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#666',
-                    fontSize: '0.9rem',
-                    fontStyle: 'italic',
-                    padding: '1rem',
-                    textAlign: 'center'
-                  }}>
-                    Click "Get New Suggestions" to see conversation ideas
-                  </div>
-                )}
-              </div>
-
-              {/* Get Suggestions Button - Fixed at bottom */}
-              <div style={{
-                padding: '1rem',
-                borderTop: '1px solid #e0e0e0',
-                background: '#f9f9f9'
-              }}>
-                {suggestions.length === 0 && !isLoadingSuggestions && (
-                  <button
-                    onClick={fetchSuggestions}
-                    style={{
-                      width: '100%',
-                      padding: '0.6rem 1.2rem',
-                      background: 'var(--rose-primary)',
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: 10,
-                      cursor: 'pointer',
-                      fontSize: '0.9rem',
-                      fontWeight: 500,
-                      transition: 'all 0.2s',
-                      boxShadow: '0 1px 4px rgba(195,141,148,0.10)'
-                    }}
-                  >
-                    💡 Get New Suggestions
-                  </button>
-                )}
-                {suggestions.length > 0 && (
-                  <button
-                    onClick={() => {
-                      setSuggestions([]);
-                      fetchSuggestions();
-                    }}
-                    style={{
-                      width: '100%',
-                      padding: '0.6rem 1.2rem',
-                      background: '#fff',
-                      color: 'var(--rose-primary)',
-                      border: '1px solid #c38d94',
-                      borderRadius: 10,
-                      cursor: 'pointer',
-                      fontSize: '0.9rem',
-                      fontWeight: 500,
-                      transition: 'all 0.2s ease',
-                      boxShadow: '0 1px 4px rgba(195,141,148,0.08)'
-                    }}
-                  >
-                    🔄 Get New Suggestions
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
         </div>
       )}
       {/* Interrupt message - prominent UI position */}
