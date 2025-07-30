@@ -203,7 +203,7 @@ export const LEARNING_GOALS: LearningGoal[] = [
     icon: "💪",
     subgoals: [
       // { id: "speak_fluently_1", description: "Average response time per turn is below 5 seconds." },
-      { id: "speak_fluently_2", description: "No more than 1 long pause (e.g., >8s) every 5 turns." },
+      { id: "speak_fluently_2", description: "No Long Pauses (e.g., >8s) every 5 turns." },
       { id: "speak_fluently_3", description: "Fewer than 10% of turns are skipped or answered with placeholders like “I don’t know.”" },
       { id: "speak_fluently_4", description: "At least 80% of responses are full sentences, not one-word replies." },
       // { id: "speak_fluently_5", description: "Response length variance stays within a natural range (i.e., avoids abrupt drop to single words mid-conversation)." }
