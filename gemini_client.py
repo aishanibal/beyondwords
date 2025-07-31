@@ -36,14 +36,16 @@ class LanguageTutor:
         'ko': 'Korean',
         'ar': 'Arabic',
         'ta': 'Tamil',
+        'or': 'Odia',
+        'ml': 'Malayalam',
     }
 
     CLOSENESS_LEVELS = {
-        "intimate": "Intimate/Familiar: Very casual relationship level. Used with close friends, romantic partners, younger siblings, or yourself. Informal pronouns, dropped particles, relaxed grammar. Note: This describes the relationship closeness, not emotional tone - you can be intimate with someone while being angry, sad, or any other emotion.",
-        "friendly": "Friendly/Peer: Casual relationship level. Used with classmates, coworkers, or equals. Informal but respectful grammar; friendly pronouns. Note: This describes the relationship closeness, not emotional tone - you can be friendly with someone while being frustrated, excited, or any other emotion.",
-        "respectful": "Respectful/Polite: Polite relationship level. Used with strangers, elders, teachers, or clients. Uses honorifics, full grammar, and avoids slang. Note: This describes the relationship respect level, not emotional tone - you can be respectful while being concerned, disappointed, or any other emotion.",
-        "formal": "Humble/Very Formal: Highly respectful relationship level. Used with seniors, officials, in ceremonies, or when showing deference. Uses humble language and elevated honorifics. Note: This describes the relationship deference level, not emotional tone - you can be formal while being worried, grateful, or any other emotion.",
-        "distant": "Distant/Neutral: Detached relationship level. Used in formal writing, legal contexts, or cold interactions. Impersonal grammar, no slang, and grammatically precise. Note: This describes the relationship distance, not emotional tone - you can be distant while being angry, indifferent, or any other emotion."
+        "intimate": "Very casual: close friends, partners, siblings. Informal pronouns, dropped particles, relaxed grammar.",
+        "friendly": "Casual: classmates, coworkers, peers. Informal but respectful grammar.",
+        "respectful": "Polite: strangers, elders, teachers. Honorifics, full grammar, no slang.",
+        "formal": "Very formal: business, ceremonies, seniors. Humble language, elevated honorifics.",
+        "distant": "Neutral: formal writing, legal contexts. Impersonal grammar, precise language."
     }
 
     PROFICIENCY_LEVELS = {
@@ -74,6 +76,10 @@ class LanguageTutor:
         else:
             self.model = None
 
+    def is_script_language(self) -> bool:
+        """Check if the current language uses a non-Latin script."""
+        return self.language_code in self.SCRIPT_LANGUAGES
+
     def get_conversational_response(self, user_input: str, context: str = "", description: str = None) -> str:
         """Generate a conversational response in the target language."""
         
@@ -86,10 +92,7 @@ class LanguageTutor:
             
             topic_integration_rules = f"""
     TOPIC INTEGRATION:
-    - Connect your response to the user's preferred topics ({topics_list}).
-    - Show enthusiasm and expand when a topic is mentioned.
-    - Gently steer the conversation toward these topics if it becomes generic.
-    - Ask questions that encourage the user to practice vocabulary related to these topics."""
+    - TRY TO ALWAYS CONNECT your response to the user's preferred topics ({topics_list})."""
 
         goals_guidance = ""
         if hasattr(self, 'user_goals') and self.user_goals and len(self.user_goals) > 0:
@@ -99,16 +102,19 @@ class LanguageTutor:
         description_guidance = ""
         if description:
             description_guidance = f"""
-AI PERSONALITY DESCRIPTION: {description}
-
-PERSONA ROLE-PLAYING INSTRUCTIONS:
+THIS IS YOUR PERSONA: {description}
 - CRITICAL: The description above defines YOUR personality, emotional tone, and communication style as the AI. This takes absolute priority over any default tone.
-- Embody this specific personality, background, and emotional state in your responses
-- Use the description to inform your emotional tone (happy, sad, angry, concerned, excited, etc.), vocabulary choices, and conversation topics
-- If the description mentions specific interests (e.g., travel, food, culture), naturally incorporate these into your responses
-- Maintain consistency with this personality throughout the conversation
 - The closeness level ({self.user_closeness}) determines your relationship grammar (formal/informal pronouns, honorifics, etc.), but your emotional tone comes from the description
 - Examples: You can be "friendly" with someone (using casual grammar) while being angry, sad, or excited based on your described personality"""
+
+        # Add script language instructions if this is a script language
+        script_instructions = ""
+        if self.is_script_language():
+            script_instructions = f"""
+SCRIPT LANGUAGE INSTRUCTIONS:
+- This is a {self.SCRIPT_LANGUAGES[self.language_code]} script language.
+- Provide your response in both the native script AND romanized form ACCURATELY.
+- Format: [Native Script] (Romanized)"""
 
         prompt = f"""Conversational Heritage Language Tutor  
 You are a culturally-aware AI tutor for a {self.user_level} heritage learner of {self.language_name}.
@@ -118,22 +124,23 @@ You have a {self.user_closeness} closeness level with the user and they are a {s
 - Use grammar, pronouns, and formality appropriate for this relationship level: {self.CLOSENESS_LEVELS[self.user_closeness]}
 - Adjust your vocabulary and sentence structure to match this level of proficiency: {self.PROFICIENCY_LEVELS[self.user_level]}
 - Your emotional tone and personality come from the conversation partner description (if provided)
-
+{description_guidance}
 IMPORTANT: Do not refer to yourself as a tutor, teacher, AI, or bot. Respond as a natural conversation partner would.
 
-Follow natural conversation patterns:  
-- Acknowledge before shifting topics: Respond to what the other person said when appropriate before introducing a new topic to maintain natural conversational flow.
 - Share relatable experiences, comments, or stories to deepen connection but do not monopolize the conversation.
 - Ensure the response's opening phrase logically follows the user's message; avoid using agreement or reaction phrases when the user has not made a statement to agree or react to yet.
 - Your response should be concise: no longer than 10-25 words.
-- Do not include translations in your response.
+- DO NOT include translations in your response.
+
+
+{script_instructions}
 
 {self._get_cultural_rules()}
 
 {topics_guidance}
 {topic_integration_rules}
 {goals_guidance}
-{description_guidance}
+
 
 Current conversation context:  
 {context}
@@ -221,22 +228,342 @@ Always use {self.feedback_language} for explanations.
         topics_guidance = ""
         if topics_list:
             topics_guidance = f"""
-- The user wants to focus on the following topics: {topics_list}
-- CRITICAL: Connect replies to these topics whenever possible. If one has already been mentioned, expand naturally or ask a related question.
-- If the conversation becomes generic, gently steer it back toward these topics.
+- The user wants to focus on the following topics: {topics_list} If the conversation becomes generic, gently steer it back toward these topics.
 """
 
         # Add description-aware guidance
         description_guidance = ""
         if description:
             description_guidance = f"""
-- Your AI personality is described as: {description}
-- CRITICAL: The description defines your emotional tone and personality. Prioritize this over any default tone.
-- Consider your described background, interests, emotional state, and communication style when suggesting responses
-- Tailor suggestions to be appropriate for your described personality and current emotional state
-- If the description mentions specific interests or expertise, incorporate those naturally into the suggestions
-- Remember: Relationship closeness ({self.user_closeness}) determines grammar formality, but your emotional tone comes from the description
+- AI personality is described as: {description}, so the user must respond as if they are speaking to someone with this personality.
+
 """
+# - CRITICAL: The description defines your emotional tone and personality. Prioritize this over any default tone.
+# - Consider your described background, interests, emotional state, and communication style when suggesting responses
+# - Tailor suggestions to be appropriate for your described personality and current emotional state
+# - If the description mentions specific interests or expertise, incorporate those naturally into the suggestions
+# - Remember: Relationship closeness ({self.user_closeness}) determines grammar formality, but your emotional tone comes from the description
+
+
+        # Begin prompt
+        prompt = f"""
+You are a culturally-aware AI tutor helping a heritage speaker of {self.language_name} continue a natural conversation.
+
+Your goal is to generate fluent, emotionally attuned, and topic-relevant replies.
+
+TASK:
+Suggest 3 natural responses they could say next with different difficulties, suited to a {self.user_closeness} closeness level.
+Each should directly respond to the AI's most recent message, using this description of closeness: {self.CLOSENESS_LEVELS[self.user_closeness]}.
+Incorporate the user's favorite topics where appropriate.
+
+Conversation so far (latest message last):
+{context}
+
+USER INFO:
+- Proficiency level: {self.user_level} ({level_guidance})
+{topics_guidance}
+{description_guidance}
+
+IMPORTANT:
+– Use vocabulary and sentence structure appropriate for a {self.user_level} learner: {level_guidance}
+– Each suggestion should be roughly the same length as the user's last message (or up to 1.5× longer)
+– Do NOT use placeholders like [Song Title], [Artist's Name], or brackets
+– Do NOT use asterisks (*) for emphasis or formatting - provide clean text only
+– Always provide real, natural-sounding examples that a native speaker would say
+– Provide ONLY the {self.language_name} text - no translations or explanations (those will be handled separately)
+"""
+
+        # Add format instructions for script-based languages
+        if self.language_code in self.SCRIPT_LANGUAGES:
+            prompt += f"""
+Use this exact format for each suggestion:
+[EASY {self.language_name} phrase] - [Romanized version]
+
+[MEDIUM {self.language_name} phrase] - [Romanized version]
+
+[HARD {self.language_name} phrase] - [Romanized version]
+"""
+            example = self.get_script_suggestion_example()
+            if example:
+                prompt += f"\nExample:\n{example}\n"
+        else:
+            prompt += f"""
+Use this exact format for each suggestion:
+[EASY {self.language_name} phrase]
+
+[MEDIUM {self.language_name} phrase]
+
+[HARD {self.language_name} phrase]
+"""
+
+        try:
+            response = self.model.generate_content(prompt)
+            if response and response.text:
+                return self._parse_suggestions(response.text)
+            else:
+                return self._get_fallback_suggestions()
+        except Exception as e:
+            print(f"Error generating suggestions: {e}")
+            return self._get_fallback_suggestions()
+
+    def explain_suggestion(self, suggestion_text: str, context: str = "", description: str = None) -> dict:
+        """Generate explanation and translation for a specific suggestion."""
+        print(f"[DEBUG] LanguageTutor.explain_suggestion() called with text: '{suggestion_text}'")
+        print(f"[DEBUG] Context: '{context[:100]}...'")
+        print(f"[DEBUG] Description: '{description}'")
+        
+        # Check cache first
+        cache_key = f"{suggestion_text}_{self.feedback_language}_{self.user_level}"
+        if hasattr(self, '_explanation_cache') and cache_key in self._explanation_cache:
+            print(f"[DEBUG] Cache hit for: {cache_key}")
+            return self._explanation_cache[cache_key]
+        
+        if not getattr(self, 'model', None) or not GOOGLE_AI_AVAILABLE:
+            print("[DEBUG] No model or Google AI not available")
+            return {"translation": "Translation unavailable", "explanation": "Explanation unavailable"}
+        
+        # Prepare proficiency level guidance
+        level_guidance = self.PROFICIENCY_LEVELS.get(self.user_level, "")
+        
+        # Add description-aware guidance
+        description_guidance = ""
+        if description:
+            description_guidance = f"""
+- Your AI personality is described as: {description}
+- Consider your described background, interests, and communication style when explaining the suggestion
+"""
+
+        # Create prompt for explaining the specific suggestion
+        prompt = f"""
+You are a culturally-aware AI tutor helping a heritage speaker of {self.language_name} understand a specific phrase.
+
+TASK:
+Explain the following {self.language_name} phrase in detail, providing both a translation and a very brief explanation.
+
+PHRASE TO EXPLAIN: "{suggestion_text}"
+
+USER INFO:
+- Proficiency level: {self.user_level} ({level_guidance})
+- Feedback language: {self.feedback_language}
+- Closeness level: {self.user_closeness} ({self.CLOSENESS_LEVELS[self.user_closeness]})
+{description_guidance}
+
+CONTEXT (for reference):
+{context}
+
+Provide your response in this EXACT format and order (do not change the order):
+
+Translation: [Direct translation in {self.feedback_language}]
+
+Literal translation: [LITERAL translation in {self.language_name}, following the same format as the phrase even if not grammatically correct in 
+their feedback language: {self.feedback_language}]
+
+Explanation: [Very brief explanation in {self.feedback_language} covering:
+- What the phrase means and how it would be used in the conversation
+- Any cultural nuance or idiomatic structure if relevant]
+
+IMPORTANT: Do not refer to the AI as "AI, Bot, or anything else. Just focus on explaining the phrase.
+"""
+        
+        print(f"[DEBUG] Sending prompt to AI:\n{prompt}")
+
+        try:
+            response = self.model.generate_content(prompt)
+            if response and response.text:
+                print(f"[DEBUG] Raw AI response:\n{response.text}")
+                
+                # Parse the response to extract translation and explanation
+                full_text = response.text.strip()
+                translation = ""
+                explanation = ""
+                
+                print(f"[DEBUG] Parsing response with {len(full_text)} characters...")
+                
+                # Method 1: Try exact format matching with new format
+                if 'Translation:' in full_text and 'Explanation:' in full_text:
+                    print("[DEBUG] Method 1: Exact format matching with new format")
+                    try:
+                        # Split by Translation: first
+                        parts = full_text.split('Translation:', 1)
+                        if len(parts) > 1:
+                            remaining = parts[1]
+                            
+                            # Check if there's a Literal translation section
+                            if 'Literal translation:' in remaining:
+                                # Split by Literal translation: to get the main translation
+                                trans_literal_parts = remaining.split('Literal translation:', 1)
+                                translation = trans_literal_parts[0].strip()
+                                
+                                # Now find the explanation after literal translation
+                                if 'Explanation:' in trans_literal_parts[1]:
+                                    literal_expl_parts = trans_literal_parts[1].split('Explanation:', 1)
+                                    # We can store literal translation if needed, but for now just get explanation
+                                    explanation = literal_expl_parts[1].strip()
+                                else:
+                                    # If no explanation found after literal translation, the literal translation might be at the end
+                                    # Look for explanation before literal translation
+                                    if 'Explanation:' in remaining:
+                                        expl_literal_parts = remaining.split('Explanation:', 1)
+                                        if 'Literal translation:' in expl_literal_parts[0]:
+                                            # Literal translation is before explanation, which is wrong order
+                                            literal_expl_parts = expl_literal_parts[0].split('Literal translation:', 1)
+                                            translation = literal_expl_parts[0].strip()
+                                            explanation = expl_literal_parts[1].strip()
+                                        else:
+                                            # Normal order: Translation -> Literal translation -> Explanation
+                                            explanation = expl_literal_parts[1].strip()
+                                    else:
+                                        explanation = trans_literal_parts[1].strip()
+                            else:
+                                # No literal translation, split directly by Explanation:
+                                if 'Explanation:' in remaining:
+                                    trans_expl_parts = remaining.split('Explanation:', 1)
+                                    translation = trans_expl_parts[0].strip()
+                                    explanation = trans_expl_parts[1].strip()
+                                else:
+                                    translation = remaining.strip()
+                                    explanation = ""
+                            
+                            print(f"[DEBUG] Method 1 success - Translation: '{translation}'")
+                            print(f"[DEBUG] Method 1 success - Explanation: '{explanation[:100]}...'")
+                    except Exception as e:
+                        print(f"[DEBUG] Method 1 failed: {e}")
+                
+                # Method 2: Try line-by-line parsing
+                if not translation or not explanation:
+                    print("[DEBUG] Method 2: Line-by-line parsing")
+                    lines = full_text.split('\n')
+                    current_section = None
+                    current_content = []
+                    
+                    for i, line in enumerate(lines):
+                        line = line.strip()
+                        if not line:
+                            continue
+                            
+                        # Check for section headers
+                        if line.lower().startswith('translation') and not line.lower().startswith('literal translation'):
+                            if current_section == 'translation' and current_content:
+                                translation = ' '.join(current_content).strip()
+                            current_section = 'translation'
+                            current_content = []
+                            # Extract translation from the same line if it's there
+                            if ':' in line:
+                                trans_part = line.split(':', 1)[1].strip()
+                                if trans_part:
+                                    translation = trans_part
+                        elif line.lower().startswith('literal translation'):
+                            # Skip literal translation section, but mark that we're in it
+                            current_section = 'literal_translation'
+                            current_content = []
+                        elif line.lower().startswith('explanation'):
+                            if current_section == 'translation' and current_content and not translation:
+                                translation = ' '.join(current_content).strip()
+                            current_section = 'explanation'
+                            current_content = []
+                            # Extract explanation from the same line if it's there
+                            if ':' in line:
+                                expl_part = line.split(':', 1)[1].strip()
+                                if expl_part:
+                                    explanation = expl_part
+                        else:
+                            # Add content to current section
+                            if current_section == 'translation':
+                                current_content.append(line)
+                            elif current_section == 'explanation':
+                                current_content.append(line)
+                    
+                    # Finalize the last section
+                    if current_section == 'translation' and current_content and not translation:
+                        translation = ' '.join(current_content).strip()
+                    elif current_section == 'explanation' and current_content and not explanation:
+                        explanation = ' '.join(current_content).strip()
+                
+                # Method 3: Try to split by common patterns
+                if not translation or not explanation:
+                    print("[DEBUG] Method 3: Pattern-based parsing")
+                    # Look for common patterns in the response
+                    patterns = [
+                        ('translation', 'explanation'),
+                        ('translation:', 'explanation:'),
+                        ('translation', 'explanation:'),
+                        ('translation:', 'explanation'),
+                        ('literal translation', 'explanation'),
+                        ('literal translation:', 'explanation:'),
+                        ('meaning', 'usage'),
+                        ('meaning:', 'usage:'),
+                    ]
+                    
+                    # Also try reverse order patterns (in case AI puts literal translation at end)
+                    reverse_patterns = [
+                        ('explanation', 'literal translation'),
+                        ('explanation:', 'literal translation:'),
+                    ]
+                    
+                    for pattern1, pattern2 in patterns:
+                        if pattern1 in full_text.lower() and pattern2 in full_text.lower():
+                            try:
+                                # Split by first pattern
+                                parts = full_text.lower().split(pattern1, 1)
+                                if len(parts) > 1:
+                                    remaining = parts[1]
+                                    if pattern2 in remaining:
+                                        trans_expl_parts = remaining.split(pattern2, 1)
+                                        translation = trans_expl_parts[0].strip()
+                                        explanation = trans_expl_parts[1].strip()
+                                        print(f"[DEBUG] Method 3 success with pattern '{pattern1}'/'{pattern2}'")
+                                        break
+                            except Exception as e:
+                                print(f"[DEBUG] Method 3 failed with pattern '{pattern1}'/'{pattern2}': {e}")
+                    
+                    # Try reverse patterns if normal patterns didn't work
+                    if not translation or not explanation:
+                        for pattern1, pattern2 in reverse_patterns:
+                            if pattern1 in full_text.lower() and pattern2 in full_text.lower():
+                                try:
+                                    # Split by first pattern (explanation)
+                                    parts = full_text.lower().split(pattern1, 1)
+                                    if len(parts) > 1:
+                                        remaining = parts[1]
+                                        if pattern2 in remaining:
+                                            expl_trans_parts = remaining.split(pattern2, 1)
+                                            explanation = expl_trans_parts[0].strip()
+                                            # The translation would be before the explanation
+                                            translation = parts[0].strip()
+                                            print(f"[DEBUG] Method 3 reverse success with pattern '{pattern1}'/'{pattern2}'")
+                                            break
+                                except Exception as e:
+                                    print(f"[DEBUG] Method 3 reverse failed with pattern '{pattern1}'/'{pattern2}': {e}")
+                
+                # Method 4: Fallback - split by first paragraph break
+                if not translation or not explanation:
+                    print("[DEBUG] Method 4: Paragraph-based fallback")
+                    paragraphs = [p.strip() for p in full_text.split('\n\n') if p.strip()]
+                    if len(paragraphs) >= 2:
+                        translation = paragraphs[0]
+                        explanation = '\n\n'.join(paragraphs[1:])
+                        print("[DEBUG] Method 4 success - using first paragraph as translation, rest as explanation")
+                
+                # Method 5: Last resort - use whole response as explanation
+                if not translation and not explanation:
+                    print("[DEBUG] Method 5: Last resort - using whole response as explanation")
+                    explanation = full_text
+                elif not explanation:
+                    print("[DEBUG] Method 5: Last resort - using whole response as explanation")
+                    explanation = full_text
+                
+                result = {
+                    "translation": translation,
+                    "explanation": explanation
+                }
+                print(f"[DEBUG] explain_suggestion() returning: {result}")
+                return result
+            else:
+                print("[DEBUG] No response from model")
+                return {"translation": "Translation failed", "explanation": "Explanation failed"}
+        except Exception as e:
+            print(f"[DEBUG] Error explaining suggestion: {e}")
+            return {"translation": f"Error: {str(e)}", "explanation": f"Error: {str(e)}"}
 
         # Begin prompt
         prompt = f"""
@@ -254,7 +581,6 @@ Conversation so far (latest message last):
 
 USER INFO:
 - Proficiency level: {self.user_level} ({level_guidance})
-- Target translation language: {self.feedback_language}
 {topics_guidance}
 {description_guidance}
 
@@ -503,7 +829,7 @@ If the response is already natural and grammatically accurate, return it unchang
         return ""
 
     def _parse_suggestions(self, response_text: str) -> list:
-        """Parse suggestions response into list format, supporting explanations and romanized forms."""
+        """Parse suggestions response into list format, supporting romanized forms."""
         suggestions = []
         lines = response_text.split('\n')
         i = 0
@@ -515,38 +841,30 @@ If the response is already natural and grammatically accurate, return it unchang
             # Remove any leading bullets or numbers
             clean_line = line.strip('•-1234567890. ')
             parts = clean_line.split(' - ')
-            explanation = None
-            # Look ahead for explanation line
-            if i + 1 < len(lines):
-                next_line = lines[i+1].strip()
-                if next_line.lower().startswith('explanation:'):
-                    explanation = next_line[len('explanation:'):].strip()
-                    i += 1  # Skip explanation line in next iteration
-            # Script language: expect 3 fields (characters, romanized, translation)
+            
+            # Script language: expect 2 fields (characters, romanized)
             if self.language_code in self.SCRIPT_LANGUAGES:
-                if len(parts) == 3:
+                if len(parts) == 2:
                     chars = parts[0].strip('[]')
                     romanized = parts[1].strip('[]')
-                    translation = parts[2].strip('[]')
-                    if chars and romanized and translation:
+                    if chars and romanized:
                         suggestions.append({
                             "text": chars,
                             "romanized": romanized,
-                            "translation": translation,
-                            "explanation": explanation or ""
+                            "translation": "",  # Will be filled by explain_suggestion
+                            "explanation": ""   # Will be filled by explain_suggestion
                         })
                         if len(suggestions) >= 3:
                             break
             else:
-                # Non-script language: expect 2 fields (text, translation)
-                if len(parts) == 2:
+                # Non-script language: expect 1 field (text only)
+                if len(parts) == 1:
                     text = parts[0].strip('[]')
-                    translation = parts[1].strip('[]')
-                    if text and translation:
+                    if text:
                         suggestions.append({
                             "text": text,
-                            "translation": translation,
-                            "explanation": explanation or ""
+                            "translation": "",  # Will be filled by explain_suggestion
+                            "explanation": ""   # Will be filled by explain_suggestion
                         })
                         if len(suggestions) >= 3:
                             break
@@ -1377,6 +1695,10 @@ def get_text_suggestions(chat_history: List[Dict], language: str = 'en', user_le
     # Make separate Gemini call for suggestions
     return tutor.get_suggestions(context, description)
 
+    
+
+
+
 def get_short_feedback(user_input: str, context: str = "", language: str = 'en', user_level: str = 'beginner', user_topics: list = None, feedback_language: str = 'en', user_goals: list = None, description: str = None) -> str:
     """Generate a short, conversational feedback about grammar/style."""
     if not GOOGLE_AI_AVAILABLE:
@@ -1419,18 +1741,21 @@ def get_short_feedback(user_input: str, context: str = "", language: str = 'en',
         return "Keep going!"
 
 def get_translation(text: str, source_language: str = 'auto', target_language: str = 'en', breakdown: bool = False, user_topics: List[str] = None) -> dict:
-    """Simple translation function using Gemini."""
+    """Translate text and optionally provide breakdown."""
     if user_topics is None:
         user_topics = []
     
     if not text or not text.strip():
-        return {"translation": "", "breakdown": ""}
+        return {"translation": "", "breakdown": "", "romanized": ""}
     
     if not GOOGLE_AI_AVAILABLE:
-        return {"translation": "[Translation unavailable - Google AI not configured]", "breakdown": ""}
+        return {"translation": "[Translation unavailable - Google AI not configured]", "breakdown": "", "romanized": ""}
     
     try:
         model = genai.GenerativeModel("gemini-1.5-flash")
+        
+        # Check if source language is a script language
+        is_script = source_language in LanguageTutor.SCRIPT_LANGUAGES
         
         # Build translation prompt
         if breakdown:
@@ -1442,7 +1767,18 @@ Target language: {target_language}
 
 Provide:
 1. Translation: [Direct translation]
-2. Breakdown: [Word-by-word or phrase-by-phrase explanation of key elements]
+2. Breakdown: [Word-by-word or phrase-by-phrase explanation of key elements]"""
+
+            if is_script:
+                prompt += f"""
+3. Romanized: [Romanized version of the original text using standard romanization for {LanguageTutor.SCRIPT_LANGUAGES[source_language]}]
+
+Format your response exactly as:
+Translation: [your translation here]
+Breakdown: [your breakdown here]
+Romanized: [romanized version here]"""
+            else:
+                prompt += f"""
 
 Format your response exactly as:
 Translation: [your translation here]
@@ -1452,7 +1788,20 @@ Breakdown: [your breakdown here]"""
 
 Text: "{text}"
 Source language: {source_language if source_language != 'auto' else 'detect automatically'}  
-Target language: {target_language}
+Target language: {target_language}"""
+
+            if is_script:
+                prompt += f"""
+
+Provide:
+1. Translation: [Direct translation]
+2. Romanized: [Romanized version of the original text using standard romanization for {LanguageTutor.SCRIPT_LANGUAGES[source_language]}]
+
+Format your response exactly as:
+Translation: [your translation here]
+Romanized: [romanized version here]"""
+            else:
+                prompt += f"""
 
 Provide only the translation, no additional explanation."""
         
@@ -1461,10 +1810,11 @@ Provide only the translation, no additional explanation."""
         if response and response.text:
             response_text = response.text.strip()
             
-            if breakdown:
+            if breakdown or is_script:
                 # Parse structured response
                 translation = ""
                 breakdown_text = ""
+                romanized_text = ""
                 
                 lines = response_text.split('\n')
                 for line in lines:
@@ -1473,6 +1823,8 @@ Provide only the translation, no additional explanation."""
                         translation = line.replace('Translation:', '').strip()
                     elif line.startswith('Breakdown:'):
                         breakdown_text = line.replace('Breakdown:', '').strip()
+                    elif line.startswith('Romanized:'):
+                        romanized_text = line.replace('Romanized:', '').strip()
                 
                 # If parsing failed, use the whole response as translation
                 if not translation:
@@ -1480,19 +1832,21 @@ Provide only the translation, no additional explanation."""
                 
                 return {
                     "translation": translation,
-                    "breakdown": breakdown_text
+                    "breakdown": breakdown_text,
+                    "romanized": romanized_text
                 }
             else:
                 return {
                     "translation": response_text,
-                    "breakdown": ""
+                    "breakdown": "",
+                    "romanized": ""
                 }
         else:
-            return {"translation": "[Translation failed - no response]", "breakdown": ""}
+            return {"translation": "[Translation failed - no response]", "breakdown": "", "romanized": ""}
             
     except Exception as e:
         print(f"Translation error: {e}")
-        return {"translation": f"[Translation error: {str(e)}]", "breakdown": ""}
+        return {"translation": f"[Translation error: {str(e)}]", "breakdown": "", "romanized": ""}
 
 def is_gemini_ready() -> bool:
     """Check if Gemini API is available and ready."""

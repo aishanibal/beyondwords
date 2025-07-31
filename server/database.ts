@@ -16,6 +16,12 @@ export interface User {
   learning_goals?: string[];
   practice_preference?: string;
   motivation?: string;
+  preferences?: {
+    theme?: 'light' | 'dark' | 'auto';
+    notifications_enabled?: boolean;
+    email_notifications?: boolean;
+    language?: string;
+  };
   onboarding_complete?: boolean;
   created_at?: string;
   updated_at?: string;
@@ -40,6 +46,7 @@ export interface LanguageDashboard {
   practice_preference?: string;
   feedback_language?: string;
   speak_speed?: number;
+  romanization_display?: string; // 'both', 'script_only', 'romanized_only'
   is_primary?: boolean;
   created_at?: string;
   updated_at?: string;
@@ -66,6 +73,7 @@ export interface Message {
   conversation_id: number;
   sender: string;
   text: string;
+  romanized_text?: string;
   message_type?: string;
   audio_file_path?: string;
   detailed_feedback?: string;
@@ -133,6 +141,7 @@ function initDatabase() {
         practice_preference TEXT,
         feedback_language TEXT,
         speak_speed REAL DEFAULT 1.0,
+        romanization_display TEXT DEFAULT 'both',
         is_primary BOOLEAN DEFAULT FALSE,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -166,6 +175,7 @@ function initDatabase() {
         conversation_id INTEGER NOT NULL,
         sender TEXT NOT NULL,
         text TEXT NOT NULL,
+        romanized_text TEXT,
         message_type TEXT DEFAULT 'text',
         audio_file_path TEXT,
         detailed_feedback TEXT,
@@ -204,6 +214,7 @@ function addColumnsIfNotExist() {
     'ALTER TABLE users ADD COLUMN learning_goals TEXT',
     'ALTER TABLE users ADD COLUMN practice_preference TEXT',
     'ALTER TABLE users ADD COLUMN motivation TEXT',
+    'ALTER TABLE users ADD COLUMN preferences TEXT',
     'ALTER TABLE users ADD COLUMN onboarding_complete BOOLEAN DEFAULT FALSE',
     'ALTER TABLE conversations ADD COLUMN topics TEXT',
     'ALTER TABLE conversations ADD COLUMN language_dashboard_id INTEGER',
@@ -214,7 +225,9 @@ function addColumnsIfNotExist() {
     'ALTER TABLE conversations ADD COLUMN synopsis TEXT',
     'ALTER TABLE language_dashboards ADD COLUMN speak_speed REAL DEFAULT 1.0',
     'ALTER TABLE conversations ADD COLUMN uses_persona BOOLEAN DEFAULT FALSE',
-    'ALTER TABLE conversations ADD COLUMN persona_id INTEGER'
+    'ALTER TABLE conversations ADD COLUMN persona_id INTEGER',
+    'ALTER TABLE messages ADD COLUMN romanized_text TEXT',
+    'ALTER TABLE language_dashboards ADD COLUMN romanization_display TEXT DEFAULT "both"'
   ];
   
   newColumns.forEach(sql => {
@@ -285,6 +298,33 @@ function findUserById(id: number) {
       if (err) {
         reject(err);
       } else {
+        if (row) {
+          // Parse JSON fields
+          if ((row as User).talk_topics) {
+            try {
+              (row as User).talk_topics = JSON.parse((row as User).talk_topics as any);
+            } catch (e) {
+              (row as User).talk_topics = [];
+            }
+          }
+          
+          if ((row as User).learning_goals) {
+            try {
+              (row as User).learning_goals = JSON.parse((row as User).learning_goals as any);
+            } catch (e) {
+              (row as User).learning_goals = [];
+            }
+          }
+
+          // Parse preferences field
+          if ((row as User).preferences) {
+            try {
+              (row as User).preferences = JSON.parse((row as User).preferences as any);
+            } catch (e) {
+              (row as User).preferences = {};
+            }
+          }
+        }
         resolve(row ? (row as User) : null);
       }
     });
@@ -293,8 +333,14 @@ function findUserById(id: number) {
 
 function updateUser(id: number, updates: Partial<User>) {
   return new Promise<{ changes: number }>((resolve, reject) => {
-    const fields = Object.keys(updates).map(key => `${key} = ?`).join(', ');
-    const values = Object.values(updates);
+    // Handle preferences field specially - convert to JSON string
+    const processedUpdates: any = { ...updates };
+    if (processedUpdates.preferences) {
+      processedUpdates.preferences = JSON.stringify(processedUpdates.preferences);
+    }
+    
+    const fields = Object.keys(processedUpdates).map(key => `${key} = ?`).join(', ');
+    const values = Object.values(processedUpdates);
     
     const sql = `UPDATE users SET ${fields}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`;
     
@@ -427,7 +473,8 @@ function addMessage(
   messageType: string = 'text',
   audioFilePath?: string,
   detailedFeedback?: string,
-  messageOrder?: number // <-- add this parameter
+  messageOrder?: number,
+  romanizedText?: string
 ) {
   return new Promise<{ id: number }>((resolve, reject) => {
     console.log('🗄️ DATABASE: Adding message:', { 
@@ -461,10 +508,10 @@ function addMessage(
 
     getOrder((finalOrder) => {
       const insertSql = `
-        INSERT INTO messages (conversation_id, sender, text, message_type, audio_file_path, detailed_feedback, message_order)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO messages (conversation_id, sender, text, romanized_text, message_type, audio_file_path, detailed_feedback, message_order)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `;
-      db.run(insertSql, [conversationId, sender, text, messageType, audioFilePath, detailedFeedback, finalOrder], function(err) {
+      db.run(insertSql, [conversationId, sender, text, romanizedText, messageType, audioFilePath, detailedFeedback, finalOrder], function(err) {
         if (err) {
           console.error('❌ DATABASE: Error inserting message:', err);
           reject(err);
@@ -573,7 +620,7 @@ function getConversationWithMessages(conversationId: number) {
     `;
     
     const messagesSql = `
-      SELECT id, sender, text, message_type, audio_file_path, detailed_feedback, message_order, created_at
+      SELECT id, sender, text, romanized_text, message_type, audio_file_path, detailed_feedback, message_order, created_at
       FROM messages 
       WHERE conversation_id = ?
       ORDER BY message_order
@@ -790,7 +837,7 @@ function createLanguageDashboard(userId: number, language: string, proficiencyLe
 function getUserLanguageDashboards(userId: number) {
   return new Promise<LanguageDashboard[]>((resolve, reject) => {
     const sql = `
-      SELECT id, language, proficiency_level, talk_topics, learning_goals, practice_preference, feedback_language, speak_speed, is_primary, created_at, updated_at
+      SELECT id, language, proficiency_level, talk_topics, learning_goals, practice_preference, feedback_language, speak_speed, romanization_display, is_primary, created_at, updated_at
       FROM language_dashboards 
       WHERE user_id = ?
       ORDER BY is_primary DESC, created_at ASC
@@ -814,7 +861,7 @@ function getUserLanguageDashboards(userId: number) {
 function getLanguageDashboard(userId: number, language: string) {
   return new Promise<LanguageDashboard | null>((resolve, reject) => {
     const sql = `
-      SELECT id, language, proficiency_level, talk_topics, learning_goals, practice_preference, feedback_language, speak_speed, is_primary, created_at, updated_at
+      SELECT id, language, proficiency_level, talk_topics, learning_goals, practice_preference, feedback_language, speak_speed, romanization_display, is_primary, created_at, updated_at
       FROM language_dashboards 
       WHERE user_id = ? AND language = ?
     `;
@@ -839,6 +886,8 @@ function getLanguageDashboard(userId: number, language: string) {
 
 function updateLanguageDashboard(userId: number, language: string, updates: Partial<LanguageDashboard>) {
   return new Promise<{ changes: number }>((resolve, reject) => {
+    console.log('[DEBUG] updateLanguageDashboard called with:', { userId, language, updates });
+    
     const processedUpdates = { ...updates };
     
     // Convert arrays to JSON strings if present
@@ -854,10 +903,15 @@ function updateLanguageDashboard(userId: number, language: string, updates: Part
     
     const sql = `UPDATE language_dashboards SET ${fields}, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND language = ?`;
     
+    console.log('[DEBUG] SQL query:', sql);
+    console.log('[DEBUG] Values:', [...values, userId, language]);
+    
     db.run(sql, [...values, userId, language], function(err) {
       if (err) {
+        console.error('[DEBUG] Database error:', err);
         reject(err);
       } else {
+        console.log('[DEBUG] Update successful, changes:', this.changes);
         resolve({ changes: this.changes });
       }
     });

@@ -12,9 +12,13 @@ from transformers import Wav2Vec2ForCTC, Wav2Vec2Processor
 import librosa
 import numpy as np
 import datetime
-from gemini_client import get_conversational_response, get_detailed_feedback, get_text_suggestions, get_translation, is_gemini_ready, get_short_feedback, get_detailed_breakdown
+from gemini_client import get_conversational_response, get_detailed_feedback, get_text_suggestions, get_translation, is_gemini_ready, get_short_feedback, get_detailed_breakdown, create_tutor
 # from dotenv import load_dotenv
 # load_dotenv()
+
+# NOTE: Whisper doesn't natively support Odia ('or'). We map it to Bengali ('bn') 
+# as they are linguistically similar and Bengali is supported by Whisper.
+# This provides much better transcription accuracy than auto-detection.
 
 app = Flask(__name__)
 CORS(app)
@@ -39,7 +43,7 @@ SUPPORTED_WAV2VEC2 = {
     'es': 'jonatasgrosman/wav2vec2-large-xlsr-53-spanish',
 }
 
-SUPPORTED_LANGUAGES = ['en', 'es', 'hi', 'ja']
+SUPPORTED_LANGUAGES = ['en', 'es', 'hi', 'ja', 'ko', 'zh', 'ar', 'ta', 'or', 'ml', 'fr', 'tl']
 
 def load_models():
     """Load sendgnition models"""
@@ -61,6 +65,13 @@ def get_whisper_language_code(language):
         'es': 'es',  # Spanish
         'hi': 'hi',  # Hindi
         'ja': 'ja',  # Japanese
+        'ko': 'ko',  # Korean
+        'zh': 'zh',  # Chinese
+        'ar': 'ar',  # Arabic
+        'ta': 'ta',  # Tamil
+        'or': 'bn',  # Odia - use Bengali as closest supported language
+        'ml': 'ml',  # Malayalam
+        'fr': 'fr',  # French
     }
     return language_mapping.get(language, None)  # Return None for auto-detection
 
@@ -256,10 +267,17 @@ def transcribe():
         # Get transcription using Whisper (with language)
         print(f"Calling Whisper with language={language}")
         whisper_lang = get_whisper_language_code(language)
+        print(f"Whisper language code: {whisper_lang}")
+        
         if whisper_lang:
+            # Force language for better accuracy, especially for less common languages like Odia
+            if language == 'or':
+                print(f"Odia detected - using Bengali (bn) as closest supported language")
             transcription = whisper_model.transcribe(audio_file, language=whisper_lang)["text"]
+            print(f"Used forced language: {whisper_lang}")
         else:
             transcription = whisper_model.transcribe(audio_file)["text"]
+            print(f"Used auto-detection")
         print(f"Whisper transcription: '{transcription}'")
         print(f"Calling Gemini with language={language}, level={user_level}, goals={user_topics}, formality={formality}")
         ai_response = get_conversational_response(transcription, chat_history, language, user_level, user_topics, formality, feedback_language, user_goals)
@@ -302,10 +320,15 @@ def analyze():
         if not reference_text:
             print(f"Getting reference text with Whisper (language={language})")
             whisper_lang = get_whisper_language_code(language)
+            print(f"Whisper language code: {whisper_lang}")
             if whisper_lang:
+                if language == 'or':
+                    print(f"Odia detected - using Bengali (bn) as closest supported language")
                 reference_text = whisper_model.transcribe(audio_file, language=whisper_lang)["text"]
+                print(f"Used forced language: {whisper_lang}")
             else:
                 reference_text = whisper_model.transcribe(audio_file)["text"]
+                print(f"Used auto-detection")
             print(f"Whisper reference text: '{reference_text}'")
         
         # Wav2Vec2 analysis (if supported)
@@ -605,6 +628,54 @@ def detailed_breakdown():
         return jsonify({"breakdown": breakdown})
     except Exception as e:
         print(f"Detailed breakdown error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/explain_suggestion', methods=['POST'])
+def explain_suggestion():
+    """Explain a specific suggestion with translation and detailed explanation"""
+    try:
+        data = request.get_json()
+        suggestion_text = data.get('suggestion_text', '')
+        chat_history = data.get('chatHistory', [])
+        language = data.get('language', 'en')
+        user_level = data.get('user_level', 'beginner')
+        user_topics = data.get('user_topics', [])
+        formality = data.get('formality', 'friendly')
+        feedback_language = data.get('feedback_language', 'en')
+        user_goals = data.get('user_goals', [])
+        description = data.get('description', None)
+        
+        print(f"=== /explain_suggestion called ===")
+        print(f"Suggestion text: {suggestion_text}")
+        print(f"Language: {language}")
+        print(f"User level: {user_level}")
+        print(f"User topics: {user_topics}")
+        print(f"User goals: {user_goals}")
+        print(f"Formality: {formality}")
+        print(f"Chat history length: {len(chat_history)}")
+        
+        if not suggestion_text:
+            return jsonify({"error": "No suggestion text provided"}), 400
+        
+        # Create tutor instance and call explain_suggestion method directly
+        print(f"[DEBUG] Creating tutor for language: {language}, level: {user_level}")
+        tutor = create_tutor(language, user_level, user_topics)
+        tutor.feedback_language = feedback_language
+        tutor.user_closeness = formality
+        tutor.user_goals = user_goals
+        
+        # Build context from chat history
+        context = ""
+        if chat_history:
+            context = "\n".join([f"{msg.get('sender', 'Unknown')}: {msg.get('text', '')}" for msg in chat_history[-4:]])
+        
+        print(f"[DEBUG] Calling tutor.explain_suggestion() with text: '{suggestion_text}'")
+        explanation_result = tutor.explain_suggestion(suggestion_text, context, description)
+        print(f"[DEBUG] explain_suggestion() returned: {explanation_result}")
+        
+        return jsonify(explanation_result)
+    except Exception as e:
+        print(f"Explain suggestion error: {e}")
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':

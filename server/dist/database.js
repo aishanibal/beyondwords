@@ -23,6 +23,7 @@ exports.updateConversationTitle = updateConversationTitle;
 exports.updateConversationPersona = updateConversationPersona;
 exports.updateConversation = updateConversation;
 exports.deleteConversation = deleteConversation;
+exports.updateConversationPersona = updateConversationPersona;
 exports.createLanguageDashboard = createLanguageDashboard;
 exports.getUserLanguageDashboards = getUserLanguageDashboards;
 exports.getLanguageDashboard = getLanguageDashboard;
@@ -81,6 +82,7 @@ function initDatabase() {
         practice_preference TEXT,
         feedback_language TEXT,
         speak_speed REAL DEFAULT 1.0,
+        romanization_display TEXT DEFAULT 'both',
         is_primary BOOLEAN DEFAULT FALSE,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -113,6 +115,7 @@ function initDatabase() {
         conversation_id INTEGER NOT NULL,
         sender TEXT NOT NULL,
         text TEXT NOT NULL,
+        romanized_text TEXT,
         message_type TEXT DEFAULT 'text',
         audio_file_path TEXT,
         detailed_feedback TEXT,
@@ -149,6 +152,7 @@ function addColumnsIfNotExist() {
         'ALTER TABLE users ADD COLUMN learning_goals TEXT',
         'ALTER TABLE users ADD COLUMN practice_preference TEXT',
         'ALTER TABLE users ADD COLUMN motivation TEXT',
+        'ALTER TABLE users ADD COLUMN preferences TEXT',
         'ALTER TABLE users ADD COLUMN onboarding_complete BOOLEAN DEFAULT FALSE',
         'ALTER TABLE conversations ADD COLUMN topics TEXT',
         'ALTER TABLE conversations ADD COLUMN language_dashboard_id INTEGER',
@@ -159,7 +163,12 @@ function addColumnsIfNotExist() {
         'ALTER TABLE language_dashboards ADD COLUMN speak_speed REAL DEFAULT 1.0',
         'ALTER TABLE conversations ADD COLUMN uses_persona BOOLEAN DEFAULT FALSE',
         'ALTER TABLE conversations ADD COLUMN persona_id INTEGER',
+<<<<<<< HEAD
         'ALTER TABLE conversations ADD COLUMN summary TEXT'
+=======
+        'ALTER TABLE messages ADD COLUMN romanized_text TEXT',
+        'ALTER TABLE language_dashboards ADD COLUMN romanization_display TEXT DEFAULT "both"'
+>>>>>>> aishani-backup-jul31
     ];
     newColumns.forEach(sql => {
         db.run(sql, (err) => {
@@ -224,6 +233,34 @@ function findUserById(id) {
                 reject(err);
             }
             else {
+                if (row) {
+                    // Parse JSON fields
+                    if (row.talk_topics) {
+                        try {
+                            row.talk_topics = JSON.parse(row.talk_topics);
+                        }
+                        catch (e) {
+                            row.talk_topics = [];
+                        }
+                    }
+                    if (row.learning_goals) {
+                        try {
+                            row.learning_goals = JSON.parse(row.learning_goals);
+                        }
+                        catch (e) {
+                            row.learning_goals = [];
+                        }
+                    }
+                    // Parse preferences field
+                    if (row.preferences) {
+                        try {
+                            row.preferences = JSON.parse(row.preferences);
+                        }
+                        catch (e) {
+                            row.preferences = {};
+                        }
+                    }
+                }
                 resolve(row ? row : null);
             }
         });
@@ -231,8 +268,13 @@ function findUserById(id) {
 }
 function updateUser(id, updates) {
     return new Promise((resolve, reject) => {
-        const fields = Object.keys(updates).map(key => `${key} = ?`).join(', ');
-        const values = Object.values(updates);
+        // Handle preferences field specially - convert to JSON string
+        const processedUpdates = Object.assign({}, updates);
+        if (processedUpdates.preferences) {
+            processedUpdates.preferences = JSON.stringify(processedUpdates.preferences);
+        }
+        const fields = Object.keys(processedUpdates).map(key => `${key} = ?`).join(', ');
+        const values = Object.values(processedUpdates);
         const sql = `UPDATE users SET ${fields}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`;
         db.run(sql, [...values, id], function (err) {
             if (err) {
@@ -351,8 +393,12 @@ function createConversation(userId, language, title, topics, formality, descript
         });
     });
 }
+<<<<<<< HEAD
 function addMessage(conversationId, sender, text, messageType = 'text', audioFilePath, detailedFeedback, messageOrder // <-- add this parameter
 ) {
+=======
+function addMessage(conversationId, sender, text, messageType = 'text', audioFilePath, detailedFeedback, messageOrder, romanizedText) {
+>>>>>>> aishani-backup-jul31
     return new Promise((resolve, reject) => {
         console.log('🗄️ DATABASE: Adding message:', {
             conversationId,
@@ -385,10 +431,14 @@ function addMessage(conversationId, sender, text, messageType = 'text', audioFil
         };
         getOrder((finalOrder) => {
             const insertSql = `
-        INSERT INTO messages (conversation_id, sender, text, message_type, audio_file_path, detailed_feedback, message_order)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO messages (conversation_id, sender, text, romanized_text, message_type, audio_file_path, detailed_feedback, message_order)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `;
+<<<<<<< HEAD
             db.run(insertSql, [conversationId, sender, text, messageType, audioFilePath, detailedFeedback, finalOrder], function (err) {
+=======
+            db.run(insertSql, [conversationId, sender, text, romanizedText, messageType, audioFilePath, detailedFeedback, finalOrder], function (err) {
+>>>>>>> aishani-backup-jul31
                 if (err) {
                     console.error('❌ DATABASE: Error inserting message:', err);
                     reject(err);
@@ -428,7 +478,11 @@ function getUserConversations(userId, language) {
         if (language) {
             // Get conversations for specific language dashboard
             sql = `
+<<<<<<< HEAD
         SELECT c.id, c.title, ld.language, c.message_count, c.created_at, c.updated_at, c.uses_persona, c.persona_id, p.name as persona_name, p.description as persona_description, c.summary
+=======
+        SELECT c.id, c.title, ld.language, c.message_count, c.created_at, c.updated_at, c.uses_persona, c.persona_id, p.name as persona_name, p.description as persona_description
+>>>>>>> aishani-backup-jul31
         FROM conversations c
         JOIN language_dashboards ld ON c.language_dashboard_id = ld.id
         LEFT JOIN personas p ON c.persona_id = p.id
@@ -440,7 +494,11 @@ function getUserConversations(userId, language) {
         else {
             // Get all conversations for user
             sql = `
+<<<<<<< HEAD
         SELECT c.id, c.title, ld.language, c.message_count, c.created_at, c.updated_at, c.uses_persona, c.persona_id, p.name as persona_name, p.description as persona_description, c.summary
+=======
+        SELECT c.id, c.title, ld.language, c.message_count, c.created_at, c.updated_at, c.uses_persona, c.persona_id, p.name as persona_name, p.description as persona_description
+>>>>>>> aishani-backup-jul31
         FROM conversations c
         JOIN language_dashboards ld ON c.language_dashboard_id = ld.id
         LEFT JOIN personas p ON c.persona_id = p.id
@@ -471,7 +529,7 @@ function getConversationWithMessages(conversationId) {
       WHERE c.id = ?
     `;
         const messagesSql = `
-      SELECT id, sender, text, message_type, audio_file_path, detailed_feedback, message_order, created_at
+      SELECT id, sender, text, romanized_text, message_type, audio_file_path, detailed_feedback, message_order, created_at
       FROM messages 
       WHERE conversation_id = ?
       ORDER BY message_order
@@ -617,6 +675,7 @@ function updateConversationPersona(conversationId, usesPersona, personaId) {
         });
     });
 }
+<<<<<<< HEAD
 function updateConversation(conversationId, updates) {
     return new Promise((resolve, reject) => {
         console.log('Updating conversation:', conversationId, 'with updates:', updates);
@@ -651,6 +710,8 @@ function updateConversation(conversationId, updates) {
         });
     });
 }
+=======
+>>>>>>> aishani-backup-jul31
 // Close database connection
 function closeDatabase() {
     db.close((err) => {
@@ -695,7 +756,7 @@ function createLanguageDashboard(userId, language, proficiencyLevel, talkTopics,
 function getUserLanguageDashboards(userId) {
     return new Promise((resolve, reject) => {
         const sql = `
-      SELECT id, language, proficiency_level, talk_topics, learning_goals, practice_preference, feedback_language, speak_speed, is_primary, created_at, updated_at
+      SELECT id, language, proficiency_level, talk_topics, learning_goals, practice_preference, feedback_language, speak_speed, romanization_display, is_primary, created_at, updated_at
       FROM language_dashboards 
       WHERE user_id = ?
       ORDER BY is_primary DESC, created_at ASC
@@ -714,7 +775,7 @@ function getUserLanguageDashboards(userId) {
 function getLanguageDashboard(userId, language) {
     return new Promise((resolve, reject) => {
         const sql = `
-      SELECT id, language, proficiency_level, talk_topics, learning_goals, practice_preference, feedback_language, speak_speed, is_primary, created_at, updated_at
+      SELECT id, language, proficiency_level, talk_topics, learning_goals, practice_preference, feedback_language, speak_speed, romanization_display, is_primary, created_at, updated_at
       FROM language_dashboards 
       WHERE user_id = ? AND language = ?
     `;
@@ -735,6 +796,7 @@ function getLanguageDashboard(userId, language) {
 }
 function updateLanguageDashboard(userId, language, updates) {
     return new Promise((resolve, reject) => {
+        console.log('[DEBUG] updateLanguageDashboard called with:', { userId, language, updates });
         const processedUpdates = Object.assign({}, updates);
         // Convert arrays to JSON strings if present
         if (processedUpdates.talk_topics && Array.isArray(processedUpdates.talk_topics)) {
@@ -746,11 +808,15 @@ function updateLanguageDashboard(userId, language, updates) {
         const fields = Object.keys(processedUpdates).map(key => `${key} = ?`).join(', ');
         const values = Object.values(processedUpdates);
         const sql = `UPDATE language_dashboards SET ${fields}, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND language = ?`;
+        console.log('[DEBUG] SQL query:', sql);
+        console.log('[DEBUG] Values:', [...values, userId, language]);
         db.run(sql, [...values, userId, language], function (err) {
             if (err) {
+                console.error('[DEBUG] Database error:', err);
                 reject(err);
             }
             else {
+                console.log('[DEBUG] Update successful, changes:', this.changes);
                 resolve({ changes: this.changes });
             }
         });

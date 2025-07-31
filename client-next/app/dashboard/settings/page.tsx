@@ -9,8 +9,7 @@ import { useDarkMode } from '../../contexts/DarkModeContext';
 interface UserProfile {
   id: string;
   email: string;
-  first_name?: string;
-  last_name?: string;
+  name: string;
   created_at: string;
   preferences?: {
     notifications_enabled: boolean;
@@ -23,7 +22,7 @@ interface UserProfile {
 export default function SettingsPage() {
   const router = useRouter();
   const { user, logout } = useUser();
-  const { isDarkMode, setTheme } = useDarkMode();
+  const { isDarkMode, setTheme, syncWithUserPreferences } = useDarkMode();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -52,11 +51,17 @@ export default function SettingsPage() {
           headers: { Authorization: `Bearer ${token}` }
         });
         
-        const userProfile = response.data;
+        const userProfile = response.data.user; // Backend returns { user }
         setProfile(userProfile);
+        
+        // Parse name into first and last name
+        const nameParts = userProfile.name ? userProfile.name.split(' ') : ['', ''];
+        const first_name = nameParts[0] || '';
+        const last_name = nameParts.slice(1).join(' ') || '';
+        
         setFormData({
-          first_name: userProfile.first_name || '',
-          last_name: userProfile.last_name || '',
+          first_name: first_name,
+          last_name: last_name,
           notifications_enabled: userProfile.preferences?.notifications_enabled ?? true,
           email_notifications: userProfile.preferences?.email_notifications ?? true,
           theme: userProfile.preferences?.theme || 'light',
@@ -65,7 +70,7 @@ export default function SettingsPage() {
         
         // Set theme based on user preference
         const theme = userProfile.preferences?.theme || 'light';
-        setTheme(theme);
+        syncWithUserPreferences(theme);
       } catch (error) {
         console.error('Failed to fetch profile:', error);
         setMessage({ type: 'error', text: 'Failed to load profile data.' });
@@ -99,6 +104,7 @@ export default function SettingsPage() {
       await axios.put('/api/user/profile', {
         first_name: formData.first_name,
         last_name: formData.last_name,
+        email: profile?.email || '',
         preferences: {
           notifications_enabled: formData.notifications_enabled,
           email_notifications: formData.email_notifications,

@@ -5,6 +5,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useUser } from '../ClientLayout';
+import { useDarkMode } from '../contexts/DarkModeContext';
 import logo from '../../assets/logo.png';
 
 function MenuIcon({ className = "" }) {
@@ -41,6 +42,7 @@ export default function Navigation() {
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
   const [profileDropdownTimeout, setProfileDropdownTimeout] = useState<NodeJS.Timeout | null>(null);
   const { user, logout } = useUser ? useUser() : { user: null, logout: () => {} };
+  const { isDarkMode } = useDarkMode();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -60,7 +62,7 @@ export default function Navigation() {
 
   return (
     <nav
-      className={`bg-cream/95 backdrop-blur-lg bg-border-rose-accent sticky top-0 z-50 border-b border-rose-accent/20 transition-all duration-300 font-general ${isAtTop ? "h-24" : "h-16"}`}
+      className={`${isDarkMode ? 'bg-gray-900/95' : 'bg-cream/95'} backdrop-blur-lg sticky top-0 z-50 border-b ${isDarkMode ? 'border-gray-700' : 'border-rose-accent/20'} transition-all duration-300 font-general ${isAtTop ? "h-24" : "h-16"}`}
       style={{ minHeight: isAtTop ? '6rem' : '4rem' }}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -115,6 +117,7 @@ export default function Navigation() {
                 </motion.a>
               </>
             )}
+            
             {user != null && (
               <div className="relative">
                 <motion.div 
@@ -148,7 +151,7 @@ export default function Navigation() {
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       exit={{ opacity: 0, y: -10, scale: 0.95 }}
                       transition={{ duration: 0.2 }}
-                      className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-rose-accent/20 py-2 z-50"
+                      className={`absolute right-0 mt-2 w-48 ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-rose-accent/20'} rounded-lg shadow-lg border py-2 z-50`}
                       onMouseEnter={() => {
                         if (profileDropdownTimeout) {
                           clearTimeout(profileDropdownTimeout);
@@ -165,14 +168,14 @@ export default function Navigation() {
                     >
                       <a
                         href="/dashboard/settings"
-                        className="flex items-center px-4 py-2 text-rose-primary hover:bg-rose-accent/10 transition-colors cursor-pointer font-body"
+                        className={`flex items-center px-4 py-2 ${isDarkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-rose-primary hover:bg-rose-accent/10'} transition-colors cursor-pointer font-body`}
                       >
                         <SettingsIcon className="mr-3" />
                         Settings
                       </a>
                       <button
                         onClick={logout}
-                        className="w-full flex items-center px-4 py-2 text-rose-primary hover:bg-rose-accent/10 transition-colors cursor-pointer bg-transparent border-none outline-none text-left font-body"
+                        className={`w-full flex items-center px-4 py-2 ${isDarkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-rose-primary hover:bg-rose-accent/10'} transition-colors cursor-pointer bg-transparent border-none outline-none text-left font-body`}
                       >
                         <svg className="mr-3 h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />

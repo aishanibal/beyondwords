@@ -662,18 +662,19 @@ app.put('/api/user/profile', authenticateJWT, (req, res) => __awaiter(void 0, vo
     try {
         console.log('Profile update request received:', req.body);
         console.log('User ID from JWT:', req.user.userId);
-        const { name, email } = req.body;
+        const { name, email, preferences } = req.body;
         // Validate required fields
         if (!name || !email) {
             console.log('Validation failed: missing name or email');
             return res.status(400).json({ error: 'Name and email are required' });
         }
-        console.log('Updating user with data:', { name, email });
-        // Update user profile (only personal info)
-        yield (0, database_1.updateUser)(req.user.userId, {
-            name,
-            email
-        });
+        console.log('Updating user with data:', { name, email, preferences });
+        // Update user profile
+        const updateData = { name, email };
+        if (preferences) {
+            updateData.preferences = preferences;
+        }
+        yield (0, database_1.updateUser)(req.user.userId, updateData);
         console.log('User updated successfully');
         // Get updated user data
         const user = yield (0, database_1.findUserById)(req.user.userId);
@@ -753,14 +754,20 @@ app.put('/api/user/language-dashboards/:language', authenticateJWT, (req, res) =
     try {
         const { language } = req.params;
         const updates = req.body;
+        console.log('[DEBUG] Updating language dashboard for language:', language);
+        console.log('[DEBUG] Updates received:', updates);
+        console.log('[DEBUG] User ID:', req.user.userId);
         // Check if dashboard exists
         const existingDashboard = yield (0, database_1.getLanguageDashboard)(req.user.userId, language);
         if (!existingDashboard) {
+            console.log('[DEBUG] Dashboard not found');
             return res.status(404).json({ error: 'Language dashboard not found' });
         }
+        console.log('[DEBUG] Existing dashboard:', existingDashboard);
         yield (0, database_1.updateLanguageDashboard)(req.user.userId, language, updates);
         // Get updated dashboard
         const dashboard = yield (0, database_1.getLanguageDashboard)(req.user.userId, language);
+        console.log('[DEBUG] Updated dashboard:', dashboard);
         res.json({ dashboard });
     }
     catch (error) {
@@ -999,10 +1006,9 @@ app.get('/api/conversations/:id', authenticateJWT, (req, res) => __awaiter(void 
 app.post('/api/conversations/:id/messages', authenticateJWT, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         console.log('🔄 SERVER: Adding message to conversation:', req.params.id);
-        const { sender, text, messageType, audioFilePath, detailedFeedback, message_order } = req.body;
-        console.log('📝 SERVER: Message details:', { sender, text: text.substring(0, 50) + '...', messageType, message_order });
-        const message = yield (0, database_1.addMessage)(Number(req.params.id), sender, text, messageType, audioFilePath, detailedFeedback, message_order // <-- pass it here
-        );
+        const { sender, text, messageType, audioFilePath, detailedFeedback, message_order, romanized_text } = req.body;
+        console.log('📝 SERVER: Message details:', { sender, text: text.substring(0, 50) + '...', messageType, message_order, romanized_text: romanized_text ? 'present' : 'none' });
+        const message = yield (0, database_1.addMessage)(Number(req.params.id), sender, text, messageType, audioFilePath, detailedFeedback, message_order, romanized_text);
         res.json({ message });
     }
     catch (error) {
@@ -1033,6 +1039,7 @@ app.delete('/api/conversations/:id', authenticateJWT, (req, res) => __awaiter(vo
 }));
 app.patch('/api/conversations/:id', authenticateJWT, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
+<<<<<<< HEAD
         const { id } = req.params;
         const { title, summary } = req.body;
         yield (0, database_1.updateConversation)(parseInt(id), { title, summary });
@@ -1059,6 +1066,19 @@ app.post('/api/conversations/:id/summary', authenticateJWT, (req, res) => __awai
         res.status(500).json({ error: 'Failed to save summary' });
     }
 }));
+=======
+        const conversationId = parseInt(req.params.id);
+        const { usesPersona, personaId } = req.body;
+        // Update conversation with persona information
+        yield (0, database_1.updateConversationPersona)(conversationId, usesPersona, personaId);
+        res.json({ message: 'Conversation updated successfully' });
+    }
+    catch (error) {
+        console.error('Error updating conversation:', error);
+        res.status(500).json({ error: 'Failed to update conversation' });
+    }
+}));
+>>>>>>> aishani-backup-jul31
 // Text suggestions endpoint
 app.post('/api/suggestions', authenticateJWT, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
@@ -1152,7 +1172,49 @@ app.post('/api/translate', authenticateJWT, (req, res) => __awaiter(void 0, void
     }
     catch (error) {
         console.error('Translation error:', error);
-        res.status(500).json({ error: 'Error getting translation', details: error.message });
+        res.status(500).json({ error: 'Error translating text', details: error.message });
+    }
+}));
+// Explain suggestion endpoint
+app.post('/api/explain_suggestion', authenticateJWT, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        console.log('POST /api/explain_suggestion called');
+        const { suggestion_text, chatHistory, language, user_level, user_topics, formality, feedback_language, user_goals } = req.body;
+        if (!suggestion_text) {
+            return res.status(400).json({ error: 'No suggestion text provided' });
+        }
+        // Call Python API for explanation
+        try {
+            const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5000';
+            const pythonResponse = yield axios_1.default.post(`${pythonApiUrl}/explain_suggestion`, {
+                suggestion_text: suggestion_text,
+                chatHistory: chatHistory || [],
+                language: language || 'en',
+                user_level: user_level || 'beginner',
+                user_topics: user_topics || [],
+                formality: formality || 'friendly',
+                feedback_language: feedback_language || 'en',
+                user_goals: user_goals || []
+            }, {
+                headers: { 'Content-Type': 'application/json' },
+                timeout: 30000
+            });
+            console.log('Python explanation received');
+            res.json(pythonResponse.data);
+        }
+        catch (pythonError) {
+            console.error('Python API not available for explanation:', pythonError.message);
+            // Fallback response if Python API fails
+            res.json({
+                translation: "Explanation service temporarily unavailable",
+                explanation: "The explanation service is currently unavailable. Please try again later.",
+                error: "Python API not available"
+            });
+        }
+    }
+    catch (error) {
+        console.error('Explain suggestion error:', error);
+        res.status(500).json({ error: 'Error explaining suggestion', details: error.message });
     }
 }));
 // Proxy /api/short_feedback to Python API

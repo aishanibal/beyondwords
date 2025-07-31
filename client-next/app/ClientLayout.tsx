@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { FaUserCircle } from 'react-icons/fa';
 import Navigation from "./components/Navigation";
 import SignupFloating from "./components/SignupFloating";
+import { useDarkMode } from './contexts/DarkModeContext';
 
 const translucentBg = 'rgba(60,76,115,0.06)';
 const translucentRose = 'rgba(195,141,148,0.08)';
@@ -36,6 +37,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
   const pathname = usePathname();
+  const { syncWithUserPreferences } = useDarkMode();
 
   useEffect(() => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('jwt') : null;
@@ -50,6 +52,11 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           clearTimeout(fallbackTimeout);
           setUser(res.data.user);
           console.log('APP setUser called:', res.data.user);
+          
+          // Sync theme with user preferences
+          if (res.data.user?.preferences?.theme) {
+            syncWithUserPreferences(res.data.user.preferences.theme);
+          }
         })
         .catch(() => {
           clearTimeout(fallbackTimeout);

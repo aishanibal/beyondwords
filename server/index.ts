@@ -772,22 +772,28 @@ app.put('/api/user/profile', authenticateJWT, async (req: Request, res: Response
   try {
     console.log('Profile update request received:', req.body);
     console.log('User ID from JWT:', req.user.userId);
+    console.log('Request headers:', req.headers);
     
-    const { name, email } = req.body;
+    const { name, email, preferences } = req.body;
+    
+    console.log('Extracted data:', { name, email, preferences });
     
     // Validate required fields
     if (!name || !email) {
       console.log('Validation failed: missing name or email');
+      console.log('Name value:', name, 'Email value:', email);
       return res.status(400).json({ error: 'Name and email are required' });
     }
     
-    console.log('Updating user with data:', { name, email });
+    console.log('Updating user with data:', { name, email, preferences });
     
-    // Update user profile (only personal info)
-    await updateUser(req.user.userId, {
-      name,
-      email
-    });
+    // Update user profile
+    const updateData: any = { name, email };
+    if (preferences) {
+      updateData.preferences = preferences;
+    }
+    
+    await updateUser(req.user.userId, updateData);
     
     console.log('User updated successfully');
     
@@ -887,16 +893,24 @@ app.put('/api/user/language-dashboards/:language', authenticateJWT, async (req: 
     const { language } = req.params;
     const updates = req.body;
     
+    console.log('[DEBUG] Updating language dashboard for language:', language);
+    console.log('[DEBUG] Updates received:', updates);
+    console.log('[DEBUG] User ID:', req.user.userId);
+    
     // Check if dashboard exists
     const existingDashboard = await getLanguageDashboard(req.user.userId, language);
     if (!existingDashboard) {
+      console.log('[DEBUG] Dashboard not found');
       return res.status(404).json({ error: 'Language dashboard not found' });
     }
+    
+    console.log('[DEBUG] Existing dashboard:', existingDashboard);
     
     await updateLanguageDashboard(req.user.userId, language, updates);
     
     // Get updated dashboard
     const dashboard = await getLanguageDashboard(req.user.userId, language);
+    console.log('[DEBUG] Updated dashboard:', dashboard);
     
     res.json({ dashboard });
   } catch (error: any) {
@@ -1049,6 +1063,7 @@ app.post('/api/conversations', authenticateJWT, async (req: Request, res: Respon
     // Generate and save AI intro message
     let aiMessage = null;
     let aiIntro = 'Hello! What would you like to talk about today?';
+    let ttsUrl = null;
     try {
       const user = await findUserById(req.user.userId);
       const userLevel = user?.proficiency_level || 'beginner';
@@ -1074,12 +1089,19 @@ app.post('/api/conversations', authenticateJWT, async (req: Request, res: Respon
         console.error('Python API /initial_message error:', err.message);
         aiIntro = 'Hello! What would you like to talk about today?';
       }
+      
+      // Generate TTS for the initial AI message
+      if (aiIntro && aiIntro.trim()) {
+        ttsUrl = await generateTTS(aiIntro, language);
+        console.log('Generated TTS for initial message:', ttsUrl);
+      }
+      
       aiMessage = await addMessage(conversation.id, 'AI', aiIntro, 'text', undefined, undefined);
     } catch (err) {
       console.error('Error generating/saving AI intro message:', err);
     }
-    // Return the actual AI intro text for the frontend
-    res.json({ conversation, aiMessage: { text: aiIntro } });
+    // Return the actual AI intro text and TTS URL for the frontend
+    res.json({ conversation, aiMessage: { text: aiIntro, ttsUrl } });
   } catch (error: any) {
     console.error('❌ SERVER: Create conversation error:', error);
     res.status(500).json({ error: 'Failed to create conversation' });
@@ -1135,8 +1157,8 @@ app.get('/api/conversations/:id', authenticateJWT, async (req: Request, res: Res
 app.post('/api/conversations/:id/messages', authenticateJWT, async (req: Request, res: Response) => {
   try {
     console.log('🔄 SERVER: Adding message to conversation:', req.params.id);
-    const { sender, text, messageType, audioFilePath, detailedFeedback, message_order } = req.body;
-    console.log('📝 SERVER: Message details:', { sender, text: text.substring(0, 50) + '...', messageType, message_order });
+    const { sender, text, messageType, audioFilePath, detailedFeedback, message_order, romanized_text } = req.body;
+    console.log('📝 SERVER: Message details:', { sender, text: text.substring(0, 50) + '...', messageType, message_order, romanized_text: romanized_text ? 'present' : 'none' });
 
     const message = await addMessage(
       Number(req.params.id),
@@ -1145,7 +1167,8 @@ app.post('/api/conversations/:id/messages', authenticateJWT, async (req: Request
       messageType,
       audioFilePath,
       detailedFeedback,
-      message_order // <-- pass it here
+      message_order,
+      romanized_text
     );
 
     res.json({ message });
@@ -1301,7 +1324,52 @@ app.post('/api/translate', authenticateJWT, async (req: Request, res: Response) 
     }
   } catch (error: any) {
     console.error('Translation error:', error);
-    res.status(500).json({ error: 'Error getting translation', details: error.message });
+    res.status(500).json({ error: 'Error translating text', details: error.message });
+  }
+});
+
+// Explain suggestion endpoint
+app.post('/api/explain_suggestion', authenticateJWT, async (req: Request, res: Response) => {
+  try {
+    console.log('POST /api/explain_suggestion called');
+    const { suggestion_text, chatHistory, language, user_level, user_topics, formality, feedback_language, user_goals } = req.body;
+    
+    if (!suggestion_text) {
+      return res.status(400).json({ error: 'No suggestion text provided' });
+    }
+    
+    // Call Python API for explanation
+    try {
+      const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5000';
+      const pythonResponse = await axios.post(`${pythonApiUrl}/explain_suggestion`, {
+        suggestion_text: suggestion_text,
+        chatHistory: chatHistory || [],
+        language: language || 'en',
+        user_level: user_level || 'beginner',
+        user_topics: user_topics || [],
+        formality: formality || 'friendly',
+        feedback_language: feedback_language || 'en',
+        user_goals: user_goals || []
+      }, {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 30000
+      });
+      
+      console.log('Python explanation received');
+      res.json(pythonResponse.data);
+    } catch (pythonError: any) {
+      console.error('Python API not available for explanation:', pythonError.message);
+      
+      // Fallback response if Python API fails
+      res.json({
+        translation: "Explanation service temporarily unavailable",
+        explanation: "The explanation service is currently unavailable. Please try again later.",
+        error: "Python API not available"
+      });
+    }
+  } catch (error: any) {
+    console.error('Explain suggestion error:', error);
+    res.status(500).json({ error: 'Error explaining suggestion', details: error.message });
   }
 });
 
@@ -1418,8 +1486,92 @@ app.delete('/api/personas/:id', authenticateJWT, async (req: Request, res: Respo
   }
 });
 
+// TTS endpoint for generating audio for any text
+app.post('/api/tts', authenticateJWT, async (req: Request, res: Response) => {
+  try {
+    const { text, language } = req.body;
+    
+    if (!text || !text.trim()) {
+      return res.status(400).json({ error: 'Text is required' });
+    }
+    
+    const lang = language || 'en';
+    
+    // Generate TTS for the text
+    const ttsUrl = await generateTTS(text, lang);
+    
+    if (ttsUrl) {
+      res.json({ ttsUrl });
+    } else {
+      res.status(500).json({ error: 'Failed to generate TTS' });
+    }
+  } catch (error: any) {
+    console.error('TTS endpoint error:', error);
+    res.status(500).json({ error: 'TTS generation failed', details: error.message });
+  }
+});
+
 // Serve uploads directory statically for TTS audio
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Helper function to generate TTS for any text
+async function generateTTS(text: string, language: string): Promise<string | null> {
+  try {
+    const ttsFileName = `tts_${Date.now()}.wav`;
+    const ttsFilePath = path.join(uploadsDir, ttsFileName);
+    
+    // Choose voice based on language with fallback
+    let ttsVoice = 'Karen'; // Default to English (Alex is more reliable than Flo)
+    if (language === 'es') ttsVoice = 'Mónica'; // Spanish voice
+    else if (language === 'hi') ttsVoice = 'Lekha'; // macOS Hindi voice
+    else if (language === 'ja') ttsVoice = 'Otoya'; // macOS Japanese voice
+    
+    // Check if voice is available
+    try {
+      await new Promise<void>((resolve, reject) => {
+        exec(`say -v ${ttsVoice} "test"`, (error) => {
+          if (error) reject(error);
+          else resolve();
+        });
+      });
+    } catch (voiceError) {
+      console.log(`Voice ${ttsVoice} not available, using default`);
+      ttsVoice = 'Alex'; // Fallback to Alex
+    }
+    
+    const sayCmd = `say -v ${ttsVoice} -o "${ttsFilePath}" --data-format=LEI16@22050 "${text.replace(/\"/g, '\\"')}"`;
+    console.log('TTS voice:', ttsVoice);
+    console.log('TTS command:', sayCmd);
+    console.log('TTS text length:', text.length);
+    
+    await new Promise<void>((resolve, reject) => {
+      exec(sayCmd, (error) => {
+        if (error) {
+          console.error('TTS command failed:', error);
+          reject(error);
+        } else {
+          console.log('TTS command completed successfully');
+          resolve();
+        }
+      });
+    });
+    
+    // Check if file was created
+    if (fs.existsSync(ttsFilePath)) {
+      const stats = fs.statSync(ttsFilePath);
+      console.log('TTS file created, size:', stats.size, 'bytes');
+      const ttsUrl = `/uploads/${ttsFileName}`;
+      console.log('TTS audio generated at:', ttsUrl);
+      return ttsUrl;
+    } else {
+      console.error('TTS file was not created');
+      return null;
+    }
+  } catch (ttsError) {
+    console.error('TTS error:', ttsError);
+    return null;
+  }
+}
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {

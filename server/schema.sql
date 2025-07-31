@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS users (
   learning_goals TEXT,
   practice_preference TEXT,
   motivation TEXT,
+  preferences TEXT, -- JSON field for user preferences (theme, notifications, etc.)
   onboarding_complete BOOLEAN DEFAULT FALSE,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
