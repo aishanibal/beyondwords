@@ -1862,10 +1862,13 @@ def is_gemini_ready() -> bool:
     
     return False
 
-def generate_conversation_summary(chat_history: List[Dict], subgoal_instructions: str = "") -> Dict[str, str]:
+def generate_conversation_summary(chat_history: List[Dict], subgoal_instructions: str = "", user_topics: List[str] = None) -> Dict[str, str]:
     """Generate a title and subgoal evaluation for the conversation using Gemini."""
     if not GOOGLE_AI_AVAILABLE:
         return {"title": "[Unavailable]", "synopsis": "[Gemini not available]"}
+    
+    if user_topics is None:
+        user_topics = []
 
     context = "\n".join([f"{msg['sender']}: {msg['text']}" for msg in chat_history])
 
@@ -1874,21 +1877,50 @@ You are an expert conversation evaluator and summarizer for a language learning 
 
 Given the full conversation below, complete the following tasks:
 
-1. Generate a short, descriptive title (max 8 words) that captures the main topic or theme of the conversation.
-2. Evaluate how well the user achieved these subgoals using detailed analysis of their turns. The subgoals are:
+1. Generate a short, descriptive title (max 8 words) that captures the main topic or theme of the conversation. It should reflect what the user spent most of their time discussing.
+
+2. Evaluate how well the user achieved each of the following 3 subgoals:
 {subgoal_instructions}
- Clearly explain:
-   - How successfully they followed the subgoal
-   - A quantitative estimate of their performance (e.g., percentage of relevant turns)
-   - Specific moments where they succeeded or fell short
+Your response must:
+- Use second-person language ("you", "your")
+- Include a quantitative estimate based on the metric for each subgoal (e.g., % of valid turns, number of elaborated responses, number of flagged repetitions, etc.)
+- Highlight one specific moment where the subgoal was met or not met
+- If the subgoal **was met**: provide a new metric-based subgoal that builds on the same skill and is slightly more advanced
+- If the subgoal **was not met**: give actionable feedback and end with: "Keep practicing this subgoal."
+
+Be extremely strict in your evaluation. Do not say the subgoal was achieved unless it is clearly and verifiably met based on the conversation history.
+If you cannot evaluate the subgoal, say "Not enough information to evaluate this subgoal. Keep practicing!"
 
 Use this conversation history to evaluate the user's performance:
 {chat_history}
 
+The topics of the conversation are: {user_topics}
+
 Return your answer in this exact format:
-Title: <your title here>
-Evaluation: <your evaluation here>
+Title: <your title here>  
+Evaluation:  
+<Subgoal 1 name>: <subgoal 1 evaluation>  
+<Subgoal 2 name>: <subgoal 2 evaluation>  
+<Subgoal 3 name>: <subgoal 3 evaluation>  
+
+---
+
+EXAMPLE
+
+Title: Talking About Food and Preferences  
+Evaluation:  
+**No excessive repetition**: You repeated the word “good” four times within five turns (“good food,” “really good,” “so good”), which triggered the repetition flag. Try using more descriptive words like “delicious” or “satisfying” to add variety.  
+Keep practicing this subgoal.
+
+**At least 3 elaborated responses**: You gave 4 elaborated responses, such as “Yes, I love sushi because it’s fresh and reminds me of Japan.” This added depth and moved the conversation forward.  
+**Next subgoal:** Include at least 5 elaborated responses with a reason or example in a 10-turn span.
+
+**No more than 2 one-word replies in 10 turns**: You gave 3 one-word responses (“Yeah,” “Maybe,” “Cool”) within a 10-turn stretch, which exceeds the limit. Try responding with full thoughts to keep conversations flowing naturally.  
+Keep practicing this subgoal.
 """
+
+
+
     try:
         model = genai.GenerativeModel("gemini-1.5-flash")
         response = model.generate_content(prompt)

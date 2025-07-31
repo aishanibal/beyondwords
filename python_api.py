@@ -374,12 +374,14 @@ def conversation_summary():
         data = request.get_json()
         chat_history = data.get('chat_history', [])
         subgoal_instructions = data.get('subgoal_instructions', '')
+        user_topics = data.get('user_topics', [])
         
         print(f"Chat history length: {len(chat_history)}")
         print(f"Subgoal instructions: {subgoal_instructions}")
+        print(f"User topics: {user_topics}")
         
         from gemini_client import generate_conversation_summary
-        summary = generate_conversation_summary(chat_history, subgoal_instructions)
+        summary = generate_conversation_summary(chat_history, subgoal_instructions, user_topics)
         
         print(f"Generated summary: {summary}")
         return jsonify(summary)
