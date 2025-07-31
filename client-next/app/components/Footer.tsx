@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { Heart, Twitter, Linkedin, Instagram, Facebook } from "lucide-react";
 import logo from "../../assets/logo.png";
+import { useDarkMode } from "../contexts/DarkModeContext";
 
 const footerLinks = {
   product: [
@@ -33,8 +34,9 @@ const socialLinks = [
 ];
 
 export default function Footer() {
+  const { isDarkMode } = useDarkMode();
   return (
-    <footer id="contact" className="text-white py-16" style={{ backgroundColor: '#3b5377' }}>
+    <footer id="contact" className={`text-white py-16 ${isDarkMode ? 'bg-gray-900' : ''}`} style={{ backgroundColor: isDarkMode ? '#1a1a1a' : '#3b5377' }}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid md:grid-cols-4 gap-8">
           <motion.div

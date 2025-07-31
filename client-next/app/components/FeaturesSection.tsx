@@ -9,55 +9,57 @@ import {
   TrendingUp,
   Book,
 } from "lucide-react";
-
-const features = [
-  {
-    icon: Languages,
-    title: "Cultural Context AI",
-    description: "Speak more naturally with AI that understands your cultural and language background.",
-    bgColor: "bg-rose-primary/20",
-    textColor: "text-rose-primary",
-  },
-  {
-    icon: Users,
-    title: "Conversational Practice",
-    description: "Build fluency by chatting freely with AI in a judgment-free space.",
-    bgColor: "bg-blue-secondary/20",
-    textColor: "text-blue-secondary",
-  },
-  {
-    icon: Edit,
-    title: "Detailed Feedback",
-    description: "Get clear, personalized tips on how to improve your speaking.",
-    bgColor: "bg-accent/20",
-    textColor: "text-accent",
-  },
-  {
-    icon: Globe,
-    title: "On-the-Go Learning",
-    description: "Practice in short moments throughout your day without extra effort.",
-    bgColor: "bg-rose-primary/20",
-    textColor: "text-rose-primary",
-  },
-  {
-    icon: TrendingUp,
-    title: "Progress Tracking",
-    description: "See your growth and stay motivated as your fluency improves.",
-    bgColor: "bg-blue-secondary/20",
-    textColor: "text-blue-secondary",
-  },
-  {
-    icon: Book,
-    title: "Personalized Review",
-    description: "Review what you struggle with most for faster, focused learning.",
-    bgColor: "bg-accent/20",
-    textColor: "text-accent",
-  },
-];
+import { useDarkMode } from "../contexts/DarkModeContext";
 
 export default function FeaturesSection() {
+  const { isDarkMode } = useDarkMode();
+  
+  const features = [
+    {
+      icon: Languages,
+      title: "Cultural Context AI",
+      description: "Speak more naturally with AI that understands your cultural and language background.",
+      bgColor: isDarkMode ? "bg-light-purple/20" : "bg-rose-primary/20",
+      textColor: isDarkMode ? "text-light-purple" : "text-rose-primary",
+    },
+    {
+      icon: Users,
+      title: "Conversational Practice",
+      description: "Build fluency by chatting freely with AI in a judgment-free space.",
+      bgColor: "bg-blue-secondary/20",
+      textColor: "text-blue-secondary",
+    },
+    {
+      icon: Edit,
+      title: "Detailed Feedback",
+      description: "Get clear, personalized tips on how to improve your speaking.",
+      bgColor: "bg-accent/20",
+      textColor: "text-accent",
+    },
+    {
+      icon: Globe,
+      title: "On-the-Go Learning",
+      description: "Practice in short moments throughout your day without extra effort.",
+      bgColor: isDarkMode ? "bg-light-purple/20" : "bg-rose-primary/20",
+      textColor: isDarkMode ? "text-light-purple" : "text-rose-primary",
+    },
+    {
+      icon: TrendingUp,
+      title: "Progress Tracking",
+      description: "See your growth and stay motivated as your fluency improves.",
+      bgColor: "bg-blue-secondary/20",
+      textColor: "text-blue-secondary",
+    },
+    {
+      icon: Book,
+      title: "Personalized Review",
+      description: "Review what you struggle with most for faster, focused learning.",
+      bgColor: "bg-accent/20",
+      textColor: "text-accent",
+    },
+  ];
   return (
-    <section id="features" className="py-20 bg-white/50">
+    <section id="features" className={`py-20 ${isDarkMode ? 'bg-gray-900/50' : 'bg-white/50'}`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <motion.div
           className="text-center mb-16"
@@ -66,7 +68,7 @@ export default function FeaturesSection() {
           transition={{ duration: 0.8 }}
           viewport={{ once: true }}
         >
-          <h2 className="text-3xl md:text-4xl font-heading font-bold text-rose-primary mb-4">
+          <h2 className={`text-3xl md:text-4xl font-heading font-bold ${isDarkMode ? 'text-light-purple' : 'text-rose-primary'} mb-4`}>
             Powerful Features for Every Learner
           </h2>
           <p className="text-xl font-body text-foreground max-w-3xl mx-auto">
@@ -80,7 +82,7 @@ export default function FeaturesSection() {
             return (
               <motion.div
                 key={feature.title}
-                className="hover-lift bg-white/80 backdrop-blur-sm rounded-xl p-8 border border-gray-200 cursor-pointer"
+                className={`hover-lift ${isDarkMode ? 'bg-gray-800/80' : 'bg-white/80'} backdrop-blur-sm rounded-xl p-8 border ${isDarkMode ? 'border-gray-700' : 'border-gray-200'} cursor-pointer`}
                 initial={{ opacity: 0, y: 30 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{

@@ -104,7 +104,7 @@ function LearningGoalCard({ goal, index }: LearningGoalCardProps) {
           {goal.icon}
         </div>
         <div style={{ 
-          color: 'var(--blue-secondary)', 
+          color: 'var(--foreground)', 
           fontWeight: 600,
           fontSize: '0.9rem',
           lineHeight: '1.3',
@@ -151,7 +151,7 @@ function LearningGoalCard({ goal, index }: LearningGoalCardProps) {
                   alignItems: 'flex-start',
                   gap: '0.5rem',
                   padding: '0.5rem',
-                  background: 'rgba(255,255,255,0.5)',
+                  background: 'var(--card)',
                   borderRadius: 8,
                   border: '1px solid rgba(126,90,117,0.1)'
                 }}>
@@ -173,7 +173,7 @@ function LearningGoalCard({ goal, index }: LearningGoalCardProps) {
                     {subIndex + 1}
                   </div>
                   <div style={{ 
-                    color: 'var(--blue-secondary)', 
+                    color: 'var(--foreground)', 
                     fontSize: '0.75rem',
                     lineHeight: '1.4',
                     fontFamily: 'AR One Sans, Arial, sans-serif',

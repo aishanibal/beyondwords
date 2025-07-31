@@ -1,8 +1,10 @@
 'use client';
 import { useState } from 'react';
 import { motion } from 'framer-motion';
+import { useDarkMode } from '../contexts/DarkModeContext';
 
 export default function ContactPage() {
+  const { isDarkMode } = useDarkMode();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -68,11 +70,11 @@ export default function ContactPage() {
         transition={{ duration: 0.6 }}
       >
         <div className="max-w-4xl mx-auto text-center">
-          <h1 className="text-4xl md:text-5xl lg:text-6xl font-heading font-bold text-rose-primary mb-6">
+          <h1 className={`text-4xl md:text-5xl lg:text-6xl font-heading font-bold ${isDarkMode ? 'text-light-purple' : 'text-rose-primary'} mb-6`}>
             Get in Touch
           </h1>
           <p className="text-xl text-blue-secondary font-body max-w-2xl mx-auto leading-relaxed">
-            Have questions about <span className="text-rose-primary font-semibold">BeyondWords</span>? We'd love to hear from you. Send us a message and we'll respond as soon as possible.
+            Have questions about <span className={`${isDarkMode ? 'text-light-purple' : 'text-rose-primary'} font-semibold`}>BeyondWords</span>? We'd love to hear from you. Send us a message and we'll respond as soon as possible.
           </p>
         </div>
       </motion.div>
@@ -88,7 +90,7 @@ export default function ContactPage() {
             transition={{ duration: 0.6, delay: 0.2 }}
             className="bg-white rounded-2xl shadow-card p-8"
           >
-            <h2 className="text-2xl font-heading font-semibold text-rose-primary mb-6">
+            <h2 className={`text-2xl font-heading font-semibold ${isDarkMode ? 'text-light-purple' : 'text-rose-primary'} mb-6`}>
               Send us a Message
             </h2>
             
@@ -105,7 +107,7 @@ export default function ContactPage() {
                     value={formData.name}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-4 py-3 border border-rose-accent/30 rounded-lg focus:ring-2 focus:ring-rose-primary focus:border-transparent transition-all duration-200 font-body"
+                    className={`w-full px-4 py-3 border border-rose-accent/30 rounded-lg focus:ring-2 ${isDarkMode ? 'focus:ring-light-purple' : 'focus:ring-rose-primary'} focus:border-transparent transition-all duration-200 font-body`}
                     placeholder="Your name"
                   />
                 </div>
@@ -121,7 +123,7 @@ export default function ContactPage() {
                     value={formData.email}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-4 py-3 border border-rose-accent/30 rounded-lg focus:ring-2 focus:ring-rose-primary focus:border-transparent transition-all duration-200 font-body"
+                    className={`w-full px-4 py-3 border border-rose-accent/30 rounded-lg focus:ring-2 ${isDarkMode ? 'focus:ring-light-purple' : 'focus:ring-rose-primary'} focus:border-transparent transition-all duration-200 font-body`}
                     placeholder="your.email@example.com"
                   />
                 </div>
@@ -138,7 +140,7 @@ export default function ContactPage() {
                   value={formData.subject}
                   onChange={handleInputChange}
                   required
-                  className="w-full px-4 py-3 border border-rose-accent/30 rounded-lg focus:ring-2 focus:ring-rose-primary focus:border-transparent transition-all duration-200 font-body"
+                  className={`w-full px-4 py-3 border border-rose-accent/30 rounded-lg focus:ring-2 ${isDarkMode ? 'focus:ring-light-purple' : 'focus:ring-rose-primary'} focus:border-transparent transition-all duration-200 font-body`}
                   placeholder="What's this about?"
                 />
               </div>
@@ -154,7 +156,7 @@ export default function ContactPage() {
                   onChange={handleInputChange}
                   required
                   rows={6}
-                  className="w-full px-4 py-3 border border-rose-accent/30 rounded-lg focus:ring-2 focus:ring-rose-primary focus:border-transparent transition-all duration-200 font-body resize-none"
+                  className={`w-full px-4 py-3 border border-rose-accent/30 rounded-lg focus:ring-2 ${isDarkMode ? 'focus:ring-light-purple' : 'focus:ring-rose-primary'} focus:border-transparent transition-all duration-200 font-body resize-none`}
                   placeholder="Tell us more about your inquiry..."
                 />
               </div>
@@ -165,7 +167,7 @@ export default function ContactPage() {
                 className={`w-full py-4 px-6 rounded-lg font-semibold transition-all duration-200 font-body ${
                   isSubmitting 
                     ? 'bg-rose-accent text-text-dark cursor-not-allowed' 
-                    : 'bg-rose-primary text-white hover:bg-rose-primary/90 hover:scale-105'
+                    : `${isDarkMode ? 'bg-light-purple' : 'bg-rose-primary'} text-white hover:bg-rose-primary/90 hover:scale-105`
                 }`}
                 whileHover={!isSubmitting ? { scale: 1.02 } : {}}
                 whileTap={!isSubmitting ? { scale: 0.98 } : {}}

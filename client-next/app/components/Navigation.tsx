@@ -78,14 +78,14 @@ export default function Navigation() {
                 {/* Logo image */}
                 <img src={logo.src} alt="BeyondWords Logo" className={`${isAtTop ? "h-24 w-24" : "h-16 w-16"} transition-all duration-300`} style={{ objectFit: 'contain' }} />
               </div>
-              <span className={`ml-3 font-heading font-semibold text-rose-primary transition-all duration-300 ${isAtTop ? "text-3xl" : "text-xl"}`}>BeyondWords</span>
+              <span className={`ml-3 font-heading font-semibold ${isDarkMode ? 'text-light-purple' : 'text-rose-primary'} transition-all duration-300 ${isAtTop ? "text-3xl" : "text-xl"}`}>BeyondWords</span>
             </a>
           </motion.div>
           <div className="hidden md:flex items-center space-x-8">
             {user != null && (
               <motion.a
                 href="/dashboard"
-                className="text-rose-primary hover:text-rose-accent transition-colors cursor-pointer font-body"
+                className={`${isDarkMode ? 'text-light-purple' : 'text-rose-primary'} hover:text-rose-accent transition-colors cursor-pointer font-body`}
                 whileHover={{ scale: 1.05 }}
               >
                 Dashboard
@@ -94,7 +94,7 @@ export default function Navigation() {
 
             <motion.a 
               href="/contact" 
-              className="text-rose-primary hover:text-rose-accent transition-colors cursor-pointer font-body"
+              className={`${isDarkMode ? 'text-light-purple' : 'text-rose-primary'} hover:text-rose-accent transition-colors cursor-pointer font-body`}
               whileHover={{ scale: 1.05 }}
             >
               Contact
@@ -103,14 +103,14 @@ export default function Navigation() {
               <>
                 <motion.a
                   href="/login"
-                  className="text-rose-primary hover:text-rose-accent transition-colors cursor-pointer font-body"
+                  className={`${isDarkMode ? 'text-light-purple' : 'text-rose-primary'} hover:text-rose-accent transition-colors cursor-pointer font-body`}
                   whileHover={{ scale: 1.05 }}
                 >
                   Login
                 </motion.a>
                 <motion.a
                   href="/signup"
-                  className="text-rose-primary hover:text-rose-accent transition-colors cursor-pointer font-body"
+                  className={`${isDarkMode ? 'text-light-purple' : 'text-rose-primary'} hover:text-rose-accent transition-colors cursor-pointer font-body`}
                   whileHover={{ scale: 1.05 }}
                 >
                   Sign Up
@@ -137,7 +137,7 @@ export default function Navigation() {
                   }}
                 >
                   <motion.button
-                    className="text-rose-primary hover:text-rose-accent transition-colors cursor-pointer bg-transparent border-none outline-none p-2 rounded-full hover:bg-rose-accent/10"
+                    className={`${isDarkMode ? 'text-light-purple' : 'text-rose-primary'} hover:text-rose-accent transition-colors cursor-pointer bg-transparent border-none outline-none p-2 rounded-full hover:bg-rose-accent/10`}
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                   >
@@ -194,7 +194,7 @@ export default function Navigation() {
           <div className="md:hidden">
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="text-text-dark hover:text-rose-primary p-2 rounded-full focus:outline-none"
+              className={`text-text-dark ${isDarkMode ? 'hover:text-light-purple' : 'hover:text-rose-primary'} p-2 rounded-full focus:outline-none`}
             >
               {isMenuOpen ? <XIcon className="h-6 w-6" /> : <MenuIcon className="h-6 w-6" />}
             </button>
@@ -213,7 +213,7 @@ export default function Navigation() {
             {user != null && (
               <a
                 href="/dashboard"
-                className="block text-rose-primary hover:text-rose-accent transition-colors cursor-pointer font-body"
+                className={`block ${isDarkMode ? 'text-light-purple' : 'text-rose-primary'} hover:text-rose-accent transition-colors cursor-pointer font-body`}
               >
                 Dashboard
               </a>
@@ -222,13 +222,13 @@ export default function Navigation() {
             <a 
               href="#testimonials" 
               onClick={(e) => { e.preventDefault(); scrollToSection('testimonials'); }}
-              className="block text-rose-primary hover:text-rose-accent transition-colors cursor-pointer font-body"
+              className={`block ${isDarkMode ? 'text-light-purple' : 'text-rose-primary'} hover:text-rose-accent transition-colors cursor-pointer font-body`}
             >
               Testimonials
             </a>
             <a 
               href="/contact" 
-              className="block text-rose-primary hover:text-rose-accent transition-colors cursor-pointer font-body"
+              className={`block ${isDarkMode ? 'text-light-purple' : 'text-rose-primary'} hover:text-rose-accent transition-colors cursor-pointer font-body`}
             >
               Contact
             </a>
@@ -236,13 +236,13 @@ export default function Navigation() {
               <>
                 <a
                   href="/login"
-                  className="block text-rose-primary hover:text-rose-accent transition-colors cursor-pointer font-body"
+                  className={`block ${isDarkMode ? 'text-light-purple' : 'text-rose-primary'} hover:text-rose-accent transition-colors cursor-pointer font-body`}
                 >
                   Login
                 </a>
                 <a
                   href="/signup"
-                  className="block text-rose-primary hover:text-rose-accent transition-colors cursor-pointer font-body"
+                  className={`block ${isDarkMode ? 'text-light-purple' : 'text-rose-primary'} hover:text-rose-accent transition-colors cursor-pointer font-body`}
                 >
                   Sign Up
                 </a>
@@ -252,13 +252,13 @@ export default function Navigation() {
               <>
                 <a
                   href="/dashboard/settings"
-                  className="block text-rose-primary hover:text-rose-accent transition-colors cursor-pointer font-body"
+                  className={`block ${isDarkMode ? 'text-light-purple' : 'text-rose-primary'} hover:text-rose-accent transition-colors cursor-pointer font-body`}
                 >
                   Settings
                 </a>
                 <button
                   onClick={logout}
-                  className="block text-rose-primary hover:text-rose-accent transition-colors cursor-pointer bg-transparent border-none outline-none px-2 w-full text-left font-body"
+                  className={`block ${isDarkMode ? 'text-light-purple' : 'text-rose-primary'} hover:text-rose-accent transition-colors cursor-pointer bg-transparent border-none outline-none px-2 w-full text-left font-body`}
                 >
                   Log Out
                 </button>
@@ -266,7 +266,7 @@ export default function Navigation() {
             )}
             <button 
               onClick={() => scrollToSection('waitlist')}
-              className="w-full bg-rose-primary text-white hover:bg-rose-primary/90 px-6 py-2 rounded-lg font-semibold transition font-body"
+              className={`w-full ${isDarkMode ? 'bg-light-purple' : 'bg-rose-primary'} text-white hover:bg-rose-primary/90 px-6 py-2 rounded-lg font-semibold transition font-body`}
             >
               Join Waitlist
             </button>

@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import Link from "next/link";
+import { useDarkMode } from "../contexts/DarkModeContext";
 
 // Inline SVGs for icons
 function Rocket({ className = "" }: { className?: string }) {
@@ -57,6 +58,7 @@ function ExternalLink({ className = "" }: { className?: string }) {
 }
 
 export default function HeroSection() {
+  const { isDarkMode } = useDarkMode();
   const scrollToWaitlist = () => {
     const el = document.getElementById("waitlist");
     if (el) el.scrollIntoView({ behavior: "smooth" });
@@ -76,7 +78,7 @@ export default function HeroSection() {
             transition={{ duration: 0.8, ease: "easeOut" }}
           >
             <motion.h1
-              className="text-5xl md:text-5xl lg:text-7xl font-heading font-bold text-rose-primary mb-6 leading-tight"
+              className={`text-5xl md:text-5xl lg:text-7xl font-heading font-bold ${isDarkMode ? 'text-light-purple' : 'text-rose-primary'} mb-6 leading-tight`}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8, delay: 0.2 }}
@@ -135,7 +137,7 @@ export default function HeroSection() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 1.6, delay: 0.8 }}
                   >
-                    <h3 className="text-3xl font-heading font-bold text-rose-primary mb-2">
+                    <h3 className={`text-3xl font-heading font-bold ${isDarkMode ? 'text-light-purple' : 'text-rose-primary'} mb-2`}>
                       Share Your Experience
                     </h3>
                     <p className="text-foreground opacity-80 font-body">
@@ -145,7 +147,7 @@ export default function HeroSection() {
 
                   <div className="space-y-4">
                     <div className="flex items-center space-x-3">
-                      <div className="w-3 h-3 bg-rose-primary rounded-full" />
+                      <div className={`w-3 h-3 ${isDarkMode ? 'bg-light-purple' : 'bg-rose-primary'} rounded-full`} />
                       <span className="text-sm text-foreground">
                         Share the language your community speaks
                       </span>

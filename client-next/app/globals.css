@@ -58,6 +58,7 @@
   --blue-secondary: #8ba3d9;
   --rose-accent: #f0c8d0;
   --text-dark: #f8fafc;
+  --light-purple: #c4b5fd;
 }
 
 body {
@@ -96,6 +97,10 @@ h1 {
 
 .text-rose-accent {
   color: var(--rose-accent);
+}
+
+.text-light-purple {
+  color: var(--light-purple);
 }
 
 .bg-card {
@@ -152,6 +157,38 @@ h1 {
   color: var(--rose-accent);
 }
 
+.dark .text-light-purple {
+  color: var(--light-purple);
+}
+
+/* Modal styles for dark mode */
+.dark .modal-overlay {
+  background-color: rgba(0, 0, 0, 0.7);
+}
+
+.dark .modal-content {
+  background-color: var(--card);
+  border: 1px solid var(--border);
+  color: var(--foreground);
+}
+
+.dark .modal-header {
+  border-bottom: 1px solid var(--border);
+}
+
+.dark .modal-footer {
+  border-top: 1px solid var(--border);
+}
+
+.dark .modal-close-button {
+  color: var(--muted-foreground);
+}
+
+.dark .modal-close-button:hover {
+  color: var(--foreground);
+  background-color: var(--muted);
+}
+
 /* Form elements in dark mode */
 .dark input,
 .dark textarea,
@@ -173,6 +210,18 @@ h1 {
 
 .dark .bg-rose-primary:hover {
   background-color: #f0c8d0;
+}
+
+.dark .bg-light-purple {
+  background-color: var(--light-purple);
+}
+
+.dark .bg-light-purple:hover {
+  background-color: #a78bfa;
+}
+
+.dark .border-light-purple {
+  border-color: var(--light-purple);
 }
 
 /* Card and container styles */

@@ -9,12 +9,12 @@ export default function TestDarkMode() {
   return (
     <div className={`min-h-screen transition-colors duration-300 ${isDarkMode ? 'bg-gray-900 text-white' : 'bg-cream text-gray-900'}`}>
       <div className="max-w-4xl mx-auto px-4 py-8">
-        <h1 className={`text-4xl font-bold mb-8 ${isDarkMode ? 'text-white' : 'text-rose-primary'}`}>
+        <h1 className={`text-4xl font-bold mb-8 ${isDarkMode ? 'text-light-purple' : 'text-rose-primary'}`}>
           Dark Mode Test Page
         </h1>
         
         <div className={`rounded-lg shadow-lg p-6 mb-6 transition-colors duration-300 ${isDarkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'}`}>
-          <h2 className={`text-2xl font-semibold mb-4 ${isDarkMode ? 'text-white' : 'text-rose-primary'}`}>
+          <h2 className={`text-2xl font-semibold mb-4 ${isDarkMode ? 'text-light-purple' : 'text-rose-primary'}`}>
             Current Theme Status
           </h2>
           
@@ -32,7 +32,7 @@ export default function TestDarkMode() {
         </div>
 
         <div className={`rounded-lg shadow-lg p-6 mb-6 transition-colors duration-300 ${isDarkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'}`}>
-          <h2 className={`text-2xl font-semibold mb-4 ${isDarkMode ? 'text-white' : 'text-rose-primary'}`}>
+          <h2 className={`text-2xl font-semibold mb-4 ${isDarkMode ? 'text-light-purple' : 'text-rose-primary'}`}>
             Theme Toggle
           </h2>
           
@@ -40,7 +40,7 @@ export default function TestDarkMode() {
         </div>
 
         <div className={`rounded-lg shadow-lg p-6 mb-6 transition-colors duration-300 ${isDarkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'}`}>
-          <h2 className={`text-2xl font-semibold mb-4 ${isDarkMode ? 'text-white' : 'text-rose-primary'}`}>
+          <h2 className={`text-2xl font-semibold mb-4 ${isDarkMode ? 'text-light-purple' : 'text-rose-primary'}`}>
             Sample Content
           </h2>
           
@@ -52,7 +52,7 @@ export default function TestDarkMode() {
           <div className="space-y-4">
             <button className={`px-4 py-2 rounded-lg transition-colors duration-300 ${
               isDarkMode 
-                ? 'bg-rose-primary text-white hover:bg-purple-600' 
+                ? 'bg-light-purple text-white hover:bg-purple-600' 
                 : 'bg-rose-primary text-white hover:bg-rose-primary/90'
             }`}>
               Primary Button
@@ -69,7 +69,7 @@ export default function TestDarkMode() {
         </div>
 
         <div className={`rounded-lg shadow-lg p-6 transition-colors duration-300 ${isDarkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'}`}>
-          <h2 className={`text-2xl font-semibold mb-4 ${isDarkMode ? 'text-white' : 'text-rose-primary'}`}>
+          <h2 className={`text-2xl font-semibold mb-4 ${isDarkMode ? 'text-light-purple' : 'text-rose-primary'}`}>
             Form Elements
           </h2>
           

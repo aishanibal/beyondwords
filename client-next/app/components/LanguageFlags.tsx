@@ -2,6 +2,7 @@
 
 import { motion, useAnimationFrame } from "framer-motion";
 import { useRef } from "react";
+import { useDarkMode } from "../contexts/DarkModeContext";
 
 type Language = {
   code: string;
@@ -28,6 +29,7 @@ export const LANGUAGES: Language[] = [
 const looped = [...LANGUAGES, ...LANGUAGES];
 
 export default function LanguageFlags() {
+  const { isDarkMode } = useDarkMode();
   const containerRef = useRef<HTMLDivElement>(null);
   const x = useRef(0);
   const speed = 1.0; // Adjust for scroll speed
@@ -44,11 +46,11 @@ export default function LanguageFlags() {
   });
 
   return (
-    <section className="py-12 bg-white/50 overflow-hidden">
+    <section className={`py-12 ${isDarkMode ? 'bg-gray-900/50' : 'bg-white/50'} overflow-hidden`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Heading */}
         <div className="text-center mb-8">
-          <h3 className="text-4xl font-heading font-semibold text-rose-primary mb-2">
+          <h3 className={`text-4xl font-heading font-semibold ${isDarkMode ? 'text-light-purple' : 'text-rose-primary'} mb-2`}>
             Supporting Heritage Languages Worldwide
           </h3>
         </div>
@@ -65,8 +67,8 @@ export default function LanguageFlags() {
                 className="flex-shrink-0 flex flex-col items-center text-center min-w-[160px] max-w-[200px]"
               >
                 <div className="text-4xl sm:text-5xl">{lang.flag}</div>
-                <div className="mt-1 text-sm font-semibold text-gray-800">{lang.label}</div>
-                <div className="text-xs sm:text-sm text-gray-600 break-words leading-tight">
+                <div className={`mt-1 text-sm font-semibold ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>{lang.label}</div>
+                <div className={`text-xs sm:text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'} break-words leading-tight`}>
                   {lang.description}
                 </div>
               </div>

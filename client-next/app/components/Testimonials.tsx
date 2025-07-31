@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { User } from "lucide-react";
+import { useDarkMode } from "../contexts/DarkModeContext";
 
 const surveyResponses = [
   {
@@ -50,6 +51,7 @@ const surveyResponses = [
 ];
 
 export default function SurveyResponsesSection() {
+  const { isDarkMode } = useDarkMode();
   const INITIAL_COUNT = 3;
   const [visibleCount, setVisibleCount] = useState(INITIAL_COUNT);
 
@@ -62,7 +64,7 @@ export default function SurveyResponsesSection() {
   };
 
   return (
-    <section id="survey-responses" className="py-20 bg-translucent-rose">
+    <section id="survey-responses" className={`py-20 ${isDarkMode ? 'bg-gray-900/30' : 'bg-translucent-rose'}`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <motion.div
           className="text-center mb-12"
@@ -71,7 +73,7 @@ export default function SurveyResponsesSection() {
           transition={{ duration: 0.8 }}
           viewport={{ once: true }}
         >
-          <h2 className="text-3xl md:text-4xl font-heading font-bold text-rose-primary">
+          <h2 className={`text-3xl md:text-4xl font-heading font-bold ${isDarkMode ? 'text-light-purple' : 'text-rose-primary'}`}>
             What Heritage Speakers Tell Us
           </h2>
         </motion.div>
@@ -85,7 +87,7 @@ export default function SurveyResponsesSection() {
           {surveyResponses.slice(0, visibleCount).map((resp, idx) => (
             <motion.div
               key={resp.name}
-              className="w-full max-w-screen-xl bg-card backdrop-blur-sm rounded-2xl p-6 shadow-card border border-gray-200"
+              className={`w-full max-w-screen-xl ${isDarkMode ? 'bg-gray-800' : 'bg-card'} backdrop-blur-sm rounded-2xl p-6 shadow-card border ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: idx * 0.1 }}
