@@ -1268,9 +1268,6 @@ function Analyze() {
         }
       }
       
-      // Navigate to dashboard
-      router.push('/dashboard');
-      
       return response.data;
     } catch (error: unknown) {
       console.error('Error generating conversation summary:', error);
@@ -2004,12 +2001,21 @@ function Analyze() {
   };
 
   // Persona-related functions
-  const handleEndChat = () => {
+  const handleEndChat = async () => {
     // Only show persona modal if this is a new persona (not using an existing one)
     if (isNewPersona) {
       setShowPersonaModal(true);
     } else {
-      router.push('/dashboard');
+      // Generate conversation summary and navigate to dashboard
+      try {
+        if (chatHistory.length > 0) {
+          await generateConversationSummary();
+        }
+        router.push('/dashboard');
+      } catch (error) {
+        console.error('Error generating conversation summary:', error);
+        router.push('/dashboard');
+      }
     }
   };
 
@@ -2048,8 +2054,19 @@ function Analyze() {
           }
         }
         
-        // Close modal and navigate to dashboard
+        // Close modal
         setShowPersonaModal(false);
+        
+        // Generate conversation summary after saving persona
+        try {
+          if (chatHistory.length > 0) {
+            await generateConversationSummary();
+          }
+        } catch (error) {
+          console.error('Error generating conversation summary:', error);
+        }
+        
+        // Navigate to dashboard
         router.push('/dashboard');
       } else {
         throw new Error('Failed to save persona');
@@ -2062,8 +2079,18 @@ function Analyze() {
     }
   };
 
-  const cancelPersona = () => {
+  const cancelPersona = async () => {
     setShowPersonaModal(false);
+    
+    // Generate conversation summary after canceling persona
+    try {
+      if (chatHistory.length > 0) {
+        await generateConversationSummary();
+      }
+    } catch (error) {
+      console.error('Error generating conversation summary:', error);
+    }
+    
     router.push('/dashboard');
   };
 
@@ -3133,42 +3160,7 @@ function Analyze() {
               </button>
             </div>
 
-            {/* Generate Summary button */}
-            {chatHistory.length > 0 && (
-              <button
-                onClick={async () => {
-                  try {
-                    const summary = await generateConversationSummary();
-                    alert(`Title: ${summary.title}\n\nEvaluation: ${summary.synopsis}`);
-                  } catch (error) {
-                    alert('Failed to generate conversation summary. Please try again.');
-                  }
-                }}
-                style={{
-                  position: 'absolute',
-                  bottom: '1rem',
-                  right: '8.5rem',
-                  background: '#3498db',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: 10,
-                  padding: '0.5rem 1rem',
-                  cursor: 'pointer',
-                  fontWeight: 600,
-                  fontSize: '0.85rem',
-                  transition: 'all 0.2s',
-                  boxShadow: '0 2px 4px rgba(52,152,219,0.15)',
-                  minWidth: '120px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.3rem',
-                  zIndex: 1000
-                }}
-                title="Generate conversation summary with subgoal evaluation"
-              >
-                📊 Summary
-              </button>
-            )}
+
 
             {/* End Chat button - positioned as a separate floating element */}
             <button
@@ -3193,7 +3185,7 @@ function Analyze() {
                 gap: '0.3rem',
                 zIndex: 10
               }}
-              title="End chat and return to dashboard"
+              title="End chat, generate summary, and return to dashboard"
             >
               🏠 End Chat
             </button>

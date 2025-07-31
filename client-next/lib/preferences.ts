@@ -204,7 +204,7 @@ export const LEARNING_GOALS: LearningGoal[] = [
     subgoals: [
       // { id: "speak_fluently_1", description: "Average response time per turn is below 5 seconds." },
       { id: "speak_fluently_2", description: "No Long Pauses (e.g., >8s) every 5 turns.", subgoal_instructions: "The user should avoid long pauses (more than 8 seconds) in their responses." }, // not llm
-      { id: "speak_fluently_3", description: "Fewer than 10% of turns are skipped or answered with placeholders like “I don’t know.”", subgoal_instructions: "The user should not skip or answer with placeholders like “I don’t know.”" },
+      { id: "speak_fluently_3", description: "Fewer than 10% of turns are skipped or answered with placeholders like “I don’t know.” or an equivalent response in the target language", subgoal_instructions: "The user should not skip or answer with placeholders like “I don’t know.”" },
       { id: "speak_fluently_4", description: "At least 80% of responses are full sentences, not one-word replies.", subgoal_instructions: "The user should provide full sentence responses rather than one-word replies." },
       // { id: "speak_fluently_5", description: "Response length variance stays within a natural range (i.e., avoids abrupt drop to single words mid-conversation)." }
     ]

@@ -13,6 +13,8 @@ whisper_words_*.
 archive/opensmile_features/
 archive/mfa_output/
 *.db
+server/*.db
+server/users.db
 *.env
 server/.env
 node_modules/
