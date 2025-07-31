@@ -52,11 +52,16 @@ CREATE TABLE IF NOT EXISTS conversations (
   title TEXT,
   topics TEXT,
   formality TEXT,
+  description TEXT,
+  synopsis TEXT,
   message_count INTEGER DEFAULT 0,
+  uses_persona BOOLEAN DEFAULT FALSE,
+  persona_id INTEGER,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users (id),
-  FOREIGN KEY (language_dashboard_id) REFERENCES language_dashboards (id)
+  FOREIGN KEY (language_dashboard_id) REFERENCES language_dashboards (id),
+  FOREIGN KEY (persona_id) REFERENCES personas (id)
 );
 
 CREATE TABLE IF NOT EXISTS messages (

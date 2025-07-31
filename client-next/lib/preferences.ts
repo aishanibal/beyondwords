@@ -24,7 +24,7 @@ export interface LearningGoal {
   id: string;
   goal: string;
   icon: string;
-  subgoals?: { id: string; description: string }[];
+  subgoals?: { id: string; description: string; subgoal_instructions?: string }[];
 }
 
 export interface PracticePreference {
@@ -203,9 +203,9 @@ export const LEARNING_GOALS: LearningGoal[] = [
     icon: "💪",
     subgoals: [
       // { id: "speak_fluently_1", description: "Average response time per turn is below 5 seconds." },
-      { id: "speak_fluently_2", description: "No Long Pauses (e.g., >8s) every 5 turns." },
-      { id: "speak_fluently_3", description: "Fewer than 10% of turns are skipped or answered with placeholders like “I don’t know.”" },
-      { id: "speak_fluently_4", description: "At least 80% of responses are full sentences, not one-word replies." },
+      { id: "speak_fluently_2", description: "No Long Pauses (e.g., >8s) every 5 turns.", subgoal_instructions: "The user should avoid long pauses (more than 8 seconds) in their responses." }, // not llm
+      { id: "speak_fluently_3", description: "Fewer than 10% of turns are skipped or answered with placeholders like “I don’t know.”", subgoal_instructions: "The user should not skip or answer with placeholders like “I don’t know.”" },
+      { id: "speak_fluently_4", description: "At least 80% of responses are full sentences, not one-word replies.", subgoal_instructions: "The user should provide full sentence responses rather than one-word replies." },
       // { id: "speak_fluently_5", description: "Response length variance stays within a natural range (i.e., avoids abrupt drop to single words mid-conversation)." }
     ]
   },
@@ -226,10 +226,10 @@ export const LEARNING_GOALS: LearningGoal[] = [
     goal: "Hold flowing, back-and-forth conversations",
     icon: "💬",
     subgoals: [
-      { id: "converse_smoothly_1", description: "Maintain topic cohesion for at least 75% of the conversation (no unrelated shifts)." },
-      // { id: "converse_smoothly_2", description: "Logical progression in 80%+ of user responses (builds on AI’s turn)." },
-      { id: "converse_smoothly_3", description: "At least 3 instances of elaborating beyond yes/no when appropriate." },
-      { id: "converse_smoothly_4", description: "No more than 2 one-word responses in a 10-turn span." },
+      { id: "converse_smoothly_1", description: "Maintain topic cohesion for at least 75% of the conversation (no unrelated shifts).", subgoal_instructions: "The user should stay on topic and avoid unrelated shifts in conversation." },
+      // { id: "converse_smoothly_2", description: "Logical progression in 80%+ of user responses (builds on AI's turn)." },
+      { id: "converse_smoothly_3", description: "At least 3 instances of elaborating beyond yes/no when appropriate.", subgoal_instructions: "The user should elaborate beyond simple yes/no responses when appropriate." },
+      { id: "converse_smoothly_4", description: "No more than 2 one-word responses in a 10-turn span.", subgoal_instructions: "The user should avoid giving too many one-word responses." },
       // { id: "converse_smoothly_5", description: "<10% of turns result in conversation breakdown or restart prompts." }
     ]
   },
@@ -238,10 +238,10 @@ export const LEARNING_GOALS: LearningGoal[] = [
     goal: "Use the right words in daily conversations",
     icon: "📚",
     subgoals: [
-      { id: "use_daily_vocab_1", description: "80%+ of content words match the selected topic domain or are semantically relevant." },
-      { id: "use_daily_vocab_2", description: "Fewer than 2 vague terms per 10 turns (“thing,” “stuff,” etc.)." },
+      { id: "use_daily_vocab_1", description: "80%+ of content words match the selected topic domain or are semantically relevant.", subgoal_instructions: "The user should use vocabulary relevant to the conversation topic." },
+      { id: "use_daily_vocab_2", description: "Fewer than 2 vague terms per 10 turns (\"thing,\" \"stuff,\" etc.).", subgoal_instructions: "The user should avoid using vague terms like 'thing' or 'stuff'." },
       // { id: "use_daily_vocab_3", description: "Use of tier-1 (high-frequency) vocabulary in at least 70% of turns." },
-      { id: "use_daily_vocab_4", description: "No excessive repetition: same content word repeated >3 times within 5 turns triggers flag." },
+      { id: "use_daily_vocab_4", description: "No excessive repetition: same content word repeated >3 times within 5 turns triggers flag.", subgoal_instructions: "The user should avoid excessive repetition of the same words." },
       // { id: "use_daily_vocab_5", description: "Correct usage of topic-specific nouns/verbs in at least 3 different turns." }
     ]
   },

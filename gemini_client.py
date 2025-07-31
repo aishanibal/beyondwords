@@ -1508,25 +1508,32 @@ def is_gemini_ready() -> bool:
     
     return False
 
-def generate_conversation_summary(chat_history: List[Dict]) -> Dict[str, str]:
-    """Generate a title and synopsis for the entire conversation history using Gemini."""
+def generate_conversation_summary(chat_history: List[Dict], subgoal_instructions: str = "") -> Dict[str, str]:
+    """Generate a title and subgoal evaluation for the conversation using Gemini."""
     if not GOOGLE_AI_AVAILABLE:
         return {"title": "[Unavailable]", "synopsis": "[Gemini not available]"}
-    
-    # Build the full context string
-    context = "\n".join([f"{msg['sender']}: {msg['text']}" for msg in chat_history])
-    
-    prompt = f"""
-You are an expert conversation summarizer for a language learning app. Given the full conversation below, generate:
-1. A short, descriptive title (max 8 words) that captures the main topic or theme of the conversation.
-2. A concise synopsis (2-4 sentences) that summarizes what was discussed, the tone, and any key moments or learning points.
 
-CONVERSATION HISTORY:
-{context}
+    context = "\n".join([f"{msg['sender']}: {msg['text']}" for msg in chat_history])
+
+    prompt = f"""
+You are an expert conversation evaluator and summarizer for a language learning app.
+
+Given the full conversation below, complete the following tasks:
+
+1. Generate a short, descriptive title (max 8 words) that captures the main topic or theme of the conversation.
+2. Evaluate how well the user achieved these subgoals using detailed analysis of their turns. The subgoals are:
+{subgoal_instructions}
+ Clearly explain:
+   - How successfully they followed the subgoal
+   - A quantitative estimate of their performance (e.g., percentage of relevant turns)
+   - Specific moments where they succeeded or fell short
+
+Use this conversation history to evaluate the user's performance:
+{chat_history}
 
 Return your answer in this exact format:
 Title: <your title here>
-Synopsis: <your synopsis here>
+Evaluation: <your evaluation here>
 """
     try:
         model = genai.GenerativeModel("gemini-1.5-flash")
@@ -1536,11 +1543,65 @@ Synopsis: <your synopsis here>
             lines = response.text.strip().split("\n")
             title = ""
             synopsis = ""
+            in_evaluation = False
+            synopsis_lines = []
+            
+            print(f"DEBUG: Raw response text: {response.text}")
+            print(f"DEBUG: Raw response lines: {lines}")
+            
             for line in lines:
-                if line.lower().startswith("title:"):
+                line_lower = line.lower().strip()
+                if line_lower.startswith("title:"):
                     title = line[len("title:"):].strip()
-                elif line.lower().startswith("synopsis:"):
-                    synopsis = line[len("synopsis:"):].strip()
+                    print(f"DEBUG: Found title: {title}")
+                elif line_lower.startswith("evaluation:"):
+                    in_evaluation = True
+                    print(f"DEBUG: Found evaluation marker")
+                    # Start collecting evaluation content from the next line
+                    synopsis_lines = []
+                elif in_evaluation:
+                    # Collect all lines that are part of the evaluation
+                    synopsis_lines.append(line)
+                    print(f"DEBUG: Added to synopsis: {line}")
+            
+            # Join all evaluation lines
+            if synopsis_lines:
+                synopsis = "\n".join(synopsis_lines).strip()
+                print(f"DEBUG: Raw synopsis: {synopsis}")
+            
+            # Clean up the synopsis to remove any title references
+            if synopsis and title:
+                print(f"DEBUG: Before cleanup - synopsis: {synopsis}")
+                # Remove the title from the synopsis if it appears at the beginning
+                synopsis_lines = synopsis.split('\n')
+                cleaned_lines = []
+                skip_until_evaluation = False
+                
+                for line in synopsis_lines:
+                    line_lower = line.strip().lower()
+                    
+                    # Skip lines that are just the title
+                    if line_lower.startswith("title:"):
+                        skip_until_evaluation = True
+                        print(f"DEBUG: Skipping title line in synopsis: {line}")
+                        continue
+                    # Skip empty lines after title
+                    elif skip_until_evaluation and not line.strip():
+                        print(f"DEBUG: Skipping empty line after title")
+                        continue
+                    # Stop skipping when we hit evaluation
+                    elif line_lower.startswith("evaluation:"):
+                        skip_until_evaluation = False
+                        print(f"DEBUG: Found evaluation marker, stopping skip")
+                        continue
+                    # Add the line if we're not in the skip section
+                    elif not skip_until_evaluation:
+                        cleaned_lines.append(line)
+                        print(f"DEBUG: Adding cleaned line: {line}")
+                
+                synopsis = "\n".join(cleaned_lines).strip()
+                print(f"DEBUG: Final cleaned synopsis: {synopsis}")
+            
             if not title or not synopsis:
                 # fallback: use the whole response as synopsis
                 synopsis = response.text.strip()

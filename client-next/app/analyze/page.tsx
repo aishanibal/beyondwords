@@ -9,6 +9,7 @@ import axios from 'axios';
 import { useRouter, useSearchParams } from 'next/navigation';
 import TopicSelectionModal from './TopicSelectionModal';
 import PersonaModal from './PersonaModal';
+import { LEARNING_GOALS, LearningGoal } from '../../lib/preferences';
 
 // TypeScript: Add type declarations for browser APIs
 declare global {
@@ -686,6 +687,25 @@ function Analyze() {
       formData.append('user_level', userPreferences.userLevel);
       formData.append('user_topics', JSON.stringify(userPreferences.topics));
       formData.append('feedback_language', userPreferences.feedbackLanguage);
+      
+      // Add learning goals and subgoal instructions
+      const user_goals = user?.learning_goals ? (typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : user.learning_goals) : [];
+      formData.append('user_goals', JSON.stringify(user_goals));
+      
+      // Extract subgoal instructions from LEARNING_GOALS
+      const subgoalInstructions = user_goals.map((goalId: string) => {
+        const goal = LEARNING_GOALS.find((g: LearningGoal) => g.id === goalId);
+        if (goal?.subgoals) {
+          return goal.subgoals
+            .filter(subgoal => subgoal.subgoal_instructions)
+            .map(subgoal => subgoal.subgoal_instructions)
+            .join('\n');
+        }
+        return '';
+      }).filter(instructions => instructions.length > 0).join('\n');
+      
+      formData.append('subgoal_instructions', subgoalInstructions);
+      
       // Add JWT token to headers
       const token = localStorage.getItem('jwt');
       const response = await axios.post('/api/analyze', formData, {
@@ -886,12 +906,119 @@ function Analyze() {
   };
 
   const clearSuggestionCarousel = () => {
-    setShowSuggestionCarousel(false);
-    setSuggestionMessages([]);
     setCurrentSuggestionIndex(0);
+    setSuggestions([]);
   };
 
-  // Helper to get initial AI message
+  const generateConversationSummary = async () => {
+    try {
+      console.log('Generating conversation summary...');
+      console.log('Chat history:', chatHistory);
+      
+      // Use the learning goals from the current conversation (userPreferences.user_goals)
+      // Also try to get from user object if not available in preferences
+      const user_goals = userPreferences.user_goals?.length > 0 
+        ? userPreferences.user_goals 
+        : (user?.learning_goals ? (typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : user.learning_goals) : []);
+      console.log('Current conversation learning goals:', user_goals);
+      console.log('User learning goals from user object:', user?.learning_goals);
+      
+      let subgoalInstructions = '';
+      
+      if (user_goals.length > 0) {
+        // User has specific learning goals for this conversation
+        console.log('Processing learning goals:', user_goals);
+        
+        subgoalInstructions = user_goals.map((goalId: string) => {
+          console.log('Processing goal ID:', goalId);
+          const goal = LEARNING_GOALS.find((g: LearningGoal) => g.id === goalId);
+          console.log('Found goal:', goal);
+          
+          if (goal?.subgoals) {
+            console.log('Goal subgoals:', goal.subgoals);
+            const instructions = goal.subgoals
+              .filter(subgoal => subgoal.description) // Use description instead of subgoal_instructions
+              .map(subgoal => subgoal.description);   // Use description instead of subgoal_instructions
+            console.log('Extracted descriptions for this goal:', instructions);
+            return instructions.join('\n');
+          }
+          return '';
+        }).filter(instructions => instructions.length > 0).join('\n');
+        
+        console.log('Final subgoal instructions:', subgoalInstructions);
+      } else {
+        // Fallback: use the first learning goal as default
+        console.log('No specific learning goals, using fallback with first goal');
+        const defaultGoal = LEARNING_GOALS[0]; // Use the first goal as default
+        if (defaultGoal?.subgoals) {
+          subgoalInstructions = defaultGoal.subgoals
+            .filter(subgoal => subgoal.description)
+            .map(subgoal => subgoal.description)
+            .join('\n');
+          console.log('Using fallback goal:', defaultGoal.id);
+        } else {
+          console.log('No fallback goal available');
+          subgoalInstructions = '';
+        }
+      }
+      
+      console.log('Final subgoal instructions:', subgoalInstructions);
+
+      const token = localStorage.getItem('jwt');
+      const response = await axios.post('/api/conversation-summary', {
+        chat_history: chatHistory,
+        subgoal_instructions: subgoalInstructions
+      }, {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        }
+      });
+
+      console.log('Summary response:', response.data);
+      
+      // Update the existing conversation with the Gemini-generated title and synopsis
+      if (conversationId) {
+        try {
+          // Update the conversation title
+          await axios.put(`/api/conversations/${conversationId}/title`, {
+            title: response.data.title
+          }, {
+            headers: {
+              ...(token ? { Authorization: `Bearer ${token}` } : {})
+            }
+          });
+          
+          // Update the conversation with the synopsis
+          await axios.patch(`/api/conversations/${conversationId}`, {
+            synopsis: response.data.synopsis
+          }, {
+            headers: {
+              ...(token ? { Authorization: `Bearer ${token}` } : {})
+            }
+          });
+          
+          console.log('Conversation updated with title and synopsis');
+          console.log('Title:', response.data.title);
+          console.log('Synopsis:', response.data.synopsis.substring(0, 100) + '...');
+        } catch (updateError) {
+          console.error('Error updating conversation with summary:', updateError);
+        }
+      }
+      
+      // Navigate to dashboard
+      router.push('/dashboard');
+      
+      return response.data;
+    } catch (error: unknown) {
+      console.error('Error generating conversation summary:', error);
+      if (axios.isAxiosError(error)) {
+        console.error('Response status:', error.response?.status);
+        console.error('Response data:', error.response?.data);
+      }
+      throw error;
+    }
+  };
+
   const fetchInitialAIMessage = async (convId: string, topics: string[]) => {
     setIsLoadingInitialAI(true);
     try {
@@ -2315,9 +2442,46 @@ function Analyze() {
               </button>
             </div>
 
-                          {/* End Chat button - positioned as a separate floating element */}
+            {/* Generate Summary button */}
+            {chatHistory.length > 0 && (
               <button
-                onClick={handleEndChat}
+                onClick={async () => {
+                  try {
+                    const summary = await generateConversationSummary();
+                    alert(`Title: ${summary.title}\n\nEvaluation: ${summary.synopsis}`);
+                  } catch (error) {
+                    alert('Failed to generate conversation summary. Please try again.');
+                  }
+                }}
+                style={{
+                  position: 'absolute',
+                  bottom: '1rem',
+                  right: '8.5rem',
+                  background: '#3498db',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 10,
+                  padding: '0.5rem 1rem',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  fontSize: '0.85rem',
+                  transition: 'all 0.2s',
+                  boxShadow: '0 2px 4px rgba(52,152,219,0.15)',
+                  minWidth: '120px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.3rem',
+                  zIndex: 1000
+                }}
+                title="Generate conversation summary with subgoal evaluation"
+              >
+                📊 Summary
+              </button>
+            )}
+
+            {/* End Chat button - positioned as a separate floating element */}
+            <button
+              onClick={handleEndChat}
               style={{
                 position: 'absolute',
                 bottom: '1rem',

@@ -639,7 +639,8 @@ app.post('/api/user/onboarding', authenticateJWT, (req, res) => __awaiter(void 0
             return res.status(400).json({ error: 'Missing required onboarding fields' });
         }
         // Create the first language dashboard (primary)
-        const dashboard = yield (0, database_1.createLanguageDashboard)(req.user.userId, language, proficiency, talkTopics, learningGoals, practicePreference, 'true' // isPrimary as string
+        const dashboard = yield (0, database_1.createLanguageDashboard)(req.user.userId, language, proficiency, talkTopics, learningGoals, practicePreference, 'en', // feedbackLanguage
+        true // isPrimary as boolean
         );
         // Update user to mark onboarding as complete
         yield (0, database_1.updateUser)(req.user.userId, {
@@ -737,7 +738,9 @@ app.post('/api/user/language-dashboards', authenticateJWT, (req, res) => __await
         // Check if this is the user's first dashboard (make it primary)
         const existingDashboards = yield (0, database_1.getUserLanguageDashboards)(req.user.userId);
         const isPrimary = existingDashboards.length === 0;
-        const dashboard = yield (0, database_1.createLanguageDashboard)(req.user.userId, language, proficiency, talkTopics, learningGoals, practicePreference, isPrimary ? 'true' : 'false');
+        const dashboard = yield (0, database_1.createLanguageDashboard)(req.user.userId, language, proficiency, talkTopics, learningGoals, practicePreference, 'en', // feedbackLanguage
+        isPrimary // isPrimary as boolean
+        );
         res.json({ dashboard });
     }
     catch (error) {
@@ -887,10 +890,12 @@ app.post('/api/admin/demote', authenticateJWT, (req, res) => __awaiter(void 0, v
 // Conversation endpoints
 app.post('/api/conversations', authenticateJWT, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { language, title, topics, formality } = req.body;
+        const { language, title, topics, formality, description, usesPersona, personaId } = req.body;
         console.log('🔄 SERVER: Creating conversation with formality:', formality);
+        console.log('🔄 SERVER: Creating conversation with description:', description);
+        console.log('🔄 SERVER: Creating conversation with persona info:', { usesPersona, personaId });
         console.log('🔄 SERVER: Full request body:', req.body);
-        const conversation = yield (0, database_1.createConversation)(req.user.userId, language, title, topics, formality);
+        const conversation = yield (0, database_1.createConversation)(req.user.userId, language, title, topics, formality, description, usesPersona, personaId);
         console.log('🔄 SERVER: Conversation creation result:', conversation);
         if (!conversation || !conversation.id) {
             console.error('❌ SERVER: Failed to create conversation');
@@ -917,7 +922,8 @@ app.post('/api/conversations', authenticateJWT, (req, res) => __awaiter(void 0, 
                     language,
                     user_level: userLevel,
                     user_topics: topicsToSend,
-                    formality: formality || 'friendly'
+                    formality: formality || 'friendly',
+                    description: description || null
                 }, {
                     headers: { 'Content-Type': 'application/json' },
                     timeout: 30000
@@ -1023,6 +1029,34 @@ app.delete('/api/conversations/:id', authenticateJWT, (req, res) => __awaiter(vo
     catch (error) {
         console.error('Delete conversation error:', error);
         res.status(500).json({ error: 'Failed to delete conversation' });
+    }
+}));
+app.patch('/api/conversations/:id', authenticateJWT, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { id } = req.params;
+        const { title, summary } = req.body;
+        yield (0, database_1.updateConversation)(parseInt(id), { title, summary });
+        res.json({ success: true });
+    }
+    catch (error) {
+        console.error('❌ SERVER: Update conversation error:', error);
+        res.status(500).json({ error: 'Failed to update conversation' });
+    }
+}));
+app.post('/api/conversations/:id/summary', authenticateJWT, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { id } = req.params;
+        const { title, evaluation } = req.body;
+        console.log('Saving summary for conversation:', id);
+        console.log('Title:', title);
+        console.log('Evaluation:', evaluation);
+        yield (0, database_1.updateConversation)(parseInt(id), { title, summary: evaluation });
+        console.log('Summary saved successfully');
+        res.json({ success: true, message: 'Summary saved successfully' });
+    }
+    catch (error) {
+        console.error('❌ SERVER: Save summary error:', error);
+        res.status(500).json({ error: 'Failed to save summary' });
     }
 }));
 // Text suggestions endpoint
@@ -1166,6 +1200,54 @@ app.post('/api/detailed_breakdown', authenticateJWT, (req, res) => __awaiter(voi
             error: 'Failed to get detailed breakdown',
             details: ((_a = error.response) === null || _a === void 0 ? void 0 : _a.data) || error.message
         });
+    }
+}));
+// Personas endpoints
+app.post('/api/personas', authenticateJWT, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { name, description, topics, formality, language, conversationId } = req.body;
+        const userId = req.user.userId;
+        if (!name) {
+            return res.status(400).json({ error: 'Name is required' });
+        }
+        const persona = yield (0, database_1.createPersona)(userId, {
+            name,
+            description: description || '',
+            topics: topics || [],
+            formality: formality || 'neutral',
+            language: language || 'en',
+            conversationId: conversationId
+        });
+        res.status(201).json({ persona });
+    }
+    catch (error) {
+        console.error('Error creating persona:', error);
+        res.status(500).json({ error: 'Failed to create persona', details: error.message });
+    }
+}));
+app.get('/api/personas', authenticateJWT, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const userId = req.user.userId;
+        const personas = yield (0, database_1.getUserPersonas)(userId);
+        res.json({ personas });
+    }
+    catch (error) {
+        console.error('Error fetching personas:', error);
+        res.status(500).json({ error: 'Failed to fetch personas', details: error.message });
+    }
+}));
+app.delete('/api/personas/:id', authenticateJWT, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const personaId = parseInt(req.params.id);
+        const result = yield (0, database_1.deletePersona)(personaId);
+        if (result.changes === 0) {
+            return res.status(404).json({ error: 'Persona not found' });
+        }
+        res.json({ message: 'Persona deleted successfully' });
+    }
+    catch (error) {
+        console.error('Error deleting persona:', error);
+        res.status(500).json({ error: 'Failed to delete persona', details: error.message });
     }
 }));
 // Serve uploads directory statically for TTS audio

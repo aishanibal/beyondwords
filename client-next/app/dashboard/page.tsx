@@ -31,6 +31,7 @@ interface ConversationType {
   persona_id?: number;
   persona_name?: string;
   persona_description?: string;
+  synopsis?: string;
 }
 
 interface PersonaType {
@@ -1009,6 +1010,22 @@ export default function DashboardPage() {
                                 💬 {conversation.message_count} messages
                               </div>
                             )}
+                            {/* Show summary if it exists */}
+                            {conversation.synopsis && (
+                              <div style={{ 
+                                color: 'var(--blue-secondary)', 
+                                fontSize: '0.9rem',
+                                lineHeight: 1.6,
+                                fontFamily: 'AR One Sans, Arial, sans-serif',
+                                whiteSpace: 'pre-wrap',
+                                marginTop: '0.5rem',
+                                background: 'rgba(126,90,117,0.05)',
+                                padding: '0.5rem',
+                                borderRadius: 6
+                              }} className="font-body">
+                                {conversation.synopsis}
+                              </div>
+                            )}
                           </div>
                         </div>
                         
@@ -1048,14 +1065,7 @@ export default function DashboardPage() {
                           </button>
                         </div>
                       </div>
-                      <div style={{ 
-                        color: 'var(--rose-primary)', 
-                        fontSize: '0.9rem', 
-                        opacity: 0.8,
-                        fontFamily: 'AR One Sans, Arial, sans-serif'
-                      }} className="font-body">
-                        💬 {conversation.message_count || 0} messages
-                      </div>
+
                     </div>
                   ))}
                 </div>

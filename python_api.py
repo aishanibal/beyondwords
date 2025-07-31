@@ -286,12 +286,14 @@ def analyze():
         reference_text = data.get('reference_text', '')
         chat_history = data.get('chat_history', [])
         language = data.get('language', 'en')
+        subgoal_instructions = data.get('subgoal_instructions', '')
         
         print(f"=== /analyze called ===")
         print(f"Language received: {language}")
         print(f"Audio file: {audio_file}")
         print(f"Reference text: {reference_text}")
         print(f"Chat history length: {len(chat_history)}")
+        print(f"Subgoal instructions: {subgoal_instructions}")
         
         if not audio_file or not os.path.exists(audio_file):
             return jsonify({"error": "Audio file not found"}), 400
@@ -335,6 +337,33 @@ def analyze():
         })
     except Exception as e:
         print(f"Analysis error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/conversation_summary', methods=['POST'])
+def conversation_summary():
+    """Generate a conversation summary with subgoal evaluation"""
+    try:
+        print(f"=== /conversation_summary called ===")
+        print(f"Request method: {request.method}")
+        print(f"Request headers: {dict(request.headers)}")
+        print(f"Request data: {request.get_json()}")
+        
+        data = request.get_json()
+        chat_history = data.get('chat_history', [])
+        subgoal_instructions = data.get('subgoal_instructions', '')
+        
+        print(f"Chat history length: {len(chat_history)}")
+        print(f"Subgoal instructions: {subgoal_instructions}")
+        
+        from gemini_client import generate_conversation_summary
+        summary = generate_conversation_summary(chat_history, subgoal_instructions)
+        
+        print(f"Generated summary: {summary}")
+        return jsonify(summary)
+    except Exception as e:
+        print(f"Conversation summary error: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 @app.route('/health', methods=['GET'])

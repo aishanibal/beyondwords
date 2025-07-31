@@ -46,6 +46,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           formData.append(key, String(value));
         }
       });
+      
+      // Extract subgoal_instructions from form data
+      const subgoal_instructions = fields.subgoal_instructions ? String(fields.subgoal_instructions) : '';
+      if (subgoal_instructions) {
+        formData.append('subgoal_instructions', subgoal_instructions);
+      }
+      
       let audioFile;
       if (Array.isArray(files.audio)) {
         audioFile = files.audio[0];

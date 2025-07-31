@@ -21,6 +21,7 @@ import {
   getUserConversations,
   addMessage,
   updateConversationTitle,
+  updateConversationSynopsis,
   deleteConversation,
   updateConversationPersona,
   createLanguageDashboard,
@@ -1178,11 +1179,21 @@ app.delete('/api/conversations/:id', authenticateJWT, async (req: Request, res: 
 app.patch('/api/conversations/:id', authenticateJWT, async (req: Request, res: Response) => {
   try {
     const conversationId = parseInt(req.params.id);
-    const { usesPersona, personaId } = req.body;
+    const { usesPersona, personaId, synopsis } = req.body;
     
-    // Update conversation with persona information
-    await updateConversationPersona(conversationId, usesPersona, personaId);
-    res.json({ message: 'Conversation updated successfully' });
+    if (synopsis !== undefined) {
+      // Update conversation with synopsis
+      console.log('Updating conversation synopsis:', { conversationId, synopsis: synopsis.substring(0, 100) + '...' });
+      await updateConversationSynopsis(conversationId, synopsis);
+      console.log('Conversation synopsis updated successfully');
+      res.json({ message: 'Conversation synopsis updated successfully' });
+    } else if (usesPersona !== undefined) {
+      // Update conversation with persona information
+      await updateConversationPersona(conversationId, usesPersona, personaId);
+      res.json({ message: 'Conversation updated successfully' });
+    } else {
+      res.status(400).json({ error: 'No valid update fields provided' });
+    }
   } catch (error: any) {
     console.error('Error updating conversation:', error);
     res.status(500).json({ error: 'Failed to update conversation' });
