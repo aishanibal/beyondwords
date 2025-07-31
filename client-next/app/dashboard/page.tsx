@@ -20,6 +20,7 @@ interface DashboardType {
   talk_topics: string[];
   learning_goals: string[];
   speak_speed?: number;
+  romanization_display?: string; // 'both', 'script_only', 'romanized_only'
 }
 
 interface ConversationType {
@@ -241,13 +242,7 @@ export default function DashboardPage() {
     }
   }, [selectedLanguage]);
 
-  // On mount, restore selected language from localStorage if available
-  React.useEffect(() => {
-    const savedLanguage = localStorage.getItem('selectedLanguage');
-    if (savedLanguage) {
-      setSelectedLanguage(savedLanguage);
-    }
-  }, []);
+
 
   useEffect(() => {
     console.log('DASHBOARD useEffect triggered. user:', user);
@@ -264,14 +259,31 @@ export default function DashboardPage() {
           ...dashboard,
           talk_topics: dashboard.talk_topics || [],
           learning_goals: dashboard.learning_goals || [],
-          speak_speed: dashboard.speak_speed || 1.0
+          speak_speed: dashboard.speak_speed || 1.0,
+          romanization_display: dashboard.romanization_display || 'both'
         }));
         setLanguageDashboards(processedDashboards);
-        let currentLanguage = selectedLanguage;
-        // Only set selectedLanguage if not already set (from localStorage or onboarding)
-        if (!selectedLanguage && processedDashboards.length > 0) {
-          currentLanguage = processedDashboards[0].language;
-          setSelectedLanguage(currentLanguage);
+        
+        // Get saved language from localStorage
+        const savedLanguage = localStorage.getItem('selectedLanguage');
+        
+        // Determine which language to select
+        let languageToSelect = selectedLanguage;
+        
+        if (!languageToSelect) {
+          // If no language is currently selected, check localStorage first
+          if (savedLanguage && processedDashboards.some(d => d.language === savedLanguage)) {
+            // Use saved language if it exists in available dashboards
+            languageToSelect = savedLanguage;
+          } else if (processedDashboards.length > 0) {
+            // Fallback to first dashboard if no saved language or saved language not available
+            languageToSelect = processedDashboards[0].language;
+          }
+        }
+        
+        // Only update if we have a language to select and it's different from current
+        if (languageToSelect && languageToSelect !== selectedLanguage) {
+          setSelectedLanguage(languageToSelect);
         }
       } catch (err) {
         setError('Failed to load dashboard data.');
@@ -282,7 +294,7 @@ export default function DashboardPage() {
     if (user?.id) {
       fetchDashboardData();
     }
-  }, [user]);
+  }, [user, selectedLanguage]);
 
   useEffect(() => {
     async function fetchConversations() {
@@ -370,7 +382,8 @@ export default function DashboardPage() {
       ...newDashboard,
       talk_topics: newDashboard.talk_topics || [],
       learning_goals: newDashboard.learning_goals || [],
-      speak_speed: newDashboard.speak_speed || 1.0
+      speak_speed: newDashboard.speak_speed || 1.0,
+      romanization_display: newDashboard.romanization_display || 'both'
     };
     setLanguageDashboards((prev: DashboardType[]) => [...prev, processedDashboard]);
     setShowLanguageOnboarding(false);
@@ -383,6 +396,7 @@ export default function DashboardPage() {
   if (currentDashboard) {
     currentDashboard.talk_topics = currentDashboard.talk_topics || [];
     currentDashboard.learning_goals = currentDashboard.learning_goals || [];
+    currentDashboard.romanization_display = currentDashboard.romanization_display || 'both';
   }
 
   const [streak, setStreak] = useState<number>(0);

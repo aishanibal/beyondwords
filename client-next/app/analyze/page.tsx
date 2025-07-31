@@ -5,6 +5,7 @@
 "use client";
 import React, { useState, useRef, useEffect } from 'react';
 import { useUser } from '../ClientLayout';
+import { useDarkMode } from '../contexts/DarkModeContext';
 import axios from 'axios';
 import { useRouter, useSearchParams } from 'next/navigation';
 import TopicSelectionModal from './TopicSelectionModal';
@@ -38,6 +39,41 @@ const getLanguageLabel = (code: string): string => {
   return languages[code] || 'English';
 };
 
+// Script languages that need romanization
+const SCRIPT_LANGUAGES = {
+  'hi': 'Devanagari',
+  'ja': 'Japanese',
+  'zh': 'Chinese',
+  'ko': 'Korean',
+  'ar': 'Arabic',
+  'ta': 'Tamil',
+  'ml': 'Malayalam',
+  'or': 'Odia'
+};
+
+const isScriptLanguage = (languageCode: string): boolean => {
+  return languageCode in SCRIPT_LANGUAGES;
+};
+
+const formatScriptLanguageText = (text: string, languageCode: string): { mainText: string; romanizedText?: string } => {
+  if (!isScriptLanguage(languageCode)) {
+    return { mainText: text };
+  }
+  
+  // Check if the text already contains romanized format (text) or (romanized)
+  if (text.includes('(') && text.includes(')')) {
+    // Extract main text and romanized text
+    const match = text.match(/^(.+?)\s*\((.+?)\)$/);
+    if (match) {
+      return { mainText: match[1].trim(), romanizedText: match[2].trim() };
+    }
+  }
+  
+  // If it's a script language but doesn't have romanization, return as is
+  // The AI should handle the formatting, but this is a fallback
+  return { mainText: text };
+};
+
 // Add index signature to CLOSENESS_LEVELS for string indexing
 const CLOSENESS_LEVELS: { [key: string]: string } = {
   intimate: '👫 Intimate: Close friends, family, or partners',
@@ -51,9 +87,11 @@ interface ChatMessage {
   id?: string;
   sender: string;
   text: string;
+  romanizedText?: string;
   timestamp: Date;
   messageType?: string;
   audioFilePath?: string | null;
+  ttsUrl?: string | null;
   translation?: string;
   breakdown?: string;
   detailedFeedback?: string;
@@ -102,6 +140,7 @@ function usePersistentChatHistory(user: User | null): [ChatMessage[], React.Disp
 function Analyze() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { isDarkMode } = useDarkMode();
 
   const urlConversationId = searchParams?.get('conversation');
   const urlLang = searchParams?.get('language');
@@ -179,6 +218,9 @@ function Analyze() {
   const [translations, setTranslations] = useState<Record<number, { translation?: string; breakdown?: string; has_breakdown?: boolean }>>({});
   const [isTranslating, setIsTranslating] = useState<Record<number, boolean>>({});
   const [showTranslations, setShowTranslations] = useState<Record<number, boolean>>({});
+  const [suggestionTranslations, setSuggestionTranslations] = useState<Record<number, { translation?: string; breakdown?: string; has_breakdown?: boolean }>>({});
+  const [isTranslatingSuggestion, setIsTranslatingSuggestion] = useState<Record<number, boolean>>({});
+  const [showSuggestionTranslations, setShowSuggestionTranslations] = useState<Record<number, boolean>>({});
   const [isLoadingMessageFeedback, setIsLoadingMessageFeedback] = useState<Record<number, boolean>>({});
   const [leftPanelWidth, setLeftPanelWidth] = useState(0.25); // 25% of screen width (1/4)
   const [rightPanelWidth, setRightPanelWidth] = useState(0.25); // 25% of screen width (1/4)
@@ -235,18 +277,25 @@ function Analyze() {
     overview: string;
     details: string;
   }[]>([]);
+  
+  // TTS caching state
+  const [ttsCache, setTtsCache] = useState<Map<string, { url: string; timestamp: number }>>(new Map());
+  const [isGeneratingTTS, setIsGeneratingTTS] = useState<{[key: string]: boolean}>({});
+  const [isPlayingTTS, setIsPlayingTTS] = useState<{[key: string]: boolean}>({});
   const [userPreferences, setUserPreferences] = useState<{
     formality: string;
     topics: string[];
     user_goals: string[];
     userLevel: string;
     feedbackLanguage: string;
+    romanizationDisplay?: string;
   }>({
     formality: 'friendly',
     topics: [],
     user_goals: [],
     userLevel: 'beginner',
-    feedbackLanguage: 'en'
+    feedbackLanguage: 'en',
+    romanizationDisplay: 'both'
   });
   
   // Keep refs in sync with state
@@ -255,6 +304,25 @@ function Analyze() {
       recognitionRef.current.lang = language || 'en-US';
     }
   }, [language]);
+
+  // Clean up TTS cache periodically (every 10 minutes)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const newCache = new Map();
+      
+      ttsCache.forEach((value, key) => {
+        // Keep cache entries for 5 minutes
+        if (now - value.timestamp < 5 * 60 * 1000) {
+          newCache.set(key, value);
+        }
+      });
+      
+      setTtsCache(newCache);
+    }, 10 * 60 * 1000); // Run every 10 minutes
+    
+    return () => clearInterval(interval);
+  }, [ttsCache]);
 
   // On unmount: stop recording and save session if needed
   useEffect(() => {
@@ -298,6 +366,30 @@ function Analyze() {
   useEffect(() => {
     console.log('Chat history changed:', chatHistory);
   }, [chatHistory]);
+
+  // Function to fetch user's dashboard preferences
+  const fetchUserDashboardPreferences = async (languageCode: string) => {
+    try {
+      const response = await axios.get(`/api/user/language-dashboards`, { headers: getAuthHeaders() });
+      const dashboards = response.data.dashboards || [];
+      const dashboard = dashboards.find((d: any) => d.language === languageCode);
+      
+      if (dashboard) {
+        return {
+          romanization_display: dashboard.romanization_display || 'both',
+          proficiency_level: dashboard.proficiency_level || 'beginner',
+          talk_topics: dashboard.talk_topics || [],
+          learning_goals: dashboard.learning_goals || [],
+          speak_speed: dashboard.speak_speed || 1.0
+        };
+      }
+      return null;
+    } catch (error) {
+      console.error('Error fetching dashboard preferences:', error);
+      return null;
+    }
+  };
+
   const loadExistingConversation = async (convId: string | null) => {
     if (!user || !convId) {
       console.log('[DEBUG] No user or conversation ID, skipping load');
@@ -315,11 +407,13 @@ function Analyze() {
       // Extract user preferences from conversation
       const formality = conversation.formality || 'friendly';
       const topics = conversation.topics ? (typeof conversation.topics === 'string' ? JSON.parse(conversation.topics) : conversation.topics) : [];
-      const userLevel = user?.proficiency_level || 'beginner';
       const feedbackLanguage = 'en'; // Default to English for now
       
-      // Get user goals from the user's language dashboard
-      const user_goals = user?.learning_goals ? (typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : user.learning_goals) : [];
+      // Fetch user's dashboard preferences for this language
+      const dashboardPrefs = await fetchUserDashboardPreferences(conversation.language || 'en');
+      const userLevel = dashboardPrefs?.proficiency_level || user?.proficiency_level || 'beginner';
+      const user_goals = dashboardPrefs?.learning_goals || user?.learning_goals ? (typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : user.learning_goals) : [];
+      const romanizationDisplay = dashboardPrefs?.romanization_display || 'both';
       
       // Check if conversation uses a persona
       const usesPersona = conversation.uses_persona || false;
@@ -333,17 +427,32 @@ function Analyze() {
       setConversationDescription(personaDescription);
       
       const messages = conversation.messages || [];
-      const history = messages.map((msg: unknown) => ({
-        sender: (msg as any).sender,
-        text: (msg as any).text,
-        timestamp: new Date((msg as any).created_at)
-      }));
+      const history = messages.map((msg: unknown) => {
+        // If the database already has romanized_text stored separately, use it
+        if ((msg as any).romanized_text) {
+          return {
+            sender: (msg as any).sender,
+            text: (msg as any).text,
+            romanizedText: (msg as any).romanized_text,
+            timestamp: new Date((msg as any).created_at)
+          };
+        } else {
+          // Fallback to parsing the text for romanized content
+          const formatted = formatScriptLanguageText((msg as any).text, conversation.language || 'en');
+          return {
+            sender: (msg as any).sender,
+            text: formatted.mainText,
+            romanizedText: formatted.romanizedText,
+            timestamp: new Date((msg as any).created_at)
+          };
+        }
+      });
       console.log('[DEBUG] Loaded conversation history with', history.length, 'messages');
       console.log('[DEBUG] Messages:', history);
       setChatHistory(history);
       
       // Store user preferences for use in API calls
-      setUserPreferences({ formality, topics, user_goals, userLevel, feedbackLanguage });
+      setUserPreferences({ formality, topics, user_goals, userLevel, feedbackLanguage, romanizationDisplay });
     } catch (error: unknown) {
       console.error('[DEBUG] Error loading conversation:', error);
       console.error('[DEBUG] Error details:', (error as any).response?.data || (error as any).message);
@@ -659,19 +768,147 @@ function Analyze() {
       }
       // Play short feedback TTS (if autospeak and feedback exists)
       if (shortFeedback) {
-        const ttsUrl = await getTTSUrl(shortFeedback, language);
-        if (ttsUrl) {
-          await playTTS(ttsUrl);
-        }
+        const cacheKey = `short_feedback_${chatHistory.length}`;
+        await playTTSAudio(shortFeedback, language, cacheKey);
       }
     } catch (e: unknown) {
       console.error('[DEBUG] (fetchAndShowShortFeedback) Error calling /short_feedback API:', e);
     }
   };
 
-  // Add stubs for getTTSUrl and playTTS above their usage
+  // TTS functions with caching
+  const generateTTSForText = async (text: string, language: string, cacheKey: string): Promise<string | null> => {
+    // Check cache first (cache for 5 minutes)
+    const cached = ttsCache.get(cacheKey);
+    const now = Date.now();
+    if (cached && (now - cached.timestamp) < 5 * 60 * 1000) {
+      console.log('Using cached TTS for:', cacheKey);
+      return cached.url;
+    }
+    
+    // Set generating state
+    setIsGeneratingTTS(prev => ({ ...prev, [cacheKey]: true }));
+    
+    try {
+      const token = localStorage.getItem('jwt');
+      const response = await axios.post('http://localhost:4000/api/tts', {
+        text,
+        language
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      const ttsUrl = response.data.ttsUrl;
+      if (ttsUrl) {
+        // Cache the result
+        setTtsCache(prev => new Map(prev).set(cacheKey, { url: ttsUrl, timestamp: now }));
+        return ttsUrl;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error generating TTS:', error);
+      return null;
+    } finally {
+      setIsGeneratingTTS(prev => ({ ...prev, [cacheKey]: false }));
+    }
+  };
+
+  const playTTSAudio = async (text: string, language: string, cacheKey: string) => {
+    // Stop any currently playing audio
+    if (ttsAudioRef.current) {
+      ttsAudioRef.current.pause();
+      ttsAudioRef.current = null;
+    }
+    
+    // Set playing state
+    setIsPlayingTTS(prev => ({ ...prev, [cacheKey]: true }));
+    
+    try {
+      const ttsUrl = await generateTTSForText(text, language, cacheKey);
+      if (ttsUrl) {
+        const audioUrl = `http://localhost:4000${ttsUrl}`;
+        const audio = new window.Audio(audioUrl);
+        ttsAudioRef.current = audio;
+        
+        audio.onended = () => {
+          ttsAudioRef.current = null;
+          setIsPlayingTTS(prev => ({ ...prev, [cacheKey]: false }));
+        };
+        
+        audio.onerror = () => {
+          console.error('Error playing TTS audio');
+          setIsPlayingTTS(prev => ({ ...prev, [cacheKey]: false }));
+        };
+        
+        await audio.play();
+      }
+    } catch (error) {
+      console.error('Error playing TTS:', error);
+      setIsPlayingTTS(prev => ({ ...prev, [cacheKey]: false }));
+    }
+  };
+
+  const playExistingTTS = async (ttsUrl: string, cacheKey: string) => {
+    // Stop any currently playing audio
+    if (ttsAudioRef.current) {
+      ttsAudioRef.current.pause();
+      ttsAudioRef.current = null;
+    }
+    
+    // Set playing state
+    setIsPlayingTTS(prev => ({ ...prev, [cacheKey]: true }));
+    
+    try {
+      const audioUrl = `http://localhost:4000${ttsUrl}`;
+      const audio = new window.Audio(audioUrl);
+      ttsAudioRef.current = audio;
+      
+      audio.onended = () => {
+        ttsAudioRef.current = null;
+        setIsPlayingTTS(prev => ({ ...prev, [cacheKey]: false }));
+      };
+      
+      audio.onerror = () => {
+        console.error('Error playing existing TTS audio');
+        setIsPlayingTTS(prev => ({ ...prev, [cacheKey]: false }));
+      };
+      
+      await audio.play();
+    } catch (error) {
+      console.error('Error playing existing TTS:', error);
+      setIsPlayingTTS(prev => ({ ...prev, [cacheKey]: false }));
+    }
+  };
+
   const getTTSUrl = async (text: string, language: string) => null;
   const playTTS = async (url: string) => {};
+
+  const generateRomanizedText = async (text: string, languageCode: string): Promise<string> => {
+    if (!isScriptLanguage(languageCode)) {
+      return '';
+    }
+    
+    try {
+      const token = localStorage.getItem('jwt');
+      const response = await axios.post(
+        '/api/translate',
+        {
+          text: text,
+          source_language: languageCode,
+          target_language: 'en',
+          breakdown: false
+        },
+        token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
+      );
+      
+      // For romanization, we want the transliteration, not translation
+      // This is a simplified approach - in a real implementation, you'd want a dedicated romanization service
+      return response.data.romanized || '';
+    } catch (error) {
+      console.error('Error generating romanized text:', error);
+      return '';
+    }
+  };
 
   // Update sendAudioToBackend to handle short feedback in autospeak mode
   const sendAudioToBackend = async (audioBlob: Blob) => {
@@ -697,12 +934,23 @@ function Analyze() {
       // Prepare new chat messages
       const transcription = response.data.transcription || 'Speech recorded';
       
+      // Generate romanized text for user messages in script languages
+      let userRomanizedText = '';
+      if (isScriptLanguage(language) && transcription !== 'Speech recorded') {
+        userRomanizedText = await generateRomanizedText(transcription, language);
+      }
+      
       // Clear suggestion carousel when user sends a message
       clearSuggestionCarousel();
       
       // Use callback form to ensure chatHistory is updated before fetching feedback
       setChatHistory(prev => {
-        const updated = [...prev, { sender: 'User', text: transcription, timestamp: new Date() }];
+        const updated = [...prev, { 
+          sender: 'User', 
+          text: transcription, 
+          romanizedText: userRomanizedText,
+          timestamp: new Date() 
+        }];
         // After chatHistory is updated, fetch short feedback if needed
         if (autoSpeak && enableShortFeedback) {
           // Use setTimeout to ensure state update is flushed before calling feedback
@@ -714,13 +962,20 @@ function Analyze() {
       });
       // Save user message to backend
       if (conversationId) {
-        await saveMessageToBackend('User', transcription, 'text', null);
+        await saveMessageToBackend('User', transcription, 'text', null, null, userRomanizedText);
       }
       // Add AI response if present
       if (response.data.aiResponse) {
-        setChatHistory(prev => [...prev, { sender: 'AI', text: response.data.aiResponse, timestamp: new Date() }]);
+        const formattedResponse = formatScriptLanguageText(response.data.aiResponse, language);
+        setChatHistory(prev => [...prev, { 
+          sender: 'AI', 
+          text: formattedResponse.mainText, 
+          romanizedText: formattedResponse.romanizedText,
+          ttsUrl: response.data.ttsUrl || null,
+          timestamp: new Date() 
+        }]);
         if (conversationId) {
-          await saveMessageToBackend('AI', response.data.aiResponse, 'text', null);
+          await saveMessageToBackend('AI', formattedResponse.mainText, 'text', null, null, formattedResponse.romanizedText);
         }
       }
       // Play AI response TTS if present
@@ -849,16 +1104,24 @@ function Analyze() {
       
       const suggestions = response.data.suggestions || [];
       if (suggestions.length > 0) {
-        // Create temporary suggestion messages
-        const tempMessages = suggestions.map((suggestion: any, index: number) => ({
-          sender: 'User',
-          text: suggestion.text?.replace(/\*\*/g, '') || '',
-          timestamp: new Date(),
-          messageType: 'text',
-          isSuggestion: true,
-          suggestionIndex: index,
-          totalSuggestions: suggestions.length
-        }));
+        // Create temporary suggestion messages with all data from the API
+        const tempMessages = suggestions.map((suggestion: any, index: number) => {
+          const formattedText = formatScriptLanguageText(suggestion.text?.replace(/\*\*/g, '') || '', language);
+          return {
+            sender: 'User',
+            text: formattedText.mainText,
+            romanizedText: formattedText.romanizedText || suggestion.romanized || '',
+            timestamp: new Date(),
+            messageType: 'text',
+            isSuggestion: true,
+            suggestionIndex: index,
+            totalSuggestions: suggestions.length,
+            // Preserve the explanation and translation from the API response
+            explanation: suggestion.explanation || '',
+            translation: suggestion.translation || '',
+            romanized: suggestion.romanized || ''
+          };
+        });
         
         setSuggestionMessages(tempMessages);
         setCurrentSuggestionIndex(0);
@@ -911,7 +1174,13 @@ function Analyze() {
       // Use the AI message from the POST response if present
       if (response.data && response.data.aiMessage) {
         console.log('[DEBUG] AI message from POST response:', response.data.aiMessage);
-        setChatHistory([{ sender: 'AI', text: (response.data.aiMessage as any).text, timestamp: new Date() }]);
+        const formattedMessage = formatScriptLanguageText((response.data.aiMessage as any).text, language);
+        setChatHistory([{ 
+          sender: 'AI', 
+          text: formattedMessage.mainText, 
+          romanizedText: formattedMessage.romanizedText,
+          timestamp: new Date() 
+        }]);
       } else {
         console.log('[DEBUG] No aiMessage in POST response, falling back to GET');
         // Fallback: fetch the updated conversation to get the AI's reply
@@ -925,7 +1194,13 @@ function Analyze() {
         const aiMsg = messages.find((m: unknown) => (m as any).sender === 'AI');
         if (aiMsg) {
           console.log('[DEBUG] AI message from GET:', aiMsg);
-          setChatHistory([{ sender: 'AI', text: (aiMsg as any).text, timestamp: new Date((aiMsg as any).created_at) }]);
+          const formattedMessage = formatScriptLanguageText((aiMsg as any).text, language);
+          setChatHistory([{ 
+            sender: 'AI', 
+            text: formattedMessage.mainText, 
+            romanizedText: formattedMessage.romanizedText,
+            timestamp: new Date((aiMsg as any).created_at) 
+          }]);
         } else {
           console.log('[DEBUG] No AI message found in conversation after GET');
         }
@@ -963,19 +1238,52 @@ function Analyze() {
       topics 
     });
     
+    // Fetch user's dashboard preferences for this language
+    const dashboardPrefs = await fetchUserDashboardPreferences(language);
+    const romanizationDisplay = dashboardPrefs?.romanization_display || 'both';
+    
     // Update user preferences with the selected formality, topics, and learning goals
     setUserPreferences(prev => ({
       ...prev,
       formality,
       topics,
-      user_goals: learningGoals
+      user_goals: learningGoals,
+      romanizationDisplay
     }));
     
     // Use Next.js router to update the URL
     router.replace(`/analyze?conversation=${newConversationId}&topics=${encodeURIComponent(topics.join(','))}`);
+    
     // Set the initial AI message from the backend response
     if (aiMessage && (aiMessage as any).text && (aiMessage as any).text.trim()) {
-      setChatHistory([{ sender: 'AI', text: (aiMessage as any).text, timestamp: new Date() }]);
+      const formattedMessage = formatScriptLanguageText((aiMessage as any).text, language);
+      setChatHistory([{ 
+        sender: 'AI', 
+        text: formattedMessage.mainText, 
+        romanizedText: formattedMessage.romanizedText,
+        ttsUrl: (aiMessage as any).ttsUrl || null,
+        timestamp: new Date() 
+      }]);
+      
+      // Play TTS for the initial AI message if available
+      if ((aiMessage as any).ttsUrl) {
+        const audioUrl = `http://localhost:4000${(aiMessage as any).ttsUrl}`;
+        try {
+          const headResponse = await fetch(audioUrl, { method: 'HEAD' });
+          if (headResponse.ok) {
+            const audio = new window.Audio(audioUrl);
+            ttsAudioRef.current = audio;
+            audio.onended = () => {
+              ttsAudioRef.current = null;
+            };
+            audio.play().catch(error => {
+              console.error('Failed to play initial TTS audio:', error);
+            });
+          }
+        } catch (fetchError: unknown) {
+          console.error('Error checking initial TTS audio file:', fetchError);
+        }
+      }
     } else {
       setChatHistory([{ sender: 'AI', text: 'Hello! What would you like to talk about today?', timestamp: new Date() }]);
     }
@@ -989,13 +1297,13 @@ function Analyze() {
     }
   };
 
-  const saveMessageToBackend = async (sender: string, text: string, messageType = 'text', audioFilePath = null, targetConversationId = null) => {
+  const saveMessageToBackend = async (sender: string, text: string, messageType = 'text', audioFilePath = null, targetConversationId = null, romanizedText: string | null = null) => {
     const useConversationId = targetConversationId || conversationId;
     if (!useConversationId) {
       console.error('[DEBUG] No conversation ID available');
       return;
     }
-    console.log('[DEBUG] Saving message to backend:', { sender, text, messageType, audioFilePath, conversationId: useConversationId });
+    console.log('[DEBUG] Saving message to backend:', { sender, text, messageType, audioFilePath, romanizedText, conversationId: useConversationId });
     try {
       const token = localStorage.getItem('jwt');
       const response = await axios.post(
@@ -1004,7 +1312,8 @@ function Analyze() {
           sender,
           text,
           messageType,
-          audioFilePath
+          audioFilePath,
+          romanized_text: romanizedText
         },
         token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
       );
@@ -1083,6 +1392,63 @@ function Analyze() {
       }));
     } finally {
       setIsTranslating(prev => ({ ...prev, [messageIndex]: false }));
+    }
+  };
+
+  const explainSuggestion = async (suggestionIndex: number, text: string) => {
+    if (isTranslatingSuggestion[suggestionIndex]) return;
+    
+    setIsTranslatingSuggestion(prev => ({ ...prev, [suggestionIndex]: true }));
+    
+    try {
+      // Call the new API endpoint to get explanation and translation
+      const token = localStorage.getItem('jwt');
+      const requestData = {
+        suggestion_text: text,
+        chatHistory: chatHistory,
+        language: language,
+        user_level: userPreferences.userLevel,
+        user_topics: userPreferences.topics,
+        formality: userPreferences.formality,
+        feedback_language: userPreferences.feedbackLanguage,
+        user_goals: userPreferences.user_goals
+      };
+      
+      console.log('[DEBUG] explainSuggestion() calling /api/explain_suggestion with:', requestData);
+      
+      const response = await axios.post(
+        '/api/explain_suggestion',
+        requestData,
+        token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
+      );
+      
+      const result = response.data;
+      console.log('[DEBUG] explainSuggestion() received response:', result);
+      
+      setSuggestionTranslations(prev => ({ 
+        ...prev, 
+        [suggestionIndex]: { 
+          translation: result.translation || '',
+          breakdown: result.explanation || '',
+          has_breakdown: true
+        } 
+      }));
+      
+      setShowSuggestionTranslations(prev => ({ 
+        ...prev, 
+        [suggestionIndex]: true 
+      }));
+    } catch (error: unknown) {
+      console.error('Suggestion explanation error:', error);
+      setSuggestionTranslations(prev => ({ 
+        ...prev, 
+        [suggestionIndex]: { 
+          translation: 'Explanation failed', 
+          error: true 
+        } 
+      }));
+    } finally {
+      setIsTranslatingSuggestion(prev => ({ ...prev, [suggestionIndex]: false }));
     }
   };
 
@@ -1638,7 +2004,7 @@ function Analyze() {
           
           // Auto-fill formality and topics from persona
           if (persona.formality || persona.topics) {
-            // Update user preferences with persona data
+            // Update user preferences with persona data (romanization will be set in startConversationWithPersona)
             setUserPreferences(prev => ({
               ...prev,
               formality: persona.formality || prev.formality,
@@ -1649,6 +2015,16 @@ function Analyze() {
           // Auto-start conversation with persona data
           const startConversationWithPersona = async () => {
             try {
+              // Fetch user's dashboard preferences for this language
+              const dashboardPrefs = await fetchUserDashboardPreferences(language);
+              const romanizationDisplay = dashboardPrefs?.romanization_display || 'both';
+              
+              // Update user preferences with romanization display
+              setUserPreferences(prev => ({
+                ...prev,
+                romanizationDisplay
+              }));
+              
               // Create a new conversation with persona data
               const topics = persona.topics || [];
               const formality = persona.formality || 'neutral';
@@ -1694,40 +2070,61 @@ function Analyze() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usePersona, user]);
 
+  const formatMessageForDisplay = (message: ChatMessage, romanizationDisplay: string | undefined): { mainText: string; romanizedText?: string } => {
+  // For non-script languages or undefined preference, just show the text
+  if (!romanizationDisplay || romanizationDisplay === 'both') {
+    return { mainText: message.text, romanizedText: message.romanizedText };
+  } else if (romanizationDisplay === 'script_only') {
+    return { mainText: message.text };
+  } else if (romanizationDisplay === 'romanized_only') {
+    return { mainText: message.romanizedText || message.text };
+  } else {
+    // Default to showing both
+    return { mainText: message.text, romanizedText: message.romanizedText };
+  }
+};
+
   return (
     <div style={{ 
       display: 'flex', 
       height: 'calc(100vh - 80px)', 
       width: '100%',
-      background: 'linear-gradient(135deg, #f5f1ec 0%, #e8e0d8 50%, #d4c8c0 100%)',
+      background: isDarkMode 
+        ? 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%)'
+        : 'linear-gradient(135deg, #f5f1ec 0%, #e8e0d8 50%, #d4c8c0 100%)',
       padding: '1rem',
-      gap: '0.5rem'
+      gap: '0.5rem',
+      transition: 'background 0.3s ease'
     }}>
       {/* Short Feedback Panel - Left */}
       {showShortFeedbackPanel && (
         <div style={{ 
           width: `${getPanelWidths().left * 100}%`, 
-          background: '#fff', 
+          background: isDarkMode ? '#1e293b' : '#fff', 
           borderRadius: 12,
           display: 'flex',
           flexDirection: 'column',
-          boxShadow: '0 3px 20px rgba(60,76,115,0.08)',
-          position: 'relative'
+          boxShadow: isDarkMode 
+            ? '0 3px 20px rgba(0,0,0,0.3)' 
+            : '0 3px 20px rgba(60,76,115,0.08)',
+          position: 'relative',
+          transition: 'background 0.3s ease, box-shadow 0.3s ease'
         }}>
           {/* Short Feedback Header */}
           <div style={{ 
-            background: 'var(--blue-secondary)', 
+            background: isDarkMode ? '#8ba3d9' : 'var(--blue-secondary)', 
             color: '#fff', 
             padding: '0.75rem 1rem', 
             borderRadius: '12px 12px 0 0',
             textAlign: 'center',
-            borderBottom: '1px solid #ececec',
+            borderBottom: isDarkMode ? '1px solid #334155' : '1px solid #ececec',
             fontFamily: 'Gabriela, Arial, sans-serif',
             fontWeight: 600,
             fontSize: '0.95rem',
             display: 'flex',
             justifyContent: 'space-between',
-            alignItems: 'center'
+            alignItems: 'center',
+            transition: 'background 0.3s ease, border-color 0.3s ease'
           }}>
                           <span>💡 AI Explanations</span>
             <button
@@ -1770,7 +2167,8 @@ function Analyze() {
           }}>
             {shortFeedback && (
               <div style={{
-                background: '#fff',
+                background: isDarkMode ? '#1e293b' : '#fff',
+                color: isDarkMode ? '#f8fafc' : '#000',
                 padding: '1rem',
                 flex: 1,
                 overflowY: 'auto',
@@ -1780,10 +2178,37 @@ function Analyze() {
                 whiteSpace: 'pre-wrap',
                 fontFamily: 'AR One Sans, Arial, sans-serif',
                 fontWeight: 400,
-                minHeight: 0
+                minHeight: 0,
+                transition: 'background 0.3s ease, color 0.3s ease'
               }}>
                 {parsedBreakdown.length > 0 ? (
                   <div>
+                    {/* TTS button for detailed breakdown */}
+                    <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'flex-end' }}>
+                      <button
+                        onClick={() => {
+                          const cacheKey = `detailed_breakdown_panel`;
+                          playTTSAudio(shortFeedback, language, cacheKey);
+                        }}
+                        disabled={isGeneratingTTS['detailed_breakdown_panel'] || isPlayingTTS['detailed_breakdown_panel']}
+                        style={{
+                          padding: '0.4rem 0.8rem',
+                          borderRadius: 6,
+                          border: isPlayingTTS['detailed_breakdown_panel'] ? 'none' : '1px solid #28a745',
+                          background: isPlayingTTS['detailed_breakdown_panel'] ? 'linear-gradient(135deg, #28a745 0%, #1e7e34 100%)' : 'rgba(40,167,69,0.08)',
+                          color: isPlayingTTS['detailed_breakdown_panel'] ? '#fff' : '#28a745',
+                          fontSize: '0.8rem',
+                          cursor: (isGeneratingTTS['detailed_breakdown_panel'] || isPlayingTTS['detailed_breakdown_panel']) ? 'not-allowed' : 'pointer',
+                          transition: 'all 0.2s ease',
+                          opacity: (isGeneratingTTS['detailed_breakdown_panel'] || isPlayingTTS['detailed_breakdown_panel']) ? 0.6 : 1,
+                          fontWeight: 500,
+                          boxShadow: isPlayingTTS['detailed_breakdown_panel'] ? '0 2px 6px rgba(40,167,69,0.18)' : '0 1px 3px rgba(40,167,69,0.10)'
+                        }}
+                        title={isPlayingTTS['detailed_breakdown_panel'] ? 'Playing audio...' : 'Listen to this breakdown'}
+                      >
+                        {isGeneratingTTS['detailed_breakdown_panel'] ? '🔄' : isPlayingTTS['detailed_breakdown_panel'] ? '🔊 Playing' : '🔊 Listen'}
+                      </button>
+                    </div>
                                           {parsedBreakdown.map((sentenceData, index) => (
                         <div key={index} style={{ marginBottom: index < parsedBreakdown.length - 1 ? '1rem' : '0' }}>
                           <div style={{ 
@@ -1797,7 +2222,12 @@ function Analyze() {
                               alignItems: 'flex-start',
                               marginBottom: '0.4rem'
                             }}>
-                              <div style={{ fontWeight: 600, fontSize: '0.95rem', flex: 1 }}>
+                              <div style={{ 
+                                fontWeight: 600, 
+                                fontSize: '0.95rem', 
+                                flex: 1,
+                                color: isDarkMode ? '#f8fafc' : '#000'
+                              }}>
                                 {sentenceData.sentence}
                               </div>
                               {sentenceData.details && sentenceData.details.trim() && (
@@ -1831,7 +2261,12 @@ function Analyze() {
                                 </button>
                               )}
                             </div>
-                            <div style={{ color: '#666', fontSize: '0.85rem', width: '100%', lineHeight: '1.4' }}>
+                            <div style={{ 
+                              color: isDarkMode ? '#94a3b8' : '#666', 
+                              fontSize: '0.85rem', 
+                              width: '100%', 
+                              lineHeight: '1.4' 
+                            }}>
                               {sentenceData.overview}
                             </div>
                           </div>
@@ -1839,14 +2274,19 @@ function Analyze() {
                           <div style={{
                             marginTop: '0.75rem',
                             padding: '1rem',
-                            background: 'linear-gradient(135deg, #f8f9fa 0%, #f0f4f8 100%)',
+                            background: isDarkMode 
+                              ? 'linear-gradient(135deg, #334155 0%, #475569 100%)'
+                              : 'linear-gradient(135deg, #f8f9fa 0%, #f0f4f8 100%)',
                             borderRadius: 8,
-                            border: '1px solid #e1e8ed',
+                            border: isDarkMode ? '1px solid #475569' : '1px solid #e1e8ed',
                             fontSize: '0.8rem',
                             lineHeight: 1.5,
                             whiteSpace: 'pre-wrap',
-                            boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.05)',
-                            color: '#2c3e50'
+                            boxShadow: isDarkMode 
+                              ? 'inset 0 1px 3px rgba(0,0,0,0.2)' 
+                              : 'inset 0 1px 3px rgba(0,0,0,0.05)',
+                            color: isDarkMode ? '#f8fafc' : '#2c3e50',
+                            transition: 'background 0.3s ease, border-color 0.3s ease, color 0.3s ease'
                           }}>
                             {sentenceData.details}
                           </div>
@@ -1855,22 +2295,49 @@ function Analyze() {
                     ))}
                   </div>
                 ) : (
-                  <div>{shortFeedback}</div>
+                  <div>
+                    <div style={{ marginBottom: '0.5rem' }}>{shortFeedback}</div>
+                    {/* TTS button for short feedback */}
+                    <button
+                      onClick={() => {
+                        const cacheKey = `short_feedback_panel`;
+                        playTTSAudio(shortFeedback, language, cacheKey);
+                      }}
+                      disabled={isGeneratingTTS['short_feedback_panel'] || isPlayingTTS['short_feedback_panel']}
+                      style={{
+                        padding: '0.4rem 0.8rem',
+                        borderRadius: 6,
+                        border: isPlayingTTS['short_feedback_panel'] ? 'none' : '1px solid #28a745',
+                        background: isPlayingTTS['short_feedback_panel'] ? 'linear-gradient(135deg, #28a745 0%, #1e7e34 100%)' : 'rgba(40,167,69,0.08)',
+                        color: isPlayingTTS['short_feedback_panel'] ? '#fff' : '#28a745',
+                        fontSize: '0.8rem',
+                        cursor: (isGeneratingTTS['short_feedback_panel'] || isPlayingTTS['short_feedback_panel']) ? 'not-allowed' : 'pointer',
+                        transition: 'all 0.2s ease',
+                        opacity: (isGeneratingTTS['short_feedback_panel'] || isPlayingTTS['short_feedback_panel']) ? 0.6 : 1,
+                        fontWeight: 500,
+                        boxShadow: isPlayingTTS['short_feedback_panel'] ? '0 2px 6px rgba(40,167,69,0.18)' : '0 1px 3px rgba(40,167,69,0.10)'
+                      }}
+                      title={isPlayingTTS['short_feedback_panel'] ? 'Playing audio...' : 'Listen to this feedback'}
+                    >
+                      {isGeneratingTTS['short_feedback_panel'] ? '🔄' : isPlayingTTS['short_feedback_panel'] ? '🔊 Playing' : '🔊 Listen'}
+                    </button>
+                  </div>
                 )}
               </div>
             )}
 
             {!shortFeedback && (
               <div style={{
-                background: '#fff',
+                background: isDarkMode ? '#1e293b' : '#fff',
+                color: isDarkMode ? '#94a3b8' : '#666',
                 padding: '1rem',
                 flex: 1,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: '#666',
                 fontSize: '0.9rem',
-                fontStyle: 'italic'
+                fontStyle: 'italic',
+                transition: 'background 0.3s ease, color 0.3s ease'
               }}>
                 Click "💡 Explain" on any AI message to see short feedback here
               </div>
@@ -1930,16 +2397,35 @@ function Analyze() {
       {/* Chat Panel - Center */}
               <div style={{ 
           flex: 1, 
-          background: '#fff', 
+          background: isDarkMode ? '#1e293b' : '#fff', 
           borderRadius: 12, 
           display: 'flex', 
           flexDirection: 'column', 
-          boxShadow: '0 3px 20px rgba(60,76,115,0.08)',
-          position: 'relative'
+          boxShadow: isDarkMode 
+            ? '0 3px 20px rgba(0,0,0,0.3)' 
+            : '0 3px 20px rgba(60,76,115,0.08)',
+          position: 'relative',
+          transition: 'background 0.3s ease, box-shadow 0.3s ease'
         }}>
         {/* Header Bar */}
-        <div style={{ padding: '0.75rem 1rem', background: '#f5f1ec', borderBottom: '1px solid #ececec', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTopLeftRadius: 12, borderTopRightRadius: 12 }}>
-          <div style={{ color: 'var(--rose-primary)', fontWeight: 600, fontSize: '0.95rem', fontFamily: 'Gabriela, Arial, sans-serif' }}>
+        <div style={{ 
+          padding: '0.75rem 1rem', 
+          background: isDarkMode ? '#334155' : '#f5f1ec', 
+          borderBottom: isDarkMode ? '1px solid #475569' : '1px solid #ececec', 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center', 
+          borderTopLeftRadius: 12, 
+          borderTopRightRadius: 12,
+          transition: 'background 0.3s ease, border-color 0.3s ease'
+        }}>
+          <div style={{ 
+            color: isDarkMode ? '#e8b3c3' : 'var(--rose-primary)', 
+            fontWeight: 600, 
+            fontSize: '0.95rem', 
+            fontFamily: 'Gabriela, Arial, sans-serif',
+            transition: 'color 0.3s ease'
+          }}>
             🌐 {getLanguageLabel(language)} Practice Session
           </div>
 
@@ -1983,9 +2469,23 @@ function Analyze() {
                   flex: 1,
                   padding: '0.7rem 1rem',
                   borderRadius: message.sender === 'User' ? '16px 16px 4px 16px' : message.sender === 'AI' ? '16px 16px 16px 4px' : '8px',
-                  background: message.sender === 'User' ? 'linear-gradient(135deg, #c38d94 0%, #b87d8a 100%)' : message.sender === 'AI' ? 'linear-gradient(135deg, #fff 0%, #f8f9fa 100%)' : '#fff7e6',
-                  color: message.sender === 'User' ? '#fff' : message.sender === 'System' ? '#e67e22' : '#3e3e3e',
-                  border: message.sender === 'AI' ? '1px solid #e0e0e0' : message.sender === 'System' ? '1px solid #e67e22' : 'none',
+                  background: message.sender === 'User' 
+                    ? 'linear-gradient(135deg, #e8b3c3 0%, #d4a3b3 100%)' 
+                    : message.sender === 'AI' 
+                      ? isDarkMode 
+                        ? 'linear-gradient(135deg, #334155 0%, #475569 100%)' 
+                        : 'linear-gradient(135deg, #fff 0%, #f8f9fa 100%)' 
+                      : isDarkMode ? '#475569' : '#fff7e6',
+                  color: message.sender === 'User' 
+                    ? '#fff' 
+                    : message.sender === 'System' 
+                      ? '#e67e22' 
+                      : isDarkMode ? '#f8fafc' : '#3e3e3e',
+                  border: message.sender === 'AI' 
+                    ? isDarkMode ? '1px solid #475569' : '1px solid #e0e0e0' 
+                    : message.sender === 'System' 
+                      ? '1px solid #e67e22' 
+                      : 'none',
                   fontSize: '0.9rem',
                   cursor: 'pointer',
                   transition: 'all 0.2s ease',
@@ -1998,9 +2498,29 @@ function Analyze() {
                   animation: 'messageAppear 0.3s ease-out',
                   fontFamily: 'AR One Sans, Arial, sans-serif'
                 }}
-              >
-                {message.text}
-                {isTranslating[index] && (
+                              >
+                  {(() => {
+                    const formatted = formatMessageForDisplay(message, userPreferences.romanizationDisplay);
+                    return (
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span>{formatted.mainText}</span>
+                        {formatted.romanizedText && (
+                          <span style={{
+                            fontSize: '0.82em',
+                            color: isDarkMode ? '#94a3b8' : '#555',
+                            opacity: 0.65,
+                            marginTop: 2,
+                            fontWeight: 400,
+                            lineHeight: 1.2,
+                            letterSpacing: '0.01em',
+                          }}>
+                            {formatted.romanizedText}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })()}
+                  {isTranslating[index] && (
                   <span style={{ marginLeft: '0.5rem', fontSize: '0.85rem' }}>
                     🔄 Translating...
                   </span>
@@ -2014,9 +2534,11 @@ function Analyze() {
                   style={{
                     padding: '0.35rem 0.9rem',
                     borderRadius: 6,
-                    border: message.detailedFeedback ? 'none' : '1px solid #c38d94',
-                    background: message.detailedFeedback ? 'linear-gradient(135deg, #c38d94 0%, #b87d8a 100%)' : 'rgba(195,141,148,0.08)',
-                    color: message.detailedFeedback ? '#fff' : '#c38d94',
+                    border: message.detailedFeedback ? 'none' : isDarkMode ? '1px solid #e8b3c3' : '1px solid #c38d94',
+                    background: message.detailedFeedback 
+                      ? 'linear-gradient(135deg, #e8b3c3 0%, #d4a3b3 100%)' 
+                      : isDarkMode ? 'rgba(232,179,195,0.15)' : 'rgba(195,141,148,0.08)',
+                    color: message.detailedFeedback ? '#fff' : isDarkMode ? '#e8b3c3' : '#c38d94',
                     fontSize: '0.8rem',
                     cursor: isLoadingMessageFeedback[index] ? 'not-allowed' : 'pointer',
                     transition: 'all 0.2s ease',
@@ -2054,6 +2576,40 @@ function Analyze() {
                   >
                     {isLoadingMessageFeedback[index] ? '🔄' : shortFeedbacks[index] ? '💡 Show' : '💡 Explain'}
                   </button>
+                  
+                  {/* TTS button for AI messages */}
+                  <button
+                    onClick={() => {
+                      const cacheKey = `ai_message_${index}`;
+                      if (message.ttsUrl) {
+                        // Use existing TTS URL if available
+                        playExistingTTS(message.ttsUrl, cacheKey);
+                      } else {
+                        // Generate new TTS
+                        const displayText = formatMessageForDisplay(message, userPreferences.romanizationDisplay).mainText;
+                        playTTSAudio(displayText, language, cacheKey);
+                      }
+                    }}
+                    disabled={isGeneratingTTS[`ai_message_${index}`] || isPlayingTTS[`ai_message_${index}`]}
+                    style={{
+                      padding: '0.35rem 0.9rem',
+                      borderRadius: 6,
+                      border: isPlayingTTS[`ai_message_${index}`] ? 'none' : '1px solid #28a745',
+                      background: isPlayingTTS[`ai_message_${index}`] ? 'linear-gradient(135deg, #28a745 0%, #1e7e34 100%)' : 'rgba(40,167,69,0.08)',
+                      color: isPlayingTTS[`ai_message_${index}`] ? '#fff' : '#28a745',
+                      fontSize: '0.8rem',
+                      cursor: (isGeneratingTTS[`ai_message_${index}`] || isPlayingTTS[`ai_message_${index}`]) ? 'not-allowed' : 'pointer',
+                      transition: 'all 0.2s ease',
+                      opacity: (isGeneratingTTS[`ai_message_${index}`] || isPlayingTTS[`ai_message_${index}`]) ? 0.6 : 1,
+                      minWidth: '70px',
+                      fontWeight: 500,
+                      boxShadow: isPlayingTTS[`ai_message_${index}`] ? '0 2px 6px rgba(40,167,69,0.18)' : '0 1px 3px rgba(40,167,69,0.10)'
+                    }}
+                    title={isPlayingTTS[`ai_message_${index}`] ? 'Playing audio...' : 'Listen to this message'}
+                  >
+                    {isGeneratingTTS[`ai_message_${index}`] ? '🔄' : isPlayingTTS[`ai_message_${index}`] ? '🔊 Playing' : '🔊 Listen'}
+                  </button>
+                  
                   {/* Show suggestions button only for the most recent AI message */}
                   {index === chatHistory.length - 1 && (
                     <button
@@ -2220,10 +2776,145 @@ function Analyze() {
                   </div>
                 <div style={{
                   lineHeight: '1.4',
-                  wordWrap: 'break-word'
+                  wordWrap: 'break-word',
+                  marginBottom: '0.5rem'
                 }}>
-                  {suggestionMessages[currentSuggestionIndex]?.text}
+                  {(() => {
+                    const suggestion = suggestionMessages[currentSuggestionIndex];
+                    if (!suggestion) return null;
+                    
+                    const formatted = formatMessageForDisplay(suggestion, userPreferences.romanizationDisplay);
+                    return (
+                      <>
+                        <span>{formatted.mainText}</span>
+                        {formatted.romanizedText && (
+                          <span style={{
+                            fontSize: '0.82em',
+                            color: '#555',
+                            opacity: 0.65,
+                            marginTop: 2,
+                            fontWeight: 400,
+                            lineHeight: 1.2,
+                            letterSpacing: '0.01em',
+                            display: 'block'
+                          }}>
+                            {formatted.romanizedText}
+                          </span>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
+                {/* Suggestion Action Buttons */}
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                  gap: '0.3rem'
+                }}>
+                  {/* TTS button for suggestions */}
+                  <button
+                    onClick={() => {
+                      const suggestion = suggestionMessages[currentSuggestionIndex];
+                      if (suggestion) {
+                        const cacheKey = `suggestion_${currentSuggestionIndex}`;
+                        const displayText = formatMessageForDisplay(suggestion, userPreferences.romanizationDisplay).mainText;
+                        playTTSAudio(displayText, language, cacheKey);
+                      }
+                    }}
+                    disabled={isGeneratingTTS[`suggestion_${currentSuggestionIndex}`] || isPlayingTTS[`suggestion_${currentSuggestionIndex}`]}
+                    style={{
+                      padding: '0.3rem 0.6rem',
+                      borderRadius: 4,
+                      border: isPlayingTTS[`suggestion_${currentSuggestionIndex}`] ? 'none' : '1px solid #28a745',
+                      background: isPlayingTTS[`suggestion_${currentSuggestionIndex}`] ? 'linear-gradient(135deg, #28a745 0%, #1e7e34 100%)' : 'rgba(40,167,69,0.08)',
+                      color: isPlayingTTS[`suggestion_${currentSuggestionIndex}`] ? '#fff' : '#28a745',
+                      cursor: (isGeneratingTTS[`suggestion_${currentSuggestionIndex}`] || isPlayingTTS[`suggestion_${currentSuggestionIndex}`]) ? 'not-allowed' : 'pointer',
+                      fontSize: '0.7rem',
+                      fontWeight: 500,
+                      transition: 'all 0.2s ease',
+                      opacity: (isGeneratingTTS[`suggestion_${currentSuggestionIndex}`] || isPlayingTTS[`suggestion_${currentSuggestionIndex}`]) ? 0.6 : 1
+                    }}
+                    title={isPlayingTTS[`suggestion_${currentSuggestionIndex}`] ? 'Playing audio...' : 'Listen to this suggestion'}
+                  >
+                    {isGeneratingTTS[`suggestion_${currentSuggestionIndex}`] ? '🔄' : isPlayingTTS[`suggestion_${currentSuggestionIndex}`] ? '🔊' : '🔊'}
+                  </button>
+                  
+                  <button
+                    onClick={() => explainSuggestion(currentSuggestionIndex, suggestionMessages[currentSuggestionIndex]?.text || '')}
+                    disabled={isTranslatingSuggestion[currentSuggestionIndex]}
+                    style={{
+                      padding: '0.3rem 0.6rem',
+                      borderRadius: 4,
+                      border: '1px solid #4a90e2',
+                      background: 'rgba(74,144,226,0.08)',
+                      color: '#4a90e2',
+                      cursor: isTranslatingSuggestion[currentSuggestionIndex] ? 'not-allowed' : 'pointer',
+                      fontSize: '0.7rem',
+                      fontWeight: 500,
+                      transition: 'all 0.2s ease',
+                      opacity: isTranslatingSuggestion[currentSuggestionIndex] ? 0.6 : 1
+                    }}
+                    title="Explain this suggestion"
+                  >
+                    {isTranslatingSuggestion[currentSuggestionIndex] ? '🔄' : '💡 Explain'}
+                  </button>
+                </div>
+                {/* Translation Display */}
+                {showSuggestionTranslations[currentSuggestionIndex] && suggestionTranslations[currentSuggestionIndex] && (
+                  <div style={{
+                    marginTop: '0.75rem',
+                    padding: '0.75rem',
+                    background: 'linear-gradient(135deg, #f0f8ff 0%, #e6f3ff 100%)',
+                    border: '1px solid #d0e4f7',
+                    borderRadius: 8,
+                    fontSize: '0.85rem',
+                    color: '#2c5282',
+                    position: 'relative',
+                    boxShadow: '0 2px 8px rgba(44,82,130,0.08)'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                      <span style={{ fontWeight: 700, fontSize: '0.8rem' }}>
+                        💡 Explanation
+                      </span>
+                      <button
+                        onClick={() => setShowSuggestionTranslations(prev => ({ ...prev, [currentSuggestionIndex]: false }))}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#2c5282',
+                          fontSize: '1rem',
+                          cursor: 'pointer',
+                          padding: '0.1rem',
+                          borderRadius: '2px'
+                        }}
+                        title="Hide explanation"
+                      >
+                        ×
+                      </button>
+                    </div>
+                    <div style={{ marginBottom: '0.5rem' }}>
+                      <strong>Translation:</strong> {suggestionTranslations[currentSuggestionIndex]?.translation || ''}
+                    </div>
+                    {suggestionTranslations[currentSuggestionIndex]?.breakdown && (
+                      <div style={{ marginTop: '0.5rem' }}>
+                        <div style={{ marginBottom: '0.5rem' }}>
+                          <strong>📖 Explanation:</strong>
+                        </div>
+                        <div style={{
+                          background: 'rgba(255,255,255,0.7)',
+                          padding: '0.75rem',
+                          borderRadius: 6,
+                          border: '1px solid #e0e0e0',
+                          fontSize: '0.8rem',
+                          lineHeight: '1.5',
+                          whiteSpace: 'pre-wrap'
+                        }}>
+                          {suggestionTranslations[currentSuggestionIndex].breakdown}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -2392,13 +3083,16 @@ function Analyze() {
       {showDetailedFeedbackPanel && (
         <div style={{ 
           width: `${getPanelWidths().right * 100}%`, 
-          background: '#fff', 
+          background: isDarkMode ? '#1e293b' : '#fff', 
           borderRadius: 12,
           display: 'flex',
           flexDirection: 'column',
-          boxShadow: '0 3px 20px rgba(60,76,115,0.08)',
+          boxShadow: isDarkMode 
+            ? '0 3px 20px rgba(0,0,0,0.3)' 
+            : '0 3px 20px rgba(60,76,115,0.08)',
           marginLeft: 0,
-          marginTop: 0
+          marginTop: 0,
+          transition: 'background 0.3s ease, box-shadow 0.3s ease'
         }}>
           {/* Full Height - Detailed Analysis */}
           <div style={{ 
@@ -2408,18 +3102,19 @@ function Analyze() {
           }}>
             {/* Detailed Analysis Header */}
             <div style={{ 
-              background: 'var(--rose-accent)', 
-              color: 'var(--blue-secondary)', 
+              background: isDarkMode ? '#f0c8d0' : 'var(--rose-accent)', 
+              color: isDarkMode ? '#3b5377' : 'var(--blue-secondary)', 
               padding: '0.75rem 1rem', 
               borderRadius: '12px 12px 0 0',
               textAlign: 'center',
-              borderBottom: '1px solid #ececec',
+              borderBottom: isDarkMode ? '1px solid #334155' : '1px solid #ececec',
               fontFamily: 'Gabriela, Arial, sans-serif',
               fontWeight: 600,
               fontSize: '0.95rem',
               display: 'flex',
               justifyContent: 'space-between',
-              alignItems: 'center'
+              alignItems: 'center',
+              transition: 'background 0.3s ease, color 0.3s ease, border-color 0.3s ease'
             }}>
               <span>📊 Conversation Errors</span>
               <button
@@ -2451,7 +3146,8 @@ function Analyze() {
             }}>
               {feedback && (
                 <div style={{
-                  background: '#fff',
+                  background: isDarkMode ? '#1e293b' : '#fff',
+                  color: isDarkMode ? '#f8fafc' : '#000',
                   padding: '1rem',
                   fontSize: '0.9rem',
                   lineHeight: 1.4,
@@ -2459,23 +3155,25 @@ function Analyze() {
                   fontFamily: 'AR One Sans, Arial, sans-serif',
                   fontWeight: 400,
                   wordWrap: 'break-word',
-                  overflowWrap: 'break-word'
+                  overflowWrap: 'break-word',
+                  transition: 'background 0.3s ease, color 0.3s ease'
                 }}>
                   {feedback}
                 </div>
               )}
               {!feedback && (
                 <div style={{
-                  background: '#fff',
+                  background: isDarkMode ? '#1e293b' : '#fff',
+                  color: isDarkMode ? '#94a3b8' : '#666',
                   padding: '1rem',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  color: '#666',
                   fontSize: '0.85rem',
                   fontStyle: 'italic',
                   textAlign: 'center',
-                  minHeight: '100px'
+                  minHeight: '100px',
+                  transition: 'background 0.3s ease, color 0.3s ease'
                 }}>
                   Click "🎯 Check" on any user message to see corrections here
                 </div>

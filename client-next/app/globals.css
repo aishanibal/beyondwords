@@ -16,15 +16,58 @@
   --blue-secondary: #3b5377;
   --rose-accent: #d6b6b6;
   --text-dark: hsl(0, 0%, 24%);
+  
+  /* Light mode colors */
+  --card: #ffffff;
+  --card-foreground: hsl(0, 0%, 24%);
+  --popover: #ffffff;
+  --popover-foreground: hsl(0, 0%, 24%);
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --border: #e2e8f0;
+  --input: #ffffff;
+  --ring: #84546d;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+}
+
+.dark {
+  --background: #0f172a;
+  --foreground: #f8fafc;
+  --card: #1e293b;
+  --card-foreground: #f8fafc;
+  --popover: #1e293b;
+  --popover-foreground: #f8fafc;
+  --primary: #84546d;
+  --primary-foreground: #ffffff;
+  --secondary: #3b5377;
+  --secondary-foreground: #f8fafc;
+  --muted: #334155;
+  --muted-foreground: #94a3b8;
+  --accent: #334155;
+  --accent-foreground: #f8fafc;
+  --destructive: #7f1d1d;
+  --destructive-foreground: #f8fafc;
+  --border: #334155;
+  --input: #1e293b;
+  --ring: #84546d;
+  
+  /* Custom dark mode colors - lighter versions of existing theme */
+  --cream: #0f172a;
+  --rose-primary: #e8b3c3;
+  --blue-secondary: #8ba3d9;
+  --rose-accent: #f0c8d0;
+  --text-dark: #f8fafc;
 }
 
 body {
-  background: var(--cream);
-  color: var(--text-dark);
+  background: var(--background);
+  color: var(--foreground);
   font-family: 'Montserrat', Arial, sans-serif;
   margin: 0;
   padding: 0;
   text-align: left;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 h1 {
@@ -80,4 +123,79 @@ h1 {
 
 .goals-scroll::-webkit-scrollbar-thumb:hover {
   background: var(--rose-primary);
+}
+
+/* Dark mode utility classes */
+.dark .bg-card {
+  background: var(--card);
+}
+
+.dark .shadow-card {
+  box-shadow: 0 4px 32px 0 rgba(0, 0, 0, 0.3);
+}
+
+/* Smooth transitions for theme switching */
+* {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+/* Dark mode specific styles */
+.dark .text-rose-primary {
+  color: var(--rose-primary);
+}
+
+.dark .text-blue-secondary {
+  color: var(--blue-secondary);
+}
+
+.dark .text-rose-accent {
+  color: var(--rose-accent);
+}
+
+/* Form elements in dark mode */
+.dark input,
+.dark textarea,
+.dark select {
+  background-color: var(--input);
+  border-color: var(--border);
+  color: var(--foreground);
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: var(--muted-foreground);
+}
+
+/* Button styles for dark mode */
+.dark .bg-rose-primary {
+  background-color: var(--rose-primary);
+}
+
+.dark .bg-rose-primary:hover {
+  background-color: #f0c8d0;
+}
+
+/* Card and container styles */
+.dark .bg-white {
+  background-color: var(--card);
+}
+
+.dark .border-gray-200 {
+  border-color: var(--border);
+}
+
+.dark .text-gray-600 {
+  color: var(--muted-foreground);
+}
+
+.dark .text-gray-700 {
+  color: var(--foreground);
+}
+
+.dark .text-gray-800 {
+  color: var(--foreground);
+}
+
+.dark .text-gray-900 {
+  color: var(--foreground);
 }

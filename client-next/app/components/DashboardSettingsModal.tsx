@@ -10,6 +10,7 @@ interface DashboardType {
   talk_topics: string[];
   learning_goals: string[];
   speak_speed?: number;
+  romanization_display?: string; // 'both', 'script_only', 'romanized_only'
   is_primary?: boolean;
 }
 
@@ -20,6 +21,22 @@ interface DashboardSettingsModalProps {
   onUpdate: (dashboard: DashboardType) => void;
   onDelete?: (language: string) => void;
 }
+
+// Script languages that need romanization
+const SCRIPT_LANGUAGES = {
+  'hi': 'Devanagari',
+  'ja': 'Japanese',
+  'zh': 'Chinese',
+  'ko': 'Korean',
+  'ar': 'Arabic',
+  'ta': 'Tamil',
+  'ml': 'Malayalam',
+  'or': 'Odia'
+};
+
+const isScriptLanguage = (languageCode: string): boolean => {
+  return languageCode in SCRIPT_LANGUAGES;
+};
 
 const getLanguageInfo = (code: string): { label: string; flag: string } => {
   const languages: Record<string, { label: string; flag: string }> = {
@@ -60,11 +77,24 @@ export default function DashboardSettingsModal({
 
   useEffect(() => {
     if (dashboard) {
+      console.log('[DEBUG] Dashboard data received:', dashboard);
+      console.log('[DEBUG] Is script language:', isScriptLanguage(dashboard.language));
+      console.log('[DEBUG] Current romanization_display:', dashboard.romanization_display);
+      
       setEditedDashboard({
         ...dashboard,
         talk_topics: dashboard.talk_topics || [],
         learning_goals: dashboard.learning_goals || [],
-        speak_speed: dashboard.speak_speed || 1.0
+        speak_speed: dashboard.speak_speed || 1.0,
+        romanization_display: isScriptLanguage(dashboard.language) ? (dashboard.romanization_display || 'both') : undefined
+      });
+      
+      console.log('[DEBUG] Edited dashboard initialized:', {
+        ...dashboard,
+        talk_topics: dashboard.talk_topics || [],
+        learning_goals: dashboard.learning_goals || [],
+        speak_speed: dashboard.speak_speed || 1.0,
+        romanization_display: isScriptLanguage(dashboard.language) ? (dashboard.romanization_display || 'both') : undefined
       });
     }
   }, [dashboard]);
@@ -92,17 +122,33 @@ export default function DashboardSettingsModal({
     setSaveError('');
     try {
       const token = localStorage.getItem('jwt');
-      const response = await axios.put(`/api/user/language-dashboards/${dashboard.language}`, {
+      const updateData: any = {
         proficiency_level: editedDashboard.proficiency_level,
         talk_topics: editedDashboard.talk_topics,
         learning_goals: editedDashboard.learning_goals,
         speak_speed: editedDashboard.speak_speed
-      }, {
+      };
+
+      // Only include romanization_display for script languages
+      if (isScriptLanguage(dashboard.language)) {
+        updateData.romanization_display = editedDashboard.romanization_display;
+        console.log('[DEBUG] Saving romanization_display:', editedDashboard.romanization_display);
+      }
+
+      console.log('[DEBUG] Saving dashboard data:', updateData);
+      console.log('[DEBUG] Language:', dashboard.language);
+      console.log('[DEBUG] Is script language:', isScriptLanguage(dashboard.language));
+
+      const response = await axios.put(`/api/user/language-dashboards/${dashboard.language}`, updateData, {
         headers: { Authorization: `Bearer ${token}` }
       });
+      
+      console.log('[DEBUG] Save response:', response.data);
       onUpdate(response.data.dashboard);
       onClose();
     } catch (err: any) {
+      console.error('[DEBUG] Save error:', err);
+      console.error('[DEBUG] Error response:', err.response?.data);
       setSaveError('Failed to update dashboard settings. Please try again.');
     } finally {
       setIsSaving(false);
@@ -435,6 +481,67 @@ export default function DashboardSettingsModal({
             </div>
           </div>
         </div>
+
+        {/* Romanization Display - Only for Script Languages */}
+        {isScriptLanguage(dashboard.language) && (
+          <div style={{ marginBottom: '2rem' }}>
+            <h3 style={{ 
+              color: '#3c4c73', 
+              fontSize: '1.1rem', 
+              fontWeight: 600, 
+              marginBottom: '1rem'
+            }} className="font-heading">
+              🔤 Romanization Display
+            </h3>
+            <p style={{ 
+              color: '#7e5a75', 
+              fontSize: '0.85rem', 
+              marginBottom: '1rem',
+              lineHeight: 1.4
+            }} className="font-body">
+              Choose how the AI displays romanized text for {getLanguageInfo(dashboard.language).label}.
+            </p>
+            <div style={{ 
+              display: 'grid', 
+              gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', 
+              gap: '0.5rem'
+            }}>
+              {['both', 'script_only', 'romanized_only'].map(display => {
+                const isSelected = editedDashboard.romanization_display === display;
+                return (
+                  <button
+                    key={display}
+                    onClick={() => setEditedDashboard((prev: DashboardType) => ({ ...prev, romanization_display: display }))}
+                    style={{
+                      padding: '0.75rem',
+                      borderRadius: '8px',
+                      border: `2px solid ${isSelected ? '#7e5a75' : 'rgba(126,90,117,0.2)'}`,
+                      backgroundColor: isSelected ? 'rgba(126,90,117,0.1)' : '#f8f6f4',
+                      cursor: 'pointer',
+                      transition: 'all 0.3s ease',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem'
+                    }}
+                  >
+                    <div style={{ fontSize: '1.2rem' }}>{display === 'both' ? '🔤' : display === 'script_only' ? '👁️' : '👄'}</div>
+                    <div style={{ 
+                      fontWeight: 500, 
+                      color: '#3c4c73', 
+                      fontSize: '0.85rem',
+                      flex: 1
+                    }} className="font-body">
+                      {display === 'both' ? 'Both Script and Romanized' : display === 'script_only' ? 'Only Script' : 'Only Romanized'}
+                    </div>
+                    {isSelected && (
+                      <div style={{ color: '#7e5a75', fontSize: '1rem' }}>✓</div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Delete Warning */}
         <div style={{
