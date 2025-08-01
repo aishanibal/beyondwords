@@ -12,7 +12,7 @@ from transformers import Wav2Vec2ForCTC, Wav2Vec2Processor
 import librosa
 import numpy as np
 import datetime
-from gemini_client import get_conversational_response, get_detailed_feedback, get_text_suggestions, get_translation, is_gemini_ready, get_short_feedback, get_detailed_breakdown, create_tutor
+from gemini_client import get_conversational_response, get_detailed_feedback, get_text_suggestions, get_translation, is_gemini_ready, get_short_feedback, get_detailed_breakdown, create_tutor, get_quick_translation
 # from dotenv import load_dotenv
 # load_dotenv()
 
@@ -684,6 +684,41 @@ def explain_suggestion():
         return jsonify(explanation_result)
     except Exception as e:
         print(f"Explain suggestion error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/quick_translation', methods=['POST'])
+def quick_translation():
+    """Get quick translation of AI message with word-by-word breakdown"""
+    try:
+        data = request.get_json()
+        ai_message = data.get('ai_message', '')
+        language = data.get('language', 'en')
+        user_level = data.get('user_level', 'beginner')
+        user_topics = data.get('user_topics', [])
+        formality = data.get('formality', 'friendly')
+        feedback_language = data.get('feedback_language', 'en')
+        user_goals = data.get('user_goals', [])
+        description = data.get('description', None)
+        
+        print(f"=== /quick_translation called ===")
+        print(f"AI message: {ai_message}")
+        print(f"Language: {language}")
+        print(f"User level: {user_level}")
+        print(f"User topics: {user_topics}")
+        print(f"User goals: {user_goals}")
+        print(f"Formality: {formality}")
+        
+        if not ai_message:
+            return jsonify({"error": "No AI message provided"}), 400
+        
+        # Call AI client for quick translation
+        translation_result = get_quick_translation(ai_message, language, user_level, user_topics, formality, feedback_language, user_goals, description)
+        print(f"Generated quick translation length: {len(translation_result)}")
+        print(f"Generated quick translation: {translation_result}")
+        
+        return jsonify({"translation": translation_result})
+    except Exception as e:
+        print(f"Quick translation error: {e}")
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':

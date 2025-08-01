@@ -1512,6 +1512,50 @@ app.post('/api/tts', authenticateJWT, async (req: Request, res: Response) => {
   }
 });
 
+// Quick translation endpoint
+app.post('/api/quick_translation', authenticateJWT, async (req: Request, res: Response) => {
+  try {
+    console.log('POST /api/quick_translation called');
+    const { ai_message, language, user_level, user_topics, formality, feedback_language, user_goals, description } = req.body;
+    
+    if (!ai_message) {
+      return res.status(400).json({ error: 'No AI message provided' });
+    }
+    
+    // Call Python API for quick translation
+    try {
+      const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5000';
+      const pythonResponse = await axios.post(`${pythonApiUrl}/quick_translation`, {
+        ai_message: ai_message,
+        language: language || 'en',
+        user_level: user_level || 'beginner',
+        user_topics: user_topics || [],
+        formality: formality || 'friendly',
+        feedback_language: feedback_language || 'en',
+        user_goals: user_goals || [],
+        description: description || null
+      }, {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 30000
+      });
+      
+      console.log('Python quick translation received');
+      res.json(pythonResponse.data);
+    } catch (pythonError: any) {
+      console.error('Python API not available for quick translation:', pythonError.message);
+      
+      // Fallback response if Python API fails
+      res.json({
+        translation: "Quick translation service temporarily unavailable",
+        error: "Python API not available"
+      });
+    }
+  } catch (error: any) {
+    console.error('Quick translation error:', error);
+    res.status(500).json({ error: 'Error getting quick translation', details: error.message });
+  }
+});
+
 // Serve uploads directory statically for TTS audio
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
