@@ -159,7 +159,7 @@ Reply naturally in {self.language_name}."""
             print(f"Error generating conversational response: {e}")
             return "Let's keep practicing together!"
 
-    def get_detailed_feedback(self, user_input: str, context: str = "", description: str = None) -> str:
+    def get_detailed_feedback(self, user_input: str, context: str = "", description: str = None, romanization_display: str = None) -> str:
         """Generate detailed feedback about grammar, pronunciation, etc."""
         if not self.model or not GOOGLE_AI_AVAILABLE:
             return "⚠️ Google AI not available for feedback."
@@ -170,6 +170,8 @@ Reply naturally in {self.language_name}."""
         tone_guidance = "culturally-aware"
         if description:
             tone_guidance = f"appropriate to your described personality: {description}. The description defines your emotional tone and personality - prioritize this over any default tone."
+        
+       
         
         prompt = f"""
       
@@ -189,15 +191,54 @@ YOUR RESPONSE STRUCTURE (use {self.feedback_language} for explanations):
 - If the input is correct and natural, simply say:
 "Correct, that sounds great!" or something similar with the same sentiment and length in {self.feedback_language}.
 
-- If there are errors, follow this format:
-Explanation: Briefly explain why it was incorrect (e.g., verb tense, word order, unnatural phrasing, incorrect particle, politeness marker, closeness level, etc.) in {self.feedback_language}.
+- If there are errors, follow this EXACT format, the brackets are to show placement, DO NOT include them in the reponse:
+
+**Your Sentence**
+"""
+
+        if self.is_script_language():
+            prompt += f"""[The user sentence with the WITH FORMATTING]
+[Romanized version of the above WITH FORMATTING]
+
+**Explanation**
+[specific word/phrase error, WITH FORMATTING] / [specific error romanized if applicable, WITH FORMATTING] - [explanation with NO FORMATTING][alternative, solution, correct word/phrase]
+
+**Corrected Version**
+[Corrected version of user sentence]
+[Corrected version of user sentence romanized if applicable]
+
+FORMATTING INSTRUCTIONS:
+- Use `__word__` (double underscores) for GRAMMAR MISTAKES (serious errors like wrong verb tense, missing particles, incorrect word order)
+- Use `~~word~~` (double tildes) for UNNATURAL PHRASING (awkward or non-native expressions)
+- Use `==word==` (double equals) for ENGLISH WORDS that should be replaced with {self.language_name} equivalents
+- Use `<<word>>` (double angle brackets) to highlight CORRECT WORDS/ALTERNATIVES that should be used instead
+- Apply formatting to BOTH script and romanized versions when both are present
+- No "`" characters in response
+- When showing script and romanized verisons in the explanation, ONLY use a / between them.
+"""
+        else:
+            prompt += f"""[The user sentence with the WITH FORMATTING]
+
+**Explanation**
+[specific word/phrase error, WITH FORMATTING] - [explanation with NO FORMATTING][alternative, solution, correct word/phrase]
+
+**Corrected Version**
+[Corrected version of user sentence]
+
+FORMATTING INSTRUCTIONS:
+- Use `__word__` (double underscores) for GRAMMAR MISTAKES (serious errors like wrong verb tense, missing particles, incorrect word order)
+- Use `~~word~~` (double tildes) for UNNATURAL PHRASING (awkward or non-native expressions)
+- Use `==word==` (double equals) for ENGLISH WORDS that should be replaced with {self.language_name} equivalents
+- Use `<<word>>` (double angle brackets) to highlight CORRECT WORDS/ALTERNATIVES that should be used instead
+"""
+
+        prompt += f"""
 
 TIPS:
 - Be encouraging and specific.
 - Focus on grammar, natural sentence structure, and phrasing that sounds native.
 - If the user used a non-{self.language_name} word that has a better equivalent, suggest a replacement like: "Instead of saying 'X', you'll sound more fluent if you say 'Y'." in {self.feedback_language}.
-- Do not include filler words like greetings, etc.
-Speak like a friendly older sibling or patient tutor. Keep your tone warm, supportive, and helpful.
+- Cut the Filler.
 Always use {self.feedback_language} for explanations.
 """
         
@@ -1645,7 +1686,7 @@ def get_conversational_response(transcription: str, chat_history: List[Dict], la
     # Make separate Gemini call for conversation
     return tutor.get_conversational_response(transcription, context, description)
 
-def get_detailed_feedback(phoneme_analysis: str, reference_text: str, recognized_text: str, chat_history: List[Dict], language: str = 'en', user_level: str = 'beginner', user_topics: List[str] = None, feedback_language: str = 'en', description: str = None) -> str:
+def get_detailed_feedback(phoneme_analysis: str, reference_text: str, recognized_text: str, chat_history: List[Dict], language: str = 'en', user_level: str = 'beginner', user_topics: List[str] = None, feedback_language: str = 'en', description: str = None, romanization_display: str = None) -> str:
     """Get detailed feedback using separate Gemini call."""
     if user_topics is None:
         user_topics = []
@@ -1666,7 +1707,7 @@ def get_detailed_feedback(phoneme_analysis: str, reference_text: str, recognized
     context = "\n".join([f"{msg['sender']}: {msg['text']}" for msg in chat_history[-4:]]) if chat_history else ""
     
     # Make separate Gemini call for feedback
-    return tutor.get_detailed_feedback(recognized_text, context, description)
+    return tutor.get_detailed_feedback(recognized_text, context, description, romanization_display)
 
 def get_text_suggestions(chat_history: List[Dict], language: str = 'en', user_level: str = 'beginner', user_topics: List[str] = None, formality: str = 'friendly', feedback_language: str = 'en', user_goals: List[str] = None, description: str = None) -> list:
     """Get text suggestions using separate Gemini call."""

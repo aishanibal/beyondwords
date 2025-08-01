@@ -456,7 +456,7 @@ app.post('/api/feedback', authenticateJWT, async (req: Request, res: Response) =
   try {
     console.log('POST /api/feedback called');
     console.log('Request body:', req.body);
-    const { user_input, context, language, user_level, user_topics } = req.body;
+    const { user_input, context, language, user_level, user_topics, romanization_display } = req.body;
     
     if (!user_input || !context) {
       console.log('Missing required fields:', { user_input: !!user_input, context: !!context });
@@ -485,7 +485,8 @@ app.post('/api/feedback', authenticateJWT, async (req: Request, res: Response) =
         language,
         user_level,
         user_topics,
-        feedback_language: 'en' // Default to English for now
+        feedback_language: 'en', // Default to English for now
+        romanization_display
       }, {
         headers: { 'Content-Type': 'application/json' },
         timeout: 120000

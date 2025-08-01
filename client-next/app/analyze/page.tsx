@@ -63,10 +63,23 @@ const formatScriptLanguageText = (text: string, languageCode: string): { mainTex
   
   // Check if the text already contains romanized format (text) or (romanized)
   if (text.includes('(') && text.includes(')')) {
-    // Extract main text and romanized text
-    const match = text.match(/^(.+?)\s*\((.+?)\)$/);
+    // Try different patterns to extract main text and romanized text
+    // Pattern 1: text (romanized) at the end
+    let match = text.match(/^(.+?)\s*\(([^)]+)\)$/);
     if (match) {
       return { mainText: match[1].trim(), romanizedText: match[2].trim() };
+    }
+    
+    // Pattern 2: text (romanized) anywhere in the text
+    match = text.match(/^(.+?)\s*\(([^)]+)\)/);
+    if (match) {
+      return { mainText: match[1].trim(), romanizedText: match[2].trim() };
+    }
+    
+    // Pattern 3: (romanized) text - romanized at the beginning
+    match = text.match(/^\(([^)]+)\)\s*(.+)$/);
+    if (match) {
+      return { mainText: match[2].trim(), romanizedText: match[1].trim() };
     }
   }
   
@@ -265,7 +278,10 @@ function Analyze() {
   const [wasInterrupted, setWasInterrupted] = useState<boolean>(false);
   const interruptedRef = useRef<boolean>(false);
   const [shortFeedbacks, setShortFeedbacks] = useState<Record<number, string>>({});
+  const [isProcessingShortFeedback, setIsProcessingShortFeedback] = useState<boolean>(false);
   const [isLoadingInitialAI, setIsLoadingInitialAI] = useState<boolean>(false);
+  const [pendingTTSCount, setPendingTTSCount] = useState<number>(0);
+  const [isPlayingAnyTTS, setIsPlayingAnyTTS] = useState<boolean>(false);
   const [manualRecording, setManualRecording] = useState(false);
   const [showShortFeedbackPanel, setShowShortFeedbackPanel] = useState<boolean>(true);
   const [showDetailedFeedbackPanel, setShowDetailedFeedbackPanel] = useState<boolean>(true);
@@ -734,6 +750,28 @@ function Analyze() {
   const fetchAndShowShortFeedback = async (transcription: string) => {
     console.log('[DEBUG] fetchAndShowShortFeedback called', { autoSpeak, enableShortFeedback, chatHistory: [...chatHistory] });
     if (!autoSpeak || !enableShortFeedback) return;
+    
+    // Prevent duplicate calls while processing
+    if (isProcessingShortFeedback) {
+      console.log('[DEBUG] Already processing short feedback, skipping duplicate call');
+      return;
+    }
+    
+    // Check if we already have a short feedback for this transcription to prevent duplicates
+    const existingFeedback = chatHistory.find(msg => 
+      msg.sender === 'System' && 
+      msg.text && 
+      msg.timestamp && 
+      Date.now() - msg.timestamp.getTime() < 5000 // Within last 5 seconds
+    );
+    
+    if (existingFeedback) {
+      console.log('[DEBUG] Short feedback already exists, skipping duplicate call');
+      return;
+    }
+    
+    setIsProcessingShortFeedback(true);
+    
     // Prepare context (last 4 messages)
     const context = chatHistory.slice(-4).map(msg => `${msg.sender}: ${msg.text}`).join('\n');
     try {
@@ -756,24 +794,32 @@ function Analyze() {
       console.log('[DEBUG] /short_feedback response', shortFeedbackRes);
       const shortFeedback = shortFeedbackRes.data.short_feedback;
       console.log('[DEBUG] shortFeedback value:', shortFeedback);
-      setShortFeedbacks(prev => ({ ...prev, [chatHistory.length]: shortFeedback }));
+      
       if (shortFeedback !== undefined && shortFeedback !== null && shortFeedback !== '') {
         console.log('[DEBUG] Adding System feedback to chatHistory', { shortFeedback, chatHistory: [...chatHistory] });
+        
+        // Use a more reliable approach to set the short feedback key
         setChatHistory(prev => {
+          const currentLength = prev.length;
           const updated = [...prev, { sender: 'System', text: shortFeedback, timestamp: new Date() }];
           console.log('[DEBUG] (fetchAndShowShortFeedback) Updated chatHistory after System message:', updated);
+          
+          // Set short feedback with the correct index
+          setShortFeedbacks(shortFeedbacks => ({ ...shortFeedbacks, [currentLength]: shortFeedback }));
+          
           return updated;
         });
+        
+        // Play short feedback TTS (if autospeak and feedback exists)
+        const cacheKey = `short_feedback_${Date.now()}`;
+        await playTTSAudio(shortFeedback, language, cacheKey);
       } else {
         console.warn('[DEBUG] (fetchAndShowShortFeedback) shortFeedback is empty or undefined:', shortFeedback);
       }
-      // Play short feedback TTS (if autospeak and feedback exists)
-      if (shortFeedback) {
-        const cacheKey = `short_feedback_${chatHistory.length}`;
-        await playTTSAudio(shortFeedback, language, cacheKey);
-      }
     } catch (e: unknown) {
       console.error('[DEBUG] (fetchAndShowShortFeedback) Error calling /short_feedback API:', e);
+    } finally {
+      setIsProcessingShortFeedback(false);
     }
   };
 
@@ -823,6 +869,7 @@ function Analyze() {
     
     // Set playing state
     setIsPlayingTTS(prev => ({ ...prev, [cacheKey]: true }));
+    setIsPlayingAnyTTS(true);
     
     try {
       const ttsUrl = await generateTTSForText(text, language, cacheKey);
@@ -834,11 +881,28 @@ function Analyze() {
         audio.onended = () => {
           ttsAudioRef.current = null;
           setIsPlayingTTS(prev => ({ ...prev, [cacheKey]: false }));
+          setIsPlayingAnyTTS(false);
+          
+          // For autospeak mode, restart recording after TTS finishes
+          if (autoSpeakRef.current) {
+            setTimeout(() => {
+              if (autoSpeakRef.current) startRecording();
+            }, 300);
+          }
         };
         
         audio.onerror = () => {
           console.error('Error playing TTS audio');
+          ttsAudioRef.current = null;
           setIsPlayingTTS(prev => ({ ...prev, [cacheKey]: false }));
+          setIsPlayingAnyTTS(false);
+          
+          // For autospeak mode, restart recording even if TTS fails
+          if (autoSpeakRef.current) {
+            setTimeout(() => {
+              if (autoSpeakRef.current) startRecording();
+            }, 300);
+          }
         };
         
         await audio.play();
@@ -846,6 +910,14 @@ function Analyze() {
     } catch (error) {
       console.error('Error playing TTS:', error);
       setIsPlayingTTS(prev => ({ ...prev, [cacheKey]: false }));
+      setIsPlayingAnyTTS(false);
+      
+      // For autospeak mode, restart recording even if TTS fails
+      if (autoSpeakRef.current) {
+        setTimeout(() => {
+          if (autoSpeakRef.current) startRecording();
+        }, 300);
+      }
     }
   };
 
@@ -858,6 +930,7 @@ function Analyze() {
     
     // Set playing state
     setIsPlayingTTS(prev => ({ ...prev, [cacheKey]: true }));
+    setIsPlayingAnyTTS(true);
     
     try {
       const audioUrl = `http://localhost:4000${ttsUrl}`;
@@ -867,17 +940,35 @@ function Analyze() {
       audio.onended = () => {
         ttsAudioRef.current = null;
         setIsPlayingTTS(prev => ({ ...prev, [cacheKey]: false }));
+        setIsPlayingAnyTTS(false);
+        
+        // For autospeak mode, restart recording after TTS finishes
+        if (autoSpeakRef.current) {
+          setTimeout(() => {
+            if (autoSpeakRef.current) startRecording();
+          }, 300);
+        }
       };
       
       audio.onerror = () => {
         console.error('Error playing existing TTS audio');
+        ttsAudioRef.current = null;
         setIsPlayingTTS(prev => ({ ...prev, [cacheKey]: false }));
+        setIsPlayingAnyTTS(false);
+        
+        // For autospeak mode, restart recording even if TTS fails
+        if (autoSpeakRef.current) {
+          setTimeout(() => {
+            if (autoSpeakRef.current) startRecording();
+          }, 300);
+        }
       };
       
       await audio.play();
     } catch (error) {
       console.error('Error playing existing TTS:', error);
       setIsPlayingTTS(prev => ({ ...prev, [cacheKey]: false }));
+      setIsPlayingAnyTTS(false);
     }
   };
 
@@ -971,15 +1062,11 @@ function Analyze() {
           romanizedText: userRomanizedText,
           timestamp: new Date() 
         }];
-        // After chatHistory is updated, fetch short feedback if needed
-        if (autoSpeak && enableShortFeedback) {
-          // Use setTimeout to ensure state update is flushed before calling feedback
-          setTimeout(() => {
-            fetchAndShowShortFeedback(transcription);
-          }, 0);
-        }
         return updated;
       });
+      
+      // Store transcription for potential short feedback after AI response TTS finishes
+      const currentTranscription = transcription;
       // Save user message to backend
       if (conversationId) {
         await saveMessageToBackend('User', transcription, 'text', null, null, userRomanizedText);
@@ -1006,16 +1093,47 @@ function Analyze() {
           if (headResponse.ok) {
             const audio = new window.Audio(audioUrl);
             ttsAudioRef.current = audio;
+            setIsPlayingAnyTTS(true);
+            
             audio.onended = () => {
               ttsAudioRef.current = null;
+              setIsPlayingAnyTTS(false);
+              
+              // For autospeak mode, fetch short feedback after AI response TTS finishes
+              if (autoSpeakRef.current && enableShortFeedback && !isProcessingShortFeedback) {
+                setTimeout(() => {
+                  fetchAndShowShortFeedback(currentTranscription);
+                }, 100);
+              } else if (autoSpeakRef.current) {
+                // If no short feedback, restart recording after AI response TTS finishes
+                setTimeout(() => {
+                  if (autoSpeakRef.current) startRecording();
+                }, 300);
+              }
+            };
+            
+            audio.onerror = () => {
+              console.error('Failed to play AI response TTS audio');
+              ttsAudioRef.current = null;
+              setIsPlayingAnyTTS(false);
+              // For autospeak mode, restart recording even if TTS fails
               if (autoSpeakRef.current) {
                 setTimeout(() => {
                   if (autoSpeakRef.current) startRecording();
                 }, 300);
               }
             };
+            
             audio.play().catch(error => {
               console.error('Failed to play TTS audio:', error);
+              ttsAudioRef.current = null;
+              setIsPlayingAnyTTS(false);
+              // For autospeak mode, restart recording even if TTS fails
+              if (autoSpeakRef.current) {
+                setTimeout(() => {
+                  if (autoSpeakRef.current) startRecording();
+                }, 300);
+              }
             });
           }
         } catch (fetchError: unknown) {
@@ -1267,6 +1385,9 @@ function Analyze() {
           console.error('Error updating conversation with summary:', updateError);
         }
       }
+      
+      // Navigate to dashboard
+      router.push('/dashboard');
       
       return response.data;
     } catch (error: unknown) {
@@ -1608,7 +1729,8 @@ function Analyze() {
         context,
         language,
         user_level: userPreferences.userLevel,
-        user_topics: userPreferences.topics
+        user_topics: userPreferences.topics,
+        romanization_display: userPreferences.romanizationDisplay
       };
       
       console.log('[DEBUG] Sending to /api/feedback:', requestData);
@@ -1636,6 +1758,9 @@ function Analyze() {
       
       const detailedFeedback = response.data.feedback;
       
+      // Extract formatted sentence from feedback and update chat history
+      const formattedSentence = extractFormattedSentence(detailedFeedback, userPreferences.romanizationDisplay || 'both');
+      
       // Store feedback in the database for the specific message
       if (message && message.id) {
         const token = localStorage.getItem('jwt');
@@ -1648,11 +1773,19 @@ function Analyze() {
           token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
         );
         
-        // Update the message in chat history with the feedback
+        // Update the message in chat history with the feedback and formatted text
         setChatHistory(prev => 
           prev.map((msg, idx) => 
             idx === messageIndex 
-              ? { ...msg, detailedFeedback: detailedFeedback }
+              ? { 
+                  ...msg, 
+                  detailedFeedback: detailedFeedback,
+                  // Update the message text with formatted version if available
+                  ...(formattedSentence && {
+                    text: formattedSentence.mainText,
+                    romanizedText: formattedSentence.romanizedText
+                  })
+                }
               : msg
           )
         );
@@ -2001,21 +2134,12 @@ function Analyze() {
   };
 
   // Persona-related functions
-  const handleEndChat = async () => {
+  const handleEndChat = () => {
     // Only show persona modal if this is a new persona (not using an existing one)
     if (isNewPersona) {
       setShowPersonaModal(true);
     } else {
-      // Generate conversation summary and navigate to dashboard
-      try {
-        if (chatHistory.length > 0) {
-          await generateConversationSummary();
-        }
-        router.push('/dashboard');
-      } catch (error) {
-        console.error('Error generating conversation summary:', error);
-        router.push('/dashboard');
-      }
+      router.push('/dashboard');
     }
   };
 
@@ -2054,19 +2178,8 @@ function Analyze() {
           }
         }
         
-        // Close modal
+        // Close modal and navigate to dashboard
         setShowPersonaModal(false);
-        
-        // Generate conversation summary after saving persona
-        try {
-          if (chatHistory.length > 0) {
-            await generateConversationSummary();
-          }
-        } catch (error) {
-          console.error('Error generating conversation summary:', error);
-        }
-        
-        // Navigate to dashboard
         router.push('/dashboard');
       } else {
         throw new Error('Failed to save persona');
@@ -2079,18 +2192,8 @@ function Analyze() {
     }
   };
 
-  const cancelPersona = async () => {
+  const cancelPersona = () => {
     setShowPersonaModal(false);
-    
-    // Generate conversation summary after canceling persona
-    try {
-      if (chatHistory.length > 0) {
-        await generateConversationSummary();
-      }
-    } catch (error) {
-      console.error('Error generating conversation summary:', error);
-    }
-    
     router.push('/dashboard');
   };
 
@@ -2237,6 +2340,359 @@ function Analyze() {
     return { mainText: message.text, romanizedText: message.romanizedText };
   }
 };
+
+  // Helper function to get the appropriate text for TTS based on romanization display preference
+  const getTTSText = (message: ChatMessage, romanizationDisplay: string | undefined, language: string): string => {
+    // For non-script languages, always use the main text
+    if (!isScriptLanguage(language)) {
+      return message.text;
+    }
+    
+    // For script languages, choose based on romanization display preference
+    if (romanizationDisplay === 'romanized_only') {
+      return message.romanizedText || message.text;
+    } else {
+      // For 'script_only' or 'both', use the script text (main text)
+      // But first check if the main text already contains both script and romanized text
+      const formatted = formatScriptLanguageText(message.text, language);
+      return formatted.mainText;
+    }
+  };
+
+  // Helper function to render formatted text with color-coded underlines
+  const renderFormattedText = (text: string) => {
+    if (!text) return text;
+    
+    let processedText: (string | React.JSX.Element)[] = [text];
+    let elementIndex = 0;
+    
+    // Handle grammar mistakes (red) - __word__
+    processedText = processedText.flatMap((item) => {
+      if (typeof item === 'string' && item.includes('__')) {
+        const parts = item.split(/(__[^_]+__)/g);
+        return parts.map((part) => {
+          if (part.startsWith('__') && part.endsWith('__')) {
+            return (
+              <span key={`grammar-${elementIndex++}`} style={{
+                textDecoration: 'underline',
+                textDecorationColor: isDarkMode ? '#ef4444' : '#dc2626',
+                textDecorationThickness: '2px',
+                color: isDarkMode ? '#ef4444' : '#dc2626',
+                fontWeight: 600
+              }}>
+                {part.slice(2, -2)}
+              </span>
+            );
+          }
+          return part;
+        });
+      }
+      return item;
+    });
+    
+    // Handle unnatural phrasing (yellow) - ~~word~~
+    processedText = processedText.flatMap((item) => {
+      if (typeof item === 'string' && item.includes('~~')) {
+        const parts = item.split(/(~~[^~]+~~)/g);
+        return parts.map((part) => {
+          if (part.startsWith('~~') && part.endsWith('~~')) {
+            return (
+              <span key={`unnatural-${elementIndex++}`} style={{
+                textDecoration: 'underline',
+                textDecorationColor: isDarkMode ? '#fbbf24' : '#f59e0b',
+                textDecorationThickness: '2px',
+                color: isDarkMode ? '#fbbf24' : '#f59e0b',
+                fontWeight: 600
+              }}>
+                {part.slice(2, -2)}
+              </span>
+            );
+          }
+          return part;
+        });
+      }
+      return item;
+    });
+    
+    // Handle English words (blue) - ==word==
+    processedText = processedText.flatMap((item) => {
+      if (typeof item === 'string' && item.includes('==')) {
+        const parts = item.split(/(==[^=]+==)/g);
+        return parts.map((part) => {
+          if (part.startsWith('==') && part.endsWith('==')) {
+            return (
+              <span key={`english-${elementIndex++}`} style={{
+                textDecoration: 'underline',
+                textDecorationColor: isDarkMode ? '#60a5fa' : '#2563eb',
+                textDecorationThickness: '2px',
+                color: isDarkMode ? '#60a5fa' : '#2563eb',
+                fontWeight: 600
+              }}>
+                {part.slice(2, -2)}
+              </span>
+            );
+          }
+          return part;
+        });
+      }
+      return item;
+    });
+    
+    // Handle correct words/alternatives (green) - <<word>>
+    processedText = processedText.flatMap((item) => {
+      if (typeof item === 'string' && item.includes('<<')) {
+        const parts = item.split(/(<<[^>]+>>)/g);
+        return parts.map((part) => {
+          if (part.startsWith('<<') && part.endsWith('>>')) {
+            return (
+              <span key={`correct-${elementIndex++}`} style={{
+                backgroundColor: isDarkMode ? '#10b981' : '#10b981',
+                color: '#ffffff',
+                padding: '2px 4px',
+                borderRadius: '4px',
+                fontWeight: 700,
+                fontSize: '0.95em',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
+              }}>
+                {part.slice(2, -2)}
+              </span>
+            );
+          }
+          return part;
+        });
+      }
+      return item;
+    });
+    
+    return processedText;
+  };
+
+  // Helper function to extract formatted sentence from detailed feedback
+  const extractFormattedSentence = (feedback: string, romanizationDisplay: string): { mainText: string; romanizedText?: string } | null => {
+    if (!feedback) return null;
+    
+    const lines = feedback.split('\n');
+    let sentenceSection = '';
+    let inSentenceSection = false;
+    
+    for (const line of lines) {
+      if (line.includes('**Your Sentence**')) {
+        inSentenceSection = true;
+        continue;
+      }
+      if (inSentenceSection && line.startsWith('**')) {
+        break; // End of sentence section
+      }
+      if (inSentenceSection && line.trim()) {
+        sentenceSection += line + '\n';
+      }
+    }
+    
+    if (!sentenceSection.trim()) return null;
+    
+    const sentenceLines = sentenceSection.trim().split('\n').filter(line => line.trim());
+    
+    if (sentenceLines.length === 0) return null;
+    
+    // For script languages, we expect both script and romanized lines
+    if (isScriptLanguage(language)) {
+      if (sentenceLines.length >= 2) {
+        const scriptLine = sentenceLines[0].trim();
+        const romanizedLine = sentenceLines[1].trim();
+        
+        // Apply romanization display preference
+        if (romanizationDisplay === 'script_only') {
+          return { mainText: scriptLine };
+        } else if (romanizationDisplay === 'romanized_only') {
+          return { mainText: romanizedLine };
+        } else {
+          // 'both' or default
+          return { mainText: scriptLine, romanizedText: romanizedLine };
+        }
+      } else {
+        // Only one line available
+        return { mainText: sentenceLines[0].trim() };
+      }
+    } else {
+      // Non-script language
+      return { mainText: sentenceLines[0].trim() };
+    }
+  };
+
+  const renderFeedbackText = (text: string) => {
+    if (!text) return null;
+    
+    // Split the text into lines to handle different sections
+    const lines = text.split('\n');
+    const renderedLines = lines.map((line, index) => {
+                       // Handle bold headers (e.g., **Your Sentence**, **Corrected Version**)
+        if (line.trim().startsWith('**') && line.trim().endsWith('**')) {
+          const headerText = line.trim().slice(2, -2);
+          const isMainHeader = headerText === 'Your Sentence' || headerText === 'Corrected Version';
+          
+          return (
+            <div key={index} style={{ 
+              fontWeight: 700, 
+              fontSize: isMainHeader ? '1.1rem' : '1rem', 
+              marginTop: index > 0 ? '1.5rem' : '0',
+              marginBottom: '0.75rem',
+              color: isDarkMode ? '#e8b3c3' : '#c38d94',
+              borderBottom: isMainHeader ? `2px solid ${isDarkMode ? '#e8b3c3' : '#c38d94'}` : 'none',
+              paddingBottom: isMainHeader ? '0.5rem' : '0',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem'
+            }}>
+              {isMainHeader && (
+                <span style={{ fontSize: '1.2rem' }}>
+                  {headerText === 'Your Sentence' ? '💬' : '✅'}
+                </span>
+              )}
+              {headerText}
+            </div>
+          );
+        }
+      
+               // Fallback for any line that contains ** and these specific headers
+         if (line.includes('**') && (line.includes('Your Sentence') || line.includes('Corrected Version'))) {
+           const headerText = line.replace(/\*\*/g, '').trim();
+           const isMainHeader = headerText === 'Your Sentence' || headerText === 'Corrected Version';
+        
+        return (
+          <div key={index} style={{ 
+            fontWeight: 700, 
+            fontSize: isMainHeader ? '1.1rem' : '1rem', 
+            marginTop: index > 0 ? '1.5rem' : '0',
+            marginBottom: '0.75rem',
+            color: isDarkMode ? '#e8b3c3' : '#c38d94',
+            borderBottom: isMainHeader ? `2px solid ${isDarkMode ? '#e8b3c3' : '#c38d94'}` : 'none',
+            paddingBottom: isMainHeader ? '0.5rem' : '0',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem'
+          }}>
+            {isMainHeader && (
+              <span style={{ fontSize: '1.2rem' }}>
+                {headerText === 'Your Sentence' ? '💬' : '✅'}
+              </span>
+            )}
+            {headerText}
+          </div>
+        );
+      }
+      
+      // Process line with all three types of formatting
+      let processedLine: (string | React.JSX.Element)[] = [line];
+      let elementIndex = 0;
+      
+      // Handle grammar mistakes (red) - __word__
+      processedLine = processedLine.flatMap((item) => {
+        if (typeof item === 'string' && item.includes('__')) {
+          const parts = item.split(/(__[^_]+__)/g);
+          return parts.map((part, partIndex) => {
+            if (part.startsWith('__') && part.endsWith('__')) {
+              return (
+                <span key={`grammar-${elementIndex++}`} style={{
+                  textDecoration: 'underline',
+                  textDecorationColor: isDarkMode ? '#ef4444' : '#dc2626',
+                  textDecorationThickness: '2px',
+                  color: isDarkMode ? '#ef4444' : '#dc2626',
+                  fontWeight: 600
+                }}>
+                  {part.slice(2, -2)}
+                </span>
+              );
+            }
+            return part;
+          });
+        }
+        return item;
+      });
+      
+      // Handle unnatural phrasing (yellow) - ~~word~~
+      processedLine = processedLine.flatMap((item) => {
+        if (typeof item === 'string' && item.includes('~~')) {
+          const parts = item.split(/(~~[^~]+~~)/g);
+          return parts.map((part, partIndex) => {
+            if (part.startsWith('~~') && part.endsWith('~~')) {
+              return (
+                <span key={`unnatural-${elementIndex++}`} style={{
+                  textDecoration: 'underline',
+                  textDecorationColor: isDarkMode ? '#fbbf24' : '#f59e0b',
+                  textDecorationThickness: '2px',
+                  color: isDarkMode ? '#fbbf24' : '#f59e0b',
+                  fontWeight: 600
+                }}>
+                  {part.slice(2, -2)}
+                </span>
+              );
+            }
+            return part;
+          });
+        }
+        return item;
+      });
+      
+                     // Handle English words (blue) - ==word==
+               processedLine = processedLine.flatMap((item) => {
+                 if (typeof item === 'string' && item.includes('==')) {
+                   const parts = item.split(/(==[^=]+==)/g);
+                   return parts.map((part, partIndex) => {
+                     if (part.startsWith('==') && part.endsWith('==')) {
+                       return (
+                         <span key={`english-${elementIndex++}`} style={{
+                           textDecoration: 'underline',
+                           textDecorationColor: isDarkMode ? '#60a5fa' : '#2563eb',
+                           textDecorationThickness: '2px',
+                           color: isDarkMode ? '#60a5fa' : '#2563eb',
+                           fontWeight: 600
+                         }}>
+                           {part.slice(2, -2)}
+                         </span>
+                       );
+                     }
+                     return part;
+                   });
+                 }
+                 return item;
+               });
+               
+               // Handle correct words/alternatives (green) - <<word>>
+               processedLine = processedLine.flatMap((item) => {
+                 if (typeof item === 'string' && item.includes('<<')) {
+                   const parts = item.split(/(<<[^>]+>>)/g);
+                   return parts.map((part, partIndex) => {
+                     if (part.startsWith('<<') && part.endsWith('>>')) {
+                       return (
+                         <span key={`correct-${elementIndex++}`} style={{
+                           backgroundColor: isDarkMode ? '#10b981' : '#10b981',
+                           color: '#ffffff',
+                           padding: '2px 4px',
+                           borderRadius: '4px',
+                           fontWeight: 700,
+                           fontSize: '0.95em',
+                           boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                         }}>
+                           {part.slice(2, -2)}
+                         </span>
+                       );
+                     }
+                     return part;
+                   });
+                 }
+                 return item;
+               });
+      
+      // Return the processed line
+      return (
+        <div key={index} style={{ marginBottom: '0.5rem' }}>
+          {processedLine}
+        </div>
+      );
+    });
+    
+    return renderedLines;
+  };
 
   return (
     <div style={{ 
@@ -2631,7 +3087,7 @@ function Analyze() {
                         : 'linear-gradient(135deg, #fff 0%, #f8f9fa 100%)' 
                       : isDarkMode ? '#475569' : '#fff7e6',
                   color: message.sender === 'User' 
-                    ? '#fff' 
+                    ? (message.detailedFeedback ? 'inherit' : '#fff')
                     : message.sender === 'System' 
                       ? '#e67e22' 
                       : isDarkMode ? '#f8fafc' : '#3e3e3e',
@@ -2657,18 +3113,20 @@ function Analyze() {
                     const formatted = formatMessageForDisplay(message, userPreferences.romanizationDisplay);
                     return (
                       <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <span>{formatted.mainText}</span>
+                        <span>
+                          {message.detailedFeedback ? renderFormattedText(formatted.mainText) : formatted.mainText}
+                        </span>
                         {formatted.romanizedText && (
                           <span style={{
                             fontSize: '0.82em',
-                            color: isDarkMode ? '#94a3b8' : '#555',
-                            opacity: 0.65,
+                            color: message.detailedFeedback ? 'inherit' : (isDarkMode ? '#94a3b8' : '#555'),
+                            opacity: message.detailedFeedback ? 1 : 0.65,
                             marginTop: 2,
                             fontWeight: 400,
                             lineHeight: 1.2,
                             letterSpacing: '0.01em',
                           }}>
-                            {formatted.romanizedText}
+                            {message.detailedFeedback ? renderFormattedText(formatted.romanizedText) : formatted.romanizedText}
                           </span>
                         )}
                       </div>
@@ -2739,9 +3197,9 @@ function Analyze() {
                         // Use existing TTS URL if available
                         playExistingTTS(message.ttsUrl, cacheKey);
                       } else {
-                        // Generate new TTS
-                        const displayText = formatMessageForDisplay(message, userPreferences.romanizationDisplay).mainText;
-                        playTTSAudio(displayText, language, cacheKey);
+                        // Generate new TTS using appropriate text based on romanization preference
+                        const ttsText = getTTSText(message, userPreferences.romanizationDisplay, language);
+                        playTTSAudio(ttsText, language, cacheKey);
                       }
                     }}
                     disabled={isGeneratingTTS[`ai_message_${index}`] || isPlayingTTS[`ai_message_${index}`]}
@@ -2971,8 +3429,8 @@ function Analyze() {
                       const suggestion = suggestionMessages[currentSuggestionIndex];
                       if (suggestion) {
                         const cacheKey = `suggestion_${currentSuggestionIndex}`;
-                        const displayText = formatMessageForDisplay(suggestion, userPreferences.romanizationDisplay).mainText;
-                        playTTSAudio(displayText, language, cacheKey);
+                        const ttsText = getTTSText(suggestion, userPreferences.romanizationDisplay, language);
+                        playTTSAudio(ttsText, language, cacheKey);
                       }
                     }}
                     disabled={isGeneratingTTS[`suggestion_${currentSuggestionIndex}`] || isPlayingTTS[`suggestion_${currentSuggestionIndex}`]}
@@ -3160,7 +3618,42 @@ function Analyze() {
               </button>
             </div>
 
-
+            {/* Generate Summary button */}
+            {chatHistory.length > 0 && (
+              <button
+                onClick={async () => {
+                  try {
+                    const summary = await generateConversationSummary();
+                    alert(`Title: ${summary.title}\n\nEvaluation: ${summary.synopsis}`);
+                  } catch (error) {
+                    alert('Failed to generate conversation summary. Please try again.');
+                  }
+                }}
+                style={{
+                  position: 'absolute',
+                  bottom: '1rem',
+                  right: '8.5rem',
+                  background: '#3498db',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 10,
+                  padding: '0.5rem 1rem',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  fontSize: '0.85rem',
+                  transition: 'all 0.2s',
+                  boxShadow: '0 2px 4px rgba(52,152,219,0.15)',
+                  minWidth: '120px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.3rem',
+                  zIndex: 1000
+                }}
+                title="Generate conversation summary with subgoal evaluation"
+              >
+                📊 Summary
+              </button>
+            )}
 
             {/* End Chat button - positioned as a separate floating element */}
             <button
@@ -3185,7 +3678,7 @@ function Analyze() {
                 gap: '0.3rem',
                 zIndex: 10
               }}
-              title="End chat, generate summary, and return to dashboard"
+              title="End chat and return to dashboard"
             >
               🏠 End Chat
             </button>
@@ -3290,6 +3783,64 @@ function Analyze() {
                 ▶
               </button>
             </div>
+            {/* Color Key */}
+            <div style={{
+              background: isDarkMode ? '#334155' : '#f8f9fa',
+              borderBottom: isDarkMode ? '1px solid #475569' : '1px solid #e9ecef',
+              padding: '0.75rem 1rem',
+              fontSize: '0.8rem',
+              fontFamily: 'AR One Sans, Arial, sans-serif',
+              transition: 'background 0.3s ease, border-color 0.3s ease'
+            }}>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '0.5rem'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                  <span style={{
+                    textDecoration: 'underline',
+                    textDecorationColor: isDarkMode ? '#ef4444' : '#dc2626',
+                    textDecorationThickness: '2px',
+                    color: isDarkMode ? '#ef4444' : '#dc2626',
+                    fontWeight: 600
+                  }}>Grammar</span>
+                  <span style={{ color: isDarkMode ? '#94a3b8' : '#6c757d' }}>•</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                  <span style={{
+                    textDecoration: 'underline',
+                    textDecorationColor: isDarkMode ? '#fbbf24' : '#f59e0b',
+                    textDecorationThickness: '2px',
+                    color: isDarkMode ? '#fbbf24' : '#f59e0b',
+                    fontWeight: 600
+                  }}>Unnatural</span>
+                  <span style={{ color: isDarkMode ? '#94a3b8' : '#6c757d' }}>•</span>
+                </div>
+                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                   <span style={{
+                     textDecoration: 'underline',
+                     textDecorationColor: isDarkMode ? '#60a5fa' : '#2563eb',
+                     textDecorationThickness: '2px',
+                     color: isDarkMode ? '#60a5fa' : '#2563eb',
+                     fontWeight: 600
+                   }}>English</span>
+                   <span style={{ color: isDarkMode ? '#94a3b8' : '#6c757d' }}>•</span>
+                 </div>
+                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                   <span style={{
+                     backgroundColor: isDarkMode ? '#10b981' : '#10b981',
+                     color: '#ffffff',
+                     padding: '2px 4px',
+                     borderRadius: '4px',
+                     fontWeight: 700,
+                     fontSize: '0.8em'
+                   }}>Correct</span>
+                 </div>
+              </div>
+            </div>
             {/* Detailed Analysis Content */}
             <div style={{ 
               flex: 1, 
@@ -3307,14 +3858,13 @@ function Analyze() {
                   padding: '1rem',
                   fontSize: '0.9rem',
                   lineHeight: 1.4,
-                  whiteSpace: 'pre-wrap',
                   fontFamily: 'AR One Sans, Arial, sans-serif',
                   fontWeight: 400,
                   wordWrap: 'break-word',
                   overflowWrap: 'break-word',
                   transition: 'background 0.3s ease, color 0.3s ease'
                 }}>
-                  {feedback}
+                  {renderFeedbackText(feedback)}
                 </div>
               )}
               {!feedback && (

@@ -348,7 +348,10 @@ def analyze():
             chat_history,
             language,
             user_level,
-            user_topics
+            user_topics,
+            feedback_language='en',
+            description=None,
+            romanization_display=None
         )
         print(f"Gemini detailed feedback: '{feedback[:100]}...'")
         
@@ -431,6 +434,7 @@ def feedback():
         user_level = data.get('user_level', 'beginner')
         user_topics = data.get('user_topics', [])
         feedback_language = data.get('feedback_language', 'en')
+        romanization_display = data.get('romanization_display', None)
 
         print(f"=== /feedback called ===")
         print(f"Language: {language}")
@@ -446,7 +450,9 @@ def feedback():
             language=language,
             user_level=user_level,
             user_topics=user_topics,
-            feedback_language=feedback_language
+            feedback_language=feedback_language,
+            description=None,
+            romanization_display=romanization_display
         )
         print(f"AI feedback received: {response[:100]}...")
         return jsonify({"feedback": response})
