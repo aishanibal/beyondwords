@@ -207,6 +207,18 @@ function Analyze() {
         70% { box-shadow: 0 0 0 8px #e67e2200; }
         100% { box-shadow: 0 0 0 0 #e67e2255; }
       }
+      @keyframes slideDown {
+        0% {
+          opacity: 0;
+          transform: translateY(-10px);
+          max-height: 0;
+        }
+        100% {
+          opacity: 1;
+          transform: translateY(0);
+          max-height: 200px;
+        }
+      }
     `;
     document.head.appendChild(style);
     return () => { document.head.removeChild(style); };
@@ -215,8 +227,8 @@ function Analyze() {
   const { user } = useUser() as { user: User | null };
   const [isRecording, setIsRecording] = useState<boolean>(false);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
-  const [feedback, setFeedback] = useState<string>('');
-  const [isLoadingFeedback, setIsLoadingFeedback] = useState<boolean>(false);
+
+
   const recognitionRef = useRef<{ lang: string; stop: () => void } | null>(null);
   const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
   const autoSpeakRef = useRef<boolean>(false);
@@ -249,26 +261,16 @@ function Analyze() {
 
   // Calculate actual panel widths based on visibility
   const getPanelWidths = () => {
-    const visiblePanels = [showShortFeedbackPanel, true, showDetailedFeedbackPanel].filter(Boolean).length;
+    const visiblePanels = [showShortFeedbackPanel, true].filter(Boolean).length;
     
     if (visiblePanels === 1) {
       // Only middle panel visible
       return { left: 0, center: 1, right: 0 };
-    } else if (visiblePanels === 2) {
-      // Two panels visible - allow resizing between them
-      if (!showShortFeedbackPanel) {
-        // Left panel hidden - middle and right panels are resizable
-        const centerWidth = Math.max(0.33, 1 - rightPanelWidth); // Ensure center is at least 1/3
-        return { left: 0, center: centerWidth, right: 1 - centerWidth };
-      } else if (!showDetailedFeedbackPanel) {
-        // Right panel hidden - left and middle panels are resizable
-        const centerWidth = Math.max(0.33, 1 - leftPanelWidth); // Ensure center is at least 1/3
-        return { left: 1 - centerWidth, center: centerWidth, right: 0 };
-      }
+    } else {
+      // Left and middle panels visible - allow resizing between them
+      const centerWidth = Math.max(0.33, 1 - leftPanelWidth); // Ensure center is at least 1/3
+      return { left: 1 - centerWidth, center: centerWidth, right: 0 };
     }
-    
-    // All three panels visible (default case)
-    return { left: leftPanelWidth, center: 1 - leftPanelWidth - rightPanelWidth, right: rightPanelWidth };
   };
   const [showTopicModal, setShowTopicModal] = useState<boolean>(false);
   const [autoSpeak, setAutoSpeak] = useState<boolean>(false);
@@ -290,7 +292,6 @@ function Analyze() {
   } | null>(null);
   const [manualRecording, setManualRecording] = useState(false);
   const [showShortFeedbackPanel, setShowShortFeedbackPanel] = useState<boolean>(true);
-  const [showDetailedFeedbackPanel, setShowDetailedFeedbackPanel] = useState<boolean>(true);
   const [shortFeedback, setShortFeedback] = useState<string>('');
   const [showDetailedBreakdown, setShowDetailedBreakdown] = useState<{[key: number]: boolean}>({});
   const [showSuggestionExplanations, setShowSuggestionExplanations] = useState<{[key: number]: boolean}>({});
@@ -300,6 +301,11 @@ function Analyze() {
     overview: string;
     details: string;
   }[]>([]);
+  const [feedbackExplanations, setFeedbackExplanations] = useState<Record<number, Record<string, string>>>({});
+  const [activePopup, setActivePopup] = useState<{ messageIndex: number; wordKey: string; position: { x: number; y: number } } | null>(null);
+  const [showCorrectedVersions, setShowCorrectedVersions] = useState<Record<number, boolean>>({});
+  const [quickTranslations, setQuickTranslations] = useState<Record<number, { fullTranslation: string; wordTranslations: Record<string, string>; romanized: string; error: boolean; generatedWords?: string[]; generatedScriptWords?: string[] }>>({});
+  const [showQuickTranslations, setShowQuickTranslations] = useState<Record<number, boolean>>({});
   const [sessionStartTime, setSessionStartTime] = useState<Date | null>(null);
   
   // TTS caching state
@@ -328,6 +334,56 @@ function Analyze() {
       recognitionRef.current.lang = language || 'en-US';
     }
   }, [language]);
+
+  // Add global click handler for word clicks
+  useEffect(() => {
+    // Add global click handler
+    (window as any).handleWordClick = (wordKey: string, messageIndex: number, event: MouseEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      
+      const explanations = feedbackExplanations[messageIndex] || {};
+      const explanation = explanations[wordKey];
+      
+      if (explanation) {
+        const rect = (event.target as HTMLElement).getBoundingClientRect();
+        setActivePopup({
+          messageIndex,
+          wordKey,
+          position: {
+            x: rect.left + rect.width / 2,
+            y: rect.top
+          }
+        });
+      }
+    };
+
+    // Add click handler to close popup when clicking outside
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      console.log('Click outside handler triggered, target:', target);
+      
+      if (target && target.closest('[data-popup="true"]')) {
+        console.log('Click was on popup, not hiding');
+        return; // Don't hide if clicking on popup
+      }
+      
+      if (target && target.closest('[data-clickable-word="true"]')) {
+        console.log('Click was on clickable word, not hiding');
+        return; // Don't hide if clicking on a word
+      }
+      
+      console.log('Click was outside popup, hiding popup');
+      setActivePopup(null);
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+
+    return () => {
+      delete (window as any).handleWordClick;
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+      }, [feedbackExplanations, quickTranslations]);
 
   // Clean up TTS cache periodically (every 10 minutes)
   useEffect(() => {
@@ -1193,11 +1249,11 @@ function Analyze() {
     // Get the latest user message
     const lastUserMessage = [...chatHistory].reverse().find(msg => msg.sender === 'User');
     if (!lastUserMessage || !lastUserMessage.text || lastUserMessage.text === 'Speech recorded') {
-      setFeedback('No valid user speech found for feedback. Please record a message first.');
+      // Show error in console only
+      console.error('No valid user speech found for feedback. Please record a message first.');
       return;
     }
 
-    setIsLoadingFeedback(true);
     try {
       const token = localStorage.getItem('jwt');
       const payload = {
@@ -1216,14 +1272,14 @@ function Analyze() {
       setFeedback(response.data.feedback);
       // Optionally, add to chatHistory
               setChatHistory(prev => [...prev, { sender: 'System', text: response.data.feedback, timestamp: new Date(), isFromOriginalConversation: false }]);
+      // Feedback is applied to the message, no need to add to chat
     } catch (error: unknown) {
       console.error('Error getting detailed feedback:', error);
       console.error('[DEBUG] Error response:', (error as any).response?.data);
       console.error('[DEBUG] Error status:', (error as any).response?.status);
       console.error('[DEBUG] Error message:', (error as any).message);
-      setFeedback('Error getting detailed feedback. Please try again.');
-    } finally {
-      setIsLoadingFeedback(false);
+      // Show error in console only
+      console.error('Error getting detailed feedback. Please try again.');
     }
   };
 
@@ -1833,8 +1889,15 @@ function Analyze() {
   };
 
   const requestDetailedFeedbackForMessage = async (messageIndex: number) => {
-    if (!conversationId) return;
+    console.log('[DEBUG] requestDetailedFeedbackForMessage called with index:', messageIndex);
+    console.log('[DEBUG] conversationId:', conversationId);
     
+    if (!conversationId) {
+      console.log('[DEBUG] No conversationId, returning early');
+      return;
+    }
+    
+    console.log('[DEBUG] Setting loading state for message:', messageIndex);
     setIsLoadingMessageFeedback(prev => ({ ...prev, [messageIndex]: true }));
     
     try {
@@ -1845,6 +1908,19 @@ function Analyze() {
       const user_input = message?.text || '';
       const context = chatHistory.slice(-4).map(msg => `${msg.sender}: ${msg.text}`).join('\n');
       
+      // Ensure user preferences are loaded for the current language
+      if (!userPreferences.romanizationDisplay || userPreferences.romanizationDisplay === 'both') {
+        console.log('[DEBUG] Loading user dashboard preferences for language:', language);
+        const dashboardPrefs = await fetchUserDashboardPreferences(language || 'en');
+        if (dashboardPrefs) {
+          setUserPreferences(prev => ({
+            ...prev,
+            romanizationDisplay: dashboardPrefs.romanization_display || 'both'
+          }));
+          console.log('[DEBUG] Updated user preferences with dashboard settings:', dashboardPrefs);
+        }
+      }
+      
       const requestData = {
         user_input,
         context,
@@ -1853,6 +1929,10 @@ function Analyze() {
         user_topics: userPreferences.topics,
         romanization_display: userPreferences.romanizationDisplay
       };
+      
+      console.log('[DEBUG] Request data for feedback:', requestData);
+      console.log('[DEBUG] Current language:', language);
+      console.log('[DEBUG] User preferences:', userPreferences);
       
       console.log('[DEBUG] Sending to /api/feedback:', requestData);
       console.log('[DEBUG] Request data details:', {
@@ -1871,65 +1951,138 @@ function Analyze() {
         console.error('[DEBUG] Server health check failed:', (healthError as any).message);
       }
       
+      console.log('[DEBUG] JWT token exists:', !!token);
+      console.log('[DEBUG] JWT token length:', token ? token.length : 0);
+      
+      console.log('[DEBUG] Making API call to /api/feedback...');
       const response = await axios.post(
         '/api/feedback',
         requestData,
         token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
       );
       
+      console.log('[DEBUG] API response received:', response.status);
+      console.log('[DEBUG] Response data:', response.data);
+      
       const detailedFeedback = response.data.feedback;
+      console.log('[DEBUG] Detailed feedback extracted:', detailedFeedback);
+      console.log('[DEBUG] Detailed feedback type:', typeof detailedFeedback);
+      console.log('[DEBUG] Detailed feedback length:', detailedFeedback?.length);
+      console.log('[DEBUG] Detailed feedback first 200 chars:', detailedFeedback?.substring(0, 200));
+      console.log('[DEBUG] Detailed feedback contains formatting markers:', {
+        hasDoubleUnderscore: detailedFeedback?.includes('__'),
+        hasDoubleTilde: detailedFeedback?.includes('~~'),
+        hasDoubleEquals: detailedFeedback?.includes('=='),
+        hasDoubleAngle: detailedFeedback?.includes('<<')
+      });
       
       // Extract formatted sentence from feedback and update chat history
+      console.log('[DEBUG] User preferences before extraction:', userPreferences);
       const formattedSentence = extractFormattedSentence(detailedFeedback, userPreferences.romanizationDisplay || 'both');
+      console.log('[DEBUG] Extracted formatted sentence:', formattedSentence);
+      console.log('[DEBUG] Romanization display setting:', userPreferences.romanizationDisplay);
       
-      // Store feedback in the database for the specific message
+      // Parse explanations for each highlighted word
+      const explanations = parseFeedbackExplanations(detailedFeedback);
+      console.log('[DEBUG] Parsed explanations:', explanations);
+      
+      // Extract corrected version
+      const correctedVersion = extractCorrectedVersion(detailedFeedback);
+      console.log('[DEBUG] Extracted corrected version:', correctedVersion);
+      
+      // Store explanations for this message
+      setFeedbackExplanations(prev => ({
+        ...prev,
+        [messageIndex]: explanations
+      }));
+      
+      // Show corrected version automatically when feedback is generated
+      setShowCorrectedVersions(prev => ({
+        ...prev,
+        [messageIndex]: true
+      }));
+      
+      // Update the message in chat history with the feedback and formatted text
+      console.log('[DEBUG] Updating message with formatted sentence:', formattedSentence);
+      setChatHistory(prev => {
+        console.log('[DEBUG] Previous chat history length:', prev.length);
+        console.log('[DEBUG] Message index:', messageIndex);
+        console.log('[DEBUG] Current message:', prev[messageIndex]);
+        console.log('[DEBUG] About to set detailedFeedback:', detailedFeedback);
+        
+        const updated = prev.map((msg, idx) => {
+          if (idx === messageIndex) {
+            const updatedMsg = { 
+              ...msg, 
+              detailedFeedback: detailedFeedback,
+              // Update the message text with formatted version if available
+              ...(formattedSentence && {
+                text: formattedSentence.mainText,
+                romanizedText: formattedSentence.romanizedText
+              })
+            };
+            console.log('[DEBUG] Updated message object:', updatedMsg);
+            console.log('[DEBUG] Updated message detailedFeedback:', updatedMsg.detailedFeedback);
+            return updatedMsg;
+          }
+          return msg;
+        });
+        
+        console.log('[DEBUG] Final updated message:', updated[messageIndex]);
+        console.log('[DEBUG] Message has detailedFeedback:', !!updated[messageIndex].detailedFeedback);
+        console.log('[DEBUG] Message detailedFeedback value:', updated[messageIndex].detailedFeedback);
+        console.log('[DEBUG] Message text:', updated[messageIndex].text);
+        console.log('[DEBUG] Message romanizedText:', updated[messageIndex].romanizedText);
+        return updated;
+      });
+      
+      // Store feedback in the database for the specific message (if it has an ID)
+      console.log('[DEBUG] Message ID:', message?.id);
       if (message && message.id) {
         const token = localStorage.getItem('jwt');
-        await axios.post(
-          '/api/messages/feedback',
-          {
-            messageId: message.id,
-            feedback: detailedFeedback
-          },
-          token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
-        );
-        
-        // Update the message in chat history with the feedback and formatted text
-        setChatHistory(prev => 
-          prev.map((msg, idx) => 
-            idx === messageIndex 
-              ? { 
-                  ...msg, 
-                  detailedFeedback: detailedFeedback,
-                  // Update the message text with formatted version if available
-                  ...(formattedSentence && {
-                    text: formattedSentence.mainText,
-                    romanizedText: formattedSentence.romanizedText
-                  })
-                }
-              : msg
-          )
-        );
+        console.log('[DEBUG] Storing feedback in database for message ID:', message.id);
+        try {
+          await axios.post(
+            '/api/messages/feedback',
+            {
+              messageId: message.id,
+              feedback: detailedFeedback
+            },
+            token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
+          );
+          console.log('[DEBUG] Feedback stored in database successfully');
+        } catch (dbError) {
+          console.error('[DEBUG] Failed to store feedback in database:', dbError);
+        }
+      } else {
+        console.log('[DEBUG] No message ID, skipping database storage');
       }
       
-      // Update the main feedback display
-      setFeedback(detailedFeedback);
+
     } catch (error: unknown) {
       console.error('Error getting detailed feedback:', error);
       console.error('[DEBUG] Error response:', (error as any).response?.data);
-      setFeedback('Error getting detailed feedback. Please try again.');
+      console.error('[DEBUG] Error status:', (error as any).response?.status);
+      console.error('[DEBUG] Error status text:', (error as any).response?.statusText);
+      console.error('[DEBUG] Full error object:', error);
+      // Show error in console only
+      console.error('Error getting detailed feedback. Please try again.');
     } finally {
       setIsLoadingMessageFeedback(prev => ({ ...prev, [messageIndex]: false }));
     }
   };
 
   const toggleDetailedFeedback = (messageIndex: number) => {
+    console.log('[DEBUG] toggleDetailedFeedback called with index:', messageIndex);
     const message = chatHistory[messageIndex];
+    console.log('[DEBUG] Message:', message);
+    console.log('[DEBUG] Message has detailedFeedback:', !!message?.detailedFeedback);
     
     if (message && message.detailedFeedback) {
-      // Show existing feedback in right panel
-      setFeedback(message.detailedFeedback);
+      console.log('[DEBUG] Feedback already exists for this message');
+      // Feedback already applied to the message, no action needed
     } else {
+      console.log('[DEBUG] Generating new feedback');
       // Generate new feedback
       requestDetailedFeedbackForMessage(messageIndex);
     }
@@ -2200,11 +2353,7 @@ function Analyze() {
     setResizingPanel('left');
   };
 
-  const handleRightResizeStart = (e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsResizing(true);
-    setResizingPanel('right');
-  };
+
 
   const handleMouseMove = (e: MouseEvent) => {
     if (!isResizing || !resizingPanel) return;
@@ -2214,38 +2363,18 @@ function Analyze() {
     const maxPanelRatio = 0.33; // Maximum 33.33% of screen width (allows 1/3, 1/3, 1/3)
     const minCenterRatio = 0.33; // Middle panel should never be smaller than 1/3
     
-    const visiblePanels = [showShortFeedbackPanel, true, showDetailedFeedbackPanel].filter(Boolean).length;
+    const visiblePanels = [showShortFeedbackPanel, true].filter(Boolean).length;
     
     if (visiblePanels === 2) {
-      // Only two panels visible - handle resizing between them
-      if (!showShortFeedbackPanel && resizingPanel === 'right') {
-        // Left panel hidden, resizing right panel (which affects center panel)
-        const newRightRatio = Math.max(minPanelRatio, Math.min(1 - minCenterRatio, (containerWidth - e.clientX) / containerWidth));
-        setRightPanelWidth(newRightRatio);
-      } else if (!showDetailedFeedbackPanel && resizingPanel === 'left') {
-        // Right panel hidden, resizing left panel (which affects center panel)
+      // Left and middle panels visible - handle resizing between them
+      if (resizingPanel === 'left') {
+        // Resizing left panel (which affects center panel)
         const newLeftRatio = Math.max(minPanelRatio, Math.min(1 - minCenterRatio, e.clientX / containerWidth));
         setLeftPanelWidth(newLeftRatio);
       }
-    } else if (visiblePanels === 3) {
-      // All three panels visible
-      if (resizingPanel === 'left') {
-        // Resizing left panel
-        const newLeftRatio = Math.max(minPanelRatio, Math.min(maxPanelRatio, e.clientX / containerWidth));
-        // Ensure middle panel doesn't get smaller than 1/3
-        const remainingForRight = 1 - newLeftRatio - minCenterRatio;
-        if (remainingForRight >= minPanelRatio) {
-          setLeftPanelWidth(newLeftRatio);
-        }
-      } else if (resizingPanel === 'right') {
-        // Resizing right panel
-        const newRightRatio = Math.max(minPanelRatio, Math.min(maxPanelRatio, (containerWidth - e.clientX) / containerWidth));
-        // Ensure middle panel doesn't get smaller than 1/3
-        const remainingForLeft = 1 - newRightRatio - minCenterRatio;
-        if (remainingForLeft >= minPanelRatio) {
-          setRightPanelWidth(newRightRatio);
-        }
-      }
+    } else {
+      // Only middle panel visible - no resizing needed
+      return;
     }
   };
 
@@ -2560,112 +2689,126 @@ function Analyze() {
     }
   };
 
-  // Helper function to render formatted text with color-coded underlines
-  const renderFormattedText = (text: string) => {
+  // Helper function to render formatted text with color-coded underlines and clickable popups
+  const renderFormattedText = (text: string, messageIndex: number) => {
+    console.log('[DEBUG] renderFormattedText called with:', text);
     if (!text) return text;
     
-    let processedText: (string | React.JSX.Element)[] = [text];
+    // Test if the text contains any formatting markers
+    const hasFormatting = text.includes('__') || text.includes('~~') || text.includes('==') || text.includes('<<');
+    console.log('[DEBUG] Text has formatting markers:', hasFormatting);
+    if (!hasFormatting) {
+      console.log('[DEBUG] No formatting markers found, returning original text');
+      return text;
+    }
+    
+    // Get explanations for this message
+    const explanations = feedbackExplanations[messageIndex] || {};
+    
+    // Simple approach: replace each formatting pattern with styled spans
+    let result = text;
     let elementIndex = 0;
     
-    // Handle grammar mistakes (red) - __word__
-    processedText = processedText.flatMap((item) => {
-      if (typeof item === 'string' && item.includes('__')) {
-        const parts = item.split(/(__[^_]+__)/g);
-        return parts.map((part) => {
-          if (part.startsWith('__') && part.endsWith('__')) {
-            return (
-              <span key={`grammar-${elementIndex++}`} style={{
-                textDecoration: 'underline',
-                textDecorationColor: isDarkMode ? '#ef4444' : '#dc2626',
-                textDecorationThickness: '2px',
-                color: isDarkMode ? '#ef4444' : '#dc2626',
-                fontWeight: 600
-              }}>
-                {part.slice(2, -2)}
-              </span>
-            );
-          }
-          return part;
-        });
-      }
-      return item;
+    // Replace grammar mistakes (red) - __word__
+    result = result.replace(/__([^_]+)__/g, (match, word) => {
+      const wordKey = match;
+      const hasExplanation = explanations[wordKey];
+      const cursorStyle = hasExplanation ? 'cursor: pointer;' : '';
+      return `<span class="grammar-${elementIndex++}" data-word-key="${wordKey}" data-message-index="${messageIndex}" style="text-decoration: underline; text-decoration-color: ${isDarkMode ? '#dc2626' : '#dc2626'}; text-decoration-thickness: 2px; color: ${isDarkMode ? '#dc2626' : '#dc2626'}; font-weight: 600; ${cursorStyle}" onclick="window.handleWordClick('${wordKey}', ${messageIndex}, event)">${word}</span>`;
     });
     
-    // Handle unnatural phrasing (yellow) - ~~word~~
-    processedText = processedText.flatMap((item) => {
-      if (typeof item === 'string' && item.includes('~~')) {
-        const parts = item.split(/(~~[^~]+~~)/g);
-        return parts.map((part) => {
-          if (part.startsWith('~~') && part.endsWith('~~')) {
-            return (
-              <span key={`unnatural-${elementIndex++}`} style={{
-                textDecoration: 'underline',
-                textDecorationColor: isDarkMode ? '#fbbf24' : '#f59e0b',
-                textDecorationThickness: '2px',
-                color: isDarkMode ? '#fbbf24' : '#f59e0b',
-                fontWeight: 600
-              }}>
-                {part.slice(2, -2)}
-              </span>
-            );
-          }
-          return part;
-        });
-      }
-      return item;
+    // Replace unnatural phrasing (yellow) - ~~word~~
+    result = result.replace(/~~([^~]+)~~/g, (match, word) => {
+      const wordKey = match;
+      const hasExplanation = explanations[wordKey];
+      const cursorStyle = hasExplanation ? 'cursor: pointer;' : '';
+      return `<span class="unnatural-${elementIndex++}" data-word-key="${wordKey}" data-message-index="${messageIndex}" style="text-decoration: underline; text-decoration-color: ${isDarkMode ? '#d97706' : '#d97706'}; text-decoration-thickness: 2px; color: ${isDarkMode ? '#d97706' : '#d97706'}; font-weight: 600; ${cursorStyle}" onclick="window.handleWordClick('${wordKey}', ${messageIndex}, event)">${word}</span>`;
     });
     
-    // Handle English words (blue) - ==word==
-    processedText = processedText.flatMap((item) => {
-      if (typeof item === 'string' && item.includes('==')) {
-        const parts = item.split(/(==[^=]+==)/g);
-        return parts.map((part) => {
-          if (part.startsWith('==') && part.endsWith('==')) {
-            return (
-              <span key={`english-${elementIndex++}`} style={{
-                textDecoration: 'underline',
-                textDecorationColor: isDarkMode ? '#60a5fa' : '#2563eb',
-                textDecorationThickness: '2px',
-                color: isDarkMode ? '#60a5fa' : '#2563eb',
-                fontWeight: 600
-              }}>
-                {part.slice(2, -2)}
-              </span>
-            );
-          }
-          return part;
-        });
-      }
-      return item;
+    // Replace English words (blue) - ==word==
+    result = result.replace(/==([^=]+)==/g, (match, word) => {
+      const wordKey = match;
+      const hasExplanation = explanations[wordKey];
+      const cursorStyle = hasExplanation ? 'cursor: pointer;' : '';
+      return `<span class="english-${elementIndex++}" data-word-key="${wordKey}" data-message-index="${messageIndex}" style="text-decoration: underline; text-decoration-color: ${isDarkMode ? '#2563eb' : '#2563eb'}; text-decoration-thickness: 2px; color: ${isDarkMode ? '#2563eb' : '#2563eb'}; font-weight: 600; ${cursorStyle}" onclick="window.handleWordClick('${wordKey}', ${messageIndex}, event)">${word}</span>`;
     });
     
-    // Handle correct words/alternatives (green) - <<word>>
-    processedText = processedText.flatMap((item) => {
-      if (typeof item === 'string' && item.includes('<<')) {
-        const parts = item.split(/(<<[^>]+>>)/g);
-        return parts.map((part) => {
-          if (part.startsWith('<<') && part.endsWith('>>')) {
-            return (
-              <span key={`correct-${elementIndex++}`} style={{
-                backgroundColor: isDarkMode ? '#10b981' : '#10b981',
-                color: '#ffffff',
-                padding: '2px 4px',
-                borderRadius: '4px',
-                fontWeight: 700,
-                fontSize: '0.95em',
-                boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
-              }}>
-                {part.slice(2, -2)}
-              </span>
-            );
-          }
-          return part;
-        });
-      }
-      return item;
+    // Replace correct alternatives (green) - <<word>>
+    result = result.replace(/<<([^>]+)>>/g, (match, word) => {
+      const wordKey = match;
+      const hasExplanation = explanations[wordKey];
+      const cursorStyle = hasExplanation ? 'cursor: pointer;' : '';
+      return `<span class="correct-${elementIndex++}" data-word-key="${wordKey}" data-message-index="${messageIndex}" style="background-color: ${isDarkMode ? '#10b981' : '#10b981'}; color: #ffffff; padding: 2px 4px; border-radius: 4px; font-weight: 700; font-size: 0.95em; box-shadow: 0 1px 2px rgba(0,0,0,0.1); ${cursorStyle}" onclick="window.handleWordClick('${wordKey}', ${messageIndex}, event)">${word}</span>`;
     });
     
-    return processedText;
+    // Convert HTML string to React elements with proper text color
+    return <span 
+      style={{ color: 'inherit' }}
+      dangerouslySetInnerHTML={{ __html: result }} 
+    />;
+  };
+
+  // Helper function to extract corrected version from feedback
+  const extractCorrectedVersion = (feedback: string): { mainText: string; romanizedText?: string } | null => {
+    if (!feedback) return null;
+    
+    // Find the corrected version section
+    const correctedMatch = feedback.match(/\*\*Corrected Version\*\*\s*\n([\s\S]*?)(?=\n\n|$)/);
+    if (!correctedMatch) return null;
+    
+    const correctedText = correctedMatch[1].trim();
+    const lines = correctedText.split('\n').filter(line => line.trim());
+    
+    if (lines.length === 0) return null;
+    
+    // For script languages, we expect both script and romanized lines
+    if (isScriptLanguage(language)) {
+      if (lines.length >= 2) {
+        const scriptLine = lines[0].trim();
+        const romanizedLine = lines[1].trim();
+        return { mainText: scriptLine, romanizedText: romanizedLine };
+      } else {
+        return { mainText: lines[0].trim() };
+      }
+    } else {
+      return { mainText: lines[0].trim() };
+    }
+  };
+
+  // Helper function to parse feedback and extract explanations for each highlighted word
+  const parseFeedbackExplanations = (feedback: string): Record<string, string> => {
+    const explanations: Record<string, string> = {};
+    
+    if (!feedback) return explanations;
+    
+    // Find the explanation section
+    const explanationMatch = feedback.match(/\*\*Explanation\*\*\s*\n([\s\S]*?)(?=\*\*Corrected Version\*\*|$)/);
+    if (!explanationMatch) return explanations;
+    
+    const explanationText = explanationMatch[1];
+    
+    // Parse each explanation line
+    const lines = explanationText.split('\n').filter(line => line.trim());
+    
+    lines.forEach(line => {
+      // Look for patterns like: ==word== / ==word== - explanation
+      const match = line.match(/(__[^_]+__|~~[^~]+~~|==[^=]+==|<<[^>]+>>)\s*\/?\s*(__[^_]+__|~~[^~]+~~|==[^=]+==|<<[^>]+>>)?\s*-\s*(.+)/);
+      if (match) {
+        const word1 = match[1];
+        const word2 = match[2];
+        const explanation = match[3].trim();
+        
+        // Create keys for both words if they exist
+        if (word1) {
+          explanations[word1] = explanation;
+        }
+        if (word2) {
+          explanations[word2] = explanation;
+        }
+      }
+    });
+    
+    return explanations;
   };
 
   // Helper function to extract formatted sentence from detailed feedback
@@ -2720,44 +2863,148 @@ function Analyze() {
     }
   };
 
+  // Simple parsing function for quick translation
+  const parseQuickTranslation = (translationText: string) => {
+    const result = {
+      fullTranslation: '',
+      wordTranslations: {} as Record<string, string>,
+      romanized: '',
+      error: false,
+      generatedWords: [] as string[], // Store the romanized words in order
+      generatedScriptWords: [] as string[] // Store the script words in order
+    };
+    
+    if (!translationText) return result;
+    
+    console.log('=== PARSING QUICK TRANSLATION ===');
+    console.log('Raw text:', translationText);
+    console.log('Text length:', translationText.length);
+    
+    try {
+      const lines = translationText.split('\n');
+      console.log('Total lines:', lines.length);
+      
+      for (const line of lines) {
+        const trimmedLine = line.trim();
+        console.log('Processing line:', `"${trimmedLine}"`);
+        
+        if (trimmedLine.includes('**Full Translation:**')) {
+          console.log('Found Full Translation section');
+          continue;
+        } else if (trimmedLine.includes('**Word-by-Word Breakdown:**')) {
+          console.log('Found Word-by-Word Breakdown section');
+          continue;
+        } else if (trimmedLine.includes('**Romanized Version:**')) {
+          console.log('Found Romanized Version section');
+          continue;
+        }
+        
+        // Simple parsing: look for "script / romanized -- translation" format
+        if (trimmedLine.includes(' / ') && trimmedLine.includes(' -- ')) {
+          console.log('Found script/romanized format:', trimmedLine);
+          const parts = trimmedLine.split(' -- ');
+          if (parts.length === 2) {
+            const leftSide = parts[0].trim();
+            const translation = parts[1].trim();
+            
+            // Split left side on " / " to get script and romanized
+            const scriptRomanized = leftSide.split(' / ');
+            if (scriptRomanized.length === 2) {
+              const script = scriptRomanized[0].trim();
+              const romanized = scriptRomanized[1].trim();
+              
+              // Store both script and romanized as keys (with punctuation included)
+              result.wordTranslations[script] = translation;
+              result.wordTranslations[romanized] = translation;
+              
+              // Add to generated words lists (with punctuation included)
+              result.generatedScriptWords.push(script);
+              result.generatedWords.push(romanized);
+              
+              console.log(`✅ Parsed: script="${script}", romanized="${romanized}", translation="${translation}"`);
+            }
+          }
+        }
+        // Also handle simple "word -- translation" format
+        else if (trimmedLine.includes(' -- ') && !trimmedLine.includes(' / ')) {
+          console.log('Found simple word format:', trimmedLine);
+          const parts = trimmedLine.split(' -- ');
+          if (parts.length === 2) {
+            const word = parts[0].trim();
+            const translation = parts[1].trim();
+            
+            // Store the word as-is (with punctuation included)
+            result.wordTranslations[word] = translation;
+            result.generatedWords.push(word);
+            result.generatedScriptWords.push(word); // For non-script languages, same as romanized
+            
+            console.log(`✅ Parsed: word="${word}", translation="${translation}"`);
+          }
+        }
+        // Handle full translation line
+        else if (trimmedLine && !trimmedLine.startsWith('**') && !result.fullTranslation) {
+          console.log('Found full translation:', trimmedLine);
+          result.fullTranslation = trimmedLine;
+        }
+      }
+      
+      console.log('=== FINAL PARSED RESULT ===');
+      console.log('Full translation:', result.fullTranslation);
+      console.log('Word translations count:', Object.keys(result.wordTranslations).length);
+      console.log('All word translations:', result.wordTranslations);
+      console.log('Generated script words in order:', result.generatedScriptWords);
+      console.log('Generated romanized words in order:', result.generatedWords);
+      
+    } catch (error) {
+      console.error('Error parsing quick translation:', error);
+      result.error = true;
+    }
+    
+    return result;
+  };
+
+  // Helper function to render feedback text with formatting and headers
   const renderFeedbackText = (text: string) => {
     if (!text) return null;
     
+    // Helper function to process a single line with formatting
+    const processLineWithFormatting = (line: string, lineIndex: number) => {
+      let result = line;
+      let elementIndex = 0;
+      
+      // Replace grammar mistakes (red) - __word__
+      result = result.replace(/__([^_]+)__/g, (match, word) => {
+        return `<span class="grammar-${lineIndex}-${elementIndex++}" style="text-decoration: underline; text-decoration-color: ${isDarkMode ? '#ef4444' : '#dc2626'}; text-decoration-thickness: 2px; color: ${isDarkMode ? '#ef4444' : '#dc2626'}; font-weight: 600;">${word}</span>`;
+      });
+      
+      // Replace unnatural phrasing (yellow) - ~~word~~
+      result = result.replace(/~~([^~]+)~~/g, (match, word) => {
+        return `<span class="unnatural-${lineIndex}-${elementIndex++}" style="text-decoration: underline; text-decoration-color: ${isDarkMode ? '#fbbf24' : '#f59e0b'}; text-decoration-thickness: 2px; color: ${isDarkMode ? '#fbbf24' : '#f59e0b'}; font-weight: 600;">${word}</span>`;
+      });
+      
+      // Replace English words (blue) - ==word==
+      result = result.replace(/==([^=]+)==/g, (match, word) => {
+        return `<span class="english-${lineIndex}-${elementIndex++}" style="text-decoration: underline; text-decoration-color: ${isDarkMode ? '#60a5fa' : '#2563eb'}; text-decoration-thickness: 2px; color: ${isDarkMode ? '#60a5fa' : '#2563eb'}; font-weight: 600;">${word}</span>`;
+      });
+      
+      // Replace correct alternatives (green) - <<word>>
+      result = result.replace(/<<([^>]+)>>/g, (match, word) => {
+        return `<span class="correct-${lineIndex}-${elementIndex++}" style="background-color: ${isDarkMode ? '#10b981' : '#10b981'}; color: #ffffff; padding: 2px 4px; border-radius: 4px; font-weight: 700; font-size: 0.95em; box-shadow: 0 1px 2px rgba(0,0,0,0.1);">${word}</span>`;
+      });
+      
+             return <span 
+         style={{ color: 'inherit' }}
+         dangerouslySetInnerHTML={{ __html: result }} 
+       />;
+    };
+
     // Split the text into lines to handle different sections
     const lines = text.split('\n');
     const renderedLines = lines.map((line, index) => {
-                       // Handle bold headers (e.g., **Your Sentence**, **Corrected Version**)
-        if (line.trim().startsWith('**') && line.trim().endsWith('**')) {
-          const headerText = line.trim().slice(2, -2);
-          const isMainHeader = headerText === 'Your Sentence' || headerText === 'Corrected Version';
-          
-          return (
-            <div key={index} style={{ 
-              fontWeight: 700, 
-              fontSize: isMainHeader ? '1.1rem' : '1rem', 
-              marginTop: index > 0 ? '1.5rem' : '0',
-              marginBottom: '0.75rem',
-              color: isDarkMode ? '#e8b3c3' : '#c38d94',
-              borderBottom: isMainHeader ? `2px solid ${isDarkMode ? '#e8b3c3' : '#c38d94'}` : 'none',
-              paddingBottom: isMainHeader ? '0.5rem' : '0',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem'
-            }}>
-              {isMainHeader && (
-                <span style={{ fontSize: '1.2rem' }}>
-                  {headerText === 'Your Sentence' ? '💬' : '✅'}
-                </span>
-              )}
-              {headerText}
-            </div>
-          );
-        }
-      
-               // Fallback for any line that contains ** and these specific headers
-         if (line.includes('**') && (line.includes('Your Sentence') || line.includes('Corrected Version'))) {
-           const headerText = line.replace(/\*\*/g, '').trim();
-           const isMainHeader = headerText === 'Your Sentence' || headerText === 'Corrected Version';
+      // Handle bold headers (e.g., **Your Sentence**, **Corrected Version**)
+      if (line.trim().startsWith('**') && line.trim().endsWith('**')) {
+        const headerText = line.trim().slice(2, -2);
+        const isMainHeader = headerText === 'Your Sentence' || headerText === 'Corrected Version';
         
         return (
           <div key={index} style={{ 
@@ -2782,107 +3029,36 @@ function Analyze() {
         );
       }
       
-      // Process line with all three types of formatting
-      let processedLine: (string | React.JSX.Element)[] = [line];
-      let elementIndex = 0;
+      // Fallback for any line that contains ** and these specific headers
+      if (line.includes('**') && (line.includes('Your Sentence') || line.includes('Corrected Version'))) {
+        const headerText = line.replace(/\*\*/g, '').trim();
+        const isMainHeader = headerText === 'Your Sentence' || headerText === 'Corrected Version';
+        
+        return (
+          <div key={index} style={{ 
+            fontWeight: 700, 
+            fontSize: isMainHeader ? '1.1rem' : '1rem', 
+            marginTop: index > 0 ? '1.5rem' : '0',
+            marginBottom: '0.75rem',
+            color: isDarkMode ? '#e8b3c3' : '#c38d94',
+            borderBottom: isMainHeader ? `2px solid ${isDarkMode ? '#e8b3c3' : '#c38d94'}` : 'none',
+            paddingBottom: isMainHeader ? '0.5rem' : '0',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem'
+          }}>
+            {isMainHeader && (
+              <span style={{ fontSize: '1.2rem' }}>
+                {headerText === 'Your Sentence' ? '💬' : '✅'}
+              </span>
+            )}
+            {headerText}
+          </div>
+        );
+      }
       
-      // Handle grammar mistakes (red) - __word__
-      processedLine = processedLine.flatMap((item) => {
-        if (typeof item === 'string' && item.includes('__')) {
-          const parts = item.split(/(__[^_]+__)/g);
-          return parts.map((part, partIndex) => {
-            if (part.startsWith('__') && part.endsWith('__')) {
-              return (
-                <span key={`grammar-${elementIndex++}`} style={{
-                  textDecoration: 'underline',
-                  textDecorationColor: isDarkMode ? '#ef4444' : '#dc2626',
-                  textDecorationThickness: '2px',
-                  color: isDarkMode ? '#ef4444' : '#dc2626',
-                  fontWeight: 600
-                }}>
-                  {part.slice(2, -2)}
-                </span>
-              );
-            }
-            return part;
-          });
-        }
-        return item;
-      });
-      
-      // Handle unnatural phrasing (yellow) - ~~word~~
-      processedLine = processedLine.flatMap((item) => {
-        if (typeof item === 'string' && item.includes('~~')) {
-          const parts = item.split(/(~~[^~]+~~)/g);
-          return parts.map((part, partIndex) => {
-            if (part.startsWith('~~') && part.endsWith('~~')) {
-              return (
-                <span key={`unnatural-${elementIndex++}`} style={{
-                  textDecoration: 'underline',
-                  textDecorationColor: isDarkMode ? '#fbbf24' : '#f59e0b',
-                  textDecorationThickness: '2px',
-                  color: isDarkMode ? '#fbbf24' : '#f59e0b',
-                  fontWeight: 600
-                }}>
-                  {part.slice(2, -2)}
-                </span>
-              );
-            }
-            return part;
-          });
-        }
-        return item;
-      });
-      
-                     // Handle English words (blue) - ==word==
-               processedLine = processedLine.flatMap((item) => {
-                 if (typeof item === 'string' && item.includes('==')) {
-                   const parts = item.split(/(==[^=]+==)/g);
-                   return parts.map((part, partIndex) => {
-                     if (part.startsWith('==') && part.endsWith('==')) {
-                       return (
-                         <span key={`english-${elementIndex++}`} style={{
-                           textDecoration: 'underline',
-                           textDecorationColor: isDarkMode ? '#60a5fa' : '#2563eb',
-                           textDecorationThickness: '2px',
-                           color: isDarkMode ? '#60a5fa' : '#2563eb',
-                           fontWeight: 600
-                         }}>
-                           {part.slice(2, -2)}
-                         </span>
-                       );
-                     }
-                     return part;
-                   });
-                 }
-                 return item;
-               });
-               
-               // Handle correct words/alternatives (green) - <<word>>
-               processedLine = processedLine.flatMap((item) => {
-                 if (typeof item === 'string' && item.includes('<<')) {
-                   const parts = item.split(/(<<[^>]+>>)/g);
-                   return parts.map((part, partIndex) => {
-                     if (part.startsWith('<<') && part.endsWith('>>')) {
-                       return (
-                         <span key={`correct-${elementIndex++}`} style={{
-                           backgroundColor: isDarkMode ? '#10b981' : '#10b981',
-                           color: '#ffffff',
-                           padding: '2px 4px',
-                           borderRadius: '4px',
-                           fontWeight: 700,
-                           fontSize: '0.95em',
-                           boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
-                         }}>
-                           {part.slice(2, -2)}
-                         </span>
-                       );
-                     }
-                     return part;
-                   });
-                 }
-                 return item;
-               });
+      // Process line with formatting
+      const processedLine = processLineWithFormatting(line, index);
       
       // Return the processed line
       return (
@@ -2893,6 +3069,337 @@ function Analyze() {
     });
     
     return renderedLines;
+  };
+
+  // Quick translation function
+  const quickTranslation = async (messageIndex: number, text: string) => {
+    console.log('[DEBUG] quickTranslation() called with messageIndex:', messageIndex, 'text:', text);
+    
+    if (isLoadingMessageFeedback[messageIndex]) {
+      console.log('[DEBUG] Already loading, returning early');
+      return;
+    }
+    
+    setIsLoadingMessageFeedback(prev => ({ ...prev, [messageIndex]: true }));
+    
+    // Clear all previous translations when starting a new one
+    setQuickTranslations({});
+    
+    try {
+      const token = localStorage.getItem('jwt');
+      const requestData = {
+        ai_message: text,
+        language: language,
+        user_level: userPreferences.userLevel,
+        user_topics: userPreferences.topics,
+        formality: userPreferences.formality,
+        feedback_language: userPreferences.feedbackLanguage,
+        user_goals: userPreferences.user_goals,
+        description: conversationDescription
+      };
+
+      console.log('[DEBUG] quickTranslation() calling /api/quick_translation with:', requestData);
+      
+      const response = await axios.post(
+        '/api/quick_translation',
+        requestData,
+        token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
+      );
+      
+      const result = response.data;
+      console.log('[DEBUG] quickTranslation() received response:', result);
+      
+      const translationText = result.translation;
+      console.log('[DEBUG] Raw Gemini translation text:', translationText);
+      
+      const parsedTranslation = parseQuickTranslation(translationText);
+      console.log('[DEBUG] Parsed translation:', parsedTranslation);
+      
+      // Test with sample data if no translation received
+      if (!translationText || Object.keys(parsedTranslation.wordTranslations).length === 0) {
+        console.log('[DEBUG] No translation received, using test data');
+        const testResponse = `**Full Translation:**
+Yes, the current serials don't have the same quality as the old ones, right?
+
+**Word-by-Word Breakdown:**
+जी / ji -- Sir/Yes (respectful term)
+बिल्कुल / bilkul -- Absolutely/Exactly
+आजकल / aajkal -- Nowadays/These days
+तो / to -- then/so
+एक / ek -- one/a/single
+ही / hi -- only/same
+बात / baat -- point/matter/thing
+को / ko -- to/object marker
+बहुत / bahut -- very/much/a lot
+लंबा / lamba -- long
+खींच / kheench -- drag/stretch/prolong
+देते / dete -- give/they give (present continuous tense)
+हैं / hain -- are/they are (present continuous tense)`;
+        
+        const testParsedTranslation = parseQuickTranslation(testResponse);
+        console.log('[DEBUG] Test parsed translation:', testParsedTranslation);
+        setQuickTranslations(prev => ({ ...prev, [messageIndex]: testParsedTranslation }));
+      } else {
+        setQuickTranslations(prev => ({ ...prev, [messageIndex]: parsedTranslation }));
+      }
+      
+    } catch (error: unknown) {
+      console.error('Quick translation error:', error);
+      setQuickTranslations(prev => ({ 
+        ...prev, 
+        [messageIndex]: { 
+          fullTranslation: 'Translation failed', 
+          wordTranslations: {},
+          romanized: '',
+          error: true,
+          generatedWords: [],
+          generatedScriptWords: []
+        } 
+      }));
+    } finally {
+      setIsLoadingMessageFeedback(prev => ({ ...prev, [messageIndex]: false }));
+    }
+  };
+
+  // Render clickable message with word translations
+  const renderClickableMessage = (message: ChatMessage, messageIndex: number, translation: any) => {
+    if (!translation || !translation.wordTranslations) {
+      return message.text;
+    }
+    
+    console.log('renderClickableMessage:', {
+      messageText: message.text,
+      generatedWords: translation.generatedWords,
+      generatedScriptWords: translation.generatedScriptWords,
+      wordTranslations: translation.wordTranslations,
+      availableKeys: Object.keys(translation.wordTranslations)
+    });
+    
+    // Use the generated words from the AI response to guarantee keys exist
+    if (translation.generatedWords && translation.generatedWords.length > 0) {
+      // Check if this is a script language (has both script and romanized words)
+      const isScriptLanguage = translation.generatedScriptWords && 
+                              translation.generatedScriptWords.length > 0 && 
+                              translation.generatedScriptWords.some(word => /[\u0900-\u097F\u0B80-\u0BFF\u0C00-\u0C7F\u0C80-\u0CFF\u0D00-\u0D7F\u0D80-\u0DFF\u0E00-\u0E7F\u0E80-\u0EFF\u0F00-\u0FFF\u1000-\u109F\u1100-\u11FF\u1200-\u137F\u1380-\u139F\u13A0-\u13FF\u1400-\u167F\u1680-\u169F\u16A0-\u16FF\u1700-\u171F\u1720-\u173F\u1740-\u175F\u1760-\u177F\u1780-\u17FF\u1800-\u18AF\u1900-\u194F\u1950-\u197F\u1980-\u19DF\u19E0-\u19FF\u1A00-\u1A1F\u1A20-\u1AAF\u1AB0-\u1AFF\u1B00-\u1B7F\u1B80-\u1BBF\u1BC0-\u1BFF\u1C00-\u1C4F\u1C50-\u1C7F\u1C80-\u1CDF\u1CD0-\u1CFF\u1D00-\u1D7F\u1D80-\u1DBF\u1DC0-\u1DFF\u1E00-\u1EFF\u1F00-\u1FFF]/.test(word));
+      
+      if (isScriptLanguage && translation.generatedScriptWords.length > 0) {
+        return (
+          <div>
+            {/* Script words */}
+            <div style={{ marginBottom: '0.5rem' }}>
+              <strong>Script:</strong>
+              <div style={{ 
+                marginTop: '0.25rem',
+                fontSize: '1.1rem',
+                lineHeight: '1.8',
+                wordWrap: 'break-word',
+                overflowWrap: 'break-word',
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '0.25rem'
+              }}>
+                {renderClickableWordsFromGenerated(translation.generatedScriptWords, translation, messageIndex)}
+              </div>
+            </div>
+            {/* Romanized words */}
+            <div>
+              <strong>Romanized:</strong>
+              <div style={{ 
+                marginTop: '0.25rem',
+                fontSize: '0.95rem',
+                lineHeight: '1.6',
+                wordWrap: 'break-word',
+                overflowWrap: 'break-word',
+                color: isDarkMode ? '#cbd5e1' : '#6c757d',
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '0.25rem'
+              }}>
+                {renderClickableWordsFromGenerated(translation.generatedWords, translation, messageIndex)}
+              </div>
+            </div>
+          </div>
+        );
+      } else {
+        // Non-script language - just show romanized words
+        return (
+          <div>
+            <div style={{ marginBottom: '0.5rem' }}>
+              <strong>Words:</strong>
+              <div style={{ 
+                marginTop: '0.25rem',
+                fontSize: '1rem',
+                lineHeight: '1.6',
+                wordWrap: 'break-word',
+                overflowWrap: 'break-word',
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '0.25rem'
+              }}>
+                {renderClickableWordsFromGenerated(translation.generatedWords, translation, messageIndex)}
+              </div>
+            </div>
+          </div>
+        );
+      }
+    } else {
+      // Fallback to original message text
+      const displayText = formatMessageForDisplay(message, userPreferences.romanizationDisplay);
+      const textToRender = displayText.romanizedText || displayText.mainText;
+      return renderClickableWords(textToRender, translation, messageIndex);
+    }
+  };
+
+  // Helper function to render clickable words from generated word list
+  const renderClickableWordsFromGenerated = (generatedWords: string[], translation: any, messageIndex: number) => {
+    console.log('=== RENDERING FROM GENERATED WORDS ===');
+    console.log('Generated words:', generatedWords);
+    console.log('Available translations:', Object.keys(translation.wordTranslations));
+    
+    return generatedWords.map((word, index) => {
+      const trimmedWord = word.trim();
+      
+      // Try exact match first, then try without punctuation
+      const hasTranslation = translation.wordTranslations[trimmedWord] || 
+                            translation.wordTranslations[trimmedWord.replace(/[.,!?;:'"()\[\]{}]/g, '').trim()];
+      
+      console.log(`Generated word "${trimmedWord}": hasTranslation=${hasTranslation}`);
+      
+      if (hasTranslation && trimmedWord) {
+        return (
+          <span
+            key={index}
+            data-clickable-word="true"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              console.log('Word clicked:', trimmedWord, 'Translation:', hasTranslation);
+              const rect = e.currentTarget.getBoundingClientRect();
+              const popupPosition = {
+                x: rect.left + rect.width / 2,
+                y: rect.top
+              };
+              console.log('Setting popup with:', { messageIndex, wordKey: trimmedWord, position: popupPosition });
+              setActivePopup({
+                messageIndex,
+                wordKey: trimmedWord,
+                position: popupPosition
+              });
+            }}
+            style={{
+              cursor: 'pointer',
+              textDecoration: 'underline',
+              textDecorationColor: '#4a90e2',
+              textDecorationThickness: '2px',
+              color: '#4a90e2',
+              fontWeight: 400,
+              transition: 'all 0.2s ease',
+              marginRight: '0.25rem',
+              whiteSpace: 'nowrap',
+              display: 'inline-block'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = 'rgba(74,144,226,0.1)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+            }}
+          >
+            {word}
+          </span>
+        );
+      }
+      
+      return <span key={index} style={{ marginRight: '0.25rem', whiteSpace: 'nowrap', display: 'inline-block' }}>{word}</span>;
+    });
+  };
+
+  // Helper function to render clickable words
+  const renderClickableWords = (text: string, translation: any, messageIndex: number) => {
+    console.log('=== RENDERING CLICKABLE WORDS ===');
+    console.log('Text to render:', text);
+    console.log('Available translations:', Object.keys(translation.wordTranslations));
+    
+    const words = text.split(/(\s+)/);
+    console.log('Split words:', words);
+    
+    return words.map((word, index) => {
+      const trimmedWord = word.trim();
+      
+      // Simple matching - try exact match first
+      let hasTranslation = translation.wordTranslations[trimmedWord];
+      let translationKey = trimmedWord;
+      
+      console.log(`Checking word "${trimmedWord}": exact match = ${hasTranslation}`);
+      
+      // If no exact match, try case-insensitive
+      if (!hasTranslation) {
+        const lowerTrimmedWord = trimmedWord.toLowerCase();
+        const availableKeys = Object.keys(translation.wordTranslations);
+        const matchingKey = availableKeys.find(key => key.toLowerCase() === lowerTrimmedWord);
+        if (matchingKey) {
+          hasTranslation = translation.wordTranslations[matchingKey];
+          translationKey = matchingKey;
+          console.log(`Found case-insensitive match: "${trimmedWord}" → "${matchingKey}"`);
+        }
+      }
+      
+      // If still no match, try partial matching
+      if (!hasTranslation && trimmedWord) {
+        const availableKeys = Object.keys(translation.wordTranslations);
+        const partialMatches = availableKeys.filter(key => 
+          key.includes(trimmedWord) || trimmedWord.includes(key)
+        );
+        if (partialMatches.length > 0) {
+          console.log(`Partial matches for "${trimmedWord}":`, partialMatches);
+        }
+      }
+      
+      console.log(`Final result for "${trimmedWord}": hasTranslation=${hasTranslation}, translationKey="${translationKey}"`);
+      
+      if (hasTranslation && trimmedWord) {
+        return (
+          <span
+            key={index}
+            data-clickable-word="true"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              console.log('Word clicked:', trimmedWord, 'Translation:', hasTranslation);
+              const rect = e.currentTarget.getBoundingClientRect();
+              const popupPosition = {
+                x: rect.left + rect.width / 2,
+                y: rect.top
+              };
+              setActivePopup({
+                messageIndex,
+                wordKey: translationKey,
+                position: popupPosition
+              });
+            }}
+            style={{
+              cursor: 'pointer',
+              textDecoration: 'underline',
+              textDecorationColor: '#4a90e2',
+              textDecorationThickness: '2px',
+              color: '#4a90e2',
+              fontWeight: 400,
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = 'rgba(74,144,226,0.1)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+            }}
+          >
+            {word}
+          </span>
+        );
+      }
+      
+      return word;
+    });
   };
 
   // Debug progress modal state
@@ -3013,6 +3520,81 @@ function Analyze() {
             flexDirection: 'column',
             minHeight: 0
           }}>
+            
+
+            
+            {/* Quick Translation Section */}
+            {Object.keys(quickTranslations).length > 0 && (
+              <div style={{
+                background: isDarkMode ? '#1e293b' : '#fff',
+                color: isDarkMode ? '#f8fafc' : '#000',
+                padding: '1rem',
+                borderBottom: isDarkMode ? '1px solid #334155' : '1px solid #ececec',
+                fontSize: '1rem',
+                lineHeight: 1.5,
+                fontFamily: 'AR One Sans, Arial, sans-serif',
+                fontWeight: 400,
+                transition: 'background 0.3s ease, color 0.3s ease'
+              }}>
+                <div style={{
+                  fontWeight: 600,
+                  fontSize: '1.1rem',
+                  marginBottom: '1rem',
+                  color: isDarkMode ? '#f8fafc' : '#000',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between'
+                }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    🌐 Quick Translation
+                  </span>
+
+                </div>
+                {Object.entries(quickTranslations).map(([messageIndex, translation]) => (
+                  <div key={messageIndex} style={{ marginBottom: '1rem' }}>
+                    {translation.error ? (
+                      <div style={{ color: '#dc3545', fontStyle: 'italic' }}>
+                        {translation.fullTranslation}
+                      </div>
+                    ) : (
+                      <div>
+                        {/* Original sentence with clickable words */}
+                        <div style={{ marginBottom: '0.5rem' }}>
+                          <strong>Original:</strong>
+                          <div style={{
+                            background: isDarkMode ? '#334155' : '#f8f9fa',
+                            padding: '0.75rem',
+                            borderRadius: 8,
+                            marginTop: '0.5rem',
+                            fontSize: '0.95rem',
+                            lineHeight: '1.6'
+                          }}>
+                            {renderClickableMessage(chatHistory[parseInt(messageIndex)], parseInt(messageIndex), translation)}
+                          </div>
+                        </div>
+                        
+                        {/* Full translation */}
+                        {translation.fullTranslation && (
+                          <div style={{ marginBottom: '0.5rem' }}>
+                            <strong>Translation:</strong>
+                            <div style={{
+                              background: isDarkMode ? '#334155' : '#f8f9fa',
+                              padding: '0.75rem',
+                              borderRadius: 8,
+                              marginTop: '0.5rem',
+                              fontSize: '0.95rem',
+                              lineHeight: '1.6'
+                            }}>
+                              {translation.fullTranslation}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
             {shortFeedback && (
               <div style={{
                 background: isDarkMode ? '#1e293b' : '#fff',
@@ -3174,7 +3756,7 @@ function Analyze() {
               </div>
             )}
 
-            {!shortFeedback && (
+            {!shortFeedback && Object.keys(quickTranslations).length === 0 && (
               <div style={{
                 background: isDarkMode ? '#1e293b' : '#fff',
                 color: isDarkMode ? '#94a3b8' : '#666',
@@ -3214,13 +3796,13 @@ function Analyze() {
                     const fallbackIndex = chatHistory.findIndex((msg, index) => 
                       msg.sender === 'AI' && shortFeedbacks[index]
                     );
-                    if (fallbackIndex !== -1) {
-                      console.log('[DEBUG] Using fallback messageIndex:', fallbackIndex);
-                      requestDetailedBreakdownForMessage(fallbackIndex);
-                    }
+                                      if (fallbackIndex !== -1) {
+                    console.log('[DEBUG] Using fallback messageIndex:', fallbackIndex);
+                    requestDetailedFeedbackForMessage(fallbackIndex);
+                  }
                   }
                 }}
-                disabled={isLoadingFeedback || !shortFeedback}
+                disabled={!shortFeedback}
                 style={{
                   width: '100%',
                   padding: '0.6rem',
@@ -3229,14 +3811,14 @@ function Analyze() {
                   border: 'none',
                   borderRadius: 8,
                   boxShadow: 'inset 0 2px 8px #c38d9422',
-                  cursor: (isLoadingFeedback || !shortFeedback) ? 'not-allowed' : 'pointer',
+                  cursor: !shortFeedback ? 'not-allowed' : 'pointer',
                   fontWeight: 600,
                   fontSize: '0.9rem',
                   transition: 'all 0.2s',
                   marginTop: 'auto'
                 }}
               >
-                {isLoadingFeedback ? '⏳ Processing...' : '🎯 Get Detailed Explanation'}
+                🎯 Get Detailed Explanation
               </button>
             )}
         </div>
@@ -3349,22 +3931,30 @@ function Analyze() {
                               >
                   {(() => {
                     const formatted = formatMessageForDisplay(message, userPreferences.romanizationDisplay);
+                    console.log('[DEBUG] Message rendering:', {
+                      index,
+                      hasDetailedFeedback: !!message.detailedFeedback,
+                      detailedFeedback: message.detailedFeedback,
+                      mainText: formatted.mainText,
+                      romanizedText: formatted.romanizedText,
+                      romanizationDisplay: userPreferences.romanizationDisplay
+                    });
                     return (
                       <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <span>
-                          {message.detailedFeedback ? renderFormattedText(formatted.mainText) : formatted.mainText}
+                        <span style={{ color: message.sender === 'User' ? '#fff' : 'inherit' }}>
+                          {message.detailedFeedback ? renderFormattedText(formatted.mainText, index) : formatted.mainText}
                         </span>
                         {formatted.romanizedText && (
                           <span style={{
                             fontSize: '0.82em',
-                            color: message.detailedFeedback ? 'inherit' : (isDarkMode ? '#94a3b8' : '#555'),
+                            color: message.detailedFeedback ? (isDarkMode ? '#94a3b8' : '#555') : (isDarkMode ? '#94a3b8' : '#555'),
                             opacity: message.detailedFeedback ? 1 : 0.65,
                             marginTop: 2,
                             fontWeight: 400,
                             lineHeight: 1.2,
                             letterSpacing: '0.01em',
                           }}>
-                            {message.detailedFeedback ? renderFormattedText(formatted.romanizedText) : formatted.romanizedText}
+                            {message.detailedFeedback ? renderFormattedText(formatted.romanizedText, index) : formatted.romanizedText}
                           </span>
                         )}
                       </div>
@@ -3376,19 +3966,96 @@ function Analyze() {
                   </span>
                 )}
               </div>
+              
+              {/* Corrected Version - Slides down from under the message */}
+              {message.detailedFeedback && showCorrectedVersions[index] && (
+                <div
+                  style={{
+                    width: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: message.sender === 'User' ? 'flex-end' : 'flex-start',
+                    marginTop: '0.5rem',
+                    animation: 'slideDown 0.5s ease-out forwards',
+                    overflow: 'hidden'
+                  }}
+                >
+                  <div
+                    style={{
+                      padding: '0.5rem 0.8rem',
+                      borderRadius: message.sender === 'User' ? '8px 8px 2px 8px' : '8px 8px 8px 2px',
+                      background: isDarkMode 
+                        ? 'rgba(16, 185, 129, 0.1)' 
+                        : 'rgba(16, 185, 129, 0.08)',
+                      color: isDarkMode ? '#10b981' : '#059669',
+                      fontSize: '0.85rem',
+                      fontWeight: 400,
+                      maxWidth: '75%',
+                      wordWrap: 'break-word',
+                      border: `1px solid ${isDarkMode ? 'rgba(16, 185, 129, 0.2)' : 'rgba(16, 185, 129, 0.15)'}`,
+                      position: 'relative'
+                    }}
+                  >
+                    <div style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '0.3rem', 
+                      marginBottom: '0.2rem',
+                      fontSize: '0.75rem',
+                      opacity: 0.7,
+                      fontWeight: 500
+                    }}>
+                      <span>✓</span>
+                      <span>Corrected</span>
+                    </div>
+                    {(() => {
+                      const correctedVersion = extractCorrectedVersion(message.detailedFeedback);
+                      
+                      if (!correctedVersion) {
+                        // Message is correct - show "Correct!"
+                        return (
+                          <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <span style={{ fontWeight: 500, lineHeight: 1.3 }}>
+                              Correct!
+                            </span>
+                          </div>
+                        );
+                      }
+                      
+                      return (
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                          <span style={{ fontWeight: 500, lineHeight: 1.3 }}>
+                            {correctedVersion.mainText}
+                          </span>
+                          {correctedVersion.romanizedText && (
+                            <span style={{
+                              fontSize: '0.8em',
+                              opacity: 0.8,
+                              marginTop: '0.15rem',
+                              fontWeight: 400,
+                              lineHeight: 1.2,
+                            }}>
+                              {correctedVersion.romanizedText}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+              )}
+              
               {/* Feedback Buttons */}
-              {message.sender === 'User' && (
+              {message.sender === 'User' && !message.detailedFeedback && (
                 <button
                   onClick={() => toggleDetailedFeedback(index)}
                   disabled={isLoadingMessageFeedback[index]}
                   style={{
                     padding: '0.35rem 0.9rem',
                     borderRadius: 6,
-                    border: message.detailedFeedback ? 'none' : isDarkMode ? '1px solid #e8b3c3' : '1px solid #c38d94',
-                    background: message.detailedFeedback 
-                      ? 'linear-gradient(135deg, #e8b3c3 0%, #d4a3b3 100%)' 
-                      : isDarkMode ? 'rgba(232,179,195,0.15)' : 'rgba(195,141,148,0.08)',
-                    color: message.detailedFeedback ? '#fff' : isDarkMode ? '#e8b3c3' : '#c38d94',
+                    border: isDarkMode ? '1px solid #e8b3c3' : '1px solid #c38d94',
+                    background: isDarkMode ? 'rgba(232,179,195,0.15)' : 'rgba(195,141,148,0.08)',
+                    color: isDarkMode ? '#e8b3c3' : '#c38d94',
                     fontSize: '0.8rem',
                     cursor: isLoadingMessageFeedback[index] ? 'not-allowed' : 'pointer',
                     transition: 'all 0.2s ease',
@@ -3396,35 +4063,35 @@ function Analyze() {
                     minWidth: '70px',
                     fontWeight: 500,
                     marginTop: 4,
-                    boxShadow: message.detailedFeedback ? '0 2px 6px rgba(195,141,148,0.18)' : '0 1px 3px rgba(195,141,148,0.10)'
+                    boxShadow: '0 1px 3px rgba(195,141,148,0.10)'
                   }}
-                  title={message.detailedFeedback ? 'Show detailed feedback' : 'Check for errors'}
+                  title="Check for errors"
                 >
-                  {isLoadingMessageFeedback[index] ? '🔄' : message.detailedFeedback ? '🎯 Show' : '🎯 Check'}
+                  {isLoadingMessageFeedback[index] ? '🔄' : '🎯 Check'}
                 </button>
               )}
               {message.sender === 'AI' && (
                 <div style={{ display: 'flex', gap: '0.5rem', marginTop: 4 }}>
                   <button
-                    onClick={() => toggleShortFeedback(index)}
+                    onClick={() => quickTranslation(index, message.text)}
                     disabled={isLoadingMessageFeedback[index]}
                     style={{
                       padding: '0.35rem 0.9rem',
                       borderRadius: 6,
-                      border: shortFeedbacks[index] ? 'none' : '1px solid #4a90e2',
-                      background: shortFeedbacks[index] ? 'linear-gradient(135deg, #4a90e2 0%, #357abd 100%)' : 'rgba(74,144,226,0.08)',
-                      color: shortFeedbacks[index] ? '#fff' : '#4a90e2',
+                      border: '1px solid #4a90e2',
+                      background: 'rgba(74,144,226,0.08)',
+                      color: '#4a90e2',
                       fontSize: '0.8rem',
                       cursor: isLoadingMessageFeedback[index] ? 'not-allowed' : 'pointer',
                       transition: 'all 0.2s ease',
                       opacity: isLoadingMessageFeedback[index] ? 0.6 : 1,
                       minWidth: '70px',
                       fontWeight: 500,
-                      boxShadow: shortFeedbacks[index] ? '0 2px 6px rgba(74,144,226,0.18)' : '0 1px 3px rgba(74,144,226,0.10)'
+                      boxShadow: '0 1px 3px rgba(74,144,226,0.10)'
                     }}
-                    title={shortFeedbacks[index] ? 'Show short feedback' : 'Get short feedback'}
+                    title="Get translation"
                   >
-                    {isLoadingMessageFeedback[index] ? '🔄' : shortFeedbacks[index] ? '💡 Show' : '💡 Explain'}
+                    {isLoadingMessageFeedback[index] ? '🔄' : '💡 Explain'}
                   </button>
                   
                   {/* TTS button for AI messages */}
@@ -3914,185 +4581,7 @@ function Analyze() {
             )}
           </div>
         )}
-        {/* Resize Handle */}
-        {showDetailedFeedbackPanel && (
-          <div
-            onMouseDown={handleRightResizeStart}
-            style={{
-              position: 'absolute',
-              right: -4,
-              top: 0,
-              bottom: 0,
-              width: 8,
-              cursor: 'col-resize',
-              background: 'transparent',
-              zIndex: 10
-            }}
-          />
-        )}
       </div>
-      {/* Right Panel - Split into Detailed Analysis and Suggestions */}
-      {showDetailedFeedbackPanel && (
-        <div style={{ 
-          width: `${getPanelWidths().right * 100}%`, 
-          background: isDarkMode ? '#1e293b' : '#fff', 
-          borderRadius: 12,
-          display: 'flex',
-          flexDirection: 'column',
-          boxShadow: isDarkMode 
-            ? '0 3px 20px rgba(0,0,0,0.3)' 
-            : '0 3px 20px rgba(60,76,115,0.08)',
-          marginLeft: 0,
-          marginTop: 0,
-          transition: 'background 0.3s ease, box-shadow 0.3s ease'
-        }}>
-          {/* Full Height - Detailed Analysis */}
-          <div style={{ 
-            height: '100%',
-            display: 'flex',
-            flexDirection: 'column'
-          }}>
-            {/* Detailed Analysis Header */}
-            <div style={{ 
-              background: isDarkMode ? '#f0c8d0' : 'var(--rose-accent)', 
-              color: isDarkMode ? '#3b5377' : 'var(--blue-secondary)', 
-              padding: '0.75rem 1rem', 
-              borderRadius: '12px 12px 0 0',
-              textAlign: 'center',
-              borderBottom: isDarkMode ? '1px solid #334155' : '1px solid #ececec',
-              fontFamily: 'Gabriela, Arial, sans-serif',
-              fontWeight: 600,
-              fontSize: '0.95rem',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              transition: 'background 0.3s ease, color 0.3s ease, border-color 0.3s ease'
-            }}>
-              <span>📊 Conversation Errors</span>
-              <button
-                onClick={() => setShowDetailedFeedbackPanel(false)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: 'var(--blue-secondary)',
-                  fontSize: '1.2rem',
-                  cursor: 'pointer',
-                  padding: '0.2rem',
-                  borderRadius: '4px',
-                  transition: 'all 0.2s'
-                }}
-                title="Hide panel"
-              >
-                ▶
-              </button>
-            </div>
-            {/* Color Key */}
-            <div style={{
-              background: isDarkMode ? '#334155' : '#f8f9fa',
-              borderBottom: isDarkMode ? '1px solid #475569' : '1px solid #e9ecef',
-              padding: '0.75rem 1rem',
-              fontSize: '0.8rem',
-              fontFamily: 'AR One Sans, Arial, sans-serif',
-              transition: 'background 0.3s ease, border-color 0.3s ease'
-            }}>
-              <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                flexWrap: 'wrap',
-                gap: '0.5rem'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                  <span style={{
-                    textDecoration: 'underline',
-                    textDecorationColor: isDarkMode ? '#ef4444' : '#dc2626',
-                    textDecorationThickness: '2px',
-                    color: isDarkMode ? '#ef4444' : '#dc2626',
-                    fontWeight: 600
-                  }}>Grammar</span>
-                  <span style={{ color: isDarkMode ? '#94a3b8' : '#6c757d' }}>•</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                  <span style={{
-                    textDecoration: 'underline',
-                    textDecorationColor: isDarkMode ? '#fbbf24' : '#f59e0b',
-                    textDecorationThickness: '2px',
-                    color: isDarkMode ? '#fbbf24' : '#f59e0b',
-                    fontWeight: 600
-                  }}>Unnatural</span>
-                  <span style={{ color: isDarkMode ? '#94a3b8' : '#6c757d' }}>•</span>
-                </div>
-                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                   <span style={{
-                     textDecoration: 'underline',
-                     textDecorationColor: isDarkMode ? '#60a5fa' : '#2563eb',
-                     textDecorationThickness: '2px',
-                     color: isDarkMode ? '#60a5fa' : '#2563eb',
-                     fontWeight: 600
-                   }}>English</span>
-                   <span style={{ color: isDarkMode ? '#94a3b8' : '#6c757d' }}>•</span>
-                 </div>
-                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                   <span style={{
-                     backgroundColor: isDarkMode ? '#10b981' : '#10b981',
-                     color: '#ffffff',
-                     padding: '2px 4px',
-                     borderRadius: '4px',
-                     fontWeight: 700,
-                     fontSize: '0.8em'
-                   }}>Correct</span>
-                 </div>
-              </div>
-            </div>
-            {/* Detailed Analysis Content */}
-            <div style={{ 
-              flex: 1, 
-              display: 'flex',
-              flexDirection: 'column',
-              overflowY: 'auto',
-              overflowX: 'hidden',
-              minHeight: 0,
-              maxHeight: '100%'
-            }}>
-              {feedback && (
-                <div style={{
-                  background: isDarkMode ? '#1e293b' : '#fff',
-                  color: isDarkMode ? '#f8fafc' : '#000',
-                  padding: '1rem',
-                  fontSize: '0.9rem',
-                  lineHeight: 1.4,
-                  fontFamily: 'AR One Sans, Arial, sans-serif',
-                  fontWeight: 400,
-                  wordWrap: 'break-word',
-                  overflowWrap: 'break-word',
-                  transition: 'background 0.3s ease, color 0.3s ease'
-                }}>
-                  {renderFeedbackText(feedback)}
-                </div>
-              )}
-              {!feedback && (
-                <div style={{
-                  background: isDarkMode ? '#1e293b' : '#fff',
-                  color: isDarkMode ? '#94a3b8' : '#666',
-                  padding: '1rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '0.85rem',
-                  fontStyle: 'italic',
-                  textAlign: 'center',
-                  minHeight: '100px',
-                  transition: 'background 0.3s ease, color 0.3s ease'
-                }}>
-                  Click "🎯 Check" on any user message to see corrections here
-                </div>
-              )}
-            </div>
-          </div>
-
-
-        </div>
-      )}
       {/* Interrupt message - prominent UI position */}
       {wasInterrupted && !isRecording && (
         <div style={{
@@ -4149,30 +4638,7 @@ function Analyze() {
           💡
         </button>
       )}
-      {!showDetailedFeedbackPanel && (
-        <button
-          onClick={() => setShowDetailedFeedbackPanel(true)}
-          style={{
-            position: 'fixed',
-            right: '1rem',
-            top: '6rem',
-            background: 'var(--rose-primary)',
-            color: '#fff',
-            border: 'none',
-            borderRadius: '0 8px 8px 0',
-            padding: '1rem 0.5rem',
-            fontSize: '1.2rem',
-            cursor: 'pointer',
-            fontWeight: 600,
-            transition: 'all 0.2s',
-            boxShadow: '0 2px 8px rgba(195,141,148,0.2)',
-            zIndex: 1000
-          }}
-          title="Show Detailed Analysis Panel"
-        >
-          📊
-        </button>
-      )}
+
       {/* Topic Selection Modal */}
       <TopicSelectionModal
         isOpen={showTopicModal}
@@ -4191,6 +4657,63 @@ function Analyze() {
           currentDescription={conversationDescription}
           currentFormality={userPreferences?.formality || 'neutral'}
         />
+
+              {/* Grammarly-style popup for word explanations */}
+        {activePopup && (
+          <div
+            data-popup="true"
+                        style={{
+              position: 'fixed',
+              left: Math.max(10, Math.min(window.innerWidth - 320, activePopup.position.x)),
+              top: Math.max(10, activePopup.position.y - 60),
+              transform: 'translateX(-50%)',
+              backgroundColor: isDarkMode ? '#1e293b' : '#ffffff',
+              border: `1px solid ${isDarkMode ? '#475569' : '#e2e8f0'}`,
+              borderRadius: '8px',
+              padding: '12px 16px',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+              zIndex: 1000,
+              maxWidth: '300px',
+              fontSize: '14px',
+              lineHeight: '1.4',
+              color: isDarkMode ? '#e2e8f0' : '#1e293b',
+              pointerEvents: 'auto'
+            }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div style={{ fontWeight: 400, marginBottom: '4px', color: isDarkMode ? '#cbd5e1' : '#475569', fontSize: '13px' }}>
+            {activePopup.wordKey.replace(/[__~~==<<>>]/g, '')}
+          </div>
+                      <div style={{ fontSize: '14px', fontWeight: 600, color: isDarkMode ? '#f1f5f9' : '#0f172a' }}>
+              {(() => {
+                const translation = quickTranslations[activePopup.messageIndex]?.wordTranslations[activePopup.wordKey];
+                console.log('Popup translation lookup:', { 
+                  messageIndex: activePopup.messageIndex, 
+                  wordKey: activePopup.wordKey, 
+                  translation, 
+                  allTranslations: quickTranslations[activePopup.messageIndex]?.wordTranslations,
+                  availableKeys: Object.keys(quickTranslations[activePopup.messageIndex]?.wordTranslations || {})
+                });
+                return translation || feedbackExplanations[activePopup.messageIndex]?.[activePopup.wordKey] || 'No translation available';
+              })()}
+            </div>
+          {/* Arrow pointing down to the word */}
+          <div
+            style={{
+              position: 'absolute',
+              bottom: '-6px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              width: 0,
+              height: 0,
+              borderLeft: '6px solid transparent',
+              borderRight: '6px solid transparent',
+              borderTop: `6px solid ${isDarkMode ? '#1e293b' : '#ffffff'}`,
+              filter: `drop-shadow(0 1px 1px ${isDarkMode ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.1)'})`
+            }}
+          />
+        </div>
+      )}
 
       {/* Progress Modal */}
       {showProgressModal && progressData && (

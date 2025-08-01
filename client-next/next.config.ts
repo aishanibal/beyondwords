@@ -41,6 +41,10 @@ const nextConfig: NextConfig = {
         destination: 'http://localhost:4000/api/translate', // Express backend
       },
       {
+        source: '/api/quick_translation',
+        destination: 'http://localhost:4000/api/quick_translation', // Express backend
+      },
+      {
         source: '/api/user/:path*',
         destination: 'http://localhost:4000/api/user/:path*', // Express backend
       },

@@ -197,48 +197,49 @@ YOUR RESPONSE STRUCTURE (use {self.feedback_language} for explanations):
 """
 
         if self.is_script_language():
-            prompt += f"""[The user sentence with the WITH FORMATTING]
+            prompt += f"""
+FORMATTING INSTRUCTIONS:
+- Use __word__ (double underscores) for GRAMMAR MISTAKES (serious errors like wrong verb tense, missing particles, incorrect word order)
+- Use ~~word~~ (double tildes) for UNNATURAL PHRASING (awkward or non-native expressions), but make sure Grammar is still __word__
+- Use ==word== (double equals) for ENGLISH WORDS that should be replaced with {self.language_name} equivalents
+- Apply formatting to BOTH script and romanized versions when both are present
+- When showing script and romanized verisons in the explanation, ONLY use ONE SLASH (/) between them.            
+            
+[The user sentence with the WITH FORMATTING]
 [Romanized version of the above WITH FORMATTING]
 
 **Explanation**
-[specific word/phrase error, WITH FORMATTING] / [specific error romanized if applicable, WITH FORMATTING] - [explanation with NO FORMATTING][alternative, solution, correct word/phrase]
+[specific word/phrase error, WITH FORMATTING] / [specific error romanized if applicable, WITH FORMATTING] - [explanation with NO FORMATTING][alternative, solution, correct word/phrase with romanization and translation]
 
 **Corrected Version**
 [Corrected version of user sentence]
 [Corrected version of user sentence romanized if applicable]
 
-FORMATTING INSTRUCTIONS:
-- Use `__word__` (double underscores) for GRAMMAR MISTAKES (serious errors like wrong verb tense, missing particles, incorrect word order)
-- Use `~~word~~` (double tildes) for UNNATURAL PHRASING (awkward or non-native expressions)
-- Use `==word==` (double equals) for ENGLISH WORDS that should be replaced with {self.language_name} equivalents
-- Use `<<word>>` (double angle brackets) to highlight CORRECT WORDS/ALTERNATIVES that should be used instead
-- Apply formatting to BOTH script and romanized versions when both are present
-- No "`" characters in response
-- When showing script and romanized verisons in the explanation, ONLY use a / between them.
+
 """
         else:
-            prompt += f"""[The user sentence with the WITH FORMATTING]
+            prompt += f"""
+FORMATTING INSTRUCTIONS:
+- Use __word__ (double underscores) for GRAMMAR MISTAKES (serious errors like wrong verb tense, missing particles, incorrect word order)
+- Use ~~word~~ (double tildes) for UNNATURAL PHRASING (awkward or non-native expressions)
+- Use ==word== (double equals) for ENGLISH WORDS that should be replaced with {self.language_name} equivalents
+      
+[The user sentence with the WITH FORMATTING]
 
 **Explanation**
-[specific word/phrase error, WITH FORMATTING] - [explanation with NO FORMATTING][alternative, solution, correct word/phrase]
+[specific word/phrase error, WITH FORMATTING] - [explanation with NO FORMATTING][alternative, solution, correct word/phrase with translation]
 
 **Corrected Version**
-[Corrected version of user sentence]
+[Corrected version of user sentence]"""
 
-FORMATTING INSTRUCTIONS:
-- Use `__word__` (double underscores) for GRAMMAR MISTAKES (serious errors like wrong verb tense, missing particles, incorrect word order)
-- Use `~~word~~` (double tildes) for UNNATURAL PHRASING (awkward or non-native expressions)
-- Use `==word==` (double equals) for ENGLISH WORDS that should be replaced with {self.language_name} equivalents
-- Use `<<word>>` (double angle brackets) to highlight CORRECT WORDS/ALTERNATIVES that should be used instead
-"""
+
 
         prompt += f"""
 
 TIPS:
-- Be encouraging and specific.
+- Limit Explanations to 15-20 words.
 - Focus on grammar, natural sentence structure, and phrasing that sounds native.
 - If the user used a non-{self.language_name} word that has a better equivalent, suggest a replacement like: "Instead of saying 'X', you'll sound more fluent if you say 'Y'." in {self.feedback_language}.
-- Cut the Filler.
 Always use {self.feedback_language} for explanations.
 """
         
@@ -2045,3 +2046,85 @@ def get_detailed_breakdown(llm_response: str, user_input: str = "", context: str
     
     # Use the explain_llm_response method to get detailed breakdown
     return tutor.explain_llm_response(llm_response, user_input, context, description)
+
+def get_quick_translation(ai_message: str, language: str = 'en', user_level: str = 'beginner', user_topics: list = None, formality: str = 'friendly', feedback_language: str = 'en', user_goals: list = None, description: str = None) -> str:
+    """Get quick translation of AI message with word-by-word breakdown"""
+    if user_topics is None:
+        user_topics = []
+    if user_goals is None:
+        user_goals = []
+    
+    if not ai_message or not ai_message.strip():
+        return ""
+    
+    if not GOOGLE_AI_AVAILABLE:
+        return "Translation unavailable - Google AI not configured"
+    
+    try:
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        
+        # Check if language is a script language
+        is_script = language in LanguageTutor.SCRIPT_LANGUAGES
+
+
+        
+        # Build translation prompt
+        if is_script:
+            prompt = f"""You are a language tutor helping a {user_level} level learner understand an AI message in {language}.
+
+AI MESSAGE TO TRANSLATE: "{ai_message}"
+
+
+TASK:
+Provide a complete translation with word-by-word breakdown in this EXACT format:
+
+**Full Translation:**
+[Complete translation of the entire message in {feedback_language}]
+
+**Word-by-Word Breakdown:**
+[IMPORTANT: Translate EVERY SINGLE WORD in the original message, including articles, prepositions, and common words. Do not skip any words. Do not make punctuation marks a separate word.]
+
+[Original word/phrase script] / [Original word/phrase romanized] -- [Translation in {feedback_language}]
+[Continue for each word/phrase, but do NOT make punctuation marks a separate word - make sure to include ALL words and maintain SPELLING]
+
+**BREAKDOWN RULE: "Hello." counts as ONE word, not "Hello" + ".". Keep punctuation attached to words.**
+
+CRITICAL INSTRUCTIONS:
+- PLEASE DO NOT separate punctuation marks from words. Keep punctuation WITH the word it belongs to.
+- Keep the AI message exactly the same. Do not add or change any words or punctuation.
+
+"""
+        else:
+            prompt = f"""You are a language tutor helping a {user_level} level learner understand an AI message in {language}.
+
+AI MESSAGE TO TRANSLATE: "{ai_message}"
+
+TASK:
+Provide a complete translation with word-by-word breakdown in this EXACT format:
+
+**Full Translation:**
+[Complete translation of the entire message in {feedback_language}]
+
+**Word-by-Word Breakdown:**
+[IMPORTANT: Translate EVERY SINGLE WORD in the original message, including articles, prepositions, and common words. Do not skip any words. Do not make punctuation marks a separate word.]
+
+[Original word/phrase] -- [Translation in {feedback_language}]
+[Continue for each word/phrase, but do NOT make punctuation marks a separate word - make sure to include ALL words and maintain SPELLING]
+
+**BREAKDOWN RULE: "Hello." counts as ONE word, not "Hello" + ".". Keep punctuation attached to words.**
+
+CRITICAL INSTRUCTIONS:
+- PLEASE DO NOT separate punctuation marks from words. Keep punctuation WITH the word it belongs to.
+- Keep the AI message exactly the same. Do not add or change any words or punctuation.
+"""
+    
+        response = model.generate_content(prompt)
+        
+        if response and response.text:
+            return response.text.strip()
+        else:
+            return "Translation failed"
+            
+    except Exception as e:
+        print(f"Quick translation error: {e}")
+        return "Translation error occurred"
