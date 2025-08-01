@@ -367,13 +367,8 @@ def analyze():
 
 @app.route('/conversation_summary', methods=['POST'])
 def conversation_summary():
-    """Generate a conversation summary with subgoal evaluation"""
+    """Generate conversation summary and progress evaluation using Gemini."""
     try:
-        print(f"=== /conversation_summary called ===")
-        print(f"Request method: {request.method}")
-        print(f"Request headers: {dict(request.headers)}")
-        print(f"Request data: {request.get_json()}")
-        
         data = request.get_json()
         chat_history = data.get('chat_history', [])
         subgoal_instructions = data.get('subgoal_instructions', '')
@@ -382,6 +377,16 @@ def conversation_summary():
         print(f"Chat history length: {len(chat_history)}")
         print(f"Subgoal instructions: {subgoal_instructions}")
         print(f"User topics: {user_topics}")
+        
+        # Check if there are any user messages in the chat history
+        user_messages = [msg for msg in chat_history if msg.get('sender') == 'User']
+        if not user_messages:
+            print("No user messages found in chat history, skipping evaluation")
+            return jsonify({
+                "title": "No Evaluation",
+                "synopsis": "No user messages to evaluate.",
+                "progress_percentages": None
+            })
         
         from gemini_client import generate_conversation_summary
         summary = generate_conversation_summary(chat_history, subgoal_instructions, user_topics)

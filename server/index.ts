@@ -1044,12 +1044,13 @@ app.post('/api/admin/demote', authenticateJWT, async (req: Request, res: Respons
 // Conversation endpoints
 app.post('/api/conversations', authenticateJWT, async (req: Request, res: Response) => {
   try {
-    const { language, title, topics, formality, description, usesPersona, personaId } = req.body;
+    const { language, title, topics, formality, description, usesPersona, personaId, learningGoals } = req.body;
     console.log('🔄 SERVER: Creating conversation with formality:', formality);
     console.log('🔄 SERVER: Creating conversation with description:', description);
     console.log('🔄 SERVER: Creating conversation with persona info:', { usesPersona, personaId });
+    console.log('🔄 SERVER: Creating conversation with learning goals:', learningGoals);
     console.log('🔄 SERVER: Full request body:', req.body);
-    const conversation = await createConversation(req.user.userId, language, title, topics, formality, description, usesPersona, personaId);
+    const conversation = await createConversation(req.user.userId, language, title, topics, formality, description, usesPersona, personaId, learningGoals);
     console.log('🔄 SERVER: Conversation creation result:', conversation);
     if (!conversation || !conversation.id) {
       console.error('❌ SERVER: Failed to create conversation');
@@ -1203,14 +1204,14 @@ app.delete('/api/conversations/:id', authenticateJWT, async (req: Request, res: 
 app.patch('/api/conversations/:id', authenticateJWT, async (req: Request, res: Response) => {
   try {
     const conversationId = parseInt(req.params.id);
-    const { usesPersona, personaId, synopsis } = req.body;
+    const { usesPersona, personaId, synopsis, progress_data } = req.body;
     
     if (synopsis !== undefined) {
-      // Update conversation with synopsis
-      console.log('Updating conversation synopsis:', { conversationId, synopsis: synopsis.substring(0, 100) + '...' });
-      await updateConversationSynopsis(conversationId, synopsis);
-      console.log('Conversation synopsis updated successfully');
-      res.json({ message: 'Conversation synopsis updated successfully' });
+      // Update conversation with synopsis and progress data
+      console.log('Updating conversation synopsis and progress:', { conversationId, synopsis: synopsis.substring(0, 100) + '...', progress_data });
+      await updateConversationSynopsis(conversationId, synopsis, progress_data);
+      console.log('Conversation synopsis and progress updated successfully');
+      res.json({ message: 'Conversation synopsis and progress updated successfully' });
     } else if (usesPersona !== undefined) {
       // Update conversation with persona information
       await updateConversationPersona(conversationId, usesPersona, personaId);

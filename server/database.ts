@@ -64,6 +64,8 @@ export interface Conversation {
   message_count?: number;
   uses_persona?: boolean;
   persona_id?: number;
+  progress_data?: string;
+  learning_goals?: string[];
   created_at?: string;
   updated_at?: string;
 }
@@ -226,6 +228,8 @@ function addColumnsIfNotExist() {
     'ALTER TABLE language_dashboards ADD COLUMN speak_speed REAL DEFAULT 1.0',
     'ALTER TABLE conversations ADD COLUMN uses_persona BOOLEAN DEFAULT FALSE',
     'ALTER TABLE conversations ADD COLUMN persona_id INTEGER',
+    'ALTER TABLE conversations ADD COLUMN progress_data TEXT',
+    'ALTER TABLE conversations ADD COLUMN learning_goals TEXT',
     'ALTER TABLE messages ADD COLUMN romanized_text TEXT',
     'ALTER TABLE language_dashboards ADD COLUMN romanization_display TEXT DEFAULT "both"'
   ];
@@ -420,11 +424,12 @@ function getAllUsers() {
 }
 
 // Conversation functions
-function createConversation(userId: number, language: string, title?: string, topics?: string[], formality?: string, description?: string, usesPersona?: boolean, personaId?: number) {
+function createConversation(userId: number, language: string, title?: string, topics?: string[], formality?: string, description?: string, usesPersona?: boolean, personaId?: number, learningGoals?: string[]) {
   return new Promise<{ id: number }>((resolve, reject) => {
-    console.log('🗄️ DATABASE: Creating conversation:', { userId, language, title, topics, formality, description, usesPersona, personaId });
+    console.log('🗄️ DATABASE: Creating conversation:', { userId, language, title, topics, formality, description, usesPersona, personaId, learningGoals });
     
     const topicsJson = topics ? JSON.stringify(topics) : null;
+    const learningGoalsJson = learningGoals ? JSON.stringify(learningGoals) : null;
     
     // First, get the language dashboard ID for this user and language
     const getDashboardSql = `SELECT id FROM language_dashboards WHERE user_id = ? AND language = ?`;
@@ -438,11 +443,11 @@ function createConversation(userId: number, language: string, title?: string, to
         reject(new Error('Language dashboard not found'));
       } else {
         const sql = `
-          INSERT INTO conversations (user_id, language_dashboard_id, title, topics, formality, description, uses_persona, persona_id)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO conversations (user_id, language_dashboard_id, title, topics, formality, description, uses_persona, persona_id, learning_goals)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `;
         
-        db.run(sql, [userId, (dashboard as { id: number }).id, title, topicsJson, formality, description, usesPersona || false, personaId || null], function(err) {
+        db.run(sql, [userId, (dashboard as { id: number }).id, title, topicsJson, formality, description, usesPersona || false, personaId || null, learningGoalsJson], function(err) {
           if (err) {
             console.error('❌ DATABASE: Error creating conversation:', err);
             reject(err);
@@ -456,7 +461,8 @@ function createConversation(userId: number, language: string, title?: string, to
               formality,
               description,
               uses_persona: usesPersona || false,
-              persona_id: personaId || null
+              persona_id: personaId || null,
+              learning_goals: learningGoalsJson
             });
             resolve({ id: this.lastID });
           }
@@ -553,7 +559,7 @@ function getUserConversations(userId: number, language?: string) {
     if (language) {
       // Get conversations for specific language dashboard
       sql = `
-        SELECT c.id, c.title, ld.language, c.message_count, c.created_at, c.updated_at, c.uses_persona, c.persona_id, p.name as persona_name, p.description as persona_description, c.synopsis
+        SELECT c.id, c.title, ld.language, c.message_count, c.created_at, c.updated_at, c.uses_persona, c.persona_id, p.name as persona_name, p.description as persona_description, c.synopsis, c.progress_data, c.learning_goals
         FROM conversations c
         JOIN language_dashboards ld ON c.language_dashboard_id = ld.id
         LEFT JOIN personas p ON c.persona_id = p.id
@@ -564,7 +570,7 @@ function getUserConversations(userId: number, language?: string) {
     } else {
       // Get all conversations for user
       sql = `
-        SELECT c.id, c.title, ld.language, c.message_count, c.created_at, c.updated_at, c.uses_persona, c.persona_id, p.name as persona_name, p.description as persona_description, c.synopsis
+        SELECT c.id, c.title, ld.language, c.message_count, c.created_at, c.updated_at, c.uses_persona, c.persona_id, p.name as persona_name, p.description as persona_description, c.synopsis, c.progress_data, c.learning_goals
         FROM conversations c
         JOIN language_dashboards ld ON c.language_dashboard_id = ld.id
         LEFT JOIN personas p ON c.persona_id = p.id
@@ -594,7 +600,16 @@ function getUserConversations(userId: number, language?: string) {
                 );
               });
               console.log(`Conversation ${conversation.id}: ${messages.length} messages, synopsis: ${conversation.synopsis ? 'YES' : 'NO'}`);
-              return { ...conversation, messages };
+              
+              // Parse JSON fields
+              const parsedConversation = {
+                ...conversation,
+                topics: (conversation as any).topics ? JSON.parse((conversation as any).topics) : null,
+                learning_goals: (conversation as any).learning_goals ? JSON.parse((conversation as any).learning_goals) : null,
+                messages
+              };
+              
+              return parsedConversation;
             } catch (error) {
               console.error('Error fetching messages for conversation:', conversation.id, error);
               return { ...conversation, messages: [] };
@@ -612,7 +627,7 @@ function getConversationWithMessages(conversationId: number) {
   return new Promise<Conversation & { messages: Message[] } | null>((resolve, reject) => {
     console.log('🗄️ DATABASE: Getting conversation with messages:', conversationId);
     const conversationSql = `
-      SELECT c.*, u.name as user_name, ld.language
+      SELECT c.*, u.name as user_name, ld.language, c.learning_goals
       FROM conversations c
       JOIN users u ON c.user_id = u.id
       JOIN language_dashboards ld ON c.language_dashboard_id = ld.id
@@ -666,8 +681,13 @@ function getConversationWithMessages(conversationId: number) {
               ...conv,
               topics: (conv as any).topics ? JSON.parse((conv as any).topics) : null,
               formality: (conv as any).formality,
+              learning_goals: (conv as any).learning_goals ? JSON.parse((conv as any).learning_goals) : null,
               messages: messages as Message[]
             };
+            
+            console.log('🔍 DATABASE: Raw learning_goals from DB:', (conv as any).learning_goals);
+            console.log('🔍 DATABASE: Parsed learning_goals:', parsedConversation.learning_goals);
+            
             resolve(parsedConversation as Conversation & { messages: Message[] });
           }
         });
@@ -734,20 +754,20 @@ function updateConversationTitle(conversationId: number, title: string) {
   });
 }
 
-function updateConversationSynopsis(conversationId: number, synopsis: string) {
+function updateConversationSynopsis(conversationId: number, synopsis: string, progressData?: string) {
   return new Promise<{ changes: number }>((resolve, reject) => {
-    console.log('🗄️ DATABASE: Updating conversation synopsis:', { conversationId, synopsis: synopsis.substring(0, 50) + '...' });
+    console.log('🗄️ DATABASE: Updating conversation synopsis:', { conversationId, synopsis: synopsis.substring(0, 50) + '...', progressData });
     
-    const sql = `UPDATE conversations SET synopsis = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`;
+    const sql = `UPDATE conversations SET synopsis = ?, progress_data = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`;
     console.log('🗄️ DATABASE: SQL query:', sql);
-    console.log('🗄️ DATABASE: Parameters:', [synopsis.substring(0, 50) + '...', conversationId]);
+    console.log('🗄️ DATABASE: Parameters:', [synopsis.substring(0, 50) + '...', progressData, conversationId]);
     
-    db.run(sql, [synopsis, conversationId], function(err) {
+    db.run(sql, [synopsis, progressData || null, conversationId], function(err) {
       if (err) {
         console.error('❌ DATABASE: Error updating conversation synopsis:', err);
         reject(err);
       } else {
-        console.log('✅ DATABASE: Conversation synopsis updated successfully, changes:', this.changes);
+        console.log('✅ DATABASE: Conversation synopsis and progress updated successfully, changes:', this.changes);
         resolve({ changes: this.changes });
       }
     });

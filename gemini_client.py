@@ -365,7 +365,7 @@ Use this exact format for each suggestion:
         
         # Prepare proficiency level guidance
         level_guidance = self.PROFICIENCY_LEVELS.get(self.user_level, "")
-        
+
         # Add description-aware guidance
         description_guidance = ""
         if description:
@@ -1914,50 +1914,43 @@ def generate_conversation_summary(chat_history: List[Dict], subgoal_instructions
     context = "\n".join([f"{msg['sender']}: {msg['text']}" for msg in chat_history])
 
     prompt = f"""
-You are an expert conversation evaluator and summarizer for a language learning app.
+You are an expert conversation evaluator for a language learning app.
 
-Given the full conversation below, complete the following tasks:
+Given the full conversation below, complete the following:
 
-1. Generate a short, descriptive title (max 8 words) that captures the main topic or theme of the conversation. It should reflect what the user spent most of their time discussing.
+1. A short title (max 8 words) summarizing the main theme.
+2. A strict evaluation of 3 subgoals.
 
-2. Evaluate how well the user achieved each of the following 3 subgoals:
 {subgoal_instructions}
-Your response must:
-- Use second-person language ("you", "your")
-- Include a quantitative estimate based on the metric for each subgoal (e.g., % of valid turns, number of elaborated responses, number of flagged repetitions, etc.)
-- Highlight one specific moment where the subgoal was met or not met
-- If the subgoal **was met**: provide a new metric-based subgoal that builds on the same skill and is slightly more advanced
-- If the subgoal **was not met**: give actionable feedback and end with: "Keep practicing this subgoal."
 
-Be extremely strict in your evaluation. Do not say the subgoal was achieved unless it is clearly and verifiably met based on the conversation history.
-If you cannot evaluate the subgoal, say "Not enough information to evaluate this subgoal. Keep practicing!"
+Each subgoal evaluation must:
+- Use second-person language ("you", "your"). 
+- Do not reference anything the AI said. Only evaluate the user's performance.
+- Highlight one specific example where the subgoal was met or missed
+- If met: suggest a harder next subgoal
+- If not met: give actionable feedback and end with "Keep practicing this subgoal."
+- For calculating progress percentages:
+  - 100 if met or exceeded
+  - If goal = N and user did M, compute (M / N) × 100
+  - If goal = X%, and user achieved Y%, compute (Y / X) × 100
+  - Round to nearest whole number
 
-Use this conversation history to evaluate the user's performance:
-{chat_history}
+Be extremely strict. If the user didn’t clearly meet a subgoal, do not say they did.
 
-The topics of the conversation are: {user_topics}
+Respond in this exact structure:
 
-Return your answer in this exact format:
-Title: <your title here>  
-Evaluation:  
-<Subgoal 1 name>: <subgoal 1 evaluation>  
-<Subgoal 2 name>: <subgoal 2 evaluation>  
-<Subgoal 3 name>: <subgoal 3 evaluation>  
+Title: <short title>
 
----
+Subgoal 1: <evaluation (without progress percentage)>
+<Subgoal name (the one passed in the subgoal_instructions)>: <evaluation (without progress percentage)>
+<Subgoal name (the one passed in the subgoal_instructions)>: <evaluation (without progress percentage)>
 
-EXAMPLE
+Progress: <percent 1> <percent 2> <percent 3>
 
-Title: Talking About Food and Preferences  
-Evaluation:  
-**No excessive repetition**: You repeated the word “good” four times within five turns (“good food,” “really good,” “so good”), which triggered the repetition flag. Try using more descriptive words like “delicious” or “satisfying” to add variety.  
-Keep practicing this subgoal.
+Here is the conversation:
+{context}
 
-**At least 3 elaborated responses**: You gave 4 elaborated responses, such as “Yes, I love sushi because it’s fresh and reminds me of Japan.” This added depth and moved the conversation forward.  
-**Next subgoal:** Include at least 5 elaborated responses with a reason or example in a 10-turn span.
-
-**No more than 2 one-word replies in 10 turns**: You gave 3 one-word responses (“Yeah,” “Maybe,” “Cool”) within a 10-turn stretch, which exceeds the limit. Try responding with full thoughts to keep conversations flowing naturally.  
-Keep practicing this subgoal.
+User topics: {user_topics}
 """
 
 
@@ -1976,63 +1969,53 @@ Keep practicing this subgoal.
             print(f"DEBUG: Raw response text: {response.text}")
             print(f"DEBUG: Raw response lines: {lines}")
             
+            # Parse title and extract progress percentages
+            title = ""
+            progress_percentages = []
+            subgoal_evaluations = []
+            current_subgoal = ""
+            in_evaluation = False
+            
             for line in lines:
                 line_lower = line.lower().strip()
                 if line_lower.startswith("title:"):
                     title = line[len("title:"):].strip()
                     print(f"DEBUG: Found title: {title}")
-                elif line_lower.startswith("evaluation:"):
+                elif line_lower.startswith("progress:"):
+                    # Extract percentages from Progress line
+                    progress_text = line[len("progress:"):].strip()
+                    # Parse percentages (assuming format like "Progress: 75 60 90")
+                    percentages = [int(p.strip()) for p in progress_text.split() if p.strip().isdigit()]
+                    progress_percentages = percentages
+                    print(f"DEBUG: Found progress percentages: {progress_percentages}")
+                elif ":" in line and not line_lower.startswith("progress:"):
+                    # This is a subgoal evaluation line (starts with subgoal name)
                     in_evaluation = True
-                    print(f"DEBUG: Found evaluation marker")
-                    # Start collecting evaluation content from the next line
-                    synopsis_lines = []
-                elif in_evaluation:
-                    # Collect all lines that are part of the evaluation
-                    synopsis_lines.append(line)
-                    print(f"DEBUG: Added to synopsis: {line}")
+                    subgoal_evaluations.append(line)
+                    print(f"DEBUG: Added subgoal evaluation: {line}")
+                elif in_evaluation and line.strip():
+                    # This is continuation of previous evaluation
+                    if subgoal_evaluations:
+                        subgoal_evaluations[-1] += "\n" + line
+                        print(f"DEBUG: Continued previous evaluation with: {line}")
             
-            # Join all evaluation lines
-            if synopsis_lines:
-                synopsis = "\n".join(synopsis_lines).strip()
-                print(f"DEBUG: Raw synopsis: {synopsis}")
+            # Create synopsis without progress percentages
+            if subgoal_evaluations:
+                synopsis = "\n\n".join(subgoal_evaluations).strip()
+                print(f"DEBUG: Final synopsis without progress: {synopsis}")
             
-            # Clean up the synopsis to remove any title references
-            if synopsis and title:
-                print(f"DEBUG: Before cleanup - synopsis: {synopsis}")
-                # Remove the title from the synopsis if it appears at the beginning
-                synopsis_lines = synopsis.split('\n')
-                cleaned_lines = []
-                skip_until_evaluation = False
-                
-                for line in synopsis_lines:
-                    line_lower = line.strip().lower()
-                    
-                    # Skip lines that are just the title
-                    if line_lower.startswith("title:"):
-                        skip_until_evaluation = True
-                        print(f"DEBUG: Skipping title line in synopsis: {line}")
-                        continue
-                    # Skip empty lines after title
-                    elif skip_until_evaluation and not line.strip():
-                        print(f"DEBUG: Skipping empty line after title")
-                        continue
-                    # Stop skipping when we hit evaluation
-                    elif line_lower.startswith("evaluation:"):
-                        skip_until_evaluation = False
-                        print(f"DEBUG: Found evaluation marker, stopping skip")
-                        continue
-                    # Add the line if we're not in the skip section
-                    elif not skip_until_evaluation:
-                        cleaned_lines.append(line)
-                        print(f"DEBUG: Adding cleaned line: {line}")
-                
-                synopsis = "\n".join(cleaned_lines).strip()
-                print(f"DEBUG: Final cleaned synopsis: {synopsis}")
+            # Store progress percentages for the frontend
+            result = {"title": title, "synopsis": synopsis}
+            if progress_percentages:
+                result["progress_percentages"] = progress_percentages
+                print(f"DEBUG: Added progress percentages to result: {progress_percentages}")
             
             if not title or not synopsis:
                 # fallback: use the whole response as synopsis
                 synopsis = response.text.strip()
-            return {"title": title, "synopsis": synopsis}
+                result = {"title": title, "synopsis": synopsis}
+            
+            return result
         else:
             return {"title": "[No response]", "synopsis": "[No response from Gemini]"}
     except Exception as e:

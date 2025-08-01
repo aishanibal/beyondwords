@@ -2,7 +2,7 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable react-hooks/exhaustive-deps */
 "use client";
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useUser } from '../ClientLayout';
 import axios from 'axios';
 import Link from 'next/link';
@@ -33,6 +33,8 @@ interface ConversationType {
   persona_name?: string;
   persona_description?: string;
   synopsis?: string;
+  progress_data?: string;
+  learning_goals?: string[];
 }
 
 interface PersonaType {
@@ -50,10 +52,15 @@ interface PersonaType {
 interface LearningGoalCardProps {
   goal: LearningGoal;
   index: number;
+  progressData?: number[];
 }
 
-function LearningGoalCard({ goal, index }: LearningGoalCardProps) {
+function LearningGoalCard({ goal, index, progressData }: LearningGoalCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+  
+  console.log('LearningGoalCard received progressData:', progressData);
+  console.log('LearningGoalCard goal:', goal);
+  console.log('LearningGoalCard index:', index);
 
   return (
     <div style={{ 
@@ -181,7 +188,7 @@ function LearningGoalCard({ goal, index }: LearningGoalCardProps) {
                   }}>
                     {subgoal.description}
                   </div>
-                  {/* Placeholder for future progress bar */}
+                  {/* Progress bar with actual data */}
                   <div style={{ 
                     width: '60px',
                     height: '6px',
@@ -192,12 +199,25 @@ function LearningGoalCard({ goal, index }: LearningGoalCardProps) {
                     overflow: 'hidden'
                   }}>
                     <div style={{ 
-                      width: '0%', // This will be dynamic based on progress
+                      width: progressData && progressData[subIndex] !== undefined ? `${progressData[subIndex]}%` : '0%',
                       height: '100%',
-                      background: 'var(--rose-primary)',
+                      background: progressData && progressData[subIndex] !== undefined && progressData[subIndex] >= 80 ? '#10b981' : 
+                                progressData && progressData[subIndex] !== undefined && progressData[subIndex] >= 60 ? '#f59e0b' : 'var(--rose-primary)',
                       borderRadius: 3,
                       transition: 'width 0.3s ease'
                     }} />
+                  </div>
+                  {/* Percentage display */}
+                  <div style={{ 
+                    color: 'var(--foreground)', 
+                    fontSize: '0.7rem',
+                    fontWeight: 600,
+                    fontFamily: 'Montserrat, Arial, sans-serif',
+                    marginLeft: '0.5rem',
+                    minWidth: '30px',
+                    textAlign: 'right'
+                  }}>
+                    {progressData && progressData[subIndex] !== undefined ? `${progressData[subIndex]}%` : '0%'}
                   </div>
                 </div>
               ))}
@@ -235,6 +255,7 @@ export default function DashboardPage() {
   const [error, setError] = useState<string>('');
   const [showLanguageOnboarding, setShowLanguageOnboarding] = useState<boolean>(false);
   const [showDashboardSettings, setShowDashboardSettings] = useState<boolean>(false);
+  const [expandedConversations, setExpandedConversations] = useState<Set<string>>(new Set());
 
   // Persist selected language to localStorage whenever it changes
   React.useEffect(() => {
@@ -297,26 +318,53 @@ export default function DashboardPage() {
     }
   }, [user, selectedLanguage]);
 
-  useEffect(() => {
-    async function fetchConversations() {
-      if (selectedLanguage && user?.id) {
-        try {
-          setConversations([]);
-          const token = localStorage.getItem('jwt');
-          const conversationsRes = await axios.get(`/api/conversations?language=${selectedLanguage}`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          
-          const conversations = conversationsRes.data.conversations || [];
-          
-          setConversations(conversations);
-        } catch (err) {
-          setConversations([]);
-        }
+  const fetchConversations = useCallback(async () => {
+    if (selectedLanguage && user?.id) {
+      try {
+        setConversations([]);
+        const token = localStorage.getItem('jwt');
+        const conversationsRes = await axios.get(`/api/conversations?language=${selectedLanguage}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        const conversations = conversationsRes.data.conversations || [];
+        
+        // Sort conversations by created_at date (newest first)
+        const sortedConversations = conversations.sort((a: ConversationType, b: ConversationType) => {
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        });
+        
+        console.log('Fetched conversations with data:', sortedConversations.map(conv => ({
+          id: conv.id,
+          title: conv.title,
+          synopsis: conv.synopsis ? conv.synopsis.substring(0, 100) + '...' : 'No synopsis',
+          progress_data: conv.progress_data,
+          created_at: conv.created_at
+        })));
+        
+        setConversations(sortedConversations);
+      } catch (err) {
+        setConversations([]);
       }
     }
+  }, [selectedLanguage, user?.id]);
+
+  useEffect(() => {
     fetchConversations();
-  }, [selectedLanguage, user?.id, languageDashboards]);
+  }, [fetchConversations]);
+
+  // Refetch conversations when user returns to dashboard (e.g., after completing a conversation)
+  useEffect(() => {
+    const handleFocus = () => {
+      if (selectedLanguage && user?.id) {
+        console.log('Dashboard focused, refetching conversations...');
+        fetchConversations();
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [selectedLanguage, user?.id, fetchConversations]);
 
   useEffect(() => {
     async function fetchPersonas() {
@@ -446,12 +494,31 @@ export default function DashboardPage() {
 
   const handleDashboardUpdate = (updatedDashboard: DashboardType) => {
     setLanguageDashboards((prev: DashboardType[]) => 
-      prev.map((dashboard: DashboardType) => 
-        dashboard.language === updatedDashboard.language 
-          ? { ...dashboard, ...updatedDashboard }
-          : dashboard
+      prev.map((d: DashboardType) => 
+        d.language === updatedDashboard.language ? updatedDashboard : d
       )
     );
+  };
+
+  const toggleConversationExpansion = (conversationId: string) => {
+    setExpandedConversations(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(conversationId)) {
+        newSet.delete(conversationId);
+      } else {
+        newSet.add(conversationId);
+      }
+      return newSet;
+    });
+  };
+
+  const getSummaryPreview = (synopsis: string) => {
+    // Extract the first sentence or first 100 characters as preview
+    const firstSentence = synopsis.split('.')[0];
+    if (firstSentence.length > 100) {
+      return firstSentence.substring(0, 100) + '...';
+    }
+    return firstSentence + (synopsis.includes('.') ? '.' : '');
   };
 
   if (showLanguageOnboarding) {
@@ -683,8 +750,110 @@ export default function DashboardPage() {
                         const goal = LEARNING_GOALS.find(g => g.id === goalId);
                         if (!goal) return null;
                         
+                        // Aggregate progress data from all conversations for this language
+                        let aggregatedProgressData: number[] | undefined;
+                        
+                        console.log('=== PROGRESS DATA AGGREGATION DEBUG ===');
+                        console.log('Goal ID:', goalId);
+                        console.log('Goal:', goal);
+                        console.log('All conversations for progress aggregation:', conversations);
+                        
+                        if (conversations && conversations.length > 0) {
+                          // Collect progress data only from conversations that practiced this specific goal
+                          const relevantProgressData: number[][] = [];
+                          
+                          conversations.forEach(conversation => {
+                            console.log('Checking conversation:', conversation.id, 'for progress_data');
+                            
+                            if (conversation.progress_data) {
+                              try {
+                                const progressData = JSON.parse(conversation.progress_data);
+                                
+                                // Check if this is the new format with goal information
+                                if (progressData.goals && progressData.percentages) {
+                                  // New format: { goals: [...], percentages: [...] }
+                                  console.log('Found new format progress data:', progressData);
+                                  
+                                  // Check if this conversation practiced the current goal
+                                  if (progressData.goals.includes(goalId)) {
+                                    console.log('✅ Conversation practiced this goal, adding progress data');
+                                    relevantProgressData.push(progressData.percentages);
+                                  } else {
+                                    console.log('❌ Conversation did not practice this goal, skipping');
+                                  }
+                                } else if (Array.isArray(progressData)) {
+                                  // Old format: just array of percentages
+                                  console.log('Found old format progress data:', progressData);
+                                  
+                                  // For old format, we need to check if the conversation has learning_goals
+                                  if (conversation.learning_goals) {
+                                    try {
+                                      const conversationGoals = typeof conversation.learning_goals === 'string' 
+                                        ? JSON.parse(conversation.learning_goals) 
+                                        : conversation.learning_goals;
+                                      
+                                      if (conversationGoals.includes(goalId)) {
+                                        console.log('✅ Conversation practiced this goal (old format), adding progress data');
+                                        relevantProgressData.push(progressData);
+                                      } else {
+                                        console.log('❌ Conversation did not practice this goal (old format), skipping');
+                                      }
+                                    } catch (error) {
+                                      console.error('Error parsing conversation learning goals:', error);
+                                    }
+                                  } else {
+                                    console.log('❌ No learning_goals found in conversation, skipping old format data');
+                                  }
+                                } else {
+                                  console.log('❌ Progress data is not in expected format for conversation:', conversation.id);
+                                }
+                              } catch (error) {
+                                console.error('❌ Error parsing progress data from conversation:', conversation.id, error);
+                              }
+                            } else {
+                              console.log('❌ No progress_data found in conversation:', conversation.id);
+                            }
+                          });
+                          
+                          console.log('Relevant progress data for this goal:', relevantProgressData);
+                          
+                          if (relevantProgressData.length > 0) {
+                            // Calculate average progress for each subgoal across relevant conversations
+                            const numSubgoals = Math.max(...relevantProgressData.map(data => data.length));
+                            console.log('Number of subgoals to aggregate:', numSubgoals);
+                            aggregatedProgressData = [];
+                            
+                            for (let i = 0; i < numSubgoals; i++) {
+                              const subgoalProgresses = relevantProgressData
+                                .map(data => data[i])
+                                .filter(progress => progress !== undefined && progress !== null);
+                              
+                              console.log(`Subgoal ${i + 1} progresses:`, subgoalProgresses);
+                              
+                              if (subgoalProgresses.length > 0) {
+                                // Calculate average progress for this subgoal
+                                const averageProgress = Math.round(
+                                  subgoalProgresses.reduce((sum, progress) => sum + progress, 0) / subgoalProgresses.length
+                                );
+                                aggregatedProgressData.push(averageProgress);
+                                console.log(`Subgoal ${i + 1} average progress:`, averageProgress);
+                              } else {
+                                aggregatedProgressData.push(0);
+                                console.log(`Subgoal ${i + 1} no progress data, defaulting to 0`);
+                              }
+                            }
+                            
+                            console.log('Final aggregated progress data for this goal:', aggregatedProgressData);
+                          } else {
+                            console.log('No relevant progress data found for this goal');
+                          }
+                        } else {
+                          console.log('No conversations available for progress data');
+                        }
+                        console.log('=== END PROGRESS DATA AGGREGATION DEBUG ===');
+                        
                         return (
-                          <LearningGoalCard key={goalId} goal={goal} index={index} />
+                          <LearningGoalCard key={goalId} goal={goal} index={index} progressData={aggregatedProgressData} />
                         );
                       })}
                     </div>
@@ -986,19 +1155,22 @@ export default function DashboardPage() {
                             </div>
                           )}
                           
-                          <div style={{ flex: 1 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.25rem' }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.25rem', flexWrap: 'wrap' }}>
                               <div style={{ 
                                 fontWeight: 600, 
                                 color: 'var(--blue-secondary)',
-                                fontFamily: 'Montserrat, Arial, sans-serif'
+                                fontFamily: 'Montserrat, Arial, sans-serif',
+                                flex: '1 1 auto',
+                                minWidth: 0
                               }} className="font-body">
                                 {conversation.title || 'Untitled Conversation'}
                               </div>
                               <div style={{ 
                                 color: 'var(--rose-primary)', 
                                 fontSize: '0.8rem',
-                                fontFamily: 'AR One Sans, Arial, sans-serif'
+                                fontFamily: 'AR One Sans, Arial, sans-serif',
+                                flexShrink: 0
                               }} className="font-body">
                                 {new Date(conversation.created_at).toLocaleDateString()}
                               </div>
@@ -1024,26 +1196,10 @@ export default function DashboardPage() {
                                 💬 {conversation.message_count} messages
                               </div>
                             )}
-                            {/* Show summary if it exists */}
-                            {conversation.synopsis && (
-                              <div style={{ 
-                                color: 'var(--blue-secondary)', 
-                                fontSize: '0.9rem',
-                                lineHeight: 1.6,
-                                fontFamily: 'AR One Sans, Arial, sans-serif',
-                                whiteSpace: 'pre-wrap',
-                                marginTop: '0.5rem',
-                                background: 'rgba(126,90,117,0.05)',
-                                padding: '0.5rem',
-                                borderRadius: 6
-                              }} className="font-body">
-                                {conversation.synopsis}
-                              </div>
-                            )}
                           </div>
                         </div>
                         
-                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start', flexShrink: 0, marginLeft: '0.5rem' }}>
                           <Link 
                             href={`/analyze?conversation=${conversation.id}&language=${currentDashboard.language}`}
                             style={{ 
@@ -1080,6 +1236,79 @@ export default function DashboardPage() {
                         </div>
                       </div>
 
+                      {/* Show summary if it exists */}
+                      {conversation.synopsis && (
+                        <div style={{ 
+                          marginTop: '0.75rem',
+                          background: 'rgba(126,90,117,0.05)',
+                          padding: '0.75rem',
+                          borderRadius: 8,
+                          border: '1px solid rgba(126,90,117,0.1)',
+                          overflow: 'hidden',
+                          transition: 'all 0.3s ease'
+                        }}>
+                          <div style={{ position: 'relative' }}>
+                            <button
+                              onClick={() => toggleConversationExpansion(conversation.id)}
+                              style={{ 
+                                position: 'absolute',
+                                top: 0,
+                                right: 0,
+                                color: 'var(--rose-primary)', 
+                                background: 'transparent', 
+                                border: 'none', 
+                                fontSize: '0.8rem', 
+                                cursor: 'pointer', 
+                                fontWeight: 600,
+                                fontFamily: 'Montserrat, Arial, sans-serif',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.25rem',
+                                padding: '0.25rem',
+                                borderRadius: '4px',
+                                transition: 'all 0.3s ease',
+                                zIndex: 10
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.backgroundColor = 'rgba(126,90,117,0.1)';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.backgroundColor = 'transparent';
+                              }}
+                            >
+                              {expandedConversations.has(conversation.id) ? 'Show Less ↑' : 'Show Details ↓'}
+                            </button>
+                            
+                            <div style={{ 
+                              color: 'var(--blue-secondary)', 
+                              fontSize: '0.9rem',
+                              lineHeight: 1.6,
+                              fontFamily: 'AR One Sans, Arial, sans-serif',
+                              wordBreak: 'break-word',
+                              paddingTop: '2rem', // Space for the button
+                              maxHeight: expandedConversations.has(conversation.id) ? '1000px' : '4.5rem', // Animate height
+                              overflow: 'hidden',
+                              transition: 'max-height 0.3s ease',
+                              whiteSpace: expandedConversations.has(conversation.id) ? 'pre-wrap' : 'normal'
+                            }} className="font-body">
+                              {expandedConversations.has(conversation.id) 
+                                ? conversation.synopsis 
+                                : getSummaryPreview(conversation.synopsis)
+                              }
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      {!conversation.synopsis && (
+                        <div style={{ 
+                          color: 'var(--rose-primary)', 
+                          fontSize: '0.8rem',
+                          fontStyle: 'italic',
+                          marginTop: '0.5rem'
+                        }}>
+                          No synopsis available
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

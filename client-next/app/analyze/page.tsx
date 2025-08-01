@@ -116,6 +116,7 @@ interface ChatMessage {
   isSuggestion?: boolean;
   suggestionIndex?: number;
   totalSuggestions?: number;
+  isFromOriginalConversation?: boolean; // Track if message is from original conversation
 }
 
 interface User {
@@ -282,6 +283,11 @@ function Analyze() {
   const [isLoadingInitialAI, setIsLoadingInitialAI] = useState<boolean>(false);
   const [pendingTTSCount, setPendingTTSCount] = useState<number>(0);
   const [isPlayingAnyTTS, setIsPlayingAnyTTS] = useState<boolean>(false);
+  const [showProgressModal, setShowProgressModal] = useState<boolean>(false);
+  const [progressData, setProgressData] = useState<{
+    percentages: number[];
+    subgoalNames: string[];
+  } | null>(null);
   const [manualRecording, setManualRecording] = useState(false);
   const [showShortFeedbackPanel, setShowShortFeedbackPanel] = useState<boolean>(true);
   const [showDetailedFeedbackPanel, setShowDetailedFeedbackPanel] = useState<boolean>(true);
@@ -294,6 +300,7 @@ function Analyze() {
     overview: string;
     details: string;
   }[]>([]);
+  const [sessionStartTime, setSessionStartTime] = useState<Date | null>(null);
   
   // TTS caching state
   const [ttsCache, setTtsCache] = useState<Map<string, { url: string; timestamp: number }>>(new Map());
@@ -429,14 +436,33 @@ function Analyze() {
       // Fetch user's dashboard preferences for this language
       const dashboardPrefs = await fetchUserDashboardPreferences(conversation.language || 'en');
       const userLevel = dashboardPrefs?.proficiency_level || user?.proficiency_level || 'beginner';
-      const user_goals = dashboardPrefs?.learning_goals || user?.learning_goals ? (typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : user.learning_goals) : [];
+      
+      // Use conversation's learning goals if available, otherwise fall back to dashboard preferences
+      const conversationLearningGoals = conversation.learning_goals ? 
+        (typeof conversation.learning_goals === 'string' ? JSON.parse(conversation.learning_goals) : conversation.learning_goals) : 
+        null;
+      
+      const user_goals = conversationLearningGoals || dashboardPrefs?.learning_goals || user?.learning_goals ? 
+        (typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : user.learning_goals) : 
+        [];
+      
+      console.log('[DEBUG] Learning goals extraction:', {
+        conversationLearningGoalsRaw: conversation.learning_goals,
+        conversationLearningGoalsParsed: conversationLearningGoals,
+        dashboardPrefsLearningGoals: dashboardPrefs?.learning_goals,
+        userLearningGoals: user?.learning_goals,
+        finalUserGoals: user_goals
+      });
+      
       const romanizationDisplay = dashboardPrefs?.romanization_display || 'both';
+      
+
       
       // Check if conversation uses a persona
       const usesPersona = conversation.uses_persona || false;
       const personaDescription = conversation.description || '';
       
-      console.log('[DEBUG] Extracted user preferences:', { formality, topics, user_goals, userLevel, feedbackLanguage, usesPersona, personaDescription });
+
       
       // Set persona flags
       setIsUsingPersona(usesPersona);
@@ -451,7 +477,8 @@ function Analyze() {
             sender: (msg as any).sender,
             text: (msg as any).text,
             romanizedText: (msg as any).romanized_text,
-            timestamp: new Date((msg as any).created_at)
+            timestamp: new Date((msg as any).created_at),
+            isFromOriginalConversation: true // Mark existing messages as old
           };
         } else {
           // Fallback to parsing the text for romanized content
@@ -460,13 +487,16 @@ function Analyze() {
             sender: (msg as any).sender,
             text: formatted.mainText,
             romanizedText: formatted.romanizedText,
-            timestamp: new Date((msg as any).created_at)
+            timestamp: new Date((msg as any).created_at),
+            isFromOriginalConversation: true // Mark existing messages as old
           };
         }
       });
-      console.log('[DEBUG] Loaded conversation history with', history.length, 'messages');
-      console.log('[DEBUG] Messages:', history);
+
       setChatHistory(history);
+      
+      // Don't set session start time here - it will be set when the conversation is actually continued
+      // Session start time should be set when user clicks "Continue" button, not when conversation is loaded
       
       // Store user preferences for use in API calls
       setUserPreferences({ formality, topics, user_goals, userLevel, feedbackLanguage, romanizationDisplay });
@@ -1060,7 +1090,8 @@ function Analyze() {
           sender: 'User', 
           text: transcription, 
           romanizedText: userRomanizedText,
-          timestamp: new Date() 
+          timestamp: new Date(),
+          isFromOriginalConversation: false // New message added after Continue
         }];
         return updated;
       });
@@ -1079,7 +1110,8 @@ function Analyze() {
           text: formattedResponse.mainText, 
           romanizedText: formattedResponse.romanizedText,
           ttsUrl: response.data.ttsUrl || null,
-          timestamp: new Date() 
+          timestamp: new Date(),
+          isFromOriginalConversation: false // New message added after Continue
         }]);
         if (conversationId) {
           await saveMessageToBackend('AI', formattedResponse.mainText, 'text', null, null, formattedResponse.romanizedText);
@@ -1144,7 +1176,8 @@ function Analyze() {
       const errorMessage = {
         sender: 'System',
         text: '❌ Error processing audio. Please try again.',
-        timestamp: new Date()
+        timestamp: new Date(),
+        isFromOriginalConversation: false // New message added after Continue
       };
       setChatHistory(prev => [...prev, errorMessage]);
     } finally {
@@ -1182,7 +1215,7 @@ function Analyze() {
       );
       setFeedback(response.data.feedback);
       // Optionally, add to chatHistory
-      setChatHistory(prev => [...prev, { sender: 'System', text: response.data.feedback, timestamp: new Date() }]);
+              setChatHistory(prev => [...prev, { sender: 'System', text: response.data.feedback, timestamp: new Date(), isFromOriginalConversation: false }]);
     } catch (error: unknown) {
       console.error('Error getting detailed feedback:', error);
       console.error('[DEBUG] Error response:', (error as any).response?.data);
@@ -1293,61 +1326,84 @@ function Analyze() {
 
   const generateConversationSummary = async () => {
     try {
-      console.log('Generating conversation summary...');
-      console.log('Chat history:', chatHistory);
+      const sessionMessages = getSessionMessages();
+      
+      if (sessionMessages.length === 0) {
+        console.log('No session messages found for evaluation');
+        router.push('/dashboard');
+        return;
+      }
+      
+      const userSessionMessages = sessionMessages.filter(msg => msg.sender === 'User');
+      if (userSessionMessages.length === 0) {
+        console.log('No user messages in session, skipping evaluation');
+        router.push('/dashboard');
+        return;
+      }
       
       // Use the learning goals from the current conversation (userPreferences.user_goals)
       // Also try to get from user object if not available in preferences
-      const user_goals = userPreferences.user_goals?.length > 0 
+      console.log('[DEBUG] userPreferences in generateConversationSummary:', userPreferences);
+      console.log('[DEBUG] userPreferences.user_goals:', userPreferences.user_goals);
+      
+      // Try to get learning goals from multiple sources
+      let user_goals = userPreferences.user_goals?.length > 0 
         ? userPreferences.user_goals 
         : (user?.learning_goals ? (typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : user.learning_goals) : []);
-      console.log('Current conversation learning goals:', user_goals);
-      console.log('User learning goals from user object:', user?.learning_goals);
+      
+      // If still empty, try to get from the conversation object directly
+      if (!user_goals || user_goals.length === 0) {
+        console.log('[DEBUG] user_goals is empty, trying to get from conversation object');
+        // Try to fetch the conversation again to get the learning goals
+        try {
+          const token = localStorage.getItem('jwt');
+          const response = await axios.get(`/api/conversations/${conversationId}`, {
+            headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
+          });
+          const conversation = response.data.conversation;
+          if (conversation?.learning_goals) {
+            const conversationLearningGoals = typeof conversation.learning_goals === 'string' 
+              ? JSON.parse(conversation.learning_goals) 
+              : conversation.learning_goals;
+            console.log('[DEBUG] Retrieved learning goals from conversation:', conversationLearningGoals);
+            user_goals = conversationLearningGoals;
+          }
+        } catch (error) {
+          console.log('[DEBUG] Error fetching conversation for learning goals:', error);
+        }
+      }
       
       let subgoalInstructions = '';
       
       if (user_goals.length > 0) {
         // User has specific learning goals for this conversation
-        console.log('Processing learning goals:', user_goals);
-        
         subgoalInstructions = user_goals.map((goalId: string) => {
-          console.log('Processing goal ID:', goalId);
           const goal = LEARNING_GOALS.find((g: LearningGoal) => g.id === goalId);
-          console.log('Found goal:', goal);
           
           if (goal?.subgoals) {
-            console.log('Goal subgoals:', goal.subgoals);
             const instructions = goal.subgoals
-              .filter(subgoal => subgoal.description) // Use description instead of subgoal_instructions
-              .map(subgoal => subgoal.description);   // Use description instead of subgoal_instructions
-            console.log('Extracted descriptions for this goal:', instructions);
+              .filter(subgoal => subgoal.description)
+              .map(subgoal => subgoal.description);
             return instructions.join('\n');
           }
           return '';
         }).filter(instructions => instructions.length > 0).join('\n');
-        
-        console.log('Final subgoal instructions:', subgoalInstructions);
       } else {
         // Fallback: use the first learning goal as default
-        console.log('No specific learning goals, using fallback with first goal');
         const defaultGoal = LEARNING_GOALS[0]; // Use the first goal as default
         if (defaultGoal?.subgoals) {
           subgoalInstructions = defaultGoal.subgoals
             .filter(subgoal => subgoal.description)
             .map(subgoal => subgoal.description)
             .join('\n');
-          console.log('Using fallback goal:', defaultGoal.id);
         } else {
-          console.log('No fallback goal available');
           subgoalInstructions = '';
         }
       }
-      
-      console.log('Final subgoal instructions:', subgoalInstructions);
 
       const token = localStorage.getItem('jwt');
       const response = await axios.post('/api/conversation-summary', {
-        chat_history: chatHistory,
+        chat_history: sessionMessages,
         subgoal_instructions: subgoalInstructions
       }, {
         headers: {
@@ -1369,25 +1425,83 @@ function Analyze() {
             }
           });
           
-          // Update the conversation with the synopsis
+          // Update the conversation with the synopsis and progress data
+          console.log('Saving synopsis and progress data:', {
+            synopsis: response.data.synopsis,
+            progress_data: response.data.progress_percentages ? JSON.stringify({
+              goals: user_goals,
+              percentages: response.data.progress_percentages
+            }) : null
+          });
+          
+          // Only save progress data if it's valid and not empty
+          const progressDataToSave = response.data.progress_percentages && 
+            response.data.progress_percentages.length > 0 && 
+            response.data.progress_percentages.some((p: number) => p > 0) 
+            ? JSON.stringify({
+                goals: user_goals,
+                percentages: response.data.progress_percentages
+              })
+            : null;
+          
+          console.log('Progress data to save:', progressDataToSave);
+          
           await axios.patch(`/api/conversations/${conversationId}`, {
-            synopsis: response.data.synopsis
+            synopsis: response.data.synopsis,
+            progress_data: progressDataToSave
           }, {
             headers: {
               ...(token ? { Authorization: `Bearer ${token}` } : {})
             }
           });
           
+          console.log('Successfully saved synopsis and progress data');
+          
           console.log('Conversation updated with title and synopsis');
           console.log('Title:', response.data.title);
           console.log('Synopsis:', response.data.synopsis.substring(0, 100) + '...');
+          
+          // Show progress popup if we have progress percentages
+          console.log('Progress data check:', response.data.progress_percentages);
+          console.log('Full response data:', response.data);
+          console.log('Response data type:', typeof response.data.progress_percentages);
+          console.log('Response data length:', response.data.progress_percentages?.length);
+          
+          if (response.data.progress_percentages && response.data.progress_percentages.length > 0) {
+            console.log('Setting progress modal with data:', response.data.progress_percentages);
+            console.log('userPreferences:', userPreferences);
+            console.log('userPreferences.user_goals:', userPreferences?.user_goals);
+            
+            const subgoalNames = user_goals?.map((goalId: string) => {
+              const goal = LEARNING_GOALS.find((g: LearningGoal) => g.id === goalId);
+              console.log('Found goal for ID', goalId, ':', goal);
+              return goal?.subgoals?.map(subgoal => subgoal.description) || [];
+            }).flat().slice(0, 3) || []; // Take first 3 subgoals
+            
+            console.log('Subgoal names:', subgoalNames);
+            console.log('Setting progress data:', {
+              percentages: response.data.progress_percentages,
+              subgoalNames: subgoalNames
+            });
+            
+            setProgressData({
+              percentages: response.data.progress_percentages,
+              subgoalNames: subgoalNames
+            });
+            setShowProgressModal(true);
+            console.log('Progress modal should be visible now');
+            console.log('showProgressModal state:', true);
+          } else {
+            console.log('No progress data, navigating to dashboard');
+            // If no progress data, navigate directly to dashboard
+            router.push('/dashboard');
+          }
         } catch (updateError) {
           console.error('Error updating conversation with summary:', updateError);
+          // If there's an error updating, still navigate to dashboard
+          router.push('/dashboard');
         }
       }
-      
-      // Navigate to dashboard
-      router.push('/dashboard');
       
       return response.data;
     } catch (error: unknown) {
@@ -1424,7 +1538,8 @@ function Analyze() {
           sender: 'AI', 
           text: formattedMessage.mainText, 
           romanizedText: formattedMessage.romanizedText,
-          timestamp: new Date() 
+          timestamp: new Date(),
+          isFromOriginalConversation: false // New conversation message
         }]);
       } else {
         console.log('[DEBUG] No aiMessage in POST response, falling back to GET');
@@ -1444,7 +1559,8 @@ function Analyze() {
             sender: 'AI', 
             text: formattedMessage.mainText, 
             romanizedText: formattedMessage.romanizedText,
-            timestamp: new Date((aiMsg as any).created_at) 
+            timestamp: new Date((aiMsg as any).created_at),
+            isFromOriginalConversation: false // New conversation message
           }]);
         } else {
           console.log('[DEBUG] No AI message found in conversation after GET');
@@ -1453,7 +1569,7 @@ function Analyze() {
     } catch (err: unknown) {
       console.error('[DEBUG] Error in fetchInitialAIMessage:', err);
       // Fallback: just add a generic AI greeting
-      setChatHistory([{ sender: 'AI', text: 'Hello! What would you like to talk about today?', timestamp: new Date() }]);
+      setChatHistory([{ sender: 'AI', text: 'Hello! What would you like to talk about today?', timestamp: new Date(), isFromOriginalConversation: false }]);
     } finally {
       setIsLoadingInitialAI(false);
     }
@@ -1466,6 +1582,10 @@ function Analyze() {
     setSkipValidation(true);
     setTimeout(() => setSkipValidation(false), 2000); // Skip validation for 2 seconds
     
+    // Set session start time to track new messages
+    setSessionStartTime(new Date());
+    console.log('[DEBUG] Set session start time for new conversation:', new Date());
+    
     // Set the conversation description
     setConversationDescription(description || '');
     
@@ -1473,8 +1593,8 @@ function Analyze() {
     const isPersonaConversation = !!(description && description.trim());
     setIsUsingPersona(isPersonaConversation);
     
-    // Mark this as a new persona only if not using an existing persona
-    setIsNewPersona(!isUsingExistingPersona);
+    // Mark this as a new persona for new conversations (not loaded from existing)
+    setIsNewPersona(true);
     
     console.log('[DEBUG] Starting conversation with persona:', { 
       description, 
@@ -1507,7 +1627,8 @@ function Analyze() {
         text: formattedMessage.mainText, 
         romanizedText: formattedMessage.romanizedText,
         ttsUrl: (aiMessage as any).ttsUrl || null,
-        timestamp: new Date() 
+        timestamp: new Date(),
+        isFromOriginalConversation: false // New conversation message
       }]);
       
       // Play TTS for the initial AI message if available
@@ -1530,7 +1651,7 @@ function Analyze() {
         }
       }
     } else {
-      setChatHistory([{ sender: 'AI', text: 'Hello! What would you like to talk about today?', timestamp: new Date() }]);
+      setChatHistory([{ sender: 'AI', text: 'Hello! What would you like to talk about today?', timestamp: new Date(), isFromOriginalConversation: false }]);
     }
   };
 
@@ -2134,12 +2255,39 @@ function Analyze() {
   };
 
   // Persona-related functions
-  const handleEndChat = () => {
+  const handleEndChat = async () => {
+    console.log('handleEndChat called, isNewPersona:', isNewPersona);
+    
+    // Check if there are any session messages before proceeding
+    const sessionMessages = getSessionMessages();
+    const userSessionMessages = sessionMessages.filter(msg => msg.sender === 'User');
+    
+    
+    
+    // If no user messages in session, just navigate to dashboard without evaluation
+    if (userSessionMessages.length === 0) {
+      console.log('No user messages in session, navigating to dashboard without evaluation');
+      router.push('/dashboard');
+      return;
+    }
+    
     // Only show persona modal if this is a new persona (not using an existing one)
     if (isNewPersona) {
+      console.log('Showing persona modal');
       setShowPersonaModal(true);
     } else {
-      router.push('/dashboard');
+      console.log('Skipping persona modal, generating summary directly');
+      // Generate conversation summary (progress modal will handle navigation if needed)
+      try {
+        if (chatHistory.length > 0) {
+          await generateConversationSummary();
+        } else {
+          router.push('/dashboard');
+        }
+      } catch (error) {
+        console.error('Error generating conversation summary:', error);
+        router.push('/dashboard');
+      }
     }
   };
 
@@ -2178,9 +2326,35 @@ function Analyze() {
           }
         }
         
-        // Close modal and navigate to dashboard
+        // Close modal
         setShowPersonaModal(false);
-        router.push('/dashboard');
+        
+        // Generate conversation summary after saving persona
+        try {
+          // Check if there are any session messages before proceeding
+          const sessionMessages = getSessionMessages();
+          const userSessionMessages = sessionMessages.filter(msg => msg.sender === 'User');
+          
+          console.log('Session messages in savePersona:', sessionMessages.length);
+          console.log('User session messages in savePersona:', userSessionMessages.length);
+          
+          // If no user messages in session, just navigate to dashboard without evaluation
+          if (userSessionMessages.length === 0) {
+            console.log('No user messages in session, navigating to dashboard without evaluation');
+            router.push('/dashboard');
+            return;
+          }
+          
+          if (chatHistory.length > 0) {
+            await generateConversationSummary();
+          } else {
+            router.push('/dashboard');
+          }
+        } catch (error) {
+          console.error('Error generating conversation summary:', error);
+          // If summary generation fails, still navigate to dashboard
+          router.push('/dashboard');
+        }
       } else {
         throw new Error('Failed to save persona');
       }
@@ -2192,9 +2366,35 @@ function Analyze() {
     }
   };
 
-  const cancelPersona = () => {
+  const cancelPersona = async () => {
     setShowPersonaModal(false);
-    router.push('/dashboard');
+    
+    // Generate conversation summary after canceling persona
+    try {
+      // Check if there are any session messages before proceeding
+      const sessionMessages = getSessionMessages();
+      const userSessionMessages = sessionMessages.filter(msg => msg.sender === 'User');
+      
+      console.log('Session messages in cancelPersona:', sessionMessages.length);
+      console.log('User session messages in cancelPersona:', userSessionMessages.length);
+      
+      // If no user messages in session, just navigate to dashboard without evaluation
+      if (userSessionMessages.length === 0) {
+        console.log('No user messages in session, navigating to dashboard without evaluation');
+        router.push('/dashboard');
+        return;
+      }
+      
+      if (chatHistory.length > 0) {
+        await generateConversationSummary();
+      } else {
+        router.push('/dashboard');
+      }
+    } catch (error) {
+      console.error('Error generating conversation summary:', error);
+      // If summary generation fails, still navigate to dashboard
+      router.push('/dashboard');
+    }
   };
 
   // Add/remove event listeners
@@ -2299,7 +2499,8 @@ function Analyze() {
                 formality: formality,
                 description: persona.description,
                 usesPersona: true,
-                personaId: null // This is a new persona, not a saved one
+                personaId: null, // This is a new persona, not a saved one
+                learningGoals: [] // Personas don't have specific learning goals
               }, {
                 headers: { Authorization: `Bearer ${token}` }
               });
@@ -2694,6 +2895,43 @@ function Analyze() {
     return renderedLines;
   };
 
+  // Debug progress modal state
+  console.log('Progress modal state:', { showProgressModal, progressData });
+  
+  const getSummaryPreview = (synopsis: string) => {
+    // Extract the first sentence or first 100 characters as preview
+    const firstSentence = synopsis.split('.')[0];
+    if (firstSentence.length > 100) {
+      return firstSentence.substring(0, 100) + '...';
+    }
+    return firstSentence + (synopsis.includes('.') ? '.' : '');
+  };
+
+  // Helper function to get messages from the current session only
+  const getSessionMessages = () => {
+    if (!sessionStartTime) {
+      return chatHistory; // If no session start time, return all messages
+    }
+    
+    // For continued conversations, only include messages that are NOT from the original conversation
+    // (i.e., messages added after clicking "Continue")
+    const sessionMessages = chatHistory.filter(message => !message.isFromOriginalConversation);
+    
+    return sessionMessages;
+  };
+  
+  // Set session start time when conversation is loaded from URL (user clicked "Continue")
+  useEffect(() => {
+    if (user && urlConversationId && chatHistory.length > 0 && !sessionStartTime) {
+      // This is when user clicked "Continue" - set session start time to track new messages
+      const lastMessageTime = new Date(Math.max(...chatHistory.map(msg => msg.timestamp.getTime())));
+      const newSessionStartTime = new Date(lastMessageTime.getTime() + 1000); // 1 second after the last message
+      setSessionStartTime(newSessionStartTime);
+      console.log('[DEBUG] Set session start time for continued conversation:', newSessionStartTime);
+      console.log('[DEBUG] Last message time:', lastMessageTime);
+    }
+  }, [user, urlConversationId, chatHistory, sessionStartTime]);
+  
   return (
     <div style={{ 
       display: 'flex', 
@@ -3618,42 +3856,7 @@ function Analyze() {
               </button>
             </div>
 
-            {/* Generate Summary button */}
-            {chatHistory.length > 0 && (
-              <button
-                onClick={async () => {
-                  try {
-                    const summary = await generateConversationSummary();
-                    alert(`Title: ${summary.title}\n\nEvaluation: ${summary.synopsis}`);
-                  } catch (error) {
-                    alert('Failed to generate conversation summary. Please try again.');
-                  }
-                }}
-                style={{
-                  position: 'absolute',
-                  bottom: '1rem',
-                  right: '8.5rem',
-                  background: '#3498db',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: 10,
-                  padding: '0.5rem 1rem',
-                  cursor: 'pointer',
-                  fontWeight: 600,
-                  fontSize: '0.85rem',
-                  transition: 'all 0.2s',
-                  boxShadow: '0 2px 4px rgba(52,152,219,0.15)',
-                  minWidth: '120px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.3rem',
-                  zIndex: 1000
-                }}
-                title="Generate conversation summary with subgoal evaluation"
-              >
-                📊 Summary
-              </button>
-            )}
+            
 
             {/* End Chat button - positioned as a separate floating element */}
             <button
@@ -3678,7 +3881,7 @@ function Analyze() {
                 gap: '0.3rem',
                 zIndex: 10
               }}
-              title="End chat and return to dashboard"
+                             title="End chat, generate summary, and return to dashboard"
             >
               🏠 End Chat
             </button>
@@ -3988,6 +4191,207 @@ function Analyze() {
           currentDescription={conversationDescription}
           currentFormality={userPreferences?.formality || 'neutral'}
         />
+
+      {/* Progress Modal */}
+      {showProgressModal && progressData && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 2000
+        }}>
+          <div style={{
+            background: isDarkMode ? '#1e293b' : '#ffffff',
+            padding: '2rem',
+            borderRadius: '12px',
+            maxWidth: '600px',
+            width: '90%',
+            boxShadow: '0 10px 25px rgba(0, 0, 0, 0.2)',
+            border: isDarkMode ? '1px solid #334155' : '1px solid #e2e8f0'
+          }}>
+            {/* Main Card Structure - matching dashboard */}
+            <div style={{ 
+              background: 'rgba(126,90,117,0.05)', 
+              borderRadius: 12, 
+              border: '1px solid rgba(126,90,117,0.1)',
+              overflow: 'hidden',
+              transition: 'all 0.3s ease'
+            }}>
+              {/* Goal Header - matching dashboard */}
+              <div style={{ 
+                padding: '0.75rem', 
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.75rem'
+              }}>
+                <div style={{ 
+                  background: 'var(--rose-primary)', 
+                  color: '#fff', 
+                  borderRadius: '50%', 
+                  width: '24px', 
+                  height: '24px', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  flexShrink: 0,
+                  fontFamily: 'Montserrat, Arial, sans-serif'
+                }}>
+                  1
+                </div>
+                <div style={{ 
+                  fontSize: '1.2rem',
+                  marginRight: '0.5rem'
+                }}>
+                  🎯
+                </div>
+                <div style={{ 
+                  color: 'var(--foreground)', 
+                  fontWeight: 600,
+                  fontSize: '0.9rem',
+                  lineHeight: '1.3',
+                  fontFamily: 'Gabriela, Arial, sans-serif',
+                  flex: 1
+                }}>
+                  {userPreferences?.user_goals && userPreferences.user_goals.length > 0 ? 
+                    LEARNING_GOALS.find(g => g.id === userPreferences.user_goals[0])?.goal || 'Your Learning Progress' 
+                    : 'Your Learning Progress'
+                  }
+                </div>
+              </div>
+
+              {/* Progress Indicators Section - matching dashboard */}
+              <div style={{ 
+                background: 'rgba(126,90,117,0.02)',
+                borderTop: '1px solid rgba(126,90,117,0.1)',
+                padding: '0.75rem'
+              }}>
+                <div style={{ 
+                  color: 'var(--rose-primary)', 
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  marginBottom: '0.5rem',
+                  fontFamily: 'Montserrat, Arial, sans-serif'
+                }}>
+                  Progress Indicators:
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {progressData.subgoalNames.map((subgoalName, index) => (
+                    <div key={index} style={{ 
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '0.5rem',
+                      padding: '0.5rem',
+                      background: 'var(--card)',
+                      borderRadius: 8,
+                      border: '1px solid rgba(126,90,117,0.1)'
+                    }}>
+                      <div style={{ 
+                        background: 'var(--rose-accent)', 
+                        color: '#fff', 
+                        borderRadius: '50%', 
+                        width: '16px', 
+                        height: '16px', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center', 
+                        fontSize: '0.6rem',
+                        fontWeight: 600,
+                        flexShrink: 0,
+                        fontFamily: 'Montserrat, Arial, sans-serif',
+                        marginTop: '0.1rem'
+                      }}>
+                        {index + 1}
+                      </div>
+                      <div style={{ 
+                        color: 'var(--foreground)', 
+                        fontSize: '0.75rem',
+                        lineHeight: '1.4',
+                        fontFamily: 'AR One Sans, Arial, sans-serif',
+                        flex: 1
+                      }}>
+                        {subgoalName}
+                      </div>
+                      {/* Progress bar matching dashboard style */}
+                      <div style={{ 
+                        width: '60px',
+                        height: '6px',
+                        background: 'rgba(126,90,117,0.1)',
+                        borderRadius: 3,
+                        marginTop: '0.2rem',
+                        position: 'relative',
+                        overflow: 'hidden'
+                      }}>
+                        <div style={{ 
+                          width: `${progressData.percentages[index]}%`,
+                          height: '100%',
+                          background: progressData.percentages[index] >= 80 ? '#10b981' : 
+                                    progressData.percentages[index] >= 60 ? '#f59e0b' : 'var(--rose-primary)',
+                          borderRadius: 3,
+                          transition: 'width 0.3s ease'
+                        }} />
+                      </div>
+                      {/* Percentage display */}
+                      <div style={{ 
+                        color: 'var(--foreground)', 
+                        fontSize: '0.7rem',
+                        fontWeight: 600,
+                        fontFamily: 'Montserrat, Arial, sans-serif',
+                        marginLeft: '0.5rem',
+                        minWidth: '30px',
+                        textAlign: 'right'
+                      }}>
+                        {progressData.percentages[index]}%
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            
+            <div style={{
+              display: 'flex',
+              justifyContent: 'center'
+            }}>
+              <button
+                onClick={() => {
+                  setShowProgressModal(false);
+                  setProgressData(null);
+                  router.push('/dashboard');
+                }}
+                style={{
+                  padding: '0.75rem 2rem',
+                  border: 'none',
+                  borderRadius: '8px',
+                  background: 'var(--rose-primary)',
+                  color: '#ffffff',
+                  cursor: 'pointer',
+                  fontSize: '1rem',
+                  fontWeight: 600,
+                  fontFamily: 'Montserrat, Arial, sans-serif',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'linear-gradient(135deg, var(--rose-primary) 0%, #8a6a7a 100%)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'var(--rose-primary)';
+                }}
+              >
+                Continue to Dashboard
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
