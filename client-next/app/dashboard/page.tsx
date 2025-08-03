@@ -580,7 +580,7 @@ export default function DashboardPage() {
       }
 
       // Extract subgoal descriptions from LEARNING_GOALS with percentage info
-      const subgoalDescriptions: { description: string; subgoalId: string; percentage: number }[] = [];
+      const subgoalDescriptions: { description: string; subgoalId: string; percentage: number; level: number }[] = [];
       let globalSubgoalIndex = 0; // Track the global index across all subgoals
       
       learningGoals.forEach((goalId: string) => {
@@ -610,10 +610,14 @@ export default function DashboardPage() {
                 }
               }
               
+              // Get the level for this subgoal from user progress
+              const subgoalLevel = getSubgoalLevel(subgoal.id, userSubgoalProgress);
+              
               subgoalDescriptions.push({ 
                 description: originalDescription, 
                 subgoalId: subgoal.id,
-                percentage: historicalPercentage
+                percentage: historicalPercentage,
+                level: subgoalLevel
               });
               
               globalSubgoalIndex++; // Increment the global index
@@ -624,11 +628,12 @@ export default function DashboardPage() {
 
       // Parse the synopsis to extract individual evaluations
       const lines = synopsis.split('\n');
-      const evaluations: { title: string; content: string; percentage: number }[] = [];
+      const evaluations: { title: string; content: string; percentage: number; level: number }[] = [];
       
       let currentEvaluation = '';
       let currentTitle = '';
       let currentPercentage = 0;
+      let currentLevel = 0;
       
       for (const line of lines) {
         const trimmedLine = line.trim();
@@ -639,7 +644,7 @@ export default function DashboardPage() {
         if (numberMatch) {
           // Save previous evaluation if exists
           if (currentTitle && currentEvaluation) {
-            evaluations.push({ title: currentTitle, content: currentEvaluation.trim(), percentage: currentPercentage });
+            evaluations.push({ title: currentTitle, content: currentEvaluation.trim(), percentage: currentPercentage, level: currentLevel });
           }
           
           // Start new evaluation
@@ -647,9 +652,11 @@ export default function DashboardPage() {
           if (subgoalIndex < subgoalDescriptions.length) {
             currentTitle = subgoalDescriptions[subgoalIndex].description;
             currentPercentage = subgoalDescriptions[subgoalIndex].percentage;
+            currentLevel = subgoalDescriptions[subgoalIndex].level;
           } else {
             currentTitle = `Subgoal ${numberMatch[1]}`;
             currentPercentage = 0;
+            currentLevel = 0;
           }
           currentEvaluation = numberMatch[2] || '';
         } else {
@@ -660,7 +667,7 @@ export default function DashboardPage() {
       
       // Add the last evaluation
       if (currentTitle && currentEvaluation) {
-        evaluations.push({ title: currentTitle, content: currentEvaluation.trim(), percentage: currentPercentage });
+        evaluations.push({ title: currentTitle, content: currentEvaluation.trim(), percentage: currentPercentage, level: currentLevel });
       }
 
       return { type: 'structured', evaluations };
@@ -1532,14 +1539,61 @@ export default function DashboardPage() {
                                 alignItems: 'center'
                               }}>
                                 <span>{evaluation.title}</span>
-                                <span style={{
-                                  color: 'var(--rose-primary)',
-                                  fontSize: '0.75rem',
-                                  fontWeight: 600,
-                                  fontFamily: 'Montserrat, Arial, sans-serif'
+                                <div style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '0.5rem'
                                 }}>
-                                  {evaluation.percentage}%
-                                </span>
+                                  {evaluation.percentage === 100 ? (
+                                    <div style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '0.25rem'
+                                    }}>
+                                      <span style={{
+                                        color: 'var(--rose-accent)',
+                                        fontSize: '0.7rem',
+                                        fontWeight: 500,
+                                        fontFamily: 'Montserrat, Arial, sans-serif'
+                                      }}>
+                                        Level {evaluation.level + 1}
+                                      </span>
+                                      <span style={{
+                                        color: 'var(--rose-primary)',
+                                        fontSize: '0.7rem',
+                                        fontWeight: 600,
+                                        fontFamily: 'Montserrat, Arial, sans-serif'
+                                      }}>
+                                        →
+                                      </span>
+                                      <span style={{
+                                        color: 'var(--rose-primary)',
+                                        fontSize: '0.7rem',
+                                        fontWeight: 600,
+                                        fontFamily: 'Montserrat, Arial, sans-serif'
+                                      }}>
+                                        Level {evaluation.level + 2}
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <span style={{
+                                      color: 'var(--rose-accent)',
+                                      fontSize: '0.7rem',
+                                      fontWeight: 500,
+                                      fontFamily: 'Montserrat, Arial, sans-serif'
+                                    }}>
+                                      Level {evaluation.level + 1}
+                                    </span>
+                                  )}
+                                  <span style={{
+                                    color: 'var(--rose-primary)',
+                                    fontSize: '0.75rem',
+                                    fontWeight: 600,
+                                    fontFamily: 'Montserrat, Arial, sans-serif'
+                                  }}>
+                                    {evaluation.percentage}%
+                                  </span>
+                                </div>
                               </div>
                                                                                                  <div style={{
                                                    color: 'var(--rose-primary)',
@@ -1576,9 +1630,34 @@ export default function DashboardPage() {
                                                    color: 'var(--blue-secondary)',
                                                    fontSize: '0.8rem',
                                                    marginBottom: '0.25rem',
-                                                   fontFamily: 'Montserrat, Arial, sans-serif'
+                                                   fontFamily: 'Montserrat, Arial, sans-serif',
+                                                   display: 'flex',
+                                                   justifyContent: 'space-between',
+                                                   alignItems: 'center'
                                                  }}>
-                                                   {firstEvaluation.title}
+                                                   <span>{firstEvaluation.title}</span>
+                                                   <div style={{
+                                                     display: 'flex',
+                                                     alignItems: 'center',
+                                                     gap: '0.25rem'
+                                                   }}>
+                                                     <span style={{
+                                                       color: 'var(--rose-accent)',
+                                                       fontSize: '0.65rem',
+                                                       fontWeight: 500,
+                                                       fontFamily: 'Montserrat, Arial, sans-serif'
+                                                     }}>
+                                                       Level {firstEvaluation.level + 1}
+                                                     </span>
+                                                     <span style={{
+                                                       color: 'var(--rose-primary)',
+                                                       fontSize: '0.65rem',
+                                                       fontWeight: 600,
+                                                       fontFamily: 'Montserrat, Arial, sans-serif'
+                                                     }}>
+                                                       {firstEvaluation.percentage}%
+                                                     </span>
+                                                   </div>
                                                  </div>
                                                  <div style={{
                                                    color: 'var(--rose-primary)',

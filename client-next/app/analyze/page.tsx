@@ -117,6 +117,7 @@ interface ChatMessage {
   suggestionIndex?: number;
   totalSuggestions?: number;
   isFromOriginalConversation?: boolean; // Track if message is from original conversation
+  isProcessing?: boolean; // Track if message is being processed
 }
 
 interface User {
@@ -248,7 +249,7 @@ function Analyze() {
             width: 0%;
           }
           100% {
-            width: 100%;
+            width: var(--target-width, 100%);
           }
         }
         
@@ -1141,43 +1142,49 @@ function Analyze() {
     if (!(audioBlob instanceof Blob)) return;
     try {
       setIsProcessing(true);
+      
+      // Add user message immediately with a placeholder
+      const placeholderMessage = { 
+        sender: 'User', 
+        text: '🎤 Processing your message...', 
+        romanizedText: '',
+        timestamp: new Date(),
+        isFromOriginalConversation: false,
+        isProcessing: true // Add flag to identify processing messages
+      };
+      
+      // Clear suggestion carousel when user sends a message
+      clearSuggestionCarousel();
+      
+      // Add placeholder message immediately
+      console.log('[DEBUG] Adding placeholder message:', placeholderMessage);
+      setChatHistory(prev => [...prev, placeholderMessage]);
+      
+      // Step 1: Get transcription first
+      console.log('[DEBUG] Step 1: Getting transcription...');
       const formData = new FormData();
       formData.append('audio', audioBlob, 'recording.webm');
       formData.append('language', language);
-      formData.append('chatHistory', JSON.stringify(chatHistory));
-      formData.append('formality', userPreferences.formality);
-      formData.append('user_level', userPreferences.userLevel);
-      formData.append('user_topics', JSON.stringify(userPreferences.topics));
-      formData.append('feedback_language', userPreferences.feedbackLanguage);
-      
-      // Add learning goals and subgoal instructions
-      const user_goals = user?.learning_goals ? (typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : user.learning_goals) : [];
-      formData.append('user_goals', JSON.stringify(user_goals));
-      
-      // Extract subgoal instructions from LEARNING_GOALS
-      const subgoalInstructions = user_goals.map((goalId: string) => {
-        const goal = LEARNING_GOALS.find((g: LearningGoal) => g.id === goalId);
-        if (goal?.subgoals) {
-          return goal.subgoals
-            .filter(subgoal => subgoal.subgoal_instructions)
-            .map(subgoal => subgoal.subgoal_instructions)
-            .join('\n');
-        }
-        return '';
-      }).filter(instructions => instructions.length > 0).join('\n');
-      
-      formData.append('subgoal_instructions', subgoalInstructions);
       
       // Add JWT token to headers
       const token = localStorage.getItem('jwt');
-      const response = await axios.post('/api/analyze', formData, {
+      console.log('[DEBUG] Sending transcription request to /api/transcribe_only');
+      const transcriptionResponse = await axios.post('/api/transcribe_only', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
           ...(token ? { Authorization: `Bearer ${token}` } : {})
         }
       });
-      // Prepare new chat messages
-      const transcription = response.data.transcription || 'Speech recorded';
+      
+      console.log('[DEBUG] Transcription response:', transcriptionResponse.data);
+      console.log('[DEBUG] Full transcription response:', transcriptionResponse.data);
+      console.log('[DEBUG] Response status:', transcriptionResponse.status);
+      console.log('[DEBUG] Response headers:', transcriptionResponse.headers);
+      
+      const transcription = transcriptionResponse.data.transcription || 'Speech recorded';
+      console.log('[DEBUG] Transcription received:', transcription);
+      console.log('[DEBUG] Transcription length:', transcription.length);
+      console.log('[DEBUG] Transcription is empty or fallback:', !transcription || transcription === 'Speech recorded');
       
       // Generate romanized text for user messages in script languages
       let userRomanizedText = '';
@@ -1185,98 +1192,115 @@ function Analyze() {
         userRomanizedText = await generateRomanizedText(transcription, language);
       }
       
-      // Clear suggestion carousel when user sends a message
-      clearSuggestionCarousel();
-      
-      // Use callback form to ensure chatHistory is updated before fetching feedback
+      // Replace the placeholder message with the actual transcript
+      console.log('[DEBUG] Replacing placeholder with transcript:', transcription);
       setChatHistory(prev => {
-        const updated = [...prev, { 
-          sender: 'User', 
-          text: transcription, 
-          romanizedText: userRomanizedText,
-          timestamp: new Date(),
-          isFromOriginalConversation: false // New message added after Continue
-        }];
+        const updated = prev.map((msg, index) => {
+          // Find the last processing message and replace it
+          if (msg.isProcessing && msg.sender === 'User') {
+            console.log('[DEBUG] Found processing message to replace:', msg);
+            return {
+              ...msg,
+              text: transcription,
+              romanizedText: userRomanizedText,
+              isProcessing: false
+            };
+          }
+          return msg;
+        });
+        console.log('[DEBUG] Updated chat history after transcript replacement:', updated);
         return updated;
       });
       
-      // Store transcription for potential short feedback after AI response TTS finishes
-      const currentTranscription = transcription;
       // Save user message to backend
       if (conversationId) {
         await saveMessageToBackend('User', transcription, 'text', null, null, userRomanizedText);
       }
+      
+      // Step 2: Get AI response separately
+      console.log('[DEBUG] Step 2: Getting AI response...');
+      
+      // Add AI processing message after transcript is displayed
+      const aiProcessingMessage = { 
+        sender: 'AI', 
+        text: '🤖 Processing AI response...', 
+        romanizedText: '',
+        timestamp: new Date(),
+        isFromOriginalConversation: false,
+        isProcessing: true
+      };
+      setChatHistory(prev => [...prev, aiProcessingMessage]);
+      
+      // Create updated chat history that includes the user's transcription
+      const updatedChatHistory = [...chatHistory, {
+        sender: 'User',
+        text: transcription,
+        romanizedText: userRomanizedText,
+        timestamp: new Date(),
+        isFromOriginalConversation: false
+      }];
+      
+      const aiResponseData = {
+        transcription: transcription,
+        chat_history: updatedChatHistory,
+        language: language,
+        user_level: userPreferences.userLevel,
+        user_topics: userPreferences.topics,
+        user_goals: user?.learning_goals ? (typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : user.learning_goals) : [],
+        formality: userPreferences.formality,
+        feedback_language: userPreferences.feedbackLanguage
+      };
+      
+      console.log('[DEBUG] Sending AI response request to /api/ai_response with data:', aiResponseData);
+      const aiResponseResponse = await axios.post('/api/ai_response', aiResponseData, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        }
+      });
+      
+      console.log('[DEBUG] AI response response:', aiResponseResponse.data);
+      const aiResponse = aiResponseResponse.data.ai_response;
+      console.log('[DEBUG] AI response received:', aiResponse);
+      
       // Add AI response if present
-      if (response.data.aiResponse) {
-        const formattedResponse = formatScriptLanguageText(response.data.aiResponse, language);
-        setChatHistory(prev => [...prev, { 
-          sender: 'AI', 
-          text: formattedResponse.mainText, 
-          romanizedText: formattedResponse.romanizedText,
-          ttsUrl: response.data.ttsUrl || null,
-          timestamp: new Date(),
-          isFromOriginalConversation: false // New message added after Continue
-        }]);
+      if (aiResponse) {
+        console.log('[DEBUG] Adding AI response:', aiResponse);
+        const formattedResponse = formatScriptLanguageText(aiResponse, language);
+        setChatHistory(prev => {
+          const updated = prev.map((msg, index) => {
+            // Find the last processing AI message and replace it
+            if (msg.isProcessing && msg.sender === 'AI') {
+              console.log('[DEBUG] Found AI processing message to replace:', msg);
+              return {
+                ...msg,
+                text: formattedResponse.mainText,
+                romanizedText: formattedResponse.romanizedText,
+                ttsUrl: null, // We'll handle TTS separately if needed
+                isProcessing: false
+              };
+            }
+            return msg;
+          });
+          console.log('[DEBUG] Chat history after replacing AI processing message:', updated);
+          return updated;
+        });
         if (conversationId) {
           await saveMessageToBackend('AI', formattedResponse.mainText, 'text', null, null, formattedResponse.romanizedText);
         }
       }
-      // Play AI response TTS if present
-      if (response.data.ttsUrl) {
-        const audioUrl = `http://localhost:4000${response.data.ttsUrl}`;
-        try {
-          const headResponse = await fetch(audioUrl, { method: 'HEAD' });
-          if (headResponse.ok) {
-            const audio = new window.Audio(audioUrl);
-            ttsAudioRef.current = audio;
-            setIsPlayingAnyTTS(true);
-            
-            audio.onended = () => {
-              ttsAudioRef.current = null;
-              setIsPlayingAnyTTS(false);
-              
-              // For autospeak mode, fetch short feedback after AI response TTS finishes
-              if (autoSpeakRef.current && enableShortFeedback && !isProcessingShortFeedback) {
-                setTimeout(() => {
-                  fetchAndShowShortFeedback(currentTranscription);
-                }, 100);
-              } else if (autoSpeakRef.current) {
-                // If no short feedback, restart recording after AI response TTS finishes
-                setTimeout(() => {
-                  if (autoSpeakRef.current) startRecording();
-                }, 300);
-              }
-            };
-            
-            audio.onerror = () => {
-              console.error('Failed to play AI response TTS audio');
-              ttsAudioRef.current = null;
-              setIsPlayingAnyTTS(false);
-              // For autospeak mode, restart recording even if TTS fails
-              if (autoSpeakRef.current) {
-                setTimeout(() => {
-                  if (autoSpeakRef.current) startRecording();
-                }, 300);
-              }
-            };
-            
-            audio.play().catch(error => {
-              console.error('Failed to play TTS audio:', error);
-              ttsAudioRef.current = null;
-              setIsPlayingAnyTTS(false);
-              // For autospeak mode, restart recording even if TTS fails
-              if (autoSpeakRef.current) {
-                setTimeout(() => {
-                  if (autoSpeakRef.current) startRecording();
-                }, 300);
-              }
-            });
-          }
-        } catch (fetchError: unknown) {
-          console.error('Error checking TTS audio file:', fetchError);
-        }
-      }
+      
+      // Note: TTS is handled separately if needed
+      console.log('[DEBUG] Audio processing complete');
     } catch (error: unknown) {
+      console.error('[DEBUG] Error in sendAudioToBackend:', error);
+      if (axios.isAxiosError(error)) {
+        console.error('[DEBUG] Axios error details:', {
+          status: error.response?.status,
+          data: error.response?.data,
+          message: error.message
+        });
+      }
       const errorMessage = {
         sender: 'System',
         text: '❌ Error processing audio. Please try again.',
@@ -1285,6 +1309,7 @@ function Analyze() {
       };
       setChatHistory(prev => [...prev, errorMessage]);
     } finally {
+      console.log('[DEBUG] Clearing processing state');
       setIsProcessing(false);
     }
   };
@@ -1901,8 +1926,8 @@ function Analyze() {
     const isPersonaConversation = !!(description && description.trim());
     setIsUsingPersona(isPersonaConversation);
     
-    // Mark this as a new persona for new conversations (not loaded from existing)
-    setIsNewPersona(true);
+    // Mark this as a new persona only if it's not using an existing persona
+    setIsNewPersona(!isUsingExistingPersona);
     
     console.log('[DEBUG] Starting conversation with persona:', { 
       description, 
@@ -2889,7 +2914,7 @@ function Analyze() {
               const { conversation, aiMessage } = response.data;
               if (conversation && conversation.id) {
                 // Start the conversation immediately
-                await handleModalConversationStart(conversation.id, topics, aiMessage, formality, [], persona.description);
+                await handleModalConversationStart(conversation.id, topics, aiMessage, formality, [], persona.description, true);
               }
               
               // Clear the persona data from localStorage
@@ -4149,30 +4174,34 @@ Yes, the current serials don't have the same quality as the old ones, right?
               marginBottom: '0.7rem'
             }}>
               <div 
-                onClick={() => handleMessageClick(index, message.text)}
+                onClick={message.isProcessing ? undefined : () => handleMessageClick(index, message.text)}
                 style={{
                   flex: 1,
                   padding: '0.7rem 1rem',
                   borderRadius: message.sender === 'User' ? '16px 16px 4px 16px' : message.sender === 'AI' ? '16px 16px 16px 4px' : '8px',
-                  background: message.sender === 'User' 
-                    ? 'linear-gradient(135deg, #e8b3c3 0%, #d4a3b3 100%)' 
-                    : message.sender === 'AI' 
-                      ? isDarkMode 
-                        ? 'linear-gradient(135deg, #334155 0%, #475569 100%)' 
-                        : 'linear-gradient(135deg, #fff 0%, #f8f9fa 100%)' 
-                      : isDarkMode ? '#475569' : '#fff7e6',
-                  color: message.sender === 'User' 
-                    ? (message.detailedFeedback ? 'inherit' : '#fff')
-                    : message.sender === 'System' 
-                      ? '#e67e22' 
-                      : isDarkMode ? '#f8fafc' : '#3e3e3e',
+                  background: message.isProcessing 
+                    ? 'linear-gradient(135deg, #f0f0f0 0%, #e0e0e0 100%)'
+                    : message.sender === 'User' 
+                      ? 'linear-gradient(135deg, #e8b3c3 0%, #d4a3b3 100%)' 
+                      : message.sender === 'AI' 
+                        ? isDarkMode 
+                          ? 'linear-gradient(135deg, #334155 0%, #475569 100%)' 
+                          : 'linear-gradient(135deg, #fff 0%, #f8f9fa 100%)' 
+                        : isDarkMode ? '#475569' : '#fff7e6',
+                  color: message.isProcessing
+                    ? '#666'
+                    : message.sender === 'User' 
+                      ? (message.detailedFeedback ? 'inherit' : '#fff')
+                      : message.sender === 'System' 
+                        ? '#e67e22' 
+                        : isDarkMode ? '#f8fafc' : '#3e3e3e',
                   border: message.sender === 'AI' 
                     ? isDarkMode ? '1px solid #475569' : '1px solid #e0e0e0' 
                     : message.sender === 'System' 
                       ? '1px solid #e67e22' 
                       : 'none',
                   fontSize: '0.9rem',
-                  cursor: 'pointer',
+                  cursor: message.isProcessing ? 'default' : 'pointer',
                   transition: 'all 0.2s ease',
                   opacity: isTranslating[index] ? 0.7 : 1,
                   position: 'relative',
@@ -5181,26 +5210,25 @@ Yes, the current serials don't have the same quality as the old ones, right?
                           </div>
                         </div>
                         
-                        {/* Progress Bar */}
-                        <div style={{
-                          width: '100%',
-                          height: '6px',
-                          background: 'rgba(126,90,117,0.1)',
-                          borderRadius: '3px',
-                          overflow: 'hidden',
-                          position: 'relative'
-                        }}>
+                                                 {/* Progress Bar */}
                           <div style={{
-                            width: levelUpEvent ? '100%' : `${progressData.percentages && progressData.percentages[index] ? progressData.percentages[index] : 0}%`,
-                            height: '100%',
-                            background: 'linear-gradient(90deg, var(--rose-primary) 0%, #8a6a7a 100%)',
-                            borderRadius: '4px',
-                            transition: 'width 0.8s ease-out',
-                            ...(levelUpEvent && {
-                              animation: 'progressFill 1.5s ease-out 0.5s both'
-                            })
-                          }} />
-                        </div>
+                            width: '100%',
+                            height: '6px',
+                            background: 'rgba(126,90,117,0.1)',
+                            borderRadius: '3px',
+                            overflow: 'hidden',
+                            position: 'relative'
+                          }}>
+                            <div style={{
+                              width: `${progressData.percentages && progressData.percentages[index] ? progressData.percentages[index] : 0}%`,
+                              height: '100%',
+                              background: 'linear-gradient(90deg, var(--rose-primary) 0%, #8a6a7a 100%)',
+                              borderRadius: '4px',
+                              animation: 'progressFill 1.5s ease-out 0.5s both',
+                              transform: 'translateZ(0)',
+                              '--target-width': `${progressData.percentages && progressData.percentages[index] ? progressData.percentages[index] : 0}%`
+                            } as React.CSSProperties} />
+                          </div>
                       </div>
                       
                       {/* Level Transition for level up events */}

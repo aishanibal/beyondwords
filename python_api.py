@@ -295,6 +295,117 @@ def transcribe():
         print(f"Transcription error: {e}")
         return jsonify({"error": str(e)}), 500
 
+@app.route('/transcribe_only', methods=['POST'])
+def transcribe_only():
+    """FAST: Transcribe audio only (no AI response)"""
+    try:
+        # Handle both JSON and form data
+        if request.is_json:
+            data = request.get_json()
+            audio_file = data.get('audio_file')
+            language_raw = data.get('language', 'en')
+            # Handle case where language might be a list or other type
+            if isinstance(language_raw, list):
+                language = language_raw[0] if language_raw else 'en'
+            else:
+                language = str(language_raw) if language_raw else 'en'
+        else:
+            # Handle form data (like the current /transcribe endpoint)
+            audio_file = request.form.get('audio_file')
+            language_raw = request.form.get('language', 'en')
+            # Handle case where language might be a list or other type
+            if isinstance(language_raw, list):
+                language = language_raw[0] if language_raw else 'en'
+            else:
+                language = str(language_raw) if language_raw else 'en'
+            
+        print(f"=== /transcribe_only called ===")
+        print(f"Language received: {language}")
+        print(f"Language type: {type(language)}")
+        print(f"Audio file: {audio_file}")
+        print(f"Request content type: {request.content_type}")
+        print(f"Request is JSON: {request.is_json}")
+        if request.is_json:
+            print(f"JSON data: {request.get_json()}")
+        else:
+            print(f"Form data: {dict(request.form)}")
+        
+        if not audio_file or not os.path.exists(audio_file):
+            return jsonify({"error": "Audio file not found"}), 400
+        
+        # Get transcription using Whisper (with language)
+        print(f"Calling Whisper with language={language}")
+        whisper_lang = get_whisper_language_code(language)
+        print(f"Whisper language code: {whisper_lang}")
+        
+        if whisper_lang:
+            # Force language for better accuracy, especially for less common languages like Odia
+            if language == 'or':
+                print(f"Odia detected - using Bengali (bn) as closest supported language")
+            transcription = whisper_model.transcribe(audio_file, language=whisper_lang)["text"]
+            print(f"Used forced language: {whisper_lang}")
+        else:
+            transcription = whisper_model.transcribe(audio_file)["text"]
+            print(f"Used auto-detection")
+        print(f"Whisper transcription: '{transcription}'")
+        print(f"Transcription length: {len(transcription)}")
+        print(f"Transcription is empty: {not transcription.strip()}")
+        
+        # If transcription is empty, try to get more info
+        if not transcription.strip():
+            print("WARNING: Transcription is empty!")
+            print(f"Audio file exists: {os.path.exists(audio_file)}")
+            if os.path.exists(audio_file):
+                file_size = os.path.getsize(audio_file)
+                print(f"Audio file size: {file_size} bytes")
+        
+        return jsonify({
+            "transcription": transcription
+        })
+    except Exception as e:
+        print(f"Transcription error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/ai_response', methods=['POST'])
+def ai_response():
+    """Get AI response for given transcription"""
+    try:
+        data = request.get_json()
+        transcription = data.get('transcription')
+        chat_history = data.get('chat_history', [])
+        language = data.get('language', 'en')
+        user_level = data.get('user_level', 'beginner')
+        user_topics = data.get('user_topics', [])
+        user_goals = data.get('user_goals', [])
+        formality = data.get('formality', 'friendly')
+        feedback_language = data.get('feedback_language', 'en')
+        
+        print(f"=== /ai_response called ===")
+        print(f"Transcription: {transcription}")
+        print(f"Language: {language}")
+        print(f"Chat history length: {len(chat_history)}")
+        print(f"Formality: {formality}")
+        print(f"User goals: {user_goals}")
+        
+        if not transcription:
+            return jsonify({"error": "No transcription provided"}), 400
+        
+        print(f"Calling Gemini with language={language}, level={user_level}, goals={user_topics}, formality={formality}")
+        ai_response = get_conversational_response(transcription, chat_history, language, user_level, user_topics, formality, feedback_language, user_goals)
+        if not ai_response or not str(ai_response).strip():
+            if not os.getenv('GOOGLE_API_KEY'):
+                ai_response = "AI is not available: Gemini API key is not configured."
+            else:
+                ai_response = "Hello! What would you like to talk about today?"
+        print(f"DEBUG: Outgoing ai_response: {ai_response}")
+        
+        return jsonify({
+            "ai_response": ai_response
+        })
+    except Exception as e:
+        print(f"AI response error: {e}")
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/analyze', methods=['POST'])
 def analyze():
     """SLOW: Analyze audio for detailed feedback"""
