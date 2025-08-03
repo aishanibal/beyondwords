@@ -141,7 +141,6 @@ IMPORTANT: Do not refer to yourself as a tutor, teacher, AI, or bot. Respond as 
 {topic_integration_rules}
 {goals_guidance}
 
-
 Current conversation context:  
 {context}
 
