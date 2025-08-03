@@ -10,7 +10,7 @@ import axios from 'axios';
 import { useRouter, useSearchParams } from 'next/navigation';
 import TopicSelectionModal from './TopicSelectionModal';
 import PersonaModal from './PersonaModal';
-import { LEARNING_GOALS, LearningGoal } from '../../lib/preferences';
+import { LEARNING_GOALS, LearningGoal, getProgressiveSubgoalDescription, updateSubgoalProgress, SubgoalProgress, LevelUpEvent } from '../../lib/preferences';
 
 // TypeScript: Add type declarations for browser APIs
 declare global {
@@ -219,6 +219,47 @@ function Analyze() {
           max-height: 200px;
         }
       }
+      @keyframes bounce {
+        0%, 20%, 53%, 80%, 100% {
+          transform: translate3d(0,0,0);
+        }
+        40%, 43% {
+          transform: translate3d(0, -8px, 0);
+        }
+        70% {
+          transform: translate3d(0, -4px, 0);
+        }
+        90% {
+          transform: translate3d(0, -2px, 0);
+        }
+      }
+      @keyframes slideInUp {
+        0% {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+        100% {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+              @keyframes progressFill {
+          0% {
+            width: 0%;
+          }
+          100% {
+            width: 100%;
+          }
+        }
+        
+        @keyframes progressFillFromTo {
+          0% {
+            width: var(--start-width);
+          }
+          100% {
+            width: var(--end-width);
+          }
+        }
     `;
     document.head.appendChild(style);
     return () => { document.head.removeChild(style); };
@@ -289,6 +330,13 @@ function Analyze() {
   const [progressData, setProgressData] = useState<{
     percentages: number[];
     subgoalNames: string[];
+    subgoalIds: string[];
+    levelUpEvents?: LevelUpEvent[];
+    progressTransitions?: Array<{
+      subgoalId: string;
+      previousProgress: number;
+      currentProgress: number;
+    }>;
   } | null>(null);
   const [manualRecording, setManualRecording] = useState(false);
   const [showShortFeedbackPanel, setShowShortFeedbackPanel] = useState<boolean>(true);
@@ -1384,6 +1432,16 @@ function Analyze() {
     try {
       const sessionMessages = getSessionMessages();
       
+      // Debug logging for conversation history
+      console.log('[DEBUG] Total chat history length:', chatHistory.length);
+      console.log('[DEBUG] Session messages (new only):', sessionMessages.length);
+      console.log('[DEBUG] Session messages details:', sessionMessages.map(msg => ({
+        sender: msg.sender,
+        text: msg.text.substring(0, 50) + '...',
+        timestamp: msg.timestamp,
+        isFromOriginalConversation: msg.isFromOriginalConversation
+      })));
+      
       if (sessionMessages.length === 0) {
         console.log('No session messages found for evaluation');
         router.push('/dashboard');
@@ -1391,10 +1449,28 @@ function Analyze() {
       }
       
       const userSessionMessages = sessionMessages.filter(msg => msg.sender === 'User');
+      console.log('[DEBUG] User session messages:', userSessionMessages.length);
+      
       if (userSessionMessages.length === 0) {
         console.log('No user messages in session, skipping evaluation');
         router.push('/dashboard');
         return;
+      }
+      
+      // For continued conversations, only show progress popup if there are new messages
+      const hasContinuedConversation = sessionStartTime !== null;
+      const hasNewMessages = userSessionMessages.length > 0;
+      
+      console.log('[DEBUG] Is continued conversation:', hasContinuedConversation);
+      console.log('[DEBUG] Has new messages:', hasNewMessages);
+      
+      // If continued conversation but no new messages, just navigate to dashboard
+      // But only if we don't have any progress data to show
+      if (hasContinuedConversation && !hasNewMessages) {
+        console.log('Continued conversation with no new messages, navigating to dashboard');
+        // Don't navigate immediately - let the progress modal logic handle it
+        // router.push('/dashboard');
+        // return;
       }
       
       // Use the learning goals from the current conversation (userPreferences.user_goals)
@@ -1433,13 +1509,16 @@ function Analyze() {
       
       if (user_goals.length > 0) {
         // User has specific learning goals for this conversation
+        console.log('[DEBUG] Building subgoal instructions from goals:', user_goals);
         subgoalInstructions = user_goals.map((goalId: string) => {
           const goal = LEARNING_GOALS.find((g: LearningGoal) => g.id === goalId);
+          console.log(`[DEBUG] Processing goal ${goalId} for instructions:`, goal);
           
           if (goal?.subgoals) {
             const instructions = goal.subgoals
               .filter(subgoal => subgoal.description)
               .map(subgoal => subgoal.description);
+            console.log(`[DEBUG] Instructions for goal ${goalId}:`, instructions);
             return instructions.join('\n');
           }
           return '';
@@ -1456,12 +1535,27 @@ function Analyze() {
           subgoalInstructions = '';
         }
       }
+      
+      console.log('[DEBUG] Final subgoal instructions:', subgoalInstructions);
+
+      // Check if this is a continued conversation (has existing title)
+      const isContinuedConversation = sessionStartTime !== null;
+      console.log('[DEBUG] Is continued conversation:', isContinuedConversation);
+      
+      // If continued conversation, we should preserve the existing title
+      // and only evaluate new messages for progress
+      const requestPayload = {
+        chat_history: sessionMessages,
+        subgoal_instructions: subgoalInstructions,
+        target_language: language,
+        feedback_language: userPreferences?.feedbackLanguage || 'en',
+        is_continued_conversation: isContinuedConversation
+      };
+      
+      console.log('[DEBUG] Request payload:', requestPayload);
 
       const token = localStorage.getItem('jwt');
-      const response = await axios.post('/api/conversation-summary', {
-        chat_history: sessionMessages,
-        subgoal_instructions: subgoalInstructions
-      }, {
+      const response = await axios.post('/api/conversation-summary', requestPayload, {
         headers: {
           ...(token ? { Authorization: `Bearer ${token}` } : {})
         }
@@ -1472,14 +1566,49 @@ function Analyze() {
       // Update the existing conversation with the Gemini-generated title and synopsis
       if (conversationId) {
         try {
-          // Update the conversation title
-          await axios.put(`/api/conversations/${conversationId}/title`, {
-            title: response.data.title
-          }, {
-            headers: {
-              ...(token ? { Authorization: `Bearer ${token}` } : {})
-            }
-          });
+          // Check if the conversation already has a title before updating
+          let shouldUpdateTitle = true;
+          
+          // Check if the conversation already has a title
+          try {
+            const conversationResponse = await axios.get(`/api/conversations/${conversationId}`, {
+              headers: {
+                ...(token ? { Authorization: `Bearer ${token}` } : {})
+              }
+            });
+            
+            const existingTitle = conversationResponse.data?.conversation?.title;
+            console.log('[DEBUG] Existing conversation title:', existingTitle);
+            
+            // Always update title when a new one is generated, regardless of existing title
+            // This ensures that the most relevant title (based on actual conversation content) is used
+            console.log('[DEBUG] Will update title with new generated title:', response.data.title);
+          } catch (error) {
+            console.error('[DEBUG] Error fetching conversation data:', error);
+            // If we can't fetch the conversation data, proceed with updating the title
+          }
+          
+          // Only update the title if we should and if we have a valid title
+          // console.log('[DEBUG] Title update decision:', {
+          //   shouldUpdateTitle,
+          //   responseTitle: response.data.title,
+          //   responseTitleTrimmed: response.data.title?.trim(),
+          //   isContinuedConversation,
+          //   hasValidTitle: response.data.title && response.data.title.trim() !== '' && response.data.title !== '[No Title]'
+          // });
+          
+          if (shouldUpdateTitle && response.data.title && response.data.title.trim() !== '' && response.data.title !== '[No Title]') {
+            console.log('[DEBUG] Updating conversation title:', response.data.title);
+            await axios.put(`/api/conversations/${conversationId}/title`, {
+              title: response.data.title
+            }, {
+              headers: {
+                ...(token ? { Authorization: `Bearer ${token}` } : {})
+              }
+            });
+          } else {
+            // console.log('[DEBUG] Skipping title update - preserving existing title or no valid title generated');
+          }
           
           // Update the conversation with the synopsis and progress data
           console.log('Saving synopsis and progress data:', {
@@ -1500,7 +1629,7 @@ function Analyze() {
               })
             : null;
           
-          console.log('Progress data to save:', progressDataToSave);
+                      // console.log('Progress data to save:', progressDataToSave);
           
           await axios.patch(`/api/conversations/${conversationId}`, {
             synopsis: response.data.synopsis,
@@ -1511,22 +1640,94 @@ function Analyze() {
             }
           });
           
-          console.log('Successfully saved synopsis and progress data');
+          // console.log('Successfully saved synopsis and progress data');
           
-          console.log('Conversation updated with title and synopsis');
-          console.log('Title:', response.data.title);
-          console.log('Synopsis:', response.data.synopsis.substring(0, 100) + '...');
+          // console.log('Conversation updated with synopsis');
+          // console.log('Title handling:', isContinuedConversation ? 'Preserved original title' : `Updated to: ${response.data.title}`);
+          // console.log('Synopsis:', response.data.synopsis.substring(0, 100) + '...');
           
           // Show progress popup if we have progress percentages
-          console.log('Progress data check:', response.data.progress_percentages);
-          console.log('Full response data:', response.data);
-          console.log('Response data type:', typeof response.data.progress_percentages);
-          console.log('Response data length:', response.data.progress_percentages?.length);
+          console.log('[DEBUG] Progress data received:', response.data.progress_percentages);
+          // console.log('Progress data check:', response.data.progress_percentages);
+          // console.log('Full response data:', response.data);
+          // console.log('Response data type:', typeof response.data.progress_percentages);
+          // console.log('Response data length:', response.data.progress_percentages?.length);
           
-          if (response.data.progress_percentages && response.data.progress_percentages.length > 0) {
-            console.log('Setting progress modal with data:', response.data.progress_percentages);
-            console.log('userPreferences:', userPreferences);
-            console.log('userPreferences.user_goals:', userPreferences?.user_goals);
+          // Always show progress modal if we have progress data, regardless of whether percentages changed
+          // Also show if it's a continued conversation with new messages
+          if ((response.data.progress_percentages && response.data.progress_percentages.length > 0) || 
+              (hasContinuedConversation && hasNewMessages)) {
+            // console.log('Setting progress modal with data:', response.data.progress_percentages);
+            // console.log('userPreferences:', userPreferences);
+            // console.log('userPreferences.user_goals:', userPreferences?.user_goals);
+            
+            // Get current user subgoal progress from localStorage
+            const storedProgress = localStorage.getItem(`subgoal_progress_${user?.id}_${language}`);
+            let userSubgoalProgress: SubgoalProgress[] = [];
+            if (storedProgress) {
+              try {
+                userSubgoalProgress = JSON.parse(storedProgress);
+              } catch (error) {
+                console.error('Error parsing stored subgoal progress:', error);
+              }
+            }
+            
+            // Process level-ups for each subgoal
+            const levelUpEvents: LevelUpEvent[] = [];
+            const updatedSubgoalProgress = [...userSubgoalProgress];
+            
+            // Get subgoal IDs for the current goals in the same order as they appear in subgoal_instructions
+            const subgoalIds: string[] = [];
+            user_goals?.forEach((goalId: string) => {
+              const goal = LEARNING_GOALS.find((g: LearningGoal) => g.id === goalId);
+              if (goal?.subgoals) {
+                goal.subgoals.forEach(subgoal => {
+                  if (subgoal.description) {
+                    subgoalIds.push(subgoal.id);
+                  }
+                });
+              }
+            });
+            
+            // Update progress for each subgoal
+            // console.log('[DEBUG] Progress percentages from LLM:', response.data.progress_percentages);
+            // console.log('[DEBUG] Subgoal IDs in order:', subgoalIds);
+            
+            // Check if progress_percentages exists and is an array
+            if (response.data.progress_percentages && Array.isArray(response.data.progress_percentages)) {
+              response.data.progress_percentages.forEach((percentage: number, index: number) => {
+              if (index < subgoalIds.length) {
+                const subgoalId = subgoalIds[index];
+                // console.log(`[DEBUG] Processing index ${index}: subgoalId=${subgoalId}, percentage=${percentage}`);
+                
+                const { updatedProgress, levelUpEvent } = updateSubgoalProgress(
+                  subgoalId,
+                  percentage,
+                  updatedSubgoalProgress
+                );
+                
+                if (levelUpEvent) {
+                  // console.log(`[DEBUG] Level up detected for ${subgoalId} with ${percentage}%`);
+                  levelUpEvents.push(levelUpEvent);
+                } else {
+                  // console.log(`[DEBUG] No level up for ${subgoalId} with ${percentage}%`);
+                }
+                
+                // Update the progress array
+                updatedSubgoalProgress.splice(0, updatedSubgoalProgress.length, ...updatedProgress);
+              }
+            });
+            } else {
+              // console.log('[DEBUG] No progress_percentages found in response or not an array');
+            }
+            
+            // Save updated progress to localStorage
+            localStorage.setItem(`subgoal_progress_${user?.id}_${language}`, JSON.stringify(updatedSubgoalProgress));
+            
+            // Dispatch custom event to notify dashboard of level-up
+            window.dispatchEvent(new CustomEvent('subgoalProgressUpdated', {
+              detail: { levelUpEvents, updatedProgress: updatedSubgoalProgress }
+            }));
             
             const subgoalNames = user_goals?.map((goalId: string) => {
               const goal = LEARNING_GOALS.find((g: LearningGoal) => g.id === goalId);
@@ -1535,23 +1736,74 @@ function Analyze() {
             }).flat().slice(0, 3) || []; // Take first 3 subgoals
             
             console.log('Subgoal names:', subgoalNames);
+            console.log('Level up events:', levelUpEvents);
             console.log('Setting progress data:', {
               percentages: response.data.progress_percentages,
-              subgoalNames: subgoalNames
+              subgoalNames: subgoalNames,
+              levelUpEvents: levelUpEvents
             });
             
-            setProgressData({
-              percentages: response.data.progress_percentages,
-              subgoalNames: subgoalNames
-            });
+            // Create progress transition data
+                        const progressTransitions = response.data.progress_percentages && Array.isArray(response.data.progress_percentages) 
+              ? response.data.progress_percentages.map((percentage: number, index: number) => {
+                const subgoalId = subgoalIds[index];
+                const previousProgress = userSubgoalProgress?.find(p => p.subgoalId === subgoalId)?.percentage || 0;
+                return {
+                  subgoalId,
+                  previousProgress,
+                  currentProgress: percentage
+                };
+              })
+              : [];
+            
+            // console.log('[DEBUG] Setting progress data:', {
+            //   rawProgressPercentages: response.data.progress_percentages,
+            //   rawProgressPercentagesType: typeof response.data.progress_percentages,
+            //   isArray: Array.isArray(response.data.progress_percentages),
+            //   processedPercentages: response.data.progress_percentages && Array.isArray(response.data.progress_percentages) 
+            //     ? response.data.progress_percentages 
+            //     : [],
+            //   processedPercentagesType: typeof (response.data.progress_percentages && Array.isArray(response.data.progress_percentages) 
+            //     ? response.data.progress_percentages 
+            //     : []),
+            //   subgoalNames: subgoalNames,
+            //   subgoalIds: subgoalIds,
+            //   levelUpEvents: levelUpEvents,
+            //   levelUpEventsLength: levelUpEvents.length,
+            //   subgoalNamesLength: subgoalNames.length,
+            //   responseDataKeys: Object.keys(response.data),
+            //   responseDataProgressType: typeof response.data.progress_percentages
+            // });
+            
+            const finalProgressData = {
+              percentages: response.data.progress_percentages && Array.isArray(response.data.progress_percentages) 
+                ? response.data.progress_percentages 
+                : [],
+              subgoalNames: subgoalNames,
+              subgoalIds: subgoalIds,
+              levelUpEvents: levelUpEvents,
+              progressTransitions: progressTransitions
+            };
+            
+            console.log('[DEBUG] Final progress data percentages:', finalProgressData.percentages);
+            
+            // console.log('[DEBUG] Final progress data being set:', {
+            //   ...finalProgressData,
+            //   percentagesType: typeof finalProgressData.percentages,
+            //   percentagesLength: finalProgressData.percentages?.length,
+            //   percentagesValues: finalProgressData.percentages,
+            //   percentagesMap: finalProgressData.percentages?.map((p, i) => ({ index: i, value: p, type: typeof p }))
+            // });
+            
+            setProgressData(finalProgressData);
             setShowProgressModal(true);
-            console.log('Progress modal should be visible now');
-            console.log('showProgressModal state:', true);
-          } else {
-            console.log('No progress data, navigating to dashboard');
-            // If no progress data, navigate directly to dashboard
-            router.push('/dashboard');
-          }
+            // console.log('Progress modal should be visible now');
+            // console.log('showProgressModal state:', true);
+                      } else {
+              // console.log('No progress data and not a continued conversation with new messages, navigating to dashboard');
+              // If no progress data, navigate directly to dashboard
+              router.push('/dashboard');
+            }
         } catch (updateError) {
           console.error('Error updating conversation with summary:', updateError);
           // If there's an error updating, still navigate to dashboard
@@ -1638,9 +1890,9 @@ function Analyze() {
     setSkipValidation(true);
     setTimeout(() => setSkipValidation(false), 2000); // Skip validation for 2 seconds
     
-    // Set session start time to track new messages
-    setSessionStartTime(new Date());
-    console.log('[DEBUG] Set session start time for new conversation:', new Date());
+    // For new conversations, sessionStartTime should be null initially
+    setSessionStartTime(null);
+    console.log('[DEBUG] Set session start time for new conversation: null');
     
     // Set the conversation description
     setConversationDescription(description || '');
@@ -3429,13 +3681,16 @@ Yes, the current serials don't have the same quality as the old ones, right?
   
   // Set session start time when conversation is loaded from URL (user clicked "Continue")
   useEffect(() => {
-    if (user && urlConversationId && chatHistory.length > 0 && !sessionStartTime) {
+    // Only set session start time if this is a continued conversation (has messages from original conversation)
+    const hasOriginalMessages = chatHistory.some(msg => msg.isFromOriginalConversation);
+    if (user && urlConversationId && chatHistory.length > 0 && hasOriginalMessages && !sessionStartTime) {
       // This is when user clicked "Continue" - set session start time to track new messages
       const lastMessageTime = new Date(Math.max(...chatHistory.map(msg => msg.timestamp.getTime())));
       const newSessionStartTime = new Date(lastMessageTime.getTime() + 1000); // 1 second after the last message
       setSessionStartTime(newSessionStartTime);
       console.log('[DEBUG] Set session start time for continued conversation:', newSessionStartTime);
       console.log('[DEBUG] Last message time:', lastMessageTime);
+      console.log('[DEBUG] Has original messages:', hasOriginalMessages);
     }
   }, [user, urlConversationId, chatHistory, sessionStartTime]);
   
@@ -4731,151 +4986,253 @@ Yes, the current serials don't have the same quality as the old ones, right?
         }}>
           <div style={{
             background: isDarkMode ? '#1e293b' : '#ffffff',
-            padding: '2rem',
+            padding: '1rem',
             borderRadius: '12px',
-            maxWidth: '600px',
-            width: '90%',
+            maxWidth: '450px',
+            width: '85%',
+            maxHeight: '80vh',
+            overflowY: 'auto',
             boxShadow: '0 10px 25px rgba(0, 0, 0, 0.2)',
             border: isDarkMode ? '1px solid #334155' : '1px solid #e2e8f0'
           }}>
-            {/* Main Card Structure - matching dashboard */}
-            <div style={{ 
-              background: 'rgba(126,90,117,0.05)', 
-              borderRadius: 12, 
-              border: '1px solid rgba(126,90,117,0.1)',
-              overflow: 'hidden',
-              transition: 'all 0.3s ease'
-            }}>
-              {/* Goal Header - matching dashboard */}
-              <div style={{ 
-                padding: '0.75rem', 
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.75rem'
+            {/* Header - Different messages based on level-ups */}
+            {progressData.levelUpEvents && progressData.levelUpEvents.length > 0 ? (
+              // Congratulations header for level-ups
+              <div style={{
+                textAlign: 'center',
+                marginBottom: '1rem'
               }}>
-                <div style={{ 
-                  background: 'var(--rose-primary)', 
-                  color: '#fff', 
-                  borderRadius: '50%', 
-                  width: '24px', 
-                  height: '24px', 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'center', 
+                <div style={{
+                  fontSize: '1.5rem',
+                  marginBottom: '0.3rem',
+                  animation: 'bounce 1s ease-in-out'
+                }}>
+                  🎉
+                </div>
+                <div style={{
+                  color: 'var(--foreground)',
+                  fontSize: '1rem',
+                  fontWeight: 700,
+                  marginBottom: '0.3rem',
+                  fontFamily: 'Gabriela, Arial, sans-serif'
+                }}>
+                  Congratulations! You've Leveled Up!
+                </div>
+                <div style={{
+                  color: 'var(--muted-foreground)',
                   fontSize: '0.8rem',
-                  fontWeight: 600,
-                  flexShrink: 0,
-                  fontFamily: 'Montserrat, Arial, sans-serif'
+                  fontFamily: 'AR One Sans, Arial, sans-serif'
                 }}>
-                  1
-                </div>
-                <div style={{ 
-                  fontSize: '1.2rem',
-                  marginRight: '0.5rem'
-                }}>
-                  🎯
-                </div>
-                <div style={{ 
-                  color: 'var(--foreground)', 
-                  fontWeight: 600,
-                  fontSize: '0.9rem',
-                  lineHeight: '1.3',
-                  fontFamily: 'Gabriela, Arial, sans-serif',
-                  flex: 1
-                }}>
-                  {userPreferences?.user_goals && userPreferences.user_goals.length > 0 ? 
-                    LEARNING_GOALS.find(g => g.id === userPreferences.user_goals[0])?.goal || 'Your Learning Progress' 
-                    : 'Your Learning Progress'
-                  }
+                  Your hard work paid off! Here's what you achieved:
                 </div>
               </div>
-
-              {/* Progress Indicators Section - matching dashboard */}
-              <div style={{ 
-                background: 'rgba(126,90,117,0.02)',
-                borderTop: '1px solid rgba(126,90,117,0.1)',
-                padding: '0.75rem'
+            ) : (
+              // Keep practicing header for no level-ups
+              <div style={{
+                textAlign: 'center',
+                marginBottom: '1rem'
               }}>
-                <div style={{ 
-                  color: 'var(--rose-primary)', 
-                  fontSize: '0.8rem',
-                  fontWeight: 600,
-                  marginBottom: '0.5rem',
-                  fontFamily: 'Montserrat, Arial, sans-serif'
+                <div style={{
+                  fontSize: '2rem',
+                  marginBottom: '0.4rem'
                 }}>
-                  Progress Indicators:
+                  📊
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  {progressData.subgoalNames.map((subgoalName, index) => (
-                    <div key={index} style={{ 
-                      display: 'flex',
-                      alignItems: 'flex-start',
-                      gap: '0.5rem',
-                      padding: '0.5rem',
+                <div style={{
+                  color: 'var(--foreground)',
+                  fontSize: '1.1rem',
+                  fontWeight: 700,
+                  marginBottom: '0.4rem',
+                  fontFamily: 'Gabriela, Arial, sans-serif'
+                }}>
+                  Keep Practicing!
+                </div>
+                <div style={{
+                  color: 'var(--muted-foreground)',
+                  fontSize: '0.85rem',
+                  fontFamily: 'AR One Sans, Arial, sans-serif'
+                }}>
+                  Here's your current progress on your learning goals:
+                </div>
+              </div>
+            )}
+
+            {/* Progress Section - Always show all subgoals */}
+            <div style={{
+              marginTop: '0.3rem',
+              padding: '0.75rem',
+              background: 'linear-gradient(135deg, rgba(126,90,117,0.1) 0%, rgba(126,90,117,0.05) 100%)',
+              borderRadius: '12px',
+              border: '1px solid rgba(126,90,117,0.2)',
+              overflow: 'hidden',
+              maxHeight: '50vh',
+              overflowY: 'auto'
+            }}>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {/* {(() => {
+                  console.log('[DEBUG] Modal rendering - progressData:', {
+                    subgoalNames: progressData.subgoalNames,
+                    subgoalNamesLength: progressData.subgoalNames?.length,
+                    percentages: progressData.percentages,
+                    percentagesLength: progressData.percentages?.length,
+                    percentagesValues: progressData.percentages,
+                    percentagesMap: progressData.percentages?.map((p, i) => ({ index: i, value: p, type: typeof p })),
+                    levelUpEvents: progressData.levelUpEvents,
+                    levelUpEventsLength: progressData.levelUpEvents?.length
+                  });
+                  return null;
+                })()} */}
+                {progressData.subgoalNames.map((subgoalName, index) => {
+                  console.log(`[DEBUG] Progress modal - index ${index}:`, {
+                    subgoalName,
+                    percentage: progressData.percentages ? progressData.percentages[index] : 'undefined',
+                    allPercentages: progressData.percentages,
+                    progressDataKeys: Object.keys(progressData),
+                    percentagesLength: progressData.percentages?.length,
+                    index: index
+                  });
+                  
+                  // Check if this subgoal has a level up event
+                  const levelUpEvent = progressData.levelUpEvents?.find(event => 
+                    event.subgoalId === progressData.subgoalIds[index]
+                  );
+                  
+                  return (
+                    <div key={index} style={{
                       background: 'var(--card)',
-                      borderRadius: 8,
-                      border: '1px solid rgba(126,90,117,0.1)'
+                      borderRadius: '8px',
+                      padding: '0.5rem',
+                      border: levelUpEvent ? '1px solid rgba(126,90,117,0.3)' : '1px solid rgba(126,90,117,0.15)',
+                      animation: `slideInUp 0.6s ease-out ${index * 0.2}s both`,
+                      position: 'relative',
+                      ...(levelUpEvent && {
+                        background: 'linear-gradient(135deg, rgba(126,90,117,0.05) 0%, rgba(126,90,117,0.02) 100%)',
+                        border: '1px solid rgba(126,90,117,0.3)'
+                      })
                     }}>
-                      <div style={{ 
-                        background: 'var(--rose-accent)', 
-                        color: '#fff', 
-                        borderRadius: '50%', 
-                        width: '16px', 
-                        height: '16px', 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'center', 
-                        fontSize: '0.6rem',
-                        fontWeight: 600,
-                        flexShrink: 0,
-                        fontFamily: 'Montserrat, Arial, sans-serif',
-                        marginTop: '0.1rem'
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.4rem',
+                        marginBottom: '0.5rem'
                       }}>
-                        {index + 1}
+                        <div style={{
+                          background: levelUpEvent ? 'var(--rose-primary)' : 'var(--rose-accent)',
+                          color: '#fff',
+                          borderRadius: '50%',
+                          width: '24px',
+                          height: '24px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '0.8rem',
+                          fontWeight: 600,
+                          fontFamily: 'Montserrat, Arial, sans-serif'
+                        }}>
+                          {index + 1}
+                        </div>
+                        <div style={{
+                          color: 'var(--foreground)',
+                          fontWeight: 600,
+                          fontSize: '0.8rem',
+                          fontFamily: 'Gabriela, Arial, sans-serif'
+                        }}>
+                          {subgoalName}
+                        </div>
+                        {levelUpEvent && (
+                          <div style={{
+                            background: 'var(--rose-primary)',
+                            color: '#fff',
+                            borderRadius: '12px',
+                            padding: '0.2rem 0.5rem',
+                            fontSize: '0.7rem',
+                            fontWeight: 600,
+                            fontFamily: 'Montserrat, Arial, sans-serif',
+                            marginLeft: 'auto'
+                          }}>
+                            LEVEL UP!
+                          </div>
+                        )}
                       </div>
-                      <div style={{ 
-                        color: 'var(--foreground)', 
-                        fontSize: '0.75rem',
-                        lineHeight: '1.4',
-                        fontFamily: 'AR One Sans, Arial, sans-serif',
-                        flex: 1
-                      }}>
-                        {subgoalName}
+                      
+                      {/* Progress Section */}
+                      <div style={{ marginBottom: '0.5rem' }}>
+                        <div style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          marginBottom: '0.3rem'
+                        }}>
+                          <div style={{
+                            color: 'var(--muted-foreground)',
+                            fontSize: '0.75rem',
+                            fontFamily: 'Montserrat, Arial, sans-serif'
+                          }}>
+                            {levelUpEvent ? `Level ${levelUpEvent.oldLevel + 1} → Level ${levelUpEvent.newLevel + 1}` : 'Current Progress'}
+                          </div>
+                          <div style={{
+                            color: 'var(--rose-primary)',
+                            fontSize: '0.75rem',
+                            fontWeight: 600,
+                            fontFamily: 'Montserrat, Arial, sans-serif'
+                          }}>
+                            {levelUpEvent ? '100%' : (progressData.percentages && progressData.percentages[index] !== undefined ? progressData.percentages[index] : 0) + '%'}
+                          </div>
+                        </div>
+                        
+                        {/* Progress Bar */}
+                        <div style={{
+                          width: '100%',
+                          height: '6px',
+                          background: 'rgba(126,90,117,0.1)',
+                          borderRadius: '3px',
+                          overflow: 'hidden',
+                          position: 'relative'
+                        }}>
+                          <div style={{
+                            width: levelUpEvent ? '100%' : `${progressData.percentages && progressData.percentages[index] ? progressData.percentages[index] : 0}%`,
+                            height: '100%',
+                            background: 'linear-gradient(90deg, var(--rose-primary) 0%, #8a6a7a 100%)',
+                            borderRadius: '4px',
+                            transition: 'width 0.8s ease-out',
+                            ...(levelUpEvent && {
+                              animation: 'progressFill 1.5s ease-out 0.5s both'
+                            })
+                          }} />
+                        </div>
                       </div>
-                      {/* Progress bar matching dashboard style */}
-                      <div style={{ 
-                        width: '60px',
-                        height: '6px',
-                        background: 'rgba(126,90,117,0.1)',
-                        borderRadius: 3,
-                        marginTop: '0.2rem',
-                        position: 'relative',
-                        overflow: 'hidden'
-                      }}>
-                        <div style={{ 
-                          width: `${progressData.percentages[index]}%`,
-                          height: '100%',
-                          background: progressData.percentages[index] >= 80 ? '#10b981' : 
-                                    progressData.percentages[index] >= 60 ? '#f59e0b' : 'var(--rose-primary)',
-                          borderRadius: 3,
-                          transition: 'width 0.3s ease'
-                        }} />
-                      </div>
-                      {/* Percentage display */}
-                      <div style={{ 
-                        color: 'var(--foreground)', 
-                        fontSize: '0.7rem',
-                        fontWeight: 600,
-                        fontFamily: 'Montserrat, Arial, sans-serif',
-                        marginLeft: '0.5rem',
-                        minWidth: '30px',
-                        textAlign: 'right'
-                      }}>
-                        {progressData.percentages[index]}%
-                      </div>
+                      
+                      {/* Level Transition for level up events */}
+                      {levelUpEvent && (
+                        <div style={{
+                          background: 'rgba(126,90,117,0.05)',
+                          borderRadius: '6px',
+                          padding: '0.4rem',
+                          border: '1px solid rgba(126,90,117,0.1)'
+                        }}>
+                          <div style={{
+                            color: 'var(--muted-foreground)',
+                            fontSize: '0.7rem',
+                            fontWeight: 600,
+                            marginBottom: '0.3rem',
+                            fontFamily: 'Montserrat, Arial, sans-serif'
+                          }}>
+                            New Challenge:
+                          </div>
+                          <div style={{
+                            color: 'var(--foreground)',
+                            fontSize: '0.75rem',
+                            lineHeight: '1.2',
+                            fontFamily: 'AR One Sans, Arial, sans-serif'
+                          }}>
+                            {levelUpEvent.newDescription}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  ))}
-                </div>
+                  );
+                })}
               </div>
             </div>
             
@@ -4890,13 +5247,13 @@ Yes, the current serials don't have the same quality as the old ones, right?
                   router.push('/dashboard');
                 }}
                 style={{
-                  padding: '0.75rem 2rem',
+                  padding: '0.6rem 1.5rem',
                   border: 'none',
                   borderRadius: '8px',
                   background: 'var(--rose-primary)',
                   color: '#ffffff',
                   cursor: 'pointer',
-                  fontSize: '1rem',
+                  fontSize: '0.9rem',
                   fontWeight: 600,
                   fontFamily: 'Montserrat, Arial, sans-serif',
                   transition: 'all 0.2s ease',

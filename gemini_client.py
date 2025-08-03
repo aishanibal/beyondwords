@@ -1904,7 +1904,7 @@ def is_gemini_ready() -> bool:
     
     return False
 
-def generate_conversation_summary(chat_history: List[Dict], subgoal_instructions: str = "", user_topics: List[str] = None) -> Dict[str, str]:
+def generate_conversation_summary(chat_history: List[Dict], subgoal_instructions: str = "", user_topics: List[str] = None, target_language: str = "en", feedback_language: str = "en", is_continued_conversation: bool = False) -> Dict[str, str]:
     """Generate a title and subgoal evaluation for the conversation using Gemini."""
     if not GOOGLE_AI_AVAILABLE:
         return {"title": "[Unavailable]", "synopsis": "[Gemini not available]"}
@@ -1914,47 +1914,85 @@ def generate_conversation_summary(chat_history: List[Dict], subgoal_instructions
 
     context = "\n".join([f"{msg['sender']}: {msg['text']}" for msg in chat_history])
 
+    # Language-specific grammar rules and context
+    language_context = get_language_context(target_language)
+    
+    # Assign conditional sections before the f-string
+    # Assign conditional sections before the f-string
+    if is_continued_conversation:
+        title_section = ""
+        subgoal_section = "2. A strict evaluation of 3 subgoals."
+        progress_section = "3. A progress percentage for each subgoal."
+        response_title_section = ""
+        sample_title_section = ""
+    else:
+        title_section = "1. A short title (max 8 words) summarizing the main theme.\n"
+        subgoal_section = "1. A strict evaluation of 3 subgoals."
+        progress_section = "2. A progress percentage for each subgoal."
+        response_title_section = "Title: <short title>\n"
+        sample_title_section = "Title: Learning to Cook Sinigang\n"
+
     prompt = f"""
 You are an expert conversation evaluator for a language learning app.
 
+IMPORTANT: You are evaluating a conversation in {target_language.upper()}.
+- The target language being learned is: {target_language.upper()}
+- Provide feedback in: {feedback_language.upper()}
+- NEVER make claims about grammar, vocabulary, or linguistic features unless you are 100% certain
+- If you're unsure about a linguistic aspect, focus on the learning goals instead
+{language_context}
+
+{title_section}{subgoal_section}
+{progress_section}
+
 Given the full conversation below, complete the following:
-
-1. A short title (max 8 words) summarizing the main theme.
-2. A strict evaluation of 3 subgoals.
-
-{subgoal_instructions}
+{title_section}{subgoal_section}
+{progress_section}
 
 Each subgoal evaluation must:
 - Use second-person language ("you", "your"). 
-- Do not reference anything the AI said. Only evaluate the user's performance.
+- Do not reference anything the AI said or the AI itself. Only evaluate the user's performance.
 - Highlight one specific example where the subgoal was met or missed
-- If met: suggest a harder next subgoal
-- If not met: give actionable feedback and end with "Keep practicing this subgoal."
+- If not met: give actionable feedback.
 - For calculating progress percentages:
   - 100 if met or exceeded
   - If goal = N and user did M, compute (M / N) × 100
   - If goal = X%, and user achieved Y%, compute (Y / X) × 100
   - Round to nearest whole number
 
-Be extremely strict. If the user didn’t clearly meet a subgoal, do not say they did.
+Be extremely strict. If the user didn't clearly meet a subgoal, do not say they did.
 
 Respond in this exact structure:
 
-Title: <short title>
-
-Subgoal 1: <evaluation (without progress percentage)>
-<Subgoal name (the one passed in the subgoal_instructions)>: <evaluation (without progress percentage)>
-<Subgoal name (the one passed in the subgoal_instructions)>: <evaluation (without progress percentage)>
+{response_title_section}1: <evaluation>
+2: <evaluation>
+3: <evaluation>
 
 Progress: <percent 1> <percent 2> <percent 3>
 
-Here is the conversation:
+Here is a sample response:
+{sample_title_section}1: You asked one follow-up question in three turns. This did not meet the subgoal of at least one follow-up question per five turns. To improve, try to formulate at least one additional question after every five conversational turns. For example, you could have asked about specific ingredients or steps in the Sinigang recipe.
+
+2: You asked one question, and it was context-aware, responding to the AI's suggestion of an easy dish. Therefore, 100% of your questions were context-aware. Keep up the good work!
+
+3: You used only one question type ("what"). You need to use at least three different question types to meet this subgoal. To improve, incorporate questions using "who," "when," "where," "why," or "how" in future conversations. For example, you could ask "How long does it take to cook?", "Where can I find the ingredients?", or "Why is it a favorite?".
+
+Progress: 33 100 33
+
+Here are the subgoals to be evaluated:
+{subgoal_instructions}
+
+Here is the conversation to be analyzed:
 {context}
 
 User topics: {user_topics}
 """
 
-
+    print("=" * 80)
+    print("DEBUG: CONVERSATION SUMMARY PROMPT")
+    print("=" * 80)
+    print(prompt)
+    print("=" * 80)
 
     try:
         model = genai.GenerativeModel("gemini-1.5-flash")
@@ -1971,20 +2009,26 @@ User topics: {user_topics}
             print(f"DEBUG: Raw response lines: {lines}")
             
             # Parse title and extract progress percentages
-            title = ""
+            title = "" if is_continued_conversation else "[No Title]"  # For continued conversations, no title is generated
             progress_percentages = []
             subgoal_evaluations = []
             current_subgoal = ""
             in_evaluation = False
             
+            print(f"DEBUG: Parsing response lines: {lines}")
+            print(f"DEBUG: Is continued conversation: {is_continued_conversation}")
+            
             for line in lines:
                 line_lower = line.lower().strip()
-                if line_lower.startswith("title:"):
+                print(f"DEBUG: Processing line: '{line}' -> line_lower: '{line_lower}'")
+                
+                if not is_continued_conversation and line_lower.startswith("title:"):
                     title = line[len("title:"):].strip()
                     print(f"DEBUG: Found title: {title}")
                 elif line_lower.startswith("progress:"):
                     # Extract percentages from Progress line
                     progress_text = line[len("progress:"):].strip()
+                    print(f"DEBUG: Progress text: '{progress_text}'")
                     # Parse percentages (assuming format like "Progress: 75 60 90")
                     percentages = [int(p.strip()) for p in progress_text.split() if p.strip().isdigit()]
                     progress_percentages = percentages
@@ -2011,6 +2055,8 @@ User topics: {user_topics}
                 result["progress_percentages"] = progress_percentages
                 print(f"DEBUG: Added progress percentages to result: {progress_percentages}")
             
+            print(f"DEBUG: Final result: {result}")
+            
             if not title or not synopsis:
                 # fallback: use the whole response as synopsis
                 synopsis = response.text.strip()
@@ -2022,6 +2068,150 @@ User topics: {user_topics}
     except Exception as e:
         print(f"Error generating conversation summary: {e}")
         return {"title": "[Error]", "synopsis": str(e)}
+
+
+def get_language_context(language: str) -> str:
+    """Return language-specific grammar rules and context."""
+    contexts = {
+        "tl": """
+TAGALOG/FILIPINO GRAMMAR CONTEXT:
+- "mga" is a plural marker, not "the" 
+- "ang" is the definite article (singular)
+- "ng" is a linker/connector
+- "sa" indicates location/direction
+- "ay" is a topic marker (often omitted in casual speech)
+- "na" is a linker meaning "already" or "now"
+- "pa" means "still" or "yet"
+- "din/rin" means "also" or "too"
+- "lang" means "only" or "just"
+- "po" is a politeness marker
+""",
+        "es": """
+SPANISH GRAMMAR CONTEXT:
+- "el/la" are definite articles (the)
+- "un/una" are indefinite articles (a/an)
+- "ser" vs "estar" distinction
+- Gender agreement with nouns and adjectives
+- Verb conjugations and tenses
+- "por" vs "para" prepositions
+- "se" as reflexive/impersonal marker
+""",
+        "fr": """
+FRENCH GRAMMAR CONTEXT:
+- "le/la/les" are definite articles
+- "un/une/des" are indefinite articles
+- Gender agreement with nouns and adjectives
+- Verb conjugations and tenses
+- "être" vs "avoir" distinction
+- "de" vs "du/de la/des" articles
+- Subjunctive mood usage
+""",
+        "zh": """
+MANDARIN GRAMMAR CONTEXT:
+- No articles like "the" or "a"
+- "的" (de) is a possessive/descriptive particle
+- "了" (le) indicates completed action
+- "在" (zài) indicates ongoing action
+- "有" (yǒu) means "have" or "there is"
+- "是" (shì) is the copula "to be"
+- Tones are crucial for meaning
+- Measure words are required with numbers
+""",
+        "ja": """
+JAPANESE GRAMMAR CONTEXT:
+- No articles like "the" or "a"
+- "は" (wa) is the topic marker
+- "が" (ga) is the subject marker
+- "を" (wo) is the object marker
+- "の" (no) is the possessive particle
+- "に" (ni) indicates direction/location
+- "で" (de) indicates location/method
+- "です/だ" are copula (to be)
+- Politeness levels (です vs だ)
+""",
+        "ko": """
+KOREAN GRAMMAR CONTEXT:
+- No articles like "the" or "a"
+- "은/는" (eun/neun) are topic markers
+- "이/가" (i/ga) are subject markers
+- "을/를" (eul/reul) are object markers
+- "의" (ui) is the possessive particle
+- "에" (e) indicates location/direction
+- "에서" (eseo) indicates location/method
+- "입니다/이다" are copula (to be)
+- Honorific system (존댓말 vs 반말)
+""",
+        "hi": """
+HINDI GRAMMAR CONTEXT:
+- "का/की/के" (ka/ki/ke) are possessive particles
+- "में" (mein) means "in" or "at"
+- "से" (se) means "from" or "with"
+- "को" (ko) is the object marker
+- "है/हैं" (hai/hain) are copula (to be)
+- Gender agreement with verbs
+- Postpositions instead of prepositions
+- Honorific system (आप vs तुम vs तू)
+""",
+        "ml": """
+MALAYALAM GRAMMAR CONTEXT:
+- "ആണ്/ആകുന്നു" (aanu/aakunnu) are copula (to be)
+- "ഉണ്ട്" (undu) means "there is"
+- "ഇല്ല" (illa) means "there is not"
+- "ആയി" (aayi) indicates completed action
+- "ചെയ്യുന്നു" (cheyyunnu) means "doing"
+- "ആണ്/ആണു" (aanu) is the affirmative marker
+- "അല്ല" (alla) is the negative marker
+- Honorific system (ആണ് vs ആണു)
+""",
+        "ta": """
+TAMIL GRAMMAR CONTEXT:
+- "ஆகும்/ஆகிறது" (aagum/aagirathu) are copula (to be)
+- "உள்ளது" (ullathu) means "there is"
+- "இல்லை" (illai) means "there is not"
+- "ஆனது" (aanathu) indicates completed action
+- "செய்கிறேன்" (seykiren) means "doing"
+- "ஆகும்/ஆகிறது" (aagum/aagirathu) is the affirmative marker
+- "அல்ல" (alla) is the negative marker
+- Honorific system (ஆகும் vs ஆகிறது)
+""",
+        "or": """
+ODIA GRAMMAR CONTEXT:
+- "ଅଛି" (achhi) means "there is"
+- "ନାହିଁ" (nahin) means "there is not"
+- "ହୋଇଛି" (hoichhi) indicates completed action
+- "କରୁଛି" (karuchhi) means "doing"
+- "ଅଟେ" (ate) is the copula (to be)
+- "ନୁହେଁ" (nuhen) is the negative marker
+- Honorific system (ଆପଣ vs ତୁମେ)
+""",
+        "ar": """
+ARABIC GRAMMAR CONTEXT:
+- "ال" (al-) is the definite article
+- No indefinite article like "a/an"
+- "هذا/هذه" (haadha/haadhihi) mean "this"
+- "ذلك/تلك" (dhaalika/tilka) mean "that"
+- "كان" (kaana) is the past tense of "to be"
+- "يكون" (yakuunu) is the present tense of "to be"
+- Gender agreement with verbs and adjectives
+- Dual forms in addition to singular/plural
+""",
+        "en": """
+ENGLISH GRAMMAR CONTEXT:
+- "the" is the definite article
+- "a/an" are indefinite articles
+- Subject-verb agreement
+- Tense consistency
+- Preposition usage
+- Article usage with countable/uncountable nouns
+- Modal verbs (can, could, would, should, etc.)
+"""
+    }
+    
+    return contexts.get(language.lower(), f"""
+{language.upper()} GRAMMAR CONTEXT:
+- Provide feedback based on the learning goals
+- Focus on communication effectiveness
+""")
 
 def get_detailed_breakdown(llm_response: str, user_input: str = "", context: str = "", language: str = 'en', user_level: str = 'beginner', user_topics: List[str] = None, formality: str = 'friendly', feedback_language: str = 'en', user_goals: List[str] = None, description: str = None) -> str:
     """Get detailed breakdown of an AI response using the explain_llm_response method."""

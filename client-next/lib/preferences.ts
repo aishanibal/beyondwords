@@ -27,6 +27,29 @@ export interface LearningGoal {
   subgoals?: { id: string; description: string; subgoal_instructions?: string }[];
 }
 
+export interface SubgoalLevel {
+  subgoalId: string;
+  level: number;
+  currentDescription: string;
+  nextDescription?: string;
+}
+
+export interface SubgoalProgress {
+  subgoalId: string;
+  level: number;
+  percentage: number;
+  lastUpdated: string;
+}
+
+export interface LevelUpEvent {
+  subgoalId: string;
+  oldLevel: number;
+  newLevel: number;
+  oldDescription: string;
+  newDescription: string;
+  goalName: string;
+}
+
 export interface PracticePreference {
   id: string;
   label: string;
@@ -407,3 +430,263 @@ export const FEEDBACK_LANGUAGES: FeedbackLanguage[] = [
   { code: 'ta', label: 'Tamil' },
   { code: 'or', label: 'Odia' }
 ]; 
+
+// Progressive difficulty scaling functions
+export function getProgressiveSubgoalDescription(subgoalId: string, level: number): string {
+  const baseGoal = LEARNING_GOALS.find(goal => 
+    goal.subgoals?.some(subgoal => subgoal.id === subgoalId)
+  );
+  
+  if (!baseGoal) return '';
+  
+  const baseSubgoal = baseGoal.subgoals?.find(subgoal => subgoal.id === subgoalId);
+  if (!baseSubgoal) return '';
+  
+  if (level === 0) return baseSubgoal.description;
+  
+  // Progressive scaling logic based on subgoal type
+  const baseDescription = baseSubgoal.description;
+  
+  // Extract numbers and percentages for scaling
+  const numberMatches = baseDescription.match(/(\d+)/g);
+  const percentageMatches = baseDescription.match(/(\d+)%/g);
+  
+  if (!numberMatches && !percentageMatches) {
+    // For subgoals without specific metrics, add level indicators
+    return `${baseDescription} (Level ${level + 1})`;
+  }
+  
+  let scaledDescription = baseDescription;
+  
+  // Scale numbers progressively
+  if (numberMatches) {
+    numberMatches.forEach((num, index) => {
+      const number = parseInt(num);
+      let scaledNumber = number;
+      
+      // Progressive scaling based on subgoal type
+      if (baseSubgoal.id.includes('vague_terms') || baseSubgoal.id.includes('use_daily_vocab_2')) {
+        // For vague terms: increase the limit (make it harder)
+        scaledNumber = Math.max(1, number - level);
+      } else if (baseSubgoal.id.includes('turns') && !baseSubgoal.id.includes('per')) {
+        // For turn-based metrics: increase the requirement
+        scaledNumber = number + (level * 2);
+      } else if (baseSubgoal.id.includes('percentage') || baseSubgoal.id.includes('%')) {
+        // For percentages: increase the requirement
+        scaledNumber = Math.min(100, number + (level * 5));
+      } else if (baseSubgoal.id.includes('repetition') || baseSubgoal.id.includes('use_daily_vocab_4')) {
+        // For repetition: decrease the limit (make it harder)
+        scaledNumber = Math.max(1, number - level);
+      } else if (baseSubgoal.id.includes('follow_up') || baseSubgoal.id.includes('ask_follow_up_questions')) {
+        // For follow-up questions: increase frequency
+        scaledNumber = number + level;
+      } else if (baseSubgoal.id.includes('emotions') || baseSubgoal.id.includes('express_emotions_well')) {
+        // For emotional expressions: increase requirement
+        scaledNumber = number + (level * 2);
+      } else {
+        // Default scaling: increase by level
+        scaledNumber = number + level;
+      }
+      
+      // Replace the number in the description
+      const regex = new RegExp(`\\b${number}\\b`, 'g');
+      scaledDescription = scaledDescription.replace(regex, scaledNumber.toString());
+    });
+  }
+  
+  // Scale percentages
+  if (percentageMatches) {
+    percentageMatches.forEach((percent, index) => {
+      const percentage = parseInt(percent);
+      let scaledPercentage = percentage;
+      
+      // Progressive scaling for percentages
+      if (baseSubgoal.id.includes('accuracy') || baseSubgoal.id.includes('correct')) {
+        // For accuracy metrics: increase requirement
+        scaledPercentage = Math.min(100, percentage + (level * 2));
+      } else if (baseSubgoal.id.includes('error') || baseSubgoal.id.includes('mistake')) {
+        // For error metrics: decrease limit (make it harder)
+        scaledPercentage = Math.max(0, percentage - (level * 2));
+      } else {
+        // Default percentage scaling: increase requirement
+        scaledPercentage = Math.min(100, percentage + (level * 3));
+      }
+      
+      // Replace the percentage in the description
+      const regex = new RegExp(`${percentage}%`, 'g');
+      scaledDescription = scaledDescription.replace(regex, `${scaledPercentage}%`);
+    });
+  }
+  
+  return scaledDescription;
+}
+
+export function checkForLevelUp(
+  subgoalId: string, 
+  currentLevel: number, 
+  currentPercentage: number
+): LevelUpEvent | null {
+  console.log(`[DEBUG] checkForLevelUp: ${subgoalId}, level=${currentLevel}, percentage=${currentPercentage}`);
+  
+  if (currentPercentage >= 100) {
+    console.log(`[DEBUG] Level up condition met for ${subgoalId}: ${currentPercentage} >= 100`);
+    const baseGoal = LEARNING_GOALS.find(goal => 
+      goal.subgoals?.some(subgoal => subgoal.id === subgoalId)
+    );
+    
+    if (!baseGoal) return null;
+    
+    const oldDescription = getProgressiveSubgoalDescription(subgoalId, currentLevel);
+    const newDescription = getProgressiveSubgoalDescription(subgoalId, currentLevel + 1);
+    
+    return {
+      subgoalId,
+      oldLevel: currentLevel,
+      newLevel: currentLevel + 1,
+      oldDescription,
+      newDescription,
+      goalName: baseGoal.goal
+    };
+  } else {
+    console.log(`[DEBUG] No level up for ${subgoalId}: ${currentPercentage} < 100`);
+  }
+  
+  return null;
+}
+
+export function getSubgoalLevel(subgoalId: string, userProgress: SubgoalProgress[]): number {
+  const progress = userProgress.find(p => p.subgoalId === subgoalId);
+  return progress?.level || 0;
+}
+
+export function getSubgoalProgress(subgoalId: string, userProgress: SubgoalProgress[]): number {
+  const progress = userProgress.find(p => p.subgoalId === subgoalId);
+  return progress?.percentage || 0;
+}
+
+export function updateSubgoalProgress(
+  subgoalId: string,
+  newPercentage: number,
+  userProgress: SubgoalProgress[]
+): { updatedProgress: SubgoalProgress[], levelUpEvent: LevelUpEvent | null } {
+  const existingIndex = userProgress.findIndex(p => p.subgoalId === subgoalId);
+  const currentLevel = existingIndex >= 0 ? userProgress[existingIndex].level : 0;
+  
+  // Check for level up
+  const levelUpEvent = checkForLevelUp(subgoalId, currentLevel, newPercentage);
+  
+  const updatedProgress = [...userProgress];
+  
+  if (existingIndex >= 0) {
+    // Update existing progress
+    const newLevel = levelUpEvent ? levelUpEvent.newLevel : currentLevel;
+    const newPercentageValue = levelUpEvent ? 0 : newPercentage;
+    
+    updatedProgress[existingIndex] = {
+      ...updatedProgress[existingIndex],
+      percentage: newPercentageValue, // Reset to 0 if leveled up
+      level: newLevel,
+      lastUpdated: new Date().toISOString()
+    };
+  } else {
+    // Add new progress
+    updatedProgress.push({
+      subgoalId,
+      level: currentLevel,
+      percentage: newPercentage,
+      lastUpdated: new Date().toISOString()
+    });
+  }
+  
+  return { updatedProgress, levelUpEvent };
+}
+
+// Get the original subgoal description that was active at a specific level
+export function getOriginalSubgoalDescription(subgoalId: string, targetLevel: number): string {
+  const baseGoal = LEARNING_GOALS.find(goal => 
+    goal.subgoals?.some(subgoal => subgoal.id === subgoalId)
+  );
+  
+  if (!baseGoal) return '';
+  
+  const baseSubgoal = baseGoal.subgoals?.find(subgoal => subgoal.id === subgoalId);
+  if (!baseSubgoal) return '';
+  
+  if (targetLevel === 0) return baseSubgoal.description;
+  
+  // Progressive scaling logic based on subgoal type
+  const baseDescription = baseSubgoal.description;
+  
+  // Extract numbers and percentages for scaling
+  const numberMatches = baseDescription.match(/(\d+)/g);
+  const percentageMatches = baseDescription.match(/(\d+)%/g);
+  
+  if (!numberMatches && !percentageMatches) {
+    // For subgoals without specific metrics, add level indicators
+    return `${baseDescription} (Level ${targetLevel + 1})`;
+  }
+  
+  let scaledDescription = baseDescription;
+  
+  // Scale numbers progressively
+  if (numberMatches) {
+    numberMatches.forEach((num, index) => {
+      const number = parseInt(num);
+      let scaledNumber = number;
+      
+      // Progressive scaling based on subgoal type
+      if (baseSubgoal.id.includes('vague_terms') || baseSubgoal.id.includes('use_daily_vocab_2')) {
+        // For vague terms: increase the limit (make it harder)
+        scaledNumber = Math.max(1, number - targetLevel);
+      } else if (baseSubgoal.id.includes('turns') && !baseSubgoal.id.includes('per')) {
+        // For turn-based metrics: increase the requirement
+        scaledNumber = number + (targetLevel * 2);
+      } else if (baseSubgoal.id.includes('percentage') || baseSubgoal.id.includes('%')) {
+        // For percentages: increase the requirement
+        scaledNumber = Math.min(100, number + (targetLevel * 5));
+      } else if (baseSubgoal.id.includes('repetition') || baseSubgoal.id.includes('use_daily_vocab_4')) {
+        // For repetition: decrease the limit (make it harder)
+        scaledNumber = Math.max(1, number - targetLevel);
+      } else if (baseSubgoal.id.includes('follow_up') || baseSubgoal.id.includes('ask_follow_up_questions')) {
+        // For follow-up questions: increase frequency
+        scaledNumber = number + targetLevel;
+      } else if (baseSubgoal.id.includes('emotions') || baseSubgoal.id.includes('express_emotions_well')) {
+        // For emotional expressions: increase requirement
+        scaledNumber = number + (targetLevel * 2);
+      } else {
+        // Default scaling: increase by level
+        scaledNumber = number + targetLevel;
+      }
+      
+      // Replace the number in the description
+      const regex = new RegExp(`\\b${number}\\b`, 'g');
+      scaledDescription = scaledDescription.replace(regex, scaledNumber.toString());
+    });
+  }
+  
+  // Scale percentages
+  if (percentageMatches) {
+    percentageMatches.forEach((percent, index) => {
+      const percentage = parseInt(percent);
+      let scaledPercentage = percentage;
+      
+      // Progressive scaling for percentages
+      if (baseSubgoal.id.includes('accuracy') || baseSubgoal.id.includes('correct')) {
+        // For accuracy metrics: increase requirement
+        scaledPercentage = Math.min(100, percentage + (targetLevel * 2));
+      } else if (baseSubgoal.id.includes('error') || baseSubgoal.id.includes('mistake')) {
+        // For error metrics: decrease limit (make it harder)
+        scaledPercentage = Math.max(0, percentage - (targetLevel * 2));
+      } else {
+        // Default percentage scaling: increase requirement
+        scaledPercentage = Math.min(100, percentage + (targetLevel * 3));
+      }
+      
+      // Replace the percentage in the description
+      const regex = new RegExp(`${percentage}%`, 'g');
+      scaledDescription = scaledDescription.replace(regex, `${scaledPercentage}%`);
+    });
+  }
+  
+  return scaledDescription;
+} 

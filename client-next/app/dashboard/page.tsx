@@ -11,7 +11,7 @@ import { motion } from 'framer-motion';
 import LanguageOnboarding from '../components/LanguageOnboarding';
 import DashboardSettingsModal from '../components/DashboardSettingsModal';
 
-import { LEARNING_GOALS, LearningGoal } from '../../lib/preferences';
+import { LEARNING_GOALS, LearningGoal, getProgressiveSubgoalDescription, getSubgoalLevel, getSubgoalProgress, updateSubgoalProgress, SubgoalProgress, LevelUpEvent } from '../../lib/preferences';
 
 // Type definitions
 interface DashboardType {
@@ -33,7 +33,7 @@ interface ConversationType {
   persona_name?: string;
   persona_description?: string;
   synopsis?: string;
-  progress_data?: string;
+  progress_data?: string | { goals: string[]; percentages: number[] };
   learning_goals?: string[];
 }
 
@@ -53,9 +53,10 @@ interface LearningGoalCardProps {
   goal: LearningGoal;
   index: number;
   progressData?: number[];
+  userSubgoalProgress?: SubgoalProgress[];
 }
 
-function LearningGoalCard({ goal, index, progressData }: LearningGoalCardProps) {
+function LearningGoalCard({ goal, index, progressData, userSubgoalProgress }: LearningGoalCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   
   console.log('LearningGoalCard received progressData:', progressData);
@@ -152,75 +153,100 @@ function LearningGoalCard({ goal, index, progressData }: LearningGoalCardProps) 
           </div>
           {goal.subgoals && goal.subgoals.length > 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              {goal.subgoals.map((subgoal, subIndex) => (
-                <div key={subgoal.id} style={{ 
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: '0.5rem',
-                  padding: '0.5rem',
-                  background: 'var(--card)',
-                  borderRadius: 8,
-                  border: '1px solid rgba(126,90,117,0.1)'
-                }}>
-                  <div style={{ 
-                    background: 'var(--rose-accent)', 
-                    color: '#fff', 
-                    borderRadius: '50%', 
-                    width: '16px', 
-                    height: '16px', 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    justifyContent: 'center', 
-                    fontSize: '0.6rem',
-                    fontWeight: 600,
-                    flexShrink: 0,
-                    fontFamily: 'Montserrat, Arial, sans-serif',
-                    marginTop: '0.1rem'
-                  }}>
-                    {subIndex + 1}
-                  </div>
-                  <div style={{ 
-                    color: 'var(--foreground)', 
-                    fontSize: '0.75rem',
-                    lineHeight: '1.4',
-                    fontFamily: 'AR One Sans, Arial, sans-serif',
-                    flex: 1
-                  }}>
-                    {subgoal.description}
-                  </div>
-                  {/* Progress bar with actual data */}
-                  <div style={{ 
-                    width: '60px',
-                    height: '6px',
-                    background: 'rgba(126,90,117,0.1)',
-                    borderRadius: 3,
-                    marginTop: '0.2rem',
-                    position: 'relative',
-                    overflow: 'hidden'
+              {goal.subgoals.map((subgoal, subIndex) => {
+                const userLevel = getSubgoalLevel(subgoal.id, userSubgoalProgress || []);
+                const userProgress = getSubgoalProgress(subgoal.id, userSubgoalProgress || []);
+                const currentDescription = getProgressiveSubgoalDescription(subgoal.id, userLevel);
+                const displayProgress = userProgress;
+                
+                // Debug logging
+                console.log(`Subgoal ${subgoal.id}:`, {
+                  userLevel,
+                  userProgress,
+                  currentDescription,
+                  userSubgoalProgress: userSubgoalProgress || []
+                });
+                
+                return (
+                  <div key={subgoal.id} style={{ 
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '0.5rem',
+                    padding: '0.5rem',
+                    background: 'var(--card)',
+                    borderRadius: 8,
+                    border: '1px solid rgba(126,90,117,0.1)'
                   }}>
                     <div style={{ 
-                      width: progressData && progressData[subIndex] !== undefined ? `${progressData[subIndex]}%` : '0%',
-                      height: '100%',
-                      background: progressData && progressData[subIndex] !== undefined && progressData[subIndex] >= 80 ? '#10b981' : 
-                                progressData && progressData[subIndex] !== undefined && progressData[subIndex] >= 60 ? '#f59e0b' : 'var(--rose-primary)',
+                      background: 'var(--rose-accent)', 
+                      color: '#fff', 
+                      borderRadius: '50%', 
+                      width: '16px', 
+                      height: '16px', 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center', 
+                      fontSize: '0.6rem',
+                      fontWeight: 600,
+                      flexShrink: 0,
+                      fontFamily: 'Montserrat, Arial, sans-serif',
+                      marginTop: '0.1rem'
+                    }}>
+                      {subIndex + 1}
+                    </div>
+                    <div style={{ 
+                      color: 'var(--foreground)', 
+                      fontSize: '0.75rem',
+                      lineHeight: '1.4',
+                      fontFamily: 'AR One Sans, Arial, sans-serif',
+                      flex: 1
+                    }}>
+                      {currentDescription}
+                      {userLevel > 0 && (
+                        <div style={{
+                          color: 'var(--rose-accent)',
+                          fontSize: '0.65rem',
+                          fontStyle: 'italic',
+                          marginTop: '0.25rem'
+                        }}>
+                          Level {userLevel + 1}
+                        </div>
+                      )}
+                    </div>
+                    {/* Progress bar with actual data */}
+                    <div style={{ 
+                      width: '60px',
+                      height: '6px',
+                      background: 'rgba(126,90,117,0.1)',
                       borderRadius: 3,
-                      transition: 'width 0.3s ease'
-                    }} />
+                      marginTop: '0.2rem',
+                      position: 'relative',
+                      overflow: 'hidden'
+                    }}>
+                      <div style={{ 
+                        width: `${displayProgress}%`,
+                        height: '100%',
+                        background: displayProgress >= 80 ? '#10b981' : 
+                                  displayProgress >= 60 ? '#f59e0b' : 'var(--rose-primary)',
+                        borderRadius: 3,
+                        transition: 'width 0.3s ease'
+                      }} />
+                    </div>
+                    {/* Percentage display */}
+                    <div style={{ 
+                      color: 'var(--foreground)', 
+                      fontSize: '0.7rem',
+                      fontWeight: 600,
+                      fontFamily: 'Montserrat, Arial, sans-serif',
+                      marginLeft: '0.5rem',
+                      minWidth: '30px',
+                      textAlign: 'right'
+                    }}>
+                      {displayProgress}%
+                    </div>
                   </div>
-                  {/* Percentage display */}
-                  <div style={{ 
-                    color: 'var(--foreground)', 
-                    fontSize: '0.7rem',
-                    fontWeight: 600,
-                    fontFamily: 'Montserrat, Arial, sans-serif',
-                    marginLeft: '0.5rem',
-                    minWidth: '30px',
-                    textAlign: 'right'
-                  }}>
-                    {progressData && progressData[subIndex] !== undefined ? `${progressData[subIndex]}%` : '0%'}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <div style={{ 
@@ -266,57 +292,74 @@ export default function DashboardPage() {
 
 
 
-  useEffect(() => {
-    console.log('DASHBOARD useEffect triggered. user:', user);
-    async function fetchDashboardData() {
-      setLoading(true);
-      setError('');
-      try {
-        const token = localStorage.getItem('jwt');
-        const dashboardsRes = await axios.get('/api/user/language-dashboards', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        const dashboards: DashboardType[] = dashboardsRes.data.dashboards || [];
-        const processedDashboards: DashboardType[] = dashboards.map((dashboard: DashboardType) => ({
-          ...dashboard,
-          talk_topics: dashboard.talk_topics || [],
-          learning_goals: dashboard.learning_goals || [],
-          speak_speed: dashboard.speak_speed || 1.0,
-          romanization_display: dashboard.romanization_display || 'both'
-        }));
-        setLanguageDashboards(processedDashboards);
-        
-        // Get saved language from localStorage
-        const savedLanguage = localStorage.getItem('selectedLanguage');
-        
-        // Determine which language to select
-        let languageToSelect = selectedLanguage;
-        
-        if (!languageToSelect) {
-          // If no language is currently selected, check localStorage first
-          if (savedLanguage && processedDashboards.some(d => d.language === savedLanguage)) {
-            // Use saved language if it exists in available dashboards
-            languageToSelect = savedLanguage;
-          } else if (processedDashboards.length > 0) {
-            // Fallback to first dashboard if no saved language or saved language not available
-            languageToSelect = processedDashboards[0].language;
-          }
+  const fetchDashboardData = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const token = localStorage.getItem('jwt');
+      const dashboardsRes = await axios.get('/api/user/language-dashboards', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const dashboards: DashboardType[] = dashboardsRes.data.dashboards || [];
+      const processedDashboards: DashboardType[] = dashboards.map((dashboard: DashboardType) => ({
+        ...dashboard,
+        talk_topics: dashboard.talk_topics || [],
+        learning_goals: dashboard.learning_goals || [],
+        speak_speed: dashboard.speak_speed || 1.0,
+        romanization_display: dashboard.romanization_display || 'both'
+      }));
+      setLanguageDashboards(processedDashboards);
+      
+      // Get saved language from localStorage
+      const savedLanguage = localStorage.getItem('selectedLanguage');
+      
+      // Determine which language to select
+      let languageToSelect = selectedLanguage;
+      
+      if (!languageToSelect) {
+        // If no language is currently selected, check localStorage first
+        if (savedLanguage && processedDashboards.some(d => d.language === savedLanguage)) {
+          // Use saved language if it exists in available dashboards
+          languageToSelect = savedLanguage;
+        } else if (processedDashboards.length > 0) {
+          // Fallback to first dashboard if no saved language or saved language not available
+          languageToSelect = processedDashboards[0].language;
         }
-        
-        // Only update if we have a language to select and it's different from current
-        if (languageToSelect && languageToSelect !== selectedLanguage) {
-          setSelectedLanguage(languageToSelect);
-        }
-      } catch (err) {
-        setError('Failed to load dashboard data.');
-      } finally {
-        setLoading(false);
       }
+      
+      // Only update if we have a language to select and it's different from current
+      if (languageToSelect && languageToSelect !== selectedLanguage) {
+        setSelectedLanguage(languageToSelect);
+      }
+    } catch (err) {
+      setError('Failed to load dashboard data.');
+    } finally {
+      setLoading(false);
     }
+  }, [user, selectedLanguage]);
+
+  useEffect(() => {
     if (user?.id) {
       fetchDashboardData();
     }
-  }, [user, selectedLanguage]);
+  }, [user, selectedLanguage, fetchDashboardData]);
+
+  // Add effect to refresh dashboard when localStorage changes (for level-ups)
+  useEffect(() => {
+    const handleStorageChange = () => {
+      if (user && selectedLanguage) {
+        console.log('Storage changed, refreshing dashboard...');
+        fetchDashboardData();
+      }
+    };
+
+    // Listen for custom events for same-origin localStorage changes
+    window.addEventListener('subgoalProgressUpdated', handleStorageChange);
+    
+    return () => {
+      window.removeEventListener('subgoalProgressUpdated', handleStorageChange);
+    };
+  }, [user, selectedLanguage, fetchDashboardData]);
 
   const fetchConversations = useCallback(async () => {
     if (selectedLanguage && user?.id) {
@@ -519,6 +562,112 @@ export default function DashboardPage() {
       return firstSentence.substring(0, 100) + '...';
     }
     return firstSentence + (synopsis.includes('.') ? '.' : '');
+  };
+
+  const processSynopsisWithSubgoals = (synopsis: string, conversation: ConversationType, userSubgoalProgress: SubgoalProgress[]) => {
+    if (!synopsis || !conversation.learning_goals) {
+      return { type: 'plain', content: synopsis };
+    }
+
+    try {
+      // Parse learning goals from conversation
+      const learningGoals = typeof conversation.learning_goals === 'string' 
+        ? JSON.parse(conversation.learning_goals) 
+        : conversation.learning_goals;
+
+      if (!Array.isArray(learningGoals) || learningGoals.length === 0) {
+        return { type: 'plain', content: synopsis };
+      }
+
+      // Extract subgoal descriptions from LEARNING_GOALS with percentage info
+      const subgoalDescriptions: { description: string; subgoalId: string; percentage: number }[] = [];
+      let globalSubgoalIndex = 0; // Track the global index across all subgoals
+      
+      learningGoals.forEach((goalId: string) => {
+        const goal = LEARNING_GOALS.find((g: LearningGoal) => g.id === goalId);
+        if (goal?.subgoals) {
+          goal.subgoals.forEach(subgoal => {
+            if (subgoal.description) {
+              // For recent conversations, use the original subgoal description (not leveled up)
+              // and get the percentage from the conversation's progress data (historical)
+              const originalDescription = subgoal.description;
+              
+              // Get the percentage from conversation's progress data (historical)
+              let historicalPercentage = 0;
+              if (conversation.progress_data) {
+                try {
+                  const progressData = typeof conversation.progress_data === 'string' 
+                    ? JSON.parse(conversation.progress_data) 
+                    : conversation.progress_data;
+                  if (progressData.percentages && Array.isArray(progressData.percentages)) {
+                    // Use the global index to get the correct percentage
+                    if (globalSubgoalIndex < progressData.percentages.length) {
+                      historicalPercentage = progressData.percentages[globalSubgoalIndex];
+                    }
+                  }
+                } catch (error) {
+                  console.error('Error parsing conversation progress data:', error);
+                }
+              }
+              
+              subgoalDescriptions.push({ 
+                description: originalDescription, 
+                subgoalId: subgoal.id,
+                percentage: historicalPercentage
+              });
+              
+              globalSubgoalIndex++; // Increment the global index
+            }
+          });
+        }
+      });
+
+      // Parse the synopsis to extract individual evaluations
+      const lines = synopsis.split('\n');
+      const evaluations: { title: string; content: string; percentage: number }[] = [];
+      
+      let currentEvaluation = '';
+      let currentTitle = '';
+      let currentPercentage = 0;
+      
+      for (const line of lines) {
+        const trimmedLine = line.trim();
+        if (!trimmedLine) continue;
+        
+        // Check if this line starts with a numbered subgoal (1:, 2:, 3:)
+        const numberMatch = trimmedLine.match(/^(\d+):\s*(.*)/);
+        if (numberMatch) {
+          // Save previous evaluation if exists
+          if (currentTitle && currentEvaluation) {
+            evaluations.push({ title: currentTitle, content: currentEvaluation.trim(), percentage: currentPercentage });
+          }
+          
+          // Start new evaluation
+          const subgoalIndex = parseInt(numberMatch[1]) - 1;
+          if (subgoalIndex < subgoalDescriptions.length) {
+            currentTitle = subgoalDescriptions[subgoalIndex].description;
+            currentPercentage = subgoalDescriptions[subgoalIndex].percentage;
+          } else {
+            currentTitle = `Subgoal ${numberMatch[1]}`;
+            currentPercentage = 0;
+          }
+          currentEvaluation = numberMatch[2] || '';
+        } else {
+          // Continue current evaluation
+          currentEvaluation += (currentEvaluation ? '\n' : '') + trimmedLine;
+        }
+      }
+      
+      // Add the last evaluation
+      if (currentTitle && currentEvaluation) {
+        evaluations.push({ title: currentTitle, content: currentEvaluation.trim(), percentage: currentPercentage });
+      }
+
+      return { type: 'structured', evaluations };
+    } catch (error) {
+      console.error('Error processing synopsis with subgoals:', error);
+      return { type: 'plain', content: synopsis };
+    }
   };
 
   if (showLanguageOnboarding) {
@@ -752,6 +901,7 @@ export default function DashboardPage() {
                         
                         // Aggregate progress data from all conversations for this language
                         let aggregatedProgressData: number[] | undefined;
+                        let userSubgoalProgress: SubgoalProgress[] = [];
                         
                         console.log('=== PROGRESS DATA AGGREGATION DEBUG ===');
                         console.log('Goal ID:', goalId);
@@ -767,7 +917,9 @@ export default function DashboardPage() {
                             
                             if (conversation.progress_data) {
                               try {
-                                const progressData = JSON.parse(conversation.progress_data);
+                                const progressData = typeof conversation.progress_data === 'string' 
+                                  ? JSON.parse(conversation.progress_data) 
+                                  : conversation.progress_data;
                                 
                                 // Check if this is the new format with goal information
                                 if (progressData.goals && progressData.percentages) {
@@ -823,6 +975,19 @@ export default function DashboardPage() {
                             console.log('Number of subgoals to aggregate:', numSubgoals);
                             aggregatedProgressData = [];
                             
+                                                    // Get user's current subgoal progress from localStorage
+                        const storedProgress = localStorage.getItem(`subgoal_progress_${user?.id}_${selectedLanguage}`);
+                        if (storedProgress) {
+                          try {
+                            userSubgoalProgress = JSON.parse(storedProgress);
+                            console.log('Loaded userSubgoalProgress from localStorage:', userSubgoalProgress);
+                          } catch (error) {
+                            console.error('Error parsing stored subgoal progress:', error);
+                          }
+                        } else {
+                          console.log('No stored subgoal progress found in localStorage');
+                        }
+                            
                             for (let i = 0; i < numSubgoals; i++) {
                               const subgoalProgresses = relevantProgressData
                                 .map(data => data[i])
@@ -853,7 +1018,13 @@ export default function DashboardPage() {
                         console.log('=== END PROGRESS DATA AGGREGATION DEBUG ===');
                         
                         return (
-                          <LearningGoalCard key={goalId} goal={goal} index={index} progressData={aggregatedProgressData} />
+                          <LearningGoalCard 
+                            key={goalId} 
+                            goal={goal} 
+                            index={index} 
+                            progressData={aggregatedProgressData}
+                            userSubgoalProgress={userSubgoalProgress}
+                          />
                         );
                       })}
                     </div>
@@ -1087,15 +1258,49 @@ export default function DashboardPage() {
               transition={{ delay: 0.5 }}
               className="bg-white rounded-lg shadow-lg p-8 border border-gray-200"
             >
-              <h3 style={{ 
-                color: 'var(--blue-secondary)', 
-                fontSize: '1.3rem', 
-                fontWeight: 600, 
-                marginBottom: '1rem',
-                fontFamily: 'Gabriela, Arial, sans-serif'
-              }} className="font-heading">
-                Recent Conversations
-              </h3>
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center',
+                marginBottom: '1rem'
+              }}>
+                <h3 style={{ 
+                  color: 'var(--blue-secondary)', 
+                  fontSize: '1.3rem', 
+                  fontWeight: 600,
+                  fontFamily: 'Gabriela, Arial, sans-serif'
+                }} className="font-heading">
+                  Recent Conversations
+                </h3>
+                <button
+                  onClick={() => {
+                    // Debug: Check localStorage state
+                    const storedProgress = localStorage.getItem(`subgoal_progress_${user?.id}_${selectedLanguage}`);
+                    console.log('Current localStorage subgoal progress:', storedProgress);
+                    if (storedProgress) {
+                      try {
+                        const parsed = JSON.parse(storedProgress);
+                        console.log('Parsed subgoal progress:', parsed);
+                      } catch (error) {
+                        console.error('Error parsing localStorage:', error);
+                      }
+                    }
+                  }}
+                  style={{
+                    padding: '0.25rem 0.5rem',
+                    border: '1px solid var(--rose-accent)',
+                    borderRadius: '4px',
+                    background: 'transparent',
+                    color: 'var(--rose-accent)',
+                    cursor: 'pointer',
+                    fontSize: '0.7rem',
+                    fontWeight: 600,
+                    fontFamily: 'Montserrat, Arial, sans-serif'
+                  }}
+                >
+                  🔍 Debug
+                </button>
+              </div>
               {loading ? (
                 <div style={{ 
                   textAlign: 'center', 
@@ -1132,7 +1337,18 @@ export default function DashboardPage() {
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                  {(conversations || []).slice(0, 5).map((conversation: ConversationType) => (
+                  {(conversations || []).slice(0, 5).map((conversation: ConversationType) => {
+                    // Get user subgoal progress for this language
+                    const storedProgress = localStorage.getItem(`subgoal_progress_${user?.id}_${selectedLanguage}`);
+                    let userSubgoalProgress: SubgoalProgress[] = [];
+                    if (storedProgress) {
+                      try {
+                        userSubgoalProgress = JSON.parse(storedProgress);
+                      } catch (error) {
+                        console.error('Error parsing stored subgoal progress:', error);
+                      }
+                    }
+                    return (
                     <div key={conversation.id} style={{ background: 'rgba(126,90,117,0.05)', borderRadius: 12, padding: '1rem', border: '1px solid rgba(126,90,117,0.1)', transition: 'all 0.3s ease' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
                         <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', flex: 1 }}>
@@ -1290,12 +1506,107 @@ export default function DashboardPage() {
                               overflow: 'hidden',
                               transition: 'max-height 0.3s ease',
                               whiteSpace: expandedConversations.has(conversation.id) ? 'pre-wrap' : 'normal'
-                            }} className="font-body">
-                              {expandedConversations.has(conversation.id) 
-                                ? conversation.synopsis 
-                                : getSummaryPreview(conversation.synopsis)
-                              }
-                            </div>
+                                                          }} className="font-body">
+                                {expandedConversations.has(conversation.id) 
+                                                    ? (() => {
+                      const processed = processSynopsisWithSubgoals(conversation.synopsis || '', conversation, userSubgoalProgress || []);
+                                                                             if (processed.type === 'structured' && processed.evaluations) {
+                                         return (
+                                           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                             {processed.evaluations.map((evaluation, index) => (
+                                              <div key={index} style={{
+                                                background: 'rgba(126,90,117,0.03)',
+                                                border: '1px solid rgba(126,90,117,0.1)',
+                                                borderRadius: '8px',
+                                                padding: '0.75rem',
+                                                marginBottom: '0.5rem'
+                                              }}>
+                                                                              <div style={{
+                                fontWeight: 600,
+                                color: 'var(--blue-secondary)',
+                                fontSize: '0.85rem',
+                                marginBottom: '0.5rem',
+                                fontFamily: 'Montserrat, Arial, sans-serif',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center'
+                              }}>
+                                <span>{evaluation.title}</span>
+                                <span style={{
+                                  color: 'var(--rose-primary)',
+                                  fontSize: '0.75rem',
+                                  fontWeight: 600,
+                                  fontFamily: 'Montserrat, Arial, sans-serif'
+                                }}>
+                                  {evaluation.percentage}%
+                                </span>
+                              </div>
+                                                                                                 <div style={{
+                                                   color: 'var(--rose-primary)',
+                                                   fontSize: '0.8rem',
+                                                   lineHeight: 1.5,
+                                                   fontFamily: 'AR One Sans, Arial, sans-serif'
+                                                 }}>
+                                                   {evaluation.content}
+                                                 </div>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        );
+                                      } else {
+                                        return processed.content;
+                                      }
+                                    })()
+                                                                                                                            : (() => {
+                      const processed = processSynopsisWithSubgoals(conversation.synopsis || '', conversation, userSubgoalProgress || []);
+                                       if (processed.type === 'structured' && processed.evaluations) {
+                                         // For preview, show structured preview with first evaluation
+                                         const firstEvaluation = processed.evaluations[0];
+                                         if (firstEvaluation) {
+                                           return (
+                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                               <div style={{
+                                                 background: 'rgba(126,90,117,0.03)',
+                                                 border: '1px solid rgba(126,90,117,0.1)',
+                                                 borderRadius: '8px',
+                                                 padding: '0.5rem'
+                                               }}>
+                                                 <div style={{
+                                                   fontWeight: 600,
+                                                   color: 'var(--blue-secondary)',
+                                                   fontSize: '0.8rem',
+                                                   marginBottom: '0.25rem',
+                                                   fontFamily: 'Montserrat, Arial, sans-serif'
+                                                 }}>
+                                                   {firstEvaluation.title}
+                                                 </div>
+                                                 <div style={{
+                                                   color: 'var(--rose-primary)',
+                                                   fontSize: '0.75rem',
+                                                   lineHeight: 1.4,
+                                                   fontFamily: 'AR One Sans, Arial, sans-serif'
+                                                 }}>
+                                                   {firstEvaluation.content.substring(0, 120)}...
+                                                 </div>
+                                               </div>
+                                               {processed.evaluations.length > 1 && (
+                                                 <div style={{
+                                                   color: 'var(--rose-accent)',
+                                                   fontSize: '0.7rem',
+                                                   fontStyle: 'italic',
+                                                   fontFamily: 'AR One Sans, Arial, sans-serif'
+                                                 }}>
+                                                   +{processed.evaluations.length - 1} more evaluations
+                                                 </div>
+                                               )}
+                                             </div>
+                                           );
+                                         }
+                                       }
+                                       return getSummaryPreview(processed.content || '');
+                                     })()
+                                }
+                              </div>
                           </div>
                         </div>
                       )}
@@ -1310,7 +1621,7 @@ export default function DashboardPage() {
                         </div>
                       )}
                     </div>
-                  ))}
+                  )})}
                 </div>
               )}
             </motion.div>

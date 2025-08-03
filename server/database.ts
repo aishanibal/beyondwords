@@ -64,7 +64,7 @@ export interface Conversation {
   message_count?: number;
   uses_persona?: boolean;
   persona_id?: number;
-  progress_data?: string;
+  progress_data?: string | { goals: string[]; percentages: number[] };
   learning_goals?: string[];
   created_at?: string;
   updated_at?: string;
@@ -606,6 +606,14 @@ function getUserConversations(userId: number, language?: string) {
                 ...conversation,
                 topics: (conversation as any).topics ? JSON.parse((conversation as any).topics) : null,
                 learning_goals: (conversation as any).learning_goals ? JSON.parse((conversation as any).learning_goals) : null,
+                progress_data: (() => {
+                  try {
+                    return (conversation as any).progress_data ? JSON.parse((conversation as any).progress_data) : null;
+                  } catch (error) {
+                    console.error('❌ Error parsing progress data from conversation:', conversation.id, error);
+                    return null;
+                  }
+                })(),
                 messages
               };
               
@@ -682,6 +690,14 @@ function getConversationWithMessages(conversationId: number) {
               topics: (conv as any).topics ? JSON.parse((conv as any).topics) : null,
               formality: (conv as any).formality,
               learning_goals: (conv as any).learning_goals ? JSON.parse((conv as any).learning_goals) : null,
+              progress_data: (() => {
+                try {
+                  return (conv as any).progress_data ? JSON.parse((conv as any).progress_data) : null;
+                } catch (error) {
+                  console.error('❌ Error parsing progress data from conversation:', conv.id, error);
+                  return null;
+                }
+              })(),
               messages: messages as Message[]
             };
             

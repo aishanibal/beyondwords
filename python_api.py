@@ -373,10 +373,16 @@ def conversation_summary():
         chat_history = data.get('chat_history', [])
         subgoal_instructions = data.get('subgoal_instructions', '')
         user_topics = data.get('user_topics', [])
+        target_language = data.get('target_language', 'en')
+        feedback_language = data.get('feedback_language', 'en')
+        is_continued_conversation = data.get('is_continued_conversation', False)
         
         print(f"Chat history length: {len(chat_history)}")
         print(f"Subgoal instructions: {subgoal_instructions}")
         print(f"User topics: {user_topics}")
+        print(f"Target language: {target_language}")
+        print(f"Feedback language: {feedback_language}")
+        print(f"Is continued conversation: {is_continued_conversation}")
         
         # Check if there are any user messages in the chat history
         user_messages = [msg for msg in chat_history if msg.get('sender') == 'User']
@@ -389,7 +395,7 @@ def conversation_summary():
             })
         
         from gemini_client import generate_conversation_summary
-        summary = generate_conversation_summary(chat_history, subgoal_instructions, user_topics)
+        summary = generate_conversation_summary(chat_history, subgoal_instructions, user_topics, target_language, feedback_language, is_continued_conversation)
         
         print(f"Generated summary: {summary}")
         return jsonify(summary)
