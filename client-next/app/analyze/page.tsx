@@ -3929,7 +3929,7 @@ Yes, the current serials don't have the same quality as the old ones, right?
       background: isDarkMode 
         ? 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%)'
         : 'linear-gradient(135deg, #f9f6f4 0%, #f5f1ec 50%, #e8e0d8 100%)',
-      padding: '6rem 0.5rem 0.125rem 0.5rem',
+      padding: '6rem 0.5rem 2rem 0.5rem',
       gap: '0.5rem',
       transition: 'all 0.15s ease',
       fontFamily: 'Montserrat, Arial, sans-serif',
@@ -5423,7 +5423,7 @@ Yes, the current serials don't have the same quality as the old ones, right?
             data-recording-section
             style={{ 
               position: 'relative',
-              padding: '1rem 1rem 1.5rem 1rem', 
+              padding: '1rem 1rem 2.5rem 1rem', 
               borderTop: isDarkMode ? '1px solid var(--border)' : '1px solid rgba(195,141,148,0.2)',
               background: isDarkMode 
                 ? 'linear-gradient(135deg, var(--muted) 0%, rgba(255,255,255,0.02) 100%)' 
@@ -5432,7 +5432,8 @@ Yes, the current serials don't have the same quality as the old ones, right?
               textAlign: 'center',
               transition: 'all 0.3s ease',
               boxShadow: '0 -2px 8px rgba(195,141,148,0.1)',
-              flexShrink: 0
+              flexShrink: 0,
+              marginBottom: '2rem'
             }}
           >
             {/* Centered main controls */}
@@ -5560,7 +5561,8 @@ Yes, the current serials don't have the same quality as the old ones, right?
               <div style={{
                 display: 'flex',
                 justifyContent: 'center',
-                marginTop: '0.8rem'
+                marginTop: '1rem',
+                marginBottom: '0.5rem'
               }}>
                 <button
                   onClick={() => stopRecording(true)}
@@ -5640,7 +5642,8 @@ Yes, the current serials don't have the same quality as the old ones, right?
             transition: 'all 0.3s ease',
             boxShadow: '0 4px 16px rgba(60,76,115,0.25)',
             zIndex: 1000,
-            fontFamily: 'Montserrat, Arial, sans-serif'
+            fontFamily: 'Montserrat, Arial, sans-serif',
+            bottom: '3rem'
           }}
           title="Show Short Feedback Panel"
         >
