@@ -871,6 +871,19 @@ function Analyze() {
         recognition.lang = language || 'en-US';
         recognition.interimResults = false;
         recognition.continuous = false;
+        
+                  // Set longer timeout for autospeak mode to give users more time to speak
+          if (autoSpeakRef.current) {
+            // Extend the recognition timeout to 10 seconds for autospeak mode
+            recognition.maxAlternatives = 1;
+            // Note: SpeechRecognition timeout is browser-dependent, but we can add our own timeout
+            setTimeout(() => {
+              if (recognitionRef.current) {
+                console.log('[DEBUG] Autospeak: Speech recognition timeout reached, stopping recording');
+                recognitionRef.current.stop();
+              }
+            }, 10000); // 10 seconds timeout for autospeak mode
+          }
         recognition.onresult = (event: unknown) => {
           setIsRecording(false);
           if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
@@ -1019,6 +1032,8 @@ function Analyze() {
 
   // TTS functions with caching - now integrated with admin-controlled backend
   const generateTTSForText = async (text: string, language: string, cacheKey: string): Promise<string | null> => {
+    console.log('[DEBUG] generateTTSForText called with:', { text, language, cacheKey });
+    
     // Check cache first (cache for 5 minutes)
     const cached = ttsCache.get(cacheKey);
     const now = Date.now();
@@ -1032,6 +1047,9 @@ function Analyze() {
     
     try {
       const token = localStorage.getItem('jwt');
+      
+      console.log('[DEBUG] Sending TTS request with text:', text);
+      console.log('[DEBUG] TTS request payload:', { text, language });
       
       // Call the Node.js server which will route to Python API with admin controls
       const response = await axios.post('http://localhost:4000/api/tts', {
@@ -1326,32 +1344,52 @@ function Analyze() {
       const aiResponse = aiResponseResponse.data.ai_response;
       console.log('[DEBUG] AI response received:', aiResponse);
       
-      // Add AI response if present
-      if (aiResponse) {
-        console.log('[DEBUG] Adding AI response:', aiResponse);
-        const formattedResponse = formatScriptLanguageText(aiResponse, language);
-        setChatHistory(prev => {
-          const updated = prev.map((msg, index) => {
-            // Find the last processing AI message and replace it
-            if (msg.isProcessing && msg.sender === 'AI') {
-              console.log('[DEBUG] Found AI processing message to replace:', msg);
-              return {
-                ...msg,
-                text: formattedResponse.mainText,
-                romanizedText: formattedResponse.romanizedText,
-                ttsUrl: null, // We'll handle TTS separately if needed
-                isProcessing: false
-              };
-            }
-            return msg;
+              // Add AI response if present
+        if (aiResponse) {
+          console.log('[DEBUG] Adding AI response:', aiResponse);
+          const formattedResponse = formatScriptLanguageText(aiResponse, language);
+          setChatHistory(prev => {
+            const updated = prev.map((msg, index) => {
+              // Find the last processing AI message and replace it
+              if (msg.isProcessing && msg.sender === 'AI') {
+                console.log('[DEBUG] Found AI processing message to replace:', msg);
+                return {
+                  ...msg,
+                  text: formattedResponse.mainText,
+                  romanizedText: formattedResponse.romanizedText,
+                  ttsUrl: null, // We'll handle TTS separately if needed
+                  isProcessing: false
+                };
+              }
+              return msg;
+            });
+            console.log('[DEBUG] Chat history after replacing AI processing message:', updated);
+            return updated;
           });
-          console.log('[DEBUG] Chat history after replacing AI processing message:', updated);
-          return updated;
-        });
-        if (conversationId) {
-          await saveMessageToBackend('AI', formattedResponse.mainText, 'text', null, null, formattedResponse.romanizedText);
+          if (conversationId) {
+            await saveMessageToBackend('AI', formattedResponse.mainText, 'text', null, null, formattedResponse.romanizedText);
+          }
+          
+          // Automatically play TTS for AI message
+          console.log('[DEBUG] Auto-playing TTS for AI message:', formattedResponse.mainText);
+          console.log('[DEBUG] Formatted response:', formattedResponse);
+          const aiMessage: ChatMessage = {
+            text: formattedResponse.mainText,
+            romanizedText: formattedResponse.romanizedText,
+            sender: 'AI',
+            timestamp: new Date(),
+            isFromOriginalConversation: false
+          };
+          const ttsText = getTTSText(aiMessage, userPreferences.romanizationDisplay, language);
+          console.log('[DEBUG] TTS text before cleaning:', ttsText);
+          console.log('[DEBUG] User preferences romanization display:', userPreferences.romanizationDisplay);
+          console.log('[DEBUG] Language:', language);
+          const cacheKey = `ai_message_auto_${Date.now()}`;
+          await playTTSAudio(ttsText, language, cacheKey);
+          
+          // Note: TTS will handle autospeak restart in its onended event
+          // No need to manually restart recording here
         }
-      }
       
       // Note: TTS is handled separately if needed
       console.log('[DEBUG] Audio processing complete');
@@ -2107,9 +2145,41 @@ function Analyze() {
         } catch (fetchError: unknown) {
           console.error('Error checking initial TTS audio file:', fetchError);
         }
+      } else {
+        // Auto-generate and play TTS for initial AI message
+        console.log('[DEBUG] Auto-playing TTS for initial AI message:', formattedMessage.mainText);
+        const aiMessageObj: ChatMessage = {
+          text: formattedMessage.mainText,
+          romanizedText: formattedMessage.romanizedText,
+          sender: 'AI',
+          timestamp: new Date(),
+          isFromOriginalConversation: false
+        };
+        const ttsText = getTTSText(aiMessageObj, romanizationDisplay, language);
+        const cacheKey = `ai_message_initial_${Date.now()}`;
+        await playTTSAudio(ttsText, language, cacheKey);
+        
+        // Note: TTS will handle autospeak restart in its onended event
+        // No need to manually restart recording here
       }
     } else {
-      setChatHistory([{ sender: 'AI', text: 'Hello! What would you like to talk about today?', timestamp: new Date(), isFromOriginalConversation: false }]);
+      const fallbackMessage = 'Hello! What would you like to talk about today?';
+      setChatHistory([{ sender: 'AI', text: fallbackMessage, timestamp: new Date(), isFromOriginalConversation: false }]);
+      
+      // Auto-generate and play TTS for fallback AI message
+      console.log('[DEBUG] Auto-playing TTS for fallback AI message:', fallbackMessage);
+      const aiMessageObj: ChatMessage = {
+        text: fallbackMessage,
+        sender: 'AI',
+        timestamp: new Date(),
+        isFromOriginalConversation: false
+      };
+      const ttsText = getTTSText(aiMessageObj, romanizationDisplay, language);
+      const cacheKey = `ai_message_fallback_${Date.now()}`;
+      await playTTSAudio(ttsText, language, cacheKey);
+      
+      // Note: TTS will handle autospeak restart in its onended event
+      // No need to manually restart recording here
     }
   };
 
@@ -3075,20 +3145,83 @@ function Analyze() {
 
   // Helper function to get the appropriate text for TTS based on romanization display preference
   const getTTSText = (message: ChatMessage, romanizationDisplay: string | undefined, language: string): string => {
+    console.log('[DEBUG] getTTSText called with:', { 
+      messageText: message.text, 
+      messageRomanizedText: message.romanizedText, 
+      romanizationDisplay, 
+      language 
+    });
+    
+    let textToUse: string;
+    
     // For non-script languages, always use the main text
     if (!isScriptLanguage(language)) {
-      return message.text;
+      textToUse = message.text;
+      console.log('[DEBUG] Non-script language, using main text:', textToUse);
+    } else {
+      // For script languages, ALWAYS use the script text for TTS (more accurate)
+      // Display preference doesn't affect TTS - only affects what's shown visually
+      if (message.text && message.text.trim()) {
+        // Use the script text (main text) directly
+        textToUse = message.text;
+        console.log('[DEBUG] Script language, using script text for TTS (more accurate):', textToUse);
+      } else {
+        // Fall back to romanized text only if script text is not available
+        textToUse = message.romanizedText || message.text;
+        console.log('[DEBUG] Script language, falling back to romanized text:', textToUse);
+      }
     }
     
-    // For script languages, choose based on romanization display preference
-    if (romanizationDisplay === 'romanized_only') {
-      return message.romanizedText || message.text;
-    } else {
-      // For 'script_only' or 'both', use the script text (main text)
-      // But first check if the main text already contains both script and romanized text
-      const formatted = formatScriptLanguageText(message.text, language);
-      return formatted.mainText;
+    // Safety check - if text is empty or only contains punctuation, use fallback
+    if (!textToUse || textToUse.trim().length === 0) {
+      console.log('[DEBUG] Warning: Empty text for TTS, using fallback');
+      textToUse = message.text || 'Hello';
     }
+    
+    // Clean the text for TTS - remove formatting markers and excessive punctuation
+    const cleanedText = cleanTextForTTS(textToUse);
+    
+    console.log('[DEBUG] getTTSText final result:', cleanedText);
+    
+    return cleanedText;
+  };
+  
+  const cleanTextForTTS = (text: string): string => {
+    if (!text) return text;
+    
+    console.log('[DEBUG] cleanTextForTTS input:', text);
+    
+    let cleaned = text;
+    
+    // Remove formatting markers that shouldn't be read aloud
+    cleaned = cleaned.replace(/__([^_]+)__/g, '$1'); // Remove __word__ markers
+    console.log('[DEBUG] After removing __ markers:', cleaned);
+    cleaned = cleaned.replace(/~~([^~]+)~~/g, '$1'); // Remove ~~word~~ markers  
+    console.log('[DEBUG] After removing ~~ markers:', cleaned);
+    cleaned = cleaned.replace(/==([^=]+)==/g, '$1'); // Remove ==word== markers
+    console.log('[DEBUG] After removing == markers:', cleaned);
+    cleaned = cleaned.replace(/<<([^>]+)>>/g, '$1'); // Remove <<word>> markers
+    console.log('[DEBUG] After removing << markers:', cleaned);
+    
+    // Remove excessive punctuation that might be read as "exclamation point"
+    cleaned = cleaned.replace(/[!]{2,}/g, '!'); // Multiple ! to single !
+    console.log('[DEBUG] After cleaning ! marks:', cleaned);
+    cleaned = cleaned.replace(/[?]{2,}/g, '?'); // Multiple ? to single ?
+    console.log('[DEBUG] After cleaning ? marks:', cleaned);
+    cleaned = cleaned.replace(/[.]{3,}/g, '...'); // Multiple . to ...
+    console.log('[DEBUG] After cleaning . marks:', cleaned);
+    
+    // Remove any remaining HTML-like tags
+    cleaned = cleaned.replace(/<[^>]*>/g, '');
+    console.log('[DEBUG] After removing HTML tags:', cleaned);
+    
+    // Trim whitespace
+    cleaned = cleaned.trim();
+    console.log('[DEBUG] After trimming:', cleaned);
+    
+    console.log('[DEBUG] TTS text cleaned:', { original: text, cleaned });
+    
+    return cleaned;
   };
 
   // Helper function to render formatted text with color-coded underlines and clickable popups

@@ -37,8 +37,6 @@ else:
 
 # Global variables for models
 
-
-
 SUPPORTED_LANGUAGES = ['en', 'es', 'hi', 'ja', 'ko', 'zh', 'ar', 'ta', 'or', 'ml', 'fr', 'tl']
 
 def load_models():
@@ -349,11 +347,8 @@ def health():
             "gemini_transcriber": True
         }
         
-        # In deployment, we don't load any models (cloud transcription only)
-        if USE_CLOUD_TRANSCRIPTION:
-            all_models_loaded = True  # No models needed for cloud transcription
-        else:
-            all_models_loaded = all(models_status.values())
+        # Using Gemini for transcription (no local models needed)
+        all_models_loaded = True  # No local models needed for Gemini transcription
             
         api_key_set = bool(os.getenv("GOOGLE_API_KEY"))
         gemini_ready = is_gemini_ready() if api_key_set else False
