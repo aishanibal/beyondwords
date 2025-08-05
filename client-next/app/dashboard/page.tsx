@@ -10,6 +10,7 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import LanguageOnboarding from '../components/LanguageOnboarding';
 import DashboardSettingsModal from '../components/DashboardSettingsModal';
+import LoadingScreen from '../components/LoadingScreen';
 
 import { LEARNING_GOALS, LearningGoal, getProgressiveSubgoalDescription, getSubgoalLevel, getSubgoalProgress, updateSubgoalProgress, SubgoalProgress, LevelUpEvent } from '../../lib/preferences';
 
@@ -274,6 +275,19 @@ export default function DashboardPage() {
   const router = useRouter();
   const { user } = useUser();
   const [languageDashboards, setLanguageDashboards] = useState<DashboardType[]>([]);
+
+  // Authentication protection
+  useEffect(() => {
+    if (user === null) {
+      router.push('/login');
+      return;
+    }
+  }, [user, router]);
+
+  // Show loading while checking authentication
+  if (user === null) {
+    return <LoadingScreen message="Checking authentication..." />;
+  }
   const [selectedLanguage, setSelectedLanguage] = useState<string | null>(null);
   const [conversations, setConversations] = useState<ConversationType[]>([]);
   const [personas, setPersonas] = useState<PersonaType[]>([]);

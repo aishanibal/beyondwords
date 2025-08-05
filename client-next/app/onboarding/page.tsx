@@ -5,6 +5,7 @@ import React, { useState, ChangeEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '../ClientLayout';
 import axios from 'axios';
+import LoadingScreen from '../components/LoadingScreen';
 import { LANGUAGES, PROFICIENCY_LEVELS, TALK_TOPICS, LEARNING_GOALS, PRACTICE_PREFERENCES, FEEDBACK_LANGUAGES, Language, ProficiencyLevel, Topic, LearningGoal, PracticePreference, FeedbackLanguage } from '../../lib/preferences';
 
 export default function OnboardingPage() {
@@ -37,25 +38,10 @@ export default function OnboardingPage() {
     } else {
       setUserIdError('');
     }
-  }, [user]);
+    }, [user]);
 
   if (user === null) {
-    return (
-      <div style={{ 
-        minHeight: '100vh', 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'center', 
-        background: 'var(--cream)', 
-        flexDirection: 'column', 
-        gap: '1rem',
-        fontFamily: 'Montserrat, Arial, sans-serif'
-      }}>
-        <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🗝️</div>
-        <div style={{ fontSize: '1.5rem', color: 'var(--rose-primary)', fontWeight: 600 }}>BeyondWords</div>
-        <div style={{ fontSize: '0.9rem', color: 'var(--rose-primary)', opacity: 0.7 }}>Loading your experience...</div>
-      </div>
-    );
+    return <LoadingScreen message="Loading your experience..." />;
   }
 
   const totalSteps = 4;

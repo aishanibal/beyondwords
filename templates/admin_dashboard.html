@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+        }
+        .card:hover {
+            transform: translateY(-2px);
+        }
+        .card h2 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 1.5rem;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+        .tts-toggle {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin: 20px 0;
+        }
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+        }
+        .btn-primary {
+            background: #007bff;
+            color: white;
+        }
+        .btn-primary:hover, .btn-primary.active {
+            background: #0056b3;
+            transform: translateY(-2px);
+        }
+        .btn-info {
+            background: #17a2b8;
+            color: white;
+        }
+        .btn-info:hover, .btn-info.active {
+            background: #138496;
+            transform: translateY(-2px);
+        }
+        .btn-warning {
+            background: #ffc107;
+            color: #212529;
+        }
+        .btn-warning:hover, .btn-warning.active {
+            background: #e0a800;
+            transform: translateY(-2px);
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .stat-card {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            border-left: 4px solid #667eea;
+        }
+        .stat-number {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+        .stat-label {
+            color: #666;
+            font-size: 0.9rem;
+        }
+        .alert {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            display: none;
+        }
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .alert-danger {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎛️ Admin Dashboard</h1>
+            <p>Control TTS settings and monitor usage</p>
+        </div>
+
+        <!-- Alert Messages -->
+        <div id="alert" class="alert"></div>
+        
+        <!-- Loading -->
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <p>Processing...</p>
+        </div>
+
+        <!-- TTS System Selection -->
+        <div class="card">
+            <h2>🎤 TTS System Selection</h2>
+            <p style="margin-bottom: 1rem; color: #666;">
+                Choose which TTS system to use for all users
+            </p>
+            <div class="tts-toggle">
+                <button class="btn btn-primary" onclick="setTTS('system')" id="btn-system">
+                    🎤 System TTS (FREE)
+                </button>
+                <button class="btn btn-info" onclick="setTTS('cloud')" id="btn-cloud">
+                    ☁️ Google Cloud (CHEAP)
+                </button>
+                <button class="btn btn-warning" onclick="setTTS('gemini')" id="btn-gemini">
+                    🤖 Gemini (EXPENSIVE)
+                </button>
+            </div>
+            <p style="margin-top: 1rem; font-size: 0.9rem; color: #666;">
+                <strong>Current:</strong> <span id="current-tts">{{ settings.get('active_tts', 'system').upper() }}</span>
+            </p>
+        </div>
+
+        <!-- Usage Statistics -->
+        <div class="card">
+            <h2>📊 Usage Statistics</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-number">{{ "%.2f"|format(usage_stats.get('total_cost', 0)) }}</div>
+                    <div class="stat-label">Total Cost ($)</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">{{ usage_stats.get('daily_usage', {}).get('system', 0) }}</div>
+                    <div class="stat-label">System TTS Calls</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">{{ usage_stats.get('daily_usage', {}).get('google_cloud', 0) }}</div>
+                    <div class="stat-label">Google Cloud Calls</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">{{ usage_stats.get('daily_usage', {}).get('gemini', 0) }}</div>
+                    <div class="stat-label">Gemini Calls</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function showAlert(message, type) {
+            const alert = document.getElementById('alert');
+            alert.textContent = message;
+            alert.className = `alert alert-${type}`;
+            alert.style.display = 'block';
+            
+            setTimeout(() => {
+                alert.style.display = 'none';
+            }, 5000);
+        }
+
+        function showLoading() {
+            document.getElementById('loading').style.display = 'block';
+        }
+
+        function hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        async function setTTS(system) {
+            showLoading();
+            try {
+                const response = await fetch('/admin/api/set_tts_system', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ 
+                        system: system
+                    })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    showAlert(`TTS system changed to ${system.toUpperCase()}!`, 'success');
+                    updateTTSToggleButtons(system);
+                    setTimeout(() => location.reload(), 1000);
+                } else {
+                    showAlert('Error: ' + result.message, 'danger');
+                }
+            } catch (error) {
+                showAlert('Error: ' + error.message, 'danger');
+            } finally {
+                hideLoading();
+            }
+        }
+        
+        function updateTTSToggleButtons(activeSystem) {
+            // Reset all buttons
+            document.getElementById('btn-system').className = 'btn btn-primary';
+            document.getElementById('btn-cloud').className = 'btn btn-info';
+            document.getElementById('btn-gemini').className = 'btn btn-warning';
+            
+            // Highlight active button
+            const activeBtn = document.getElementById(`btn-${activeSystem}`);
+            if (activeBtn) {
+                activeBtn.className = activeBtn.className + ' active';
+            }
+            
+            // Update current display
+            document.getElementById('current-tts').textContent = activeSystem.toUpperCase();
+        }
+        
+        // Initialize button states on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            const currentTTS = '{{ settings.get("active_tts", "system") }}';
+            updateTTSToggleButtons(currentTTS);
+        });
+    </script>
+</body>
+</html> 

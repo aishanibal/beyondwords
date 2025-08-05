@@ -10,6 +10,7 @@ import axios from 'axios';
 import { useRouter, useSearchParams } from 'next/navigation';
 import TopicSelectionModal from './TopicSelectionModal';
 import PersonaModal from './PersonaModal';
+import LoadingScreen from '../components/LoadingScreen';
 import { LEARNING_GOALS, LearningGoal, getProgressiveSubgoalDescription, updateSubgoalProgress, SubgoalProgress, LevelUpEvent } from '../../lib/preferences';
 
 // TypeScript: Add type declarations for browser APIs
@@ -269,6 +270,19 @@ function Analyze() {
   const { user } = useUser() as { user: User | null };
   const [isRecording, setIsRecording] = useState<boolean>(false);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+
+  // Authentication protection
+  useEffect(() => {
+    if (user === null) {
+      router.push('/login');
+      return;
+    }
+  }, [user, router]);
+
+  // Show loading while checking authentication
+  if (user === null) {
+    return <LoadingScreen message="Checking authentication..." />;
+  }
 
 
   const recognitionRef = useRef<{ lang: string; stop: () => void } | null>(null);
@@ -958,7 +972,7 @@ function Analyze() {
     }
   };
 
-  // TTS functions with caching
+  // TTS functions with caching - now integrated with admin-controlled backend
   const generateTTSForText = async (text: string, language: string, cacheKey: string): Promise<string | null> => {
     // Check cache first (cache for 5 minutes)
     const cached = ttsCache.get(cacheKey);
@@ -973,6 +987,8 @@ function Analyze() {
     
     try {
       const token = localStorage.getItem('jwt');
+      
+      // Call the Node.js server which will route to Python API with admin controls
       const response = await axios.post('http://localhost:4000/api/tts', {
         text,
         language
@@ -1009,7 +1025,8 @@ function Analyze() {
     try {
       const ttsUrl = await generateTTSForText(text, language, cacheKey);
       if (ttsUrl) {
-        const audioUrl = `http://localhost:4000${ttsUrl}`;
+        // Handle both relative and absolute URLs from backend
+        const audioUrl = ttsUrl.startsWith('http') ? ttsUrl : `http://localhost:4000${ttsUrl}`;
         const audio = new window.Audio(audioUrl);
         ttsAudioRef.current = audio;
         
@@ -1068,7 +1085,8 @@ function Analyze() {
     setIsPlayingAnyTTS(true);
     
     try {
-      const audioUrl = `http://localhost:4000${ttsUrl}`;
+      // Handle both relative and absolute URLs from backend
+      const audioUrl = ttsUrl.startsWith('http') ? ttsUrl : `http://localhost:4000${ttsUrl}`;
       const audio = new window.Audio(audioUrl);
       ttsAudioRef.current = audio;
       
@@ -1342,7 +1360,7 @@ function Analyze() {
         payload,
         token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
       );
-      setFeedback(response.data.feedback);
+      setShortFeedback(response.data.feedback);
       // Optionally, add to chatHistory
               setChatHistory(prev => [...prev, { sender: 'System', text: response.data.feedback, timestamp: new Date(), isFromOriginalConversation: false }]);
       // Feedback is applied to the message, no need to add to chat
@@ -1966,7 +1984,9 @@ function Analyze() {
       
       // Play TTS for the initial AI message if available
       if ((aiMessage as any).ttsUrl) {
-        const audioUrl = `http://localhost:4000${(aiMessage as any).ttsUrl}`;
+        // Handle both relative and absolute URLs from backend
+        const ttsUrl = (aiMessage as any).ttsUrl;
+        const audioUrl = ttsUrl.startsWith('http') ? ttsUrl : `http://localhost:4000${ttsUrl}`;
         try {
           const headResponse = await fetch(audioUrl, { method: 'HEAD' });
           if (headResponse.ok) {
@@ -3438,6 +3458,68 @@ Yes, the current serials don't have the same quality as the old ones, right?
     }
   };
 
+  // State for LLM response breakdown in sidebar
+  const [llmBreakdown, setLlmBreakdown] = useState<string>('');
+  const [showLlmBreakdown, setShowLlmBreakdown] = useState<boolean>(false);
+  const [showQuickTranslation, setShowQuickTranslation] = useState<boolean>(true);
+
+  // Function to get detailed breakdown of LLM response
+  const explainLLMResponse = async (messageIndex: number, text: string) => {
+    console.log('[DEBUG] explainLLMResponse() called with messageIndex:', messageIndex, 'text:', text);
+    
+    if (isLoadingMessageFeedback[messageIndex]) {
+      console.log('[DEBUG] Already loading, returning early');
+      return;
+    }
+    
+    setIsLoadingMessageFeedback(prev => ({ ...prev, [messageIndex]: true }));
+    
+    try {
+      const token = localStorage.getItem('jwt');
+      const requestData = {
+        llm_response: text,
+        user_input: "",
+        context: "",
+        language: language,
+        user_level: userPreferences.userLevel,
+        user_topics: userPreferences.topics,
+        formality: userPreferences.formality,
+        feedback_language: userPreferences.feedbackLanguage,
+        user_goals: userPreferences.user_goals,
+        description: conversationDescription
+      };
+
+      console.log('[DEBUG] explainLLMResponse() calling /api/detailed_breakdown with:', requestData);
+      
+      const response = await axios.post(
+        '/api/detailed_breakdown',
+        requestData,
+        token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
+      );
+      
+      const result = response.data;
+      console.log('[DEBUG] explainLLMResponse() received response:', result);
+      
+      const breakdownText = result.breakdown;
+      console.log('[DEBUG] Raw breakdown text:', breakdownText);
+      
+      if (!breakdownText) {
+        console.log('[DEBUG] No breakdown received');
+        return;
+      }
+      
+      // Set the breakdown in sidebar state
+      setLlmBreakdown(breakdownText);
+      setShowLlmBreakdown(true);
+      setShowQuickTranslation(false); // Collapse quick translation when LLM breakdown is shown
+      
+    } catch (error: unknown) {
+      console.error('Explain LLM response error:', error);
+    } finally {
+      setIsLoadingMessageFeedback(prev => ({ ...prev, [messageIndex]: false }));
+    }
+  };
+
   // Render clickable message with word translations
   const renderClickableMessage = (message: ChatMessage, messageIndex: number, translation: any) => {
     if (!translation || !translation.wordTranslations) {
@@ -3819,7 +3901,7 @@ Yes, the current serials don't have the same quality as the old ones, right?
                 <div style={{
                   fontWeight: 600,
                   fontSize: '1.1rem',
-                  marginBottom: '1rem',
+                  marginBottom: showQuickTranslation ? '1rem' : '0',
                   color: isDarkMode ? '#f8fafc' : '#000',
                   display: 'flex',
                   alignItems: 'center',
@@ -3828,53 +3910,171 @@ Yes, the current serials don't have the same quality as the old ones, right?
                   <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     🌐 Quick Translation
                   </span>
-
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    {showLlmBreakdown && (
+                      <button
+                        onClick={() => setShowQuickTranslation(!showQuickTranslation)}
+                        style={{
+                          padding: '0.25rem 0.5rem',
+                          borderRadius: 4,
+                          border: '1px solid #666',
+                          background: 'rgba(102,102,102,0.1)',
+                          color: '#666',
+                          fontSize: '0.7rem',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease'
+                        }}
+                        title={showQuickTranslation ? 'Collapse' : 'Expand'}
+                      >
+                        {showQuickTranslation ? '▼' : '▶'}
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        // Find the AI message that has the quick translation
+                        const messageIndex = Object.keys(quickTranslations)[0];
+                        if (messageIndex) {
+                          const message = chatHistory[parseInt(messageIndex)];
+                          if (message) {
+                            explainLLMResponse(parseInt(messageIndex), message.text);
+                          }
+                        }
+                      }}
+                      disabled={isLoadingMessageFeedback[Object.keys(quickTranslations)[0] || '0']}
+                      style={{
+                        padding: '0.35rem 0.9rem',
+                        borderRadius: 6,
+                        border: '1px solid #9c27b0',
+                        background: 'rgba(156,39,176,0.08)',
+                        color: '#9c27b0',
+                        fontSize: '0.8rem',
+                        cursor: isLoadingMessageFeedback[Object.keys(quickTranslations)[0] || '0'] ? 'not-allowed' : 'pointer',
+                        transition: 'all 0.2s ease',
+                        opacity: isLoadingMessageFeedback[Object.keys(quickTranslations)[0] || '0'] ? 0.6 : 1,
+                        fontWeight: 500,
+                        boxShadow: '0 1px 3px rgba(156,39,176,0.10)'
+                      }}
+                      title="Get detailed LLM breakdown"
+                    >
+                      {isLoadingMessageFeedback[Object.keys(quickTranslations)[0] || '0'] ? '🔄' : '📝 Explain LLM'}
+                    </button>
+                  </div>
                 </div>
-                {Object.entries(quickTranslations).map(([messageIndex, translation]) => (
-                  <div key={messageIndex} style={{ marginBottom: '1rem' }}>
-                    {translation.error ? (
-                      <div style={{ color: '#dc3545', fontStyle: 'italic' }}>
-                        {translation.fullTranslation}
-                      </div>
-                    ) : (
-                      <div>
-                        {/* Original sentence with clickable words */}
-                        <div style={{ marginBottom: '0.5rem' }}>
-                          <strong>Original:</strong>
-                          <div style={{
-                            background: isDarkMode ? '#334155' : '#f8f9fa',
-                            padding: '0.75rem',
-                            borderRadius: 8,
-                            marginTop: '0.5rem',
-                            fontSize: '0.95rem',
-                            lineHeight: '1.6'
-                          }}>
-                            {renderClickableMessage(chatHistory[parseInt(messageIndex)], parseInt(messageIndex), translation)}
+                {showQuickTranslation && (
+                  <div style={{
+                    maxHeight: showLlmBreakdown ? '200px' : 'none',
+                    overflowY: showLlmBreakdown ? 'auto' : 'visible'
+                  }}>
+                    {Object.entries(quickTranslations).map(([messageIndex, translation]) => (
+                      <div key={messageIndex} style={{ marginBottom: '1rem' }}>
+                        {translation.error ? (
+                          <div style={{ color: '#dc3545', fontStyle: 'italic' }}>
+                            {translation.fullTranslation}
                           </div>
-                        </div>
-                        
-                        {/* Full translation */}
-                        {translation.fullTranslation && (
-                          <div style={{ marginBottom: '0.5rem' }}>
-                            <strong>Translation:</strong>
-                            <div style={{
-                              background: isDarkMode ? '#334155' : '#f8f9fa',
-                              padding: '0.75rem',
-                              borderRadius: 8,
-                              marginTop: '0.5rem',
-                              fontSize: '0.95rem',
-                              lineHeight: '1.6'
-                            }}>
-                              {translation.fullTranslation}
+                        ) : (
+                          <div>
+                            {/* Original sentence with clickable words */}
+                            <div style={{ marginBottom: '0.5rem' }}>
+                              <strong>Original:</strong>
+                              <div style={{
+                                background: isDarkMode ? '#334155' : '#f8f9fa',
+                                padding: '0.75rem',
+                                borderRadius: 8,
+                                marginTop: '0.5rem',
+                                fontSize: '0.95rem',
+                                lineHeight: '1.6',
+                                maxHeight: showLlmBreakdown ? '120px' : 'none',
+                                overflowY: showLlmBreakdown ? 'auto' : 'visible'
+                              }}>
+                                {renderClickableMessage(chatHistory[parseInt(messageIndex)], parseInt(messageIndex), translation)}
+                              </div>
                             </div>
+                            
+                            {/* Full translation */}
+                            {translation.fullTranslation && (
+                              <div style={{ marginBottom: '0.5rem' }}>
+                                <strong>Translation:</strong>
+                                <div style={{
+                                  background: isDarkMode ? '#334155' : '#f8f9fa',
+                                  padding: '0.75rem',
+                                  borderRadius: 8,
+                                  marginTop: '0.5rem',
+                                  fontSize: '0.95rem',
+                                  lineHeight: '1.6'
+                                }}>
+                                  {translation.fullTranslation}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
-                    )}
+                    ))}
                   </div>
-                ))}
+                )}
               </div>
             )}
+            
+            {/* LLM Response Breakdown Section */}
+            {showLlmBreakdown && llmBreakdown && (
+              <div style={{
+                background: isDarkMode ? '#1e293b' : '#fff',
+                color: isDarkMode ? '#f8fafc' : '#000',
+                padding: '1rem',
+                borderBottom: isDarkMode ? '1px solid #334155' : '1px solid #ececec',
+                fontSize: '1rem',
+                lineHeight: 1.5,
+                fontFamily: 'AR One Sans, Arial, sans-serif',
+                fontWeight: 400,
+                transition: 'background 0.3s ease, color 0.3s ease'
+              }}>
+                <div style={{
+                  fontWeight: 600,
+                  fontSize: '1.1rem',
+                  marginBottom: '1rem',
+                  color: isDarkMode ? '#f8fafc' : '#000',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between'
+                }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    📝 LLM Response Breakdown
+                  </span>
+                  <button
+                    onClick={() => setShowLlmBreakdown(false)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: isDarkMode ? '#94a3b8' : '#666',
+                      cursor: 'pointer',
+                      fontSize: '1.2rem',
+                      padding: '0.2rem',
+                      borderRadius: '50%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'all 0.2s ease'
+                    }}
+                    title="Close breakdown"
+                  >
+                    ×
+                  </button>
+                </div>
+                <div style={{
+                  background: isDarkMode ? '#334155' : '#f8f9fa',
+                  padding: '0.75rem',
+                  borderRadius: 8,
+                  fontSize: '0.95rem',
+                  lineHeight: '1.6',
+                  whiteSpace: 'pre-wrap',
+                  maxHeight: '400px',
+                  overflowY: 'auto'
+                }}>
+                  {llmBreakdown}
+                </div>
+              </div>
+            )}
+            
             {shortFeedback && (
               <div style={{
                 background: isDarkMode ? '#1e293b' : '#fff',
@@ -4377,6 +4577,8 @@ Yes, the current serials don't have the same quality as the old ones, right?
                   >
                     {isLoadingMessageFeedback[index] ? '🔄' : '💡 Explain'}
                   </button>
+                  
+
                   
                   {/* TTS button for AI messages */}
                   <button

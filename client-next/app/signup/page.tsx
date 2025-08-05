@@ -96,12 +96,20 @@ export default function SignupPage() {
         credential: credentialResponse.credential
       });
       
+      console.log('Google signup response:', response.data);
+      
       if (response.data.user && response.data.token) {
         localStorage.setItem('jwt', response.data.token);
         setUser(response.data.user);
+        
+        console.log('User onboarding_complete:', response.data.user.onboarding_complete);
+        console.log('Boolean onboarding_complete:', Boolean(response.data.user.onboarding_complete));
+        
         if (!Boolean(response.data.user.onboarding_complete)) {
+          console.log('Redirecting to onboarding...');
           router.push('/onboarding');
         } else {
+          console.log('Redirecting to dashboard...');
           router.push('/dashboard');
         }
       }

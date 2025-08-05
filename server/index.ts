@@ -362,57 +362,40 @@ app.post('/api/analyze', authenticateJWT, upload.single('audio'), async (req: Re
       // Keep the default values
     }
 
-    // Generate text-to-speech for the response using macOS 'say'
+    // Generate text-to-speech for the response using Gemini TTS API
     let ttsUrl = null;
     const language = req.body.language || 'en';
     try {
-      const ttsFileName = `tts_${Date.now()}.wav`;
+      const ttsFileName = `tts_${Date.now()}.aiff`;
       const ttsFilePath = path.join(uploadsDir, ttsFileName);
       
-      // Choose voice based on language with fallback
-      let ttsVoice = 'Karen'; // Default to English (Alex is more reliable than Flo)
-      if (language === 'es') ttsVoice = 'Mónica'; // Spanish voice
-      else if (language === 'hi') ttsVoice = 'Lekha'; // macOS Hindi voice
-      else if (language === 'ja') ttsVoice = 'Otoya'; // macOS Japanese voice
-      
-      // Check if voice is available
-      try {
-        await new Promise<void>((resolve, reject) => {
-          exec(`say -v ${ttsVoice} "test"`, (error) => {
-            if (error) reject(error);
-            else resolve();
-          });
-        });
-      } catch (voiceError) {
-        console.log(`Voice ${ttsVoice} not available, using default`);
-        ttsVoice = 'Alex'; // Fallback to Alex
-      }
-      
-      const sayCmd = `say -v ${ttsVoice} -o "${ttsFilePath}" --data-format=LEI16@22050 "${aiResponse.replace(/\"/g, '\\"')}"`;
-      console.log('TTS voice:', ttsVoice);
-      console.log('TTS command:', sayCmd);
+      console.log('Generating TTS using Gemini API for language:', language);
       console.log('TTS text length:', aiResponse.length);
       
-      await new Promise<void>((resolve, reject) => {
-        exec(sayCmd, (error) => {
-          if (error) {
-            console.error('TTS command failed:', error);
-            reject(error);
-          } else {
-            console.log('TTS command completed successfully');
-            resolve();
-          }
-        });
+      // Call Python API for Gemini TTS
+      const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5000';
+      const ttsResponse = await axios.post(`${pythonApiUrl}/generate_tts`, {
+        text: aiResponse,
+        language_code: language,
+        output_path: ttsFilePath
+      }, {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 30000
       });
       
-      // Check if file was created
-      if (fs.existsSync(ttsFilePath)) {
-        const stats = fs.statSync(ttsFilePath);
-        console.log('TTS file created, size:', stats.size, 'bytes');
-        ttsUrl = `/uploads/${ttsFileName}`;
-        console.log('TTS audio generated at:', ttsUrl);
+      if (ttsResponse.data.success && ttsResponse.data.output_path) {
+        // Check if file was created
+        if (fs.existsSync(ttsFilePath)) {
+          const stats = fs.statSync(ttsFilePath);
+          console.log('TTS file created, size:', stats.size, 'bytes');
+          ttsUrl = `/uploads/${ttsFileName}`;
+          console.log('TTS audio generated at:', ttsUrl);
+        } else {
+          console.error('TTS file was not created');
+          ttsUrl = null;
+        }
       } else {
-        console.error('TTS file was not created');
+        console.error('TTS generation failed:', ttsResponse.data.error);
         ttsUrl = null;
       }
     } catch (ttsError) {
@@ -629,6 +612,11 @@ app.post('/auth/google/token', async (req: Request, res: Response) => {
       proficiency_level: user.proficiency_level
     };
 
+    console.log('Google auth - User created/found:', user);
+    console.log('Google auth - User response:', userResponse);
+    console.log('Google auth - onboarding_complete value:', user.onboarding_complete);
+    console.log('Google auth - Boolean onboarding_complete:', Boolean(user.onboarding_complete));
+
     res.json({ user: userResponse, token });
   } catch (error: any) {
     console.error('Google auth error:', error);
@@ -655,7 +643,8 @@ app.post('/auth/register', async (req: Request, res: Response) => {
       email,
       name,
       password_hash: passwordHash,
-      role: 'user'
+      role: 'user',
+      onboarding_complete: false
     });
     
     // Generate JWT token for immediate login
@@ -1488,7 +1477,7 @@ app.delete('/api/personas/:id', authenticateJWT, async (req: Request, res: Respo
   }
 });
 
-// TTS endpoint for generating audio for any text
+// TTS endpoint for generating audio for any text (with authentication)
 app.post('/api/tts', authenticateJWT, async (req: Request, res: Response) => {
   try {
     const { text, language } = req.body;
@@ -1498,6 +1487,15 @@ app.post('/api/tts', authenticateJWT, async (req: Request, res: Response) => {
     }
     
     const lang = language || 'en';
+    
+    // Check Python API health first
+    const isHealthy = await checkPythonAPIHealth();
+    if (!isHealthy) {
+      return res.status(503).json({ 
+        error: 'Python API is not available',
+        details: 'The TTS service is temporarily unavailable. Please try again later.'
+      });
+    }
     
     // Generate TTS for the text
     const ttsUrl = await generateTTS(text, lang);
@@ -1512,6 +1510,40 @@ app.post('/api/tts', authenticateJWT, async (req: Request, res: Response) => {
     res.status(500).json({ error: 'TTS generation failed', details: error.message });
   }
 });
+
+  // TTS endpoint for testing (without authentication)
+  app.post('/api/tts-test', async (req: Request, res: Response) => {
+    try {
+      const { text, language } = req.body;
+      
+      if (!text || !text.trim()) {
+        return res.status(400).json({ error: 'Text is required' });
+      }
+      
+      const lang = language || 'en';
+      
+      // Check Python API health first
+      const isHealthy = await checkPythonAPIHealth();
+      if (!isHealthy) {
+        return res.status(503).json({ 
+          error: 'Python API is not available',
+          details: 'The TTS service is temporarily unavailable. Please try again later.'
+        });
+      }
+      
+      // Generate TTS for the text
+      const ttsUrl = await generateTTS(text, lang);
+      
+      if (ttsUrl) {
+        res.json({ ttsUrl });
+      } else {
+        res.status(500).json({ error: 'Failed to generate TTS' });
+      }
+    } catch (error: any) {
+      console.error('TTS test endpoint error:', error);
+      res.status(500).json({ error: 'TTS generation failed', details: error.message });
+    }
+  });
 
 // Quick translation endpoint
 app.post('/api/quick_translation', authenticateJWT, async (req: Request, res: Response) => {
@@ -1560,61 +1592,88 @@ app.post('/api/quick_translation', authenticateJWT, async (req: Request, res: Re
 // Serve uploads directory statically for TTS audio
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Helper function to generate TTS for any text
-async function generateTTS(text: string, language: string): Promise<string | null> {
+// Also serve files from the current directory (where Python API might create files)
+app.use('/files', express.static(path.join(__dirname, '..')));
+
+// Helper function to check Python API health
+async function checkPythonAPIHealth(): Promise<boolean> {
   try {
-    const ttsFileName = `tts_${Date.now()}.wav`;
-    const ttsFilePath = path.join(uploadsDir, ttsFileName);
+    const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5000';
+    console.log(`🔍 Checking Python API health at: ${pythonApiUrl}/health`);
     
-    // Choose voice based on language with fallback
-    let ttsVoice = 'Karen'; // Default to English (Alex is more reliable than Flo)
-    if (language === 'es') ttsVoice = 'Mónica'; // Spanish voice
-    else if (language === 'hi') ttsVoice = 'Lekha'; // macOS Hindi voice
-    else if (language === 'ja') ttsVoice = 'Otoya'; // macOS Japanese voice
-    
-    // Check if voice is available
-    try {
-      await new Promise<void>((resolve, reject) => {
-        exec(`say -v ${ttsVoice} "test"`, (error) => {
-          if (error) reject(error);
-          else resolve();
-        });
-      });
-    } catch (voiceError) {
-      console.log(`Voice ${ttsVoice} not available, using default`);
-      ttsVoice = 'Alex'; // Fallback to Alex
-    }
-    
-    const sayCmd = `say -v ${ttsVoice} -o "${ttsFilePath}" --data-format=LEI16@22050 "${text.replace(/\"/g, '\\"')}"`;
-    console.log('TTS voice:', ttsVoice);
-    console.log('TTS command:', sayCmd);
-    console.log('TTS text length:', text.length);
-    
-    await new Promise<void>((resolve, reject) => {
-      exec(sayCmd, (error) => {
-        if (error) {
-          console.error('TTS command failed:', error);
-          reject(error);
-        } else {
-          console.log('TTS command completed successfully');
-          resolve();
-        }
-      });
+    const response = await axios.get(`${pythonApiUrl}/health`, {
+      timeout: 5000
     });
     
-    // Check if file was created
-    if (fs.existsSync(ttsFilePath)) {
-      const stats = fs.statSync(ttsFilePath);
-      console.log('TTS file created, size:', stats.size, 'bytes');
-      const ttsUrl = `/uploads/${ttsFileName}`;
-      console.log('TTS audio generated at:', ttsUrl);
-      return ttsUrl;
+    console.log(`✅ Python API health check successful:`, response.data);
+    return true;
+  } catch (error: any) {
+    console.error(`❌ Python API health check failed:`, error.message);
+    return false;
+  }
+}
+
+// Helper function to generate TTS for any text using Gemini TTS API
+async function generateTTS(text: string, language: string): Promise<string | null> {
+  try {
+    // Use .aiff extension for macOS compatibility
+    const ttsFileName = `tts_${Date.now()}.aiff`;
+    const ttsFilePath = path.join(uploadsDir, ttsFileName);
+    
+    console.log('Generating TTS using Gemini API for language:', language);
+    console.log('TTS text length:', text.length);
+    
+    // Call Python API for Gemini TTS
+    const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5000';
+    console.log(`🔗 Calling Python API at: ${pythonApiUrl}/generate_tts`);
+    console.log(`📝 Request payload: text='${text.substring(0, 50)}...', language='${language}', output_path='${ttsFilePath}'`);
+    
+    const ttsResponse = await axios.post(`${pythonApiUrl}/generate_tts`, {
+      text: text,
+      language_code: language,
+      output_path: ttsFilePath
+    }, {
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 30000
+    });
+    
+    console.log(`📊 Python API response status: ${ttsResponse.status}`);
+    console.log(`📊 Python API response data:`, ttsResponse.data);
+    
+    if (ttsResponse.data.success && ttsResponse.data.output_path) {
+      // Use the actual file path returned by Python API
+      const actualFilePath = ttsResponse.data.output_path;
+      console.log('📁 Python API returned file path:', actualFilePath);
+      
+      // Check if file was created
+      if (fs.existsSync(actualFilePath)) {
+        const stats = fs.statSync(actualFilePath);
+        console.log('✅ TTS file created, size:', stats.size, 'bytes');
+        
+        // Get the filename from the path
+        const fileName = path.basename(actualFilePath);
+        
+        // Check if file is in uploads directory or root directory
+        const isInUploads = actualFilePath.includes('uploads');
+        const ttsUrl = isInUploads ? `/uploads/${fileName}` : `/files/${fileName}`;
+        
+        console.log('✅ TTS audio generated at:', ttsUrl);
+        console.log('📁 File location:', isInUploads ? 'uploads directory' : 'root directory');
+        console.log('📄 File extension:', path.extname(actualFilePath));
+        return ttsUrl;
+      } else {
+        console.error('❌ TTS file was not created at:', actualFilePath);
+        return null;
+      }
     } else {
-      console.error('TTS file was not created');
+      console.error('❌ TTS generation failed:', ttsResponse.data.error);
       return null;
     }
-  } catch (ttsError) {
-    console.error('TTS error:', ttsError);
+  } catch (ttsError: any) {
+    console.error('❌ TTS error:', ttsError.message);
+    if (ttsError.response) {
+      console.error('❌ Python API error response:', ttsError.response.status, ttsError.response.data);
+    }
     return null;
   }
 }

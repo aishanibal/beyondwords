@@ -51,13 +51,14 @@ cursor.execute("""
     SELECT 
         c.id,
         c.title,
-        c.language,
+        ld.language,
         c.message_count,
         u.name as user_name,
         c.created_at,
         c.updated_at
     FROM conversations c
     JOIN users u ON c.user_id = u.id
+    JOIN language_dashboards ld ON c.language_dashboard_id = ld.id
     ORDER BY c.updated_at DESC
     LIMIT 10
 """)
