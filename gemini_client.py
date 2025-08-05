@@ -149,6 +149,7 @@ User just said: "{user_input}"
 Reply naturally in {self.language_name}."""
         
         try:
+            print(f"[GET RESPONSE] Prompt sent to AI:\n{prompt}")
             response = self.model.generate_content(prompt)
             if response and response.text:
                 return response.text.strip()
@@ -2006,6 +2007,7 @@ User topics: {user_topics}
             
             print(f"DEBUG: Raw response text: {response.text}")
             print(f"DEBUG: Raw response lines: {lines}")
+            print(f"DEBUG: Number of lines: {len(lines)}")
             
             # Parse title and extract progress percentages
             title = "" if is_continued_conversation else "[No Title]"  # For continued conversations, no title is generated
@@ -2020,6 +2022,8 @@ User topics: {user_topics}
             for line in lines:
                 line_lower = line.lower().strip()
                 print(f"DEBUG: Processing line: '{line}' -> line_lower: '{line_lower}'")
+                print(f"DEBUG: Line starts with 'progress:': {line_lower.startswith('progress:')}")
+                print(f"DEBUG: Line contains 'progress:': {'progress:' in line_lower}")
                 
                 if not is_continued_conversation and line_lower.startswith("title:"):
                     title = line[len("title:"):].strip()
@@ -2032,6 +2036,19 @@ User topics: {user_topics}
                     percentages = [int(p.strip()) for p in progress_text.split() if p.strip().isdigit()]
                     progress_percentages = percentages
                     print(f"DEBUG: Found progress percentages: {progress_percentages}")
+                elif "progress:" in line_lower:
+                    # Handle case where "Progress:" might be embedded in the text
+                    print(f"DEBUG: Found line containing 'progress:', trying regex match")
+                    progress_match = re.search(r'progress:\s*(\d+(?:\s+\d+)*)', line_lower)
+                    print(f"DEBUG: Regex match result: {progress_match}")
+                    if progress_match:
+                        progress_text = progress_match.group(1)
+                        print(f"DEBUG: Found embedded progress text: '{progress_text}'")
+                        percentages = [int(p.strip()) for p in progress_text.split() if p.strip().isdigit()]
+                        progress_percentages = percentages
+                        print(f"DEBUG: Found embedded progress percentages: {progress_percentages}")
+                    else:
+                        print(f"DEBUG: No regex match found for progress in line: '{line}'")
                 elif ":" in line and not line_lower.startswith("progress:"):
                     # This is a subgoal evaluation line (starts with subgoal name)
                     in_evaluation = True
@@ -2060,6 +2077,9 @@ User topics: {user_topics}
                 # fallback: use the whole response as synopsis
                 synopsis = response.text.strip()
                 result = {"title": title, "synopsis": synopsis}
+                # Don't overwrite progress_percentages if they were already set
+                if progress_percentages:
+                    result["progress_percentages"] = progress_percentages
             
             return result
         else:

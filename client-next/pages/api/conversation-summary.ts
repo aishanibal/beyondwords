@@ -32,7 +32,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       status: response.status,
       data: response.data,
       progress_percentages: response.data?.progress_percentages,
-      title: response.data?.title
+      title: response.data?.title,
+      dataKeys: Object.keys(response.data || {}),
+      progressType: typeof response.data?.progress_percentages,
+      progressIsArray: Array.isArray(response.data?.progress_percentages)
     });
 
     res.status(response.status).json(response.data);

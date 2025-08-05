@@ -156,8 +156,25 @@ function LearningGoalCard({ goal, index, progressData, userSubgoalProgress }: Le
               {goal.subgoals.map((subgoal, subIndex) => {
                 const userLevel = getSubgoalLevel(subgoal.id, userSubgoalProgress || []);
                 const userProgress = getSubgoalProgress(subgoal.id, userSubgoalProgress || []);
-                const currentDescription = getProgressiveSubgoalDescription(subgoal.id, userLevel);
-                const displayProgress = userProgress;
+                
+                console.log(`LearningGoalCard subgoal ${subgoal.id}:`, {
+                  userLevel,
+                  userProgress,
+                  userSubgoalProgress: userSubgoalProgress || []
+                });
+                
+                // If progress is 100%, show the current level with 0% progress (level-up just occurred)
+                const displayLevel = userLevel;
+                const displayProgress = userProgress === 100 ? 0 : userProgress;
+                
+                console.log(`Subgoal ${subgoal.id} display logic:`, {
+                  userLevel,
+                  userProgress,
+                  displayLevel,
+                  displayProgress,
+                  isLevelUp: userProgress === 100
+                });
+                const currentDescription = getProgressiveSubgoalDescription(subgoal.id, displayLevel);
                 
                 // Debug logging
                 console.log(`Subgoal ${subgoal.id}:`, {
@@ -202,16 +219,14 @@ function LearningGoalCard({ goal, index, progressData, userSubgoalProgress }: Le
                       flex: 1
                     }}>
                       {currentDescription}
-                      {userLevel > 0 && (
-                        <div style={{
-                          color: 'var(--rose-accent)',
-                          fontSize: '0.65rem',
-                          fontStyle: 'italic',
-                          marginTop: '0.25rem'
-                        }}>
-                          Level {userLevel + 1}
-                        </div>
-                      )}
+                      <div style={{
+                        color: 'var(--rose-accent)',
+                        fontSize: '0.65rem',
+                        fontStyle: 'italic',
+                        marginTop: '0.25rem'
+                      }}>
+                        Level {displayLevel + 1}
+                      </div>
                     </div>
                     {/* Progress bar with actual data */}
                     <div style={{ 
@@ -282,6 +297,7 @@ export default function DashboardPage() {
   const [showLanguageOnboarding, setShowLanguageOnboarding] = useState<boolean>(false);
   const [showDashboardSettings, setShowDashboardSettings] = useState<boolean>(false);
   const [expandedConversations, setExpandedConversations] = useState<Set<string>>(new Set());
+  const [userSubgoalProgress, setUserSubgoalProgress] = useState<SubgoalProgress[]>([]);
 
   // Persist selected language to localStorage whenever it changes
   React.useEffect(() => {
@@ -338,11 +354,31 @@ export default function DashboardPage() {
     }
   }, [user, selectedLanguage]);
 
+  const loadUserSubgoalProgress = useCallback(() => {
+    if (user?.id && selectedLanguage) {
+      const storedProgress = localStorage.getItem(`subgoal_progress_${user.id}_${selectedLanguage}`);
+      if (storedProgress) {
+        try {
+          const progress = JSON.parse(storedProgress);
+          setUserSubgoalProgress(progress);
+          console.log('Loaded userSubgoalProgress from localStorage:', progress);
+        } catch (error) {
+          console.error('Error parsing stored subgoal progress:', error);
+          setUserSubgoalProgress([]);
+        }
+      } else {
+        console.log('No stored subgoal progress found in localStorage');
+        setUserSubgoalProgress([]);
+      }
+    }
+  }, [user?.id, selectedLanguage]);
+
   useEffect(() => {
     if (user?.id) {
       fetchDashboardData();
+      loadUserSubgoalProgress();
     }
-  }, [user, selectedLanguage, fetchDashboardData]);
+  }, [user, selectedLanguage, fetchDashboardData, loadUserSubgoalProgress]);
 
   // Add effect to refresh dashboard when localStorage changes (for level-ups)
   useEffect(() => {
@@ -350,6 +386,22 @@ export default function DashboardPage() {
       if (user && selectedLanguage) {
         console.log('Storage changed, refreshing dashboard...');
         fetchDashboardData();
+        
+        // Immediately reload user subgoal progress from localStorage
+        const storedProgress = localStorage.getItem(`subgoal_progress_${user.id}_${selectedLanguage}`);
+        if (storedProgress) {
+          try {
+            const progress = JSON.parse(storedProgress);
+            setUserSubgoalProgress(progress);
+            console.log('Reloaded userSubgoalProgress from localStorage:', progress);
+          } catch (error) {
+            console.error('Error parsing stored subgoal progress:', error);
+            setUserSubgoalProgress([]);
+          }
+        } else {
+          console.log('No stored progress found, clearing userSubgoalProgress');
+          setUserSubgoalProgress([]);
+        }
       }
     };
 
@@ -588,9 +640,10 @@ export default function DashboardPage() {
         if (goal?.subgoals) {
           goal.subgoals.forEach(subgoal => {
             if (subgoal.description) {
-              // For recent conversations, use the original subgoal description (not leveled up)
+              // For recent conversations, use the level-adjusted subgoal description
               // and get the percentage from the conversation's progress data (historical)
-              const originalDescription = subgoal.description;
+              const subgoalLevel = getSubgoalLevel(subgoal.id, userSubgoalProgress);
+              const levelAdjustedDescription = getProgressiveSubgoalDescription(subgoal.id, subgoalLevel);
               
               // Get the percentage from conversation's progress data (historical)
               let historicalPercentage = 0;
@@ -610,11 +663,8 @@ export default function DashboardPage() {
                 }
               }
               
-              // Get the level for this subgoal from user progress
-              const subgoalLevel = getSubgoalLevel(subgoal.id, userSubgoalProgress);
-              
               subgoalDescriptions.push({ 
-                description: originalDescription, 
+                description: levelAdjustedDescription, 
                 subgoalId: subgoal.id,
                 percentage: historicalPercentage,
                 level: subgoalLevel
@@ -908,7 +958,6 @@ export default function DashboardPage() {
                         
                         // Aggregate progress data from all conversations for this language
                         let aggregatedProgressData: number[] | undefined;
-                        let userSubgoalProgress: SubgoalProgress[] = [];
                         
                         console.log('=== PROGRESS DATA AGGREGATION DEBUG ===');
                         console.log('Goal ID:', goalId);
@@ -982,18 +1031,8 @@ export default function DashboardPage() {
                             console.log('Number of subgoals to aggregate:', numSubgoals);
                             aggregatedProgressData = [];
                             
-                                                    // Get user's current subgoal progress from localStorage
-                        const storedProgress = localStorage.getItem(`subgoal_progress_${user?.id}_${selectedLanguage}`);
-                        if (storedProgress) {
-                          try {
-                            userSubgoalProgress = JSON.parse(storedProgress);
-                            console.log('Loaded userSubgoalProgress from localStorage:', userSubgoalProgress);
-                          } catch (error) {
-                            console.error('Error parsing stored subgoal progress:', error);
-                          }
-                        } else {
-                          console.log('No stored subgoal progress found in localStorage');
-                        }
+                                                    // Use the userSubgoalProgress state variable that gets updated when storage changes
+                        console.log('Using userSubgoalProgress from state:', userSubgoalProgress);
                             
                             for (let i = 0; i < numSubgoals; i++) {
                               const subgoalProgresses = relevantProgressData
@@ -1556,7 +1595,7 @@ export default function DashboardPage() {
                                         fontWeight: 500,
                                         fontFamily: 'Montserrat, Arial, sans-serif'
                                       }}>
-                                        Level {evaluation.level + 1}
+                                        Level {evaluation.percentage === 100 ? evaluation.level : evaluation.level + 1}
                                       </span>
                                       <span style={{
                                         color: 'var(--rose-primary)',
@@ -1572,7 +1611,7 @@ export default function DashboardPage() {
                                         fontWeight: 600,
                                         fontFamily: 'Montserrat, Arial, sans-serif'
                                       }}>
-                                        Level {evaluation.level + 2}
+                                        Level {evaluation.percentage === 100 ? evaluation.level + 1 : evaluation.level + 1}
                                       </span>
                                     </div>
                                   ) : (
@@ -1727,4 +1766,4 @@ export default function DashboardPage() {
       )}
     </div>
   );
-} 
+}
