@@ -8,6 +8,7 @@ import { useUser } from '../ClientLayout';
 import { useDarkMode } from '../contexts/DarkModeContext';
 import axios from 'axios';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { motion } from 'framer-motion';
 import TopicSelectionModal from './TopicSelectionModal';
 import PersonaModal from './PersonaModal';
 import { LEARNING_GOALS, LearningGoal, getProgressiveSubgoalDescription, getSubgoalLevel, updateSubgoalProgress, SubgoalProgress, LevelUpEvent } from '../../lib/preferences';
@@ -158,6 +159,12 @@ function Analyze() {
   const searchParams = useSearchParams();
   const { isDarkMode } = useDarkMode();
 
+  // Helper to get JWT token
+  const getAuthHeaders = () => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('jwt') : null;
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  };
+
   const urlConversationId = searchParams?.get('conversation');
   const urlLang = searchParams?.get('language');
   const urlTopics = searchParams?.get('topics');
@@ -166,6 +173,14 @@ function Analyze() {
 
   // Flag to skip validation right after creating a conversation
   const [skipValidation, setSkipValidation] = useState(false);
+
+  // Prevent body scrolling on analyze page
+  React.useEffect(() => {
+    document.body.classList.add('analyze-page-active');
+    return () => {
+      document.body.classList.remove('analyze-page-active');
+    };
+  }, []);
 
   // Add CSS keyframe animation for message appearance
   React.useEffect(() => {
@@ -570,9 +585,16 @@ function Analyze() {
         (typeof conversation.learning_goals === 'string' ? JSON.parse(conversation.learning_goals) : conversation.learning_goals) : 
         null;
       
-      const user_goals = conversationLearningGoals || dashboardPrefs?.learning_goals || user?.learning_goals ? 
-        (typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : user.learning_goals) : 
-        [];
+      let user_goals: string[] = [];
+      
+      // Priority: conversation learning goals > dashboard prefs > user learning goals
+      if (conversationLearningGoals && conversationLearningGoals.length > 0) {
+        user_goals = conversationLearningGoals;
+      } else if (dashboardPrefs?.learning_goals && dashboardPrefs.learning_goals.length > 0) {
+        user_goals = dashboardPrefs.learning_goals;
+      } else if (user?.learning_goals) {
+        user_goals = typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : user.learning_goals;
+      }
       
       console.log('[DEBUG] Learning goals extraction:', {
         conversationLearningGoalsRaw: conversation.learning_goals,
@@ -1365,9 +1387,8 @@ function Analyze() {
         payload,
         token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
       );
-      setFeedback(response.data.feedback);
-      // Optionally, add to chatHistory
-              setChatHistory(prev => [...prev, { sender: 'System', text: response.data.feedback, timestamp: new Date(), isFromOriginalConversation: false }]);
+      // Add feedback to chatHistory
+      setChatHistory(prev => [...prev, { sender: 'System', text: response.data.feedback, timestamp: new Date(), isFromOriginalConversation: false }]);
       // Feedback is applied to the message, no need to add to chat
     } catch (error: unknown) {
       console.error('Error getting detailed feedback:', error);
@@ -3817,45 +3838,56 @@ Yes, the current serials don't have the same quality as the old ones, right?
   }, [user, urlConversationId, chatHistory, sessionStartTime]);
   
   return (
-    <div style={{ 
+    <div className="analyze-page" style={{ 
       display: 'flex', 
-      height: 'calc(100vh - 80px)', 
+      flexDirection: 'column',
+      height: '100vh', 
       width: '100%',
       background: isDarkMode 
         ? 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%)'
         : 'linear-gradient(135deg, #f9f6f4 0%, #f5f1ec 50%, #e8e0d8 100%)',
-      padding: '1rem',
-      gap: '1.5rem',
-      transition: 'all 0.3s ease',
+      padding: '6rem 0.5rem 0.125rem 0.5rem',
+      gap: '0.5rem',
+      transition: 'all 0.15s ease',
       fontFamily: 'Montserrat, Arial, sans-serif',
       position: 'relative',
-      overflow: 'hidden'
+      overflow: 'hidden',
+      boxSizing: 'border-box'
     }}>
       {/* Background decorative elements */}
       <div style={{
         position: 'absolute',
-        top: '-50%',
-        right: '-20%',
-        width: '60%',
-        height: '200%',
+        top: '-25%',
+        right: '-10%',
+        width: '50%',
+        height: '150%',
         background: isDarkMode 
           ? 'radial-gradient(circle, rgba(195,141,148,0.03) 0%, transparent 70%)'
           : 'radial-gradient(circle, rgba(195,141,148,0.05) 0%, transparent 70%)',
         borderRadius: '50%',
-        zIndex: 0
+        zIndex: 0,
+        pointerEvents: 'none'
       }} />
       <div style={{
         position: 'absolute',
-        bottom: '-30%',
-        left: '-10%',
-        width: '40%',
-        height: '160%',
+        bottom: '-15%',
+        left: '-5%',
+        width: '30%',
+        height: '130%',
         background: isDarkMode 
           ? 'radial-gradient(circle, rgba(60,76,115,0.03) 0%, transparent 70%)'
           : 'radial-gradient(circle, rgba(60,76,115,0.05) 0%, transparent 70%)',
         borderRadius: '50%',
-        zIndex: 0
+        zIndex: 0,
+        pointerEvents: 'none'
       }} />
+      {/* Panels Container */}
+      <div style={{
+        display: 'flex',
+        flex: 1,
+        gap: '0.5rem',
+        minHeight: 0
+      }}>
       {/* Short Feedback Panel - Left */}
       {showShortFeedbackPanel && (
         <div className="panel-hover" style={{ 
@@ -3870,18 +3902,20 @@ Yes, the current serials don't have the same quality as the old ones, right?
             ? '0 8px 40px rgba(0,0,0,0.4), 0 2px 8px rgba(0,0,0,0.2)' 
             : '0 8px 40px rgba(60,60,60,0.12), 0 2px 8px rgba(195,141,148,0.08)',
           position: 'relative',
-          transition: 'all 0.3s ease',
-          border: isDarkMode ? '1px solid var(--border)' : '1px solid rgba(195,141,148,0.15)',
+          transition: 'all 0.15s ease',
+          border: isDarkMode ? '1px solid var(--blue-secondary)' : '1px solid var(--blue-secondary)',
           backdropFilter: 'blur(20px)',
-          zIndex: 1
+          zIndex: 1,
+          overflow: 'hidden',
+          height: '100%'
         }}>
-          {/* Short Feedback Header */}
+          {/* AI Explanations Header */}
           <div style={{ 
             background: isDarkMode 
               ? 'linear-gradient(135deg, var(--blue-secondary) 0%, #6b7a9a 100%)' 
               : 'linear-gradient(135deg, var(--blue-secondary) 0%, #5a6b8a 100%)', 
             color: '#fff', 
-            padding: '1rem 1.5rem', 
+            padding: '0.75rem 1.25rem', 
             borderRadius: '24px 24px 0 0',
             textAlign: 'center',
             borderBottom: isDarkMode ? '1px solid var(--border)' : '1px solid rgba(195,141,148,0.1)',
@@ -3894,23 +3928,44 @@ Yes, the current serials don't have the same quality as the old ones, right?
             transition: 'all 0.3s ease',
             boxShadow: '0 2px 8px rgba(60,76,115,0.2)'
           }}>
-                          <span>💡 AI Explanations</span>
-            <button
-              onClick={() => setShowShortFeedbackPanel(false)}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: '#fff',
-                fontSize: '1.1rem',
-                cursor: 'pointer',
-                padding: '0.2rem',
-                borderRadius: '4px',
-                transition: 'all 0.2s'
-              }}
-              title="Hide panel"
-            >
-              ◀
-            </button>
+            <div style={{ 
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              paddingLeft: '1.5rem',
+              paddingRight: '0.75rem',
+              paddingTop: '0.25rem',
+              paddingBottom: '0.25rem',
+              width: '100%'
+            }}>
+              <div style={{ 
+                color: isDarkMode ? '#e8b3c3' : '#fff', 
+                fontWeight: 700, 
+                fontSize: '1rem', 
+                fontFamily: 'Gabriela, Arial, sans-serif',
+                transition: 'color 0.3s ease',
+                whiteSpace: 'nowrap',
+                flexShrink: 0
+              }}>
+                💡 AI Explanations
+              </div>
+              <button
+                onClick={() => setShowShortFeedbackPanel(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#fff',
+                  fontSize: '1.1rem',
+                  cursor: 'pointer',
+                  padding: '0.2rem',
+                  borderRadius: '4px',
+                  transition: 'all 0.2s'
+                }}
+                title="Hide panel"
+              >
+                ◀
+              </button>
+            </div>
           </div>
           {/* Resize Handle */}
           <div
@@ -4239,7 +4294,7 @@ Yes, the current serials don't have the same quality as the old ones, right?
       )}
       {/* Chat Panel - Center */}
               <div className="panel-hover" style={{ 
-          flex: 1, 
+          width: `${getPanelWidths().center * 100}%`,
           background: isDarkMode 
             ? 'linear-gradient(135deg, var(--card) 0%, rgba(255,255,255,0.02) 100%)' 
             : 'linear-gradient(135deg, #ffffff 0%, rgba(195,141,148,0.02) 100%)', 
@@ -4251,13 +4306,15 @@ Yes, the current serials don't have the same quality as the old ones, right?
             : '0 8px 40px rgba(60,60,60,0.12), 0 2px 8px rgba(195,141,148,0.08)',
           position: 'relative',
           transition: 'all 0.3s ease',
-          border: isDarkMode ? '1px solid var(--border)' : '1px solid rgba(195,141,148,0.15)',
+          border: isDarkMode ? '1px solid var(--rose-primary)' : '1px solid var(--rose-primary)',
           backdropFilter: 'blur(20px)',
-          zIndex: 1
+          zIndex: 1,
+          minHeight: 0,
+          height: '100%'
         }}>
         {/* Header Bar */}
         <div style={{ 
-          padding: '1rem 1.5rem', 
+          padding: '0.75rem 1.25rem', 
           background: isDarkMode 
             ? 'linear-gradient(135deg, var(--muted) 0%, rgba(255,255,255,0.02) 100%)' 
             : 'linear-gradient(135deg, rgba(195,141,148,0.08) 0%, rgba(195,141,148,0.03) 100%)', 
@@ -4271,13 +4328,278 @@ Yes, the current serials don't have the same quality as the old ones, right?
           boxShadow: '0 2px 8px rgba(195,141,148,0.1)'
         }}>
           <div style={{ 
-            color: isDarkMode ? '#e8b3c3' : 'var(--rose-primary)', 
-            fontWeight: 600, 
-            fontSize: '0.9rem', 
-            fontFamily: 'Gabriela, Arial, sans-serif',
-            transition: 'color 0.3s ease'
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingLeft: '1.5rem',
+            paddingRight: '0.75rem',
+            paddingTop: '0.25rem',
+            paddingBottom: '0.25rem',
+            width: '100%'
           }}>
-            🌐 {getLanguageLabel(language)} Practice Session
+            {/* Main Title */}
+            <div style={{ 
+              color: isDarkMode ? '#e8b3c3' : 'var(--rose-primary)', 
+              fontWeight: 700, 
+              fontSize: '1rem', 
+              fontFamily: 'Gabriela, Arial, sans-serif',
+              transition: 'color 0.3s ease',
+              whiteSpace: 'nowrap',
+              flexShrink: 0
+            }}>
+              {getLanguageLabel(language)} Practice Session
+            </div>
+            
+            {/* Conversation Details Tags - Right Aligned */}
+            {chatHistory.length > 0 && (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.3rem',
+                flexWrap: 'nowrap',
+                justifyContent: 'flex-end',
+                flex: 1,
+                marginLeft: 'auto',
+                overflowX: 'auto',
+                overflowY: 'hidden',
+                minWidth: 0
+              }}>
+                {/* Topics Tags (Scenario) - First */}
+                {userPreferences?.topics?.map((topic, index) => (
+                  <motion.span 
+                    key={index} 
+                    style={{
+                      background: isDarkMode ? 'rgba(196,181,253,0.15)' : 'rgba(132,84,109,0.1)',
+                      color: isDarkMode ? 'var(--light-purple)' : 'var(--rose-primary)',
+                      padding: '0.2rem 0.4rem',
+                      borderRadius: '16px',
+                      fontSize: '0.7rem',
+                      fontWeight: 600,
+                      border: isDarkMode ? '1px solid rgba(196,181,253,0.3)' : '1px solid rgba(132,84,109,0.2)',
+                      whiteSpace: 'nowrap',
+                      fontFamily: 'Montserrat, Arial, sans-serif',
+                      boxShadow: isDarkMode ? '0 2px 8px rgba(196,181,253,0.1)' : '0 2px 8px rgba(132,84,109,0.08)',
+                      backdropFilter: 'blur(10px)',
+                      display: 'inline-block',
+                      flexShrink: 0,
+                      cursor: 'pointer',
+                      position: 'relative'
+                    }}
+                    initial={{ opacity: 0, scale: 0.8, y: 10 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    transition={{ 
+                      duration: 1.2, 
+                      delay: index * 0.25,
+                      ease: "easeOut"
+                    }}
+                    whileHover={{ 
+                      scale: 1.05, 
+                      y: -2,
+                      boxShadow: isDarkMode ? '0 4px 15px rgba(196,181,253,0.2)' : '0 4px 15px rgba(132,84,109,0.15)',
+                      transition: { duration: 0.4 }
+                    }}
+                    whileTap={{ scale: 0.95 }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.padding = '0.2rem 0.6rem';
+                      e.currentTarget.innerHTML = `💬 ${topic}`;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.padding = '0.2rem 0.4rem';
+                      e.currentTarget.innerHTML = '💬';
+                    }}
+                  >
+                    💬
+                  </motion.span>
+                ))}
+                
+                {/* Formality Tag (Intimacy) - Second */}
+                {userPreferences?.formality && (
+                  <motion.span 
+                    style={{
+                      background: isDarkMode ? 'rgba(139,163,217,0.15)' : 'rgba(59,83,119,0.1)',
+                      color: isDarkMode ? 'var(--blue-secondary)' : 'var(--blue-secondary)',
+                      padding: '0.2rem 0.4rem',
+                      borderRadius: '16px',
+                      fontSize: '0.7rem',
+                      fontWeight: 600,
+                      border: isDarkMode ? '1px solid rgba(139,163,217,0.3)' : '1px solid rgba(59,83,119,0.2)',
+                      whiteSpace: 'nowrap',
+                      fontFamily: 'Montserrat, Arial, sans-serif',
+                      boxShadow: isDarkMode ? '0 2px 8px rgba(139,163,217,0.1)' : '0 2px 8px rgba(59,83,119,0.08)',
+                      backdropFilter: 'blur(10px)',
+                      cursor: 'pointer',
+                      position: 'relative'
+                    }}
+                    initial={{ opacity: 0, scale: 0.8, y: 10 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    transition={{ 
+                      duration: 1.2, 
+                      delay: (userPreferences?.topics?.length || 0) * 0.25 + 0.3,
+                      ease: "easeOut"
+                    }}
+                    whileHover={{ 
+                      scale: 1.05, 
+                      y: -2,
+                      boxShadow: isDarkMode ? '0 4px 15px rgba(139,163,217,0.2)' : '0 4px 15px rgba(59,83,119,0.15)',
+                      transition: { duration: 0.4 }
+                    }}
+                    whileTap={{ scale: 0.95 }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.padding = '0.2rem 0.6rem';
+                      e.currentTarget.innerHTML = `🎭 ${userPreferences.formality}`;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.padding = '0.2rem 0.4rem';
+                      e.currentTarget.innerHTML = '🎭';
+                    }}
+                  >
+                    🎭
+                  </motion.span>
+                )}
+                
+                {/* Learning Goals Tags (Learning Goal) - Third */}
+                {(() => { console.log('[DEBUG] Learning goals rendering:', { userGoals: userPreferences?.user_goals, userPreferences }); return null; })()}
+                {userPreferences?.user_goals?.map((goalId, index) => {
+                  const goal = LEARNING_GOALS.find((g: LearningGoal) => g.id === goalId);
+                  return goal ? (
+                    <motion.span 
+                      key={index} 
+                      style={{
+                        background: isDarkMode ? 'rgba(240,200,208,0.15)' : 'rgba(214,182,182,0.1)',
+                        color: isDarkMode ? 'var(--rose-accent)' : 'var(--rose-accent)',
+                        padding: '0.2rem 0.4rem',
+                        borderRadius: '16px',
+                        fontSize: '0.7rem',
+                        fontWeight: 600,
+                        border: isDarkMode ? '1px solid rgba(240,200,208,0.3)' : '1px solid rgba(214,182,182,0.2)',
+                        whiteSpace: 'nowrap',
+                        fontFamily: 'Montserrat, Arial, sans-serif',
+                        boxShadow: isDarkMode ? '0 2px 8px rgba(240,200,208,0.1)' : '0 2px 8px rgba(214,182,182,0.08)',
+                        backdropFilter: 'blur(10px)',
+                                              display: 'inline-block',
+                      flexShrink: 0,
+                      cursor: 'pointer',
+                      position: 'relative'
+                    }}
+                    initial={{ opacity: 0, scale: 0.8, y: 10 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      transition={{ 
+                        duration: 1.2, 
+                        delay: ((userPreferences?.topics?.length || 0) + (userPreferences?.formality ? 1 : 0)) * 0.25 + index * 0.25 + 0.5,
+                        ease: "easeOut"
+                      }}
+                      whileHover={{ 
+                        scale: 1.05, 
+                        y: -2,
+                        boxShadow: isDarkMode ? '0 4px 15px rgba(240,200,208,0.2)' : '0 4px 15px rgba(214,182,182,0.15)',
+                        transition: { duration: 0.4 }
+                      }}
+                      whileTap={{ scale: 0.95 }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.padding = '0.2rem 0.6rem';
+                        e.currentTarget.innerHTML = `${goal.icon} ${goal.goal}`;
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.padding = '0.2rem 0.4rem';
+                        e.currentTarget.innerHTML = goal.icon;
+                      }}
+                    >
+                      {goal.icon}
+                    </motion.span>
+                  ) : null;
+                })}
+                
+                {/* User Level Tag - Additional Info */}
+                {userPreferences?.userLevel && (
+                  <motion.span 
+                    style={{
+                      background: isDarkMode ? 'rgba(232,179,195,0.15)' : 'rgba(132,84,109,0.1)',
+                      color: isDarkMode ? 'var(--rose-primary)' : 'var(--rose-primary)',
+                      padding: '0.2rem 0.4rem',
+                      borderRadius: '16px',
+                      fontSize: '0.7rem',
+                      fontWeight: 600,
+                      border: isDarkMode ? '1px solid rgba(232,179,195,0.3)' : '1px solid rgba(132,84,109,0.2)',
+                      whiteSpace: 'nowrap',
+                      fontFamily: 'Montserrat, Arial, sans-serif',
+                      boxShadow: isDarkMode ? '0 2px 8px rgba(232,179,195,0.1)' : '0 2px 8px rgba(132,84,109,0.08)',
+                      backdropFilter: 'blur(10px)',
+                      cursor: 'pointer',
+                      position: 'relative'
+                    }}
+                    initial={{ opacity: 0, scale: 0.8, y: 10 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    transition={{ 
+                      duration: 1.2, 
+                      delay: ((userPreferences?.topics?.length || 0) + (userPreferences?.formality ? 1 : 0) + (userPreferences?.user_goals?.length || 0)) * 0.25 + 0.8,
+                      ease: "easeOut"
+                    }}
+                    whileHover={{ 
+                      scale: 1.05, 
+                      y: -2,
+                      boxShadow: isDarkMode ? '0 4px 15px rgba(232,179,195,0.2)' : '0 4px 15px rgba(132,84,109,0.15)',
+                      transition: { duration: 0.4 }
+                    }}
+                    whileTap={{ scale: 0.95 }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.padding = '0.2rem 0.6rem';
+                      e.currentTarget.innerHTML = `📊 ${userPreferences.userLevel}`;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.padding = '0.2rem 0.4rem';
+                      e.currentTarget.innerHTML = '📊';
+                    }}
+                  >
+                    📊
+                  </motion.span>
+                )}
+                
+                {/* Feedback Language Tag - Additional Info (if needed) */}
+                {userPreferences?.feedbackLanguage && userPreferences.feedbackLanguage !== 'en' && (
+                  <motion.span 
+                    style={{
+                      background: isDarkMode ? 'rgba(196,181,253,0.15)' : 'rgba(132,84,109,0.1)',
+                      color: isDarkMode ? 'var(--light-purple)' : 'var(--rose-primary)',
+                      padding: '0.2rem 0.4rem',
+                      borderRadius: '16px',
+                      fontSize: '0.7rem',
+                      fontWeight: 600,
+                      border: isDarkMode ? '1px solid rgba(196,181,253,0.3)' : '1px solid rgba(132,84,109,0.2)',
+                      whiteSpace: 'nowrap',
+                      fontFamily: 'Montserrat, Arial, sans-serif',
+                      boxShadow: isDarkMode ? '0 2px 8px rgba(196,181,253,0.1)' : '0 2px 8px rgba(132,84,109,0.08)',
+                      backdropFilter: 'blur(10px)',
+                      cursor: 'pointer',
+                      position: 'relative'
+                    }}
+                    initial={{ opacity: 0, scale: 0.8, y: 10 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    transition={{ 
+                      duration: 1.2, 
+                      delay: ((userPreferences?.topics?.length || 0) + (userPreferences?.formality ? 1 : 0) + (userPreferences?.user_goals?.length || 0) + (userPreferences?.userLevel ? 1 : 0)) * 0.25 + 1.0,
+                      ease: "easeOut"
+                    }}
+                    whileHover={{ 
+                      scale: 1.05, 
+                      y: -2,
+                      boxShadow: isDarkMode ? '0 4px 15px rgba(196,181,253,0.2)' : '0 4px 15px rgba(132,84,109,0.15)',
+                      transition: { duration: 0.4 }
+                    }}
+                    whileTap={{ scale: 0.95 }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.padding = '0.2rem 0.6rem';
+                      e.currentTarget.innerHTML = `💬 ${userPreferences.feedbackLanguage.toUpperCase()}`;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.padding = '0.2rem 0.4rem';
+                      e.currentTarget.innerHTML = '💬';
+                    }}
+                  >
+                    💬
+                  </motion.span>
+                )}
+              </div>
+            )}
           </div>
 
         </div>
@@ -4285,17 +4607,20 @@ Yes, the current serials don't have the same quality as the old ones, right?
         {/* Chat Messages */}
         <div style={{ 
           flex: 1, 
-          padding: '1.5rem', 
+          padding: '0.75rem', 
           overflowY: 'auto',
+          overflowX: 'hidden',
           display: 'flex',
           flexDirection: 'column',
-          gap: '1rem',
+          gap: '0.5rem',
           background: isDarkMode 
             ? 'linear-gradient(135deg, var(--background) 0%, rgba(255,255,255,0.01) 100%)' 
             : 'linear-gradient(135deg, #f9f6f4 0%, rgba(195,141,148,0.02) 100%)',
           borderRadius: '0 0 24px 24px',
           transition: 'all 0.3s ease',
-          position: 'relative'
+          position: 'relative',
+          minHeight: 0,
+          maxHeight: 'calc(100vh - 6rem - 100px)'
         }}>
           {isLoadingConversation && (
             <div style={{
@@ -4488,17 +4813,19 @@ Yes, the current serials don't have the same quality as the old ones, right?
                   style={{
                     padding: '0.3rem 0.8rem',
                     borderRadius: 6,
-                    border: isDarkMode ? '1px solid #e8b3c3' : '1px solid #c38d94',
-                    background: isDarkMode ? 'rgba(232,179,195,0.15)' : 'rgba(195,141,148,0.08)',
-                    color: isDarkMode ? '#e8b3c3' : '#c38d94',
-                    fontSize: '0.75rem',
+                    border: '1px solid var(--rose-primary)',
+                    background: isDarkMode ? 'rgba(232,179,195,0.15)' : 'rgba(132,84,109,0.1)',
+                    color: 'var(--rose-primary)',
+                    fontSize: '0.8rem',
                     cursor: isLoadingMessageFeedback[index] ? 'not-allowed' : 'pointer',
-                    transition: 'all 0.2s ease',
+                    transition: 'all 0.3s ease',
                     opacity: isLoadingMessageFeedback[index] ? 0.6 : 1,
-                    minWidth: '70px',
-                    fontWeight: 500,
+                    minWidth: '80px',
+                    fontWeight: 600,
+                    fontFamily: 'Montserrat, Arial, sans-serif',
                     marginTop: 4,
-                    boxShadow: '0 1px 3px rgba(195,141,148,0.10)'
+                    boxShadow: isDarkMode ? '0 2px 8px rgba(232,179,195,0.1)' : '0 2px 8px rgba(132,84,109,0.08)',
+                    backdropFilter: 'blur(10px)'
                   }}
                   title="Check for errors"
                 >
@@ -4544,18 +4871,20 @@ Yes, the current serials don't have the same quality as the old ones, right?
                     }}
                     disabled={isGeneratingTTS[`ai_message_${index}`] || isPlayingTTS[`ai_message_${index}`]}
                     style={{
-                      padding: '0.35rem 0.9rem',
-                      borderRadius: 6,
-                      border: isPlayingTTS[`ai_message_${index}`] ? 'none' : '1px solid #28a745',
-                      background: isPlayingTTS[`ai_message_${index}`] ? 'linear-gradient(135deg, #28a745 0%, #1e7e34 100%)' : 'rgba(40,167,69,0.08)',
-                      color: isPlayingTTS[`ai_message_${index}`] ? '#fff' : '#28a745',
+                      padding: '0.4rem 0.8rem',
+                      borderRadius: 8,
+                      border: isPlayingTTS[`ai_message_${index}`] ? 'none' : '1px solid var(--blue-secondary)',
+                      background: isPlayingTTS[`ai_message_${index}`] ? 'linear-gradient(135deg, var(--blue-secondary) 0%, #2a4a6a 100%)' : isDarkMode ? 'rgba(139,163,217,0.15)' : 'rgba(59,83,119,0.1)',
+                      color: isPlayingTTS[`ai_message_${index}`] ? '#fff' : 'var(--blue-secondary)',
                       fontSize: '0.8rem',
                       cursor: (isGeneratingTTS[`ai_message_${index}`] || isPlayingTTS[`ai_message_${index}`]) ? 'not-allowed' : 'pointer',
-                      transition: 'all 0.2s ease',
+                      transition: 'all 0.3s ease',
                       opacity: (isGeneratingTTS[`ai_message_${index}`] || isPlayingTTS[`ai_message_${index}`]) ? 0.6 : 1,
-                      minWidth: '70px',
-                      fontWeight: 500,
-                      boxShadow: isPlayingTTS[`ai_message_${index}`] ? '0 2px 6px rgba(40,167,69,0.18)' : '0 1px 3px rgba(40,167,69,0.10)'
+                      minWidth: '80px',
+                      fontWeight: 600,
+                      fontFamily: 'Montserrat, Arial, sans-serif',
+                      boxShadow: isPlayingTTS[`ai_message_${index}`] ? '0 2px 6px rgba(59,83,119,0.18)' : isDarkMode ? '0 2px 8px rgba(139,163,217,0.1)' : '0 2px 8px rgba(59,83,119,0.08)',
+                      backdropFilter: 'blur(10px)'
                     }}
                     title={isPlayingTTS[`ai_message_${index}`] ? 'Playing audio...' : 'Listen to this message'}
                   >
@@ -4568,17 +4897,20 @@ Yes, the current serials don't have the same quality as the old ones, right?
                       onClick={handleSuggestionButtonClick}
                       disabled={isLoadingSuggestions}
                       style={{
-                        padding: '0.35rem 0.9rem',
-                        border: 'none',
-                        background: 'none',
-                        color: '#c38d94',
+                        padding: '0.4rem 0.8rem',
+                        border: '1px solid var(--rose-primary)',
+                        background: isDarkMode ? 'rgba(232,179,195,0.15)' : 'rgba(132,84,109,0.1)',
+                        color: 'var(--rose-primary)',
                         fontSize: '0.8rem',
                         cursor: isLoadingSuggestions ? 'not-allowed' : 'pointer',
-                        transition: 'all 0.2s ease',
+                        transition: 'all 0.3s ease',
                         opacity: isLoadingSuggestions ? 0.6 : 1,
-                        fontWeight: 500,
-                        textDecoration: 'underline',
-                        textDecorationColor: '#c38d94'
+                        fontWeight: 600,
+                        fontFamily: 'Montserrat, Arial, sans-serif',
+                        borderRadius: 8,
+                        minWidth: '80px',
+                        boxShadow: isDarkMode ? '0 2px 8px rgba(232,179,195,0.1)' : '0 2px 8px rgba(132,84,109,0.08)',
+                        backdropFilter: 'blur(10px)'
                       }}
                       title="Get conversation suggestions"
                     >
@@ -4670,15 +5002,15 @@ Yes, the current serials don't have the same quality as the old ones, right?
               marginBottom: '0.7rem'
             }}>
               <div className="hover-lift" style={{
-                maxWidth: '75%',
-                padding: '1.5rem 2rem',
+                maxWidth: '70%',
+                padding: '1rem 1.25rem',
                 background: isDarkMode 
                   ? 'linear-gradient(135deg, rgba(195,141,148,0.15) 0%, rgba(195,141,148,0.08) 100%)'
                   : 'linear-gradient(135deg, rgba(195,141,148,0.12) 0%, rgba(195,141,148,0.06) 100%)',
                 color: isDarkMode ? 'var(--foreground)' : '#3e3e3e',
                 borderRadius: '28px 28px 8px 28px',
                 border: isDarkMode ? '2px dashed rgba(195,141,148,0.5)' : '2px dashed #c38d94',
-                fontSize: '1.05rem',
+                fontSize: '0.9rem',
                 fontWeight: 600,
                 position: 'relative',
                 boxShadow: isDarkMode 
@@ -4882,38 +5214,125 @@ Yes, the current serials don't have the same quality as the old ones, right?
           )}
         </div>
 
-
         {/* Recording Controls */}
         {chatHistory.length > 0 && (
           <div
             data-recording-section
             style={{ 
-              padding: '1rem', 
+              position: 'relative',
+              padding: '1rem 1rem 1.5rem 1rem', 
               borderTop: isDarkMode ? '1px solid var(--border)' : '1px solid rgba(195,141,148,0.2)',
               background: isDarkMode 
                 ? 'linear-gradient(135deg, var(--muted) 0%, rgba(255,255,255,0.02) 100%)' 
                 : 'linear-gradient(135deg, rgba(195,141,148,0.08) 0%, rgba(195,141,148,0.03) 100%)',
               borderRadius: '0 0 24px 24px',
               textAlign: 'center',
-              marginTop: 0,
               transition: 'all 0.3s ease',
-              boxShadow: '0 -2px 8px rgba(195,141,148,0.1)'
+              boxShadow: '0 -2px 8px rgba(195,141,148,0.1)',
+              flexShrink: 0
             }}
           >
-            <div style={{
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              gap: '0.75rem',
-              flexWrap: 'wrap'
+            {/* Centered main controls */}
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'space-between',
+              height: '100%',
+              minHeight: '60px'
             }}>
-              {/* Autospeak Toggle Button */}
+              {/* Left side - Centered first 3 buttons */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.75rem',
+                flex: 1
+              }}>
+                {/* Autospeak Toggle Button */}
+                <button
+                  onClick={() => setAutoSpeak(v => !v)}
+                  style={{
+                    background: autoSpeak 
+                      ? 'linear-gradient(135deg, var(--blue-secondary) 0%, #5a6b8a 100%)' 
+                      : 'linear-gradient(135deg, var(--blue-secondary) 0%, #5a6b8a 100%)',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: 12,
+                    padding: '0.6rem 1rem',
+                    cursor: 'pointer',
+                    fontWeight: 600,
+                    fontSize: '0.85rem',
+                    transition: 'all 0.3s ease',
+                    boxShadow: '0 6px 24px rgba(60,76,115,0.25), 0 2px 8px rgba(60,76,115,0.15)',
+                    minWidth: '110px',
+                    fontFamily: 'Montserrat, Arial, sans-serif',
+                    transform: 'translateZ(0)'
+                  }}
+                >
+                  {autoSpeak ? '✅ Autospeak ON' : 'Autospeak OFF'}
+                </button>
+
+                {/* Microphone Button */}
+                <button
+                  onClick={isRecording ? () => stopRecording(false) : startRecording}
+                  disabled={isProcessing || (autoSpeak && isRecording)}
+                  style={{
+                    width: 56,
+                    height: 56,
+                    borderRadius: '50%',
+                    border: 'none',
+                    background: isRecording 
+                      ? 'linear-gradient(135deg, var(--blue-secondary) 0%, #5a6b8a 100%)' 
+                      : 'linear-gradient(135deg, var(--rose-primary) 0%, #8a6a7a 100%)',
+                    color: '#fff',
+                    fontSize: '24px',
+                    cursor: isProcessing || (autoSpeak && isRecording) ? 'not-allowed' : 'pointer',
+                    transition: 'all 0.3s ease',
+                    boxShadow: isRecording 
+                      ? '0 0 0 10px rgba(195,141,148,0.4), 0 10px 40px rgba(60,76,115,0.4)' 
+                      : '0 10px 40px rgba(60,76,115,0.3)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transform: isRecording ? 'scale(1.1)' : 'scale(1)',
+                    animation: isRecording ? 'pulse 2s infinite' : 'none',
+                    backdropFilter: 'blur(20px)'
+                  }}
+                  title={isRecording ? 'Stop Recording' : 'Start Recording'}
+                >
+                  {isRecording ? '⏹️' : '🎤'}
+                </button>
+
+                {/* Short Feedback Toggle Button */}
+                <button
+                  onClick={() => setEnableShortFeedback(v => !v)}
+                  style={{
+                    background: enableShortFeedback 
+                      ? 'linear-gradient(135deg, var(--blue-secondary) 0%, #5a6b8a 100%)' 
+                      : 'linear-gradient(135deg, var(--rose-primary) 0%, #8a6a7a 100%)',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: 12,
+                    padding: '0.6rem 1rem',
+                    cursor: 'pointer',
+                    fontWeight: 600,
+                    fontSize: '0.85rem',
+                    transition: 'all 0.3s ease',
+                    boxShadow: '0 6px 24px rgba(60,76,115,0.25), 0 2px 8px rgba(60,76,115,0.15)',
+                    minWidth: '110px',
+                    fontFamily: 'Montserrat, Arial, sans-serif',
+                    transform: 'translateZ(0)'
+                  }}
+                >
+                  {enableShortFeedback ? '💡 Short Feedback ON' : 'Short Feedback OFF'}
+                </button>
+              </div>
+
+              {/* Right side - End Chat Button */}
               <button
-                onClick={() => setAutoSpeak(v => !v)}
+                onClick={handleEndChat}
                 style={{
-                  background: autoSpeak 
-                    ? 'linear-gradient(135deg, var(--blue-secondary) 0%, #5a6b8a 100%)' 
-                    : 'linear-gradient(135deg, var(--blue-secondary) 0%, #5a6b8a 100%)',
+                  background: 'linear-gradient(135deg, var(--rose-primary) 0%, #8a6a7a 100%)',
                   color: '#fff',
                   border: 'none',
                   borderRadius: 12,
@@ -4927,68 +5346,11 @@ Yes, the current serials don't have the same quality as the old ones, right?
                   fontFamily: 'Montserrat, Arial, sans-serif',
                   transform: 'translateZ(0)'
                 }}
+                title="End chat, generate summary, and return to dashboard"
               >
-                {autoSpeak ? '✅ Autospeak ON' : 'Autospeak OFF'}
-              </button>
-
-              {/* Microphone Button (centered) */}
-              <button
-                onClick={isRecording ? () => stopRecording(false) : startRecording}
-                disabled={isProcessing || (autoSpeak && isRecording)}
-                style={{
-                  width: 56,
-                  height: 56,
-                  borderRadius: '50%',
-                  border: 'none',
-                  background: isRecording 
-                    ? 'linear-gradient(135deg, var(--blue-secondary) 0%, #5a6b8a 100%)' 
-                    : 'linear-gradient(135deg, var(--rose-primary) 0%, #8a6a7a 100%)',
-                  color: '#fff',
-                  fontSize: '24px',
-                  cursor: isProcessing || (autoSpeak && isRecording) ? 'not-allowed' : 'pointer',
-                  transition: 'all 0.3s ease',
-                  boxShadow: isRecording 
-                    ? '0 0 0 10px rgba(195,141,148,0.4), 0 10px 40px rgba(60,76,115,0.4)' 
-                    : '0 10px 40px rgba(60,76,115,0.3)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  transform: isRecording ? 'scale(1.1)' : 'scale(1)',
-                  animation: isRecording ? 'pulse 2s infinite' : 'none',
-                  backdropFilter: 'blur(20px)'
-                }}
-                title={isRecording ? 'Stop Recording' : 'Start Recording'}
-              >
-                {isRecording ? '⏹️' : '🎤'}
-              </button>
-
-              {/* Short Feedback Toggle Button */}
-              <button
-                onClick={() => setEnableShortFeedback(v => !v)}
-                style={{
-                  background: enableShortFeedback 
-                    ? 'linear-gradient(135deg, var(--blue-secondary) 0%, #5a6b8a 100%)' 
-                    : 'linear-gradient(135deg, var(--rose-primary) 0%, #8a6a7a 100%)',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: 12,
-                  padding: '0.6rem 1rem',
-                  cursor: 'pointer',
-                  fontWeight: 600,
-                  fontSize: '0.85rem',
-                  transition: 'all 0.3s ease',
-                  boxShadow: '0 6px 24px rgba(60,76,115,0.25), 0 2px 8px rgba(60,76,115,0.15)',
-                  minWidth: '110px',
-                  fontFamily: 'Montserrat, Arial, sans-serif',
-                  transform: 'translateZ(0)'
-                }}
-              >
-                {enableShortFeedback ? '💡 Short Feedback ON' : 'Short Feedback OFF'}
+                🏠 End Chat
               </button>
             </div>
-
-            
-
 
             {/* Redo Button: Only show in manual mode when recording */}
             {isRecording && manualRecording && (
@@ -5005,15 +5367,15 @@ Yes, the current serials don't have the same quality as the old ones, right?
                       : 'linear-gradient(135deg, var(--rose-primary) 0%, #8a6a7a 100%)',
                     color: '#fff',
                     border: 'none',
-                                      borderRadius: 6,
-                  padding: '0.4rem 0.8rem',
-                  cursor: 'pointer',
-                  fontWeight: 500,
-                  fontSize: '0.8rem',
-                  transition: 'all 0.2s ease',
-                  boxShadow: '0 1px 3px rgba(195,141,148,0.10)',
-                  minWidth: '80px',
-                  fontFamily: 'Montserrat, Arial, sans-serif'
+                    borderRadius: 6,
+                    padding: '0.4rem 0.8rem',
+                    cursor: 'pointer',
+                    fontWeight: 500,
+                    fontSize: '0.8rem',
+                    transition: 'all 0.2s ease',
+                    boxShadow: '0 1px 3px rgba(195,141,148,0.10)',
+                    minWidth: '80px',
+                    fontFamily: 'Montserrat, Arial, sans-serif'
                   }}
                 >
                   ⏹️ Redo
@@ -5054,37 +5416,7 @@ Yes, the current serials don't have the same quality as the old ones, right?
           </div>
         </div>
       )}
-      {/* End Chat Button - Floating */}
-      {chatHistory.length > 0 && (
-        <button
-          onClick={handleEndChat}
-          style={{
-            position: 'fixed',
-            bottom: '1.5rem',
-            right: '1.5rem',
-            background: isDarkMode 
-              ? 'linear-gradient(135deg, var(--rose-primary) 0%, #8a6a7a 100%)' 
-              : 'linear-gradient(135deg, var(--rose-primary) 0%, #8a6a7a 100%)',
-            color: '#fff',
-            borderRadius: 6,
-            padding: '0.4rem 0.8rem',
-            cursor: 'pointer',
-            fontWeight: 500,
-            fontSize: '0.8rem',
-            transition: 'all 0.2s ease',
-            boxShadow: '0 1px 3px rgba(195,141,148,0.10)',
-            minWidth: '100px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.3rem',
-            zIndex: 1000,
-            fontFamily: 'Montserrat, Arial, sans-serif'
-          }}
-          title="End chat, generate summary, and return to dashboard"
-        >
-          🏠 End Chat
-        </button>
-      )}
+
 
       {/* Floating Panel Toggle Buttons */}
       {!showShortFeedbackPanel && (
@@ -5190,19 +5522,6 @@ Yes, the current serials don't have the same quality as the old ones, right?
       )}
 
       {/* Progress Modal */}
-      {showProgressModal && progressData && (
-        (() => {
-          console.log('[DEBUG] Rendering progress modal with data:', {
-            showProgressModal,
-            progressData,
-            percentages: progressData.percentages,
-            percentagesLength: progressData.percentages?.length,
-            subgoalNames: progressData.subgoalNames,
-            subgoalNamesLength: progressData.subgoalNames?.length
-          });
-          return null;
-        })()
-      )}
       {showProgressModal && progressData && (
         <div style={{
           position: 'fixed',
@@ -5439,7 +5758,7 @@ Yes, the current serials don't have the same quality as the old ones, right?
                             borderRadius: '4px',
                             animation: 'progressFill 1.5s ease-out 0.5s both',
                             transform: 'translateZ(0)',
-                            '--target-width': `${progressData.percentages && progressData.percentages[index] ? progressData.percentages[index] : 0}%`
+                            ['--target-width']: `${progressData.percentages && progressData.percentages[index] ? progressData.percentages[index] : 0}%`
                           } as React.CSSProperties} />
                         </div>
                       </div>
@@ -5513,14 +5832,9 @@ Yes, the current serials don't have the same quality as the old ones, right?
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }
-
-// Helper to get JWT token
-const getAuthHeaders = () => {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('jwt') : null;
-  return token ? { Authorization: `Bearer ${token}` } : {};
-};
 
 export default Analyze;

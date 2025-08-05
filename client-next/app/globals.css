@@ -71,6 +71,64 @@ body {
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
+/* Prevent body scrolling on analyze page */
+body.analyze-page-active {
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+}
+
+/* Remove any potential spacing between navigation and content */
+body.analyze-page-active * {
+  margin-top: 0;
+}
+
+/* Specifically target the main content area */
+body.analyze-page-active main,
+body.analyze-page-active div[role="main"] {
+  margin: 0;
+  padding: 0;
+}
+
+/* Force immediate positioning after navigation */
+body.analyze-page-active .analyze-page {
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+}
+
+/* Remove any spacing from the ClientLayout */
+body.analyze-page-active > div {
+  margin: 0;
+  padding: 0;
+}
+
+/* Remove any spacing from navigation when on analyze page */
+body.analyze-page-active nav {
+  margin: 0;
+  padding: 0;
+}
+
+/* Ensure analyze page takes full available space */
+body.analyze-page-active .analyze-page {
+  margin: 0;
+  padding: 0;
+  top: 0;
+  height: calc(100vh - 1rem);
+}
+
+/* Prevent scrolling on analyze page */
+.analyze-page {
+  height: calc(100vh - 1rem);
+  overflow: hidden;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 0;
+  margin: 0;
+}
+
 h1 {
   font-family: 'Gabriela', Arial, sans-serif;
 }
