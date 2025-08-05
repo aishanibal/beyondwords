@@ -329,6 +329,8 @@ def conversation_summary():
         summary = generate_conversation_summary(chat_history, subgoal_instructions, user_topics, target_language, feedback_language, is_continued_conversation)
         
         print(f"Generated summary: {summary}")
+        print(f"Summary keys: {list(summary.keys()) if summary else 'None'}")
+        print(f"Progress percentages in summary: {summary.get('progress_percentages', 'Not found')}")
         return jsonify(summary)
     except Exception as e:
         print(f"Conversation summary error: {e}")

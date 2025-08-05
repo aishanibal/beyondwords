@@ -442,7 +442,13 @@ export function getProgressiveSubgoalDescription(subgoalId: string, level: numbe
   const baseSubgoal = baseGoal.subgoals?.find(subgoal => subgoal.id === subgoalId);
   if (!baseSubgoal) return '';
   
-  if (level === 0) return baseSubgoal.description;
+  // Always start with the base description
+  let description = baseSubgoal.description;
+  
+  // If level is 0, return description without level (level will be displayed separately)
+  if (level === 0) {
+    return description;
+  }
   
   // Progressive scaling logic based on subgoal type
   const baseDescription = baseSubgoal.description;
@@ -452,7 +458,7 @@ export function getProgressiveSubgoalDescription(subgoalId: string, level: numbe
   const percentageMatches = baseDescription.match(/(\d+)%/g);
   
   if (!numberMatches && !percentageMatches) {
-    // For subgoals without specific metrics, add level indicators
+    // For subgoals without specific metrics, just add level indicator
     return `${baseDescription} (Level ${level + 1})`;
   }
   
@@ -509,7 +515,7 @@ export function getProgressiveSubgoalDescription(subgoalId: string, level: numbe
         scaledPercentage = Math.max(0, percentage - (level * 2));
       } else {
         // Default percentage scaling: increase requirement
-        scaledPercentage = Math.min(100, percentage + (level * 3));
+        scaledPercentage = Math.min(100, percentage + (level * 1));
       }
       
       // Replace the percentage in the description
@@ -518,6 +524,7 @@ export function getProgressiveSubgoalDescription(subgoalId: string, level: numbe
     });
   }
   
+  // Return scaled description without level (level will be displayed separately)
   return scaledDescription;
 }
 
@@ -572,6 +579,8 @@ export function updateSubgoalProgress(
   const existingIndex = userProgress.findIndex(p => p.subgoalId === subgoalId);
   const currentLevel = existingIndex >= 0 ? userProgress[existingIndex].level : 0;
   
+  console.log(`[DEBUG] updateSubgoalProgress: ${subgoalId}, currentLevel=${currentLevel}, newPercentage=${newPercentage}`);
+  
   // Check for level up
   const levelUpEvent = checkForLevelUp(subgoalId, currentLevel, newPercentage);
   
@@ -582,6 +591,8 @@ export function updateSubgoalProgress(
     const newLevel = levelUpEvent ? levelUpEvent.newLevel : currentLevel;
     const newPercentageValue = levelUpEvent ? 0 : newPercentage;
     
+    console.log(`[DEBUG] updateSubgoalProgress: existing progress, newLevel=${newLevel}, newPercentageValue=${newPercentageValue}, levelUpEvent=${levelUpEvent ? 'YES' : 'NO'}`);
+    
     updatedProgress[existingIndex] = {
       ...updatedProgress[existingIndex],
       percentage: newPercentageValue, // Reset to 0 if leveled up
@@ -590,6 +601,7 @@ export function updateSubgoalProgress(
     };
   } else {
     // Add new progress
+    console.log(`[DEBUG] updateSubgoalProgress: new progress, level=${currentLevel}, percentage=${newPercentage}`);
     updatedProgress.push({
       subgoalId,
       level: currentLevel,
