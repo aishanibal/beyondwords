@@ -27,14 +27,7 @@ CREATE INDEX IF NOT EXISTS idx_waitlist_emails_email ON waitlist_emails(email);
 CREATE INDEX IF NOT EXISTS idx_waitlist_emails_created_at ON waitlist_emails(created_at);
 
 -- Disable RLS for waitlist_emails since we're handling auth ourselves
--- ALTER TABLE waitlist_emails ENABLE ROW LEVEL SECURITY;
-
--- Create policies for waitlist_emails (disabled since we're not using Supabase auth)
--- CREATE POLICY "Allow public insert" ON waitlist_emails
---   FOR INSERT WITH CHECK (true);
-
--- CREATE POLICY "Allow authenticated read" ON waitlist_emails
---   FOR SELECT USING (auth.role() = 'authenticated');
+ALTER TABLE waitlist_emails DISABLE ROW LEVEL SECURITY;
 
 -- Create trigger for waitlist_emails
 CREATE OR REPLACE TRIGGER update_waitlist_emails_updated_at
@@ -67,17 +60,7 @@ CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id);
 
 -- Disable RLS for users since we're handling auth ourselves
--- ALTER TABLE users ENABLE ROW LEVEL SECURITY;
-
--- Create policies for users (disabled since we're not using Supabase auth)
--- CREATE POLICY "Users can view their own profile" ON users
---   FOR SELECT USING (auth.uid() = id);
-
--- CREATE POLICY "Users can update their own profile" ON users
---   FOR UPDATE USING (auth.uid() = id);
-
--- CREATE POLICY "Users can insert their own profile" ON users
---   FOR INSERT WITH CHECK (auth.uid() = id);
+ALTER TABLE users DISABLE ROW LEVEL SECURITY;
 
 -- Create trigger for users
 CREATE OR REPLACE TRIGGER update_users_updated_at
@@ -98,21 +81,8 @@ CREATE TABLE IF NOT EXISTS sessions (
 -- Create indexes for sessions
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
 
--- Enable RLS for sessions
-ALTER TABLE sessions ENABLE ROW LEVEL SECURITY;
-
--- Create policies for sessions
-CREATE POLICY "Users can view their own sessions" ON sessions
-  FOR SELECT USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can insert their own sessions" ON sessions
-  FOR INSERT WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Users can update their own sessions" ON sessions
-  FOR UPDATE USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can delete their own sessions" ON sessions
-  FOR DELETE USING (auth.uid() = user_id);
+-- Disable RLS for sessions since we're handling auth ourselves
+ALTER TABLE sessions DISABLE ROW LEVEL SECURITY;
 
 -- Create trigger for sessions
 CREATE OR REPLACE TRIGGER update_sessions_updated_at
@@ -143,20 +113,7 @@ CREATE INDEX IF NOT EXISTS idx_language_dashboards_user_id ON language_dashboard
 CREATE INDEX IF NOT EXISTS idx_language_dashboards_user_language ON language_dashboards(user_id, language);
 
 -- Disable RLS for language_dashboards since we're handling auth ourselves
--- ALTER TABLE language_dashboards ENABLE ROW LEVEL SECURITY;
-
--- Create policies for language_dashboards (disabled)
--- CREATE POLICY "Users can view their own language dashboards" ON language_dashboards
---   FOR SELECT USING (auth.uid() = user_id);
-
--- CREATE POLICY "Users can insert their own language dashboards" ON language_dashboards
---   FOR INSERT WITH CHECK (auth.uid() = user_id);
-
--- CREATE POLICY "Users can update their own language dashboards" ON language_dashboards
---   FOR UPDATE USING (auth.uid() = user_id);
-
--- CREATE POLICY "Users can delete their own language dashboards" ON language_dashboards
---   FOR DELETE USING (auth.uid() = user_id);
+ALTER TABLE language_dashboards DISABLE ROW LEVEL SECURITY;
 
 -- Create trigger for language_dashboards
 CREATE OR REPLACE TRIGGER update_language_dashboards_updated_at
@@ -183,20 +140,7 @@ CREATE INDEX IF NOT EXISTS idx_personas_user_id ON personas(user_id);
 CREATE INDEX IF NOT EXISTS idx_personas_created_at ON personas(created_at);
 
 -- Disable RLS for personas since we're handling auth ourselves
--- ALTER TABLE personas ENABLE ROW LEVEL SECURITY;
-
--- Create policies for personas (disabled)
--- CREATE POLICY "Users can view their own personas" ON personas
---   FOR SELECT USING (auth.uid() = user_id);
-
--- CREATE POLICY "Users can insert their own personas" ON personas
---   FOR INSERT WITH CHECK (auth.uid() = user_id);
-
--- CREATE POLICY "Users can update their own personas" ON personas
---   FOR UPDATE USING (auth.uid() = user_id);
-
--- CREATE POLICY "Users can delete their own personas" ON personas
---   FOR DELETE USING (auth.uid() = user_id);
+ALTER TABLE personas DISABLE ROW LEVEL SECURITY;
 
 -- Create trigger for personas
 CREATE OR REPLACE TRIGGER update_personas_updated_at
@@ -228,20 +172,7 @@ CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id);
 CREATE INDEX IF NOT EXISTS idx_conversations_language_dashboard_id ON conversations(language_dashboard_id);
 
 -- Disable RLS for conversations since we're handling auth ourselves
--- ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;
-
--- Create policies for conversations (disabled)
--- CREATE POLICY "Users can view their own conversations" ON conversations
---   FOR SELECT USING (auth.uid() = user_id);
-
--- CREATE POLICY "Users can insert their own conversations" ON conversations
---   FOR INSERT WITH CHECK (auth.uid() = user_id);
-
--- CREATE POLICY "Users can update their own conversations" ON conversations
---   FOR UPDATE USING (auth.uid() = user_id);
-
--- CREATE POLICY "Users can delete their own conversations" ON conversations
---   FOR DELETE USING (auth.uid() = user_id);
+ALTER TABLE conversations DISABLE ROW LEVEL SECURITY;
 
 -- Create trigger for conversations
 CREATE OR REPLACE TRIGGER update_conversations_updated_at
@@ -268,44 +199,7 @@ CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation
 CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);
 
 -- Disable RLS for messages since we're handling auth ourselves
--- ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
-
--- Create policies for messages (disabled)
--- CREATE POLICY "Users can view messages from their conversations" ON messages
---   FOR SELECT USING (
---     EXISTS (
---       SELECT 1 FROM conversations 
---       WHERE conversations.id = messages.conversation_id 
---       AND conversations.user_id = auth.uid()
---     )
---   );
-
--- CREATE POLICY "Users can insert messages to their conversations" ON messages
---   FOR INSERT WITH CHECK (
---     EXISTS (
---       SELECT 1 FROM conversations 
---       WHERE conversations.id = messages.conversation_id 
---       AND conversations.user_id = auth.uid()
---     )
---   );
-
--- CREATE POLICY "Users can update messages from their conversations" ON messages
---   FOR UPDATE USING (
---     EXISTS (
---       SELECT 1 FROM conversations 
---       WHERE conversations.id = messages.conversation_id 
---       AND conversations.user_id = auth.uid()
---     )
---   );
-
--- CREATE POLICY "Users can delete messages from their conversations" ON messages
---   FOR DELETE USING (
---     EXISTS (
---       SELECT 1 FROM conversations 
---       WHERE conversations.id = messages.conversation_id 
---       AND conversations.user_id = auth.uid()
---     )
---   );
+ALTER TABLE messages DISABLE ROW LEVEL SECURITY;
 
 -- Create analytics view for waitlist
 CREATE OR REPLACE VIEW waitlist_analytics AS
@@ -315,4 +209,7 @@ SELECT
   COUNT(*) as signups
 FROM waitlist_emails
 GROUP BY DATE(created_at), source
-ORDER BY signup_date DESC; 
+ORDER BY signup_date DESC;
+
+-- Verify the schema
+SELECT 'Schema created successfully' as status; 

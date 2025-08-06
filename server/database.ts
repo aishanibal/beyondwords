@@ -743,15 +743,8 @@ function getUserConversations(userId: number, language?: string) {
 
       let query = supabase
         .from('conversations')
-        .select(`
-          *,
-          language_dashboards!inner(language)
-        `)
+        .select('*')
         .eq('user_id', userId);
-
-      if (language) {
-        query = query.eq('language_dashboards.language', language);
-      }
 
       const { data, error } = await query
         .order('created_at', { ascending: false });
@@ -760,8 +753,33 @@ function getUserConversations(userId: number, language?: string) {
         console.error('❌ Supabase getUserConversations error:', error);
         reject(error);
       } else {
+        // If language is specified, filter conversations by getting their language dashboards
+        let conversations = data as Conversation[] || [];
+        
+        if (language) {
+          // Get all language dashboard IDs for this user and language
+          const { data: dashboardData, error: dashboardError } = await supabase
+            .from('language_dashboards')
+            .select('id')
+            .eq('user_id', userId)
+            .eq('language', language);
+
+          if (dashboardError) {
+            console.error('❌ Error fetching language dashboards for filtering:', dashboardError);
+            reject(dashboardError);
+            return;
+          }
+
+          const dashboardIds = dashboardData?.map((d: any) => d.id) || [];
+          
+          // Filter conversations to only include those with matching language dashboard IDs
+          conversations = conversations.filter(conversation => 
+            dashboardIds.includes(conversation.language_dashboard_id)
+          );
+        }
+
         // Parse JSON fields for each conversation
-        const conversations = (data as Conversation[] || []).map(conversation => {
+        const processedConversations = conversations.map(conversation => {
           if (conversation.topics) {
             try {
               conversation.topics = JSON.parse(conversation.topics as any);
@@ -789,7 +807,7 @@ function getUserConversations(userId: number, language?: string) {
           return conversation;
         });
         
-        resolve(conversations);
+        resolve(processedConversations);
       }
     } catch (error) {
       console.error('❌ getUserConversations error:', error);
@@ -888,14 +906,32 @@ function getLatestConversation(userId: number, language?: string) {
 
       let query = supabase
         .from('conversations')
-        .select(`
-          *,
-          language_dashboards!inner(language)
-        `)
+        .select('*')
         .eq('user_id', userId);
 
+      // If language is specified, filter by language dashboard IDs
       if (language) {
-        query = query.eq('language_dashboards.language', language);
+        // Get all language dashboard IDs for this user and language
+        const { data: dashboardData, error: dashboardError } = await supabase
+          .from('language_dashboards')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('language', language);
+
+        if (dashboardError) {
+          console.error('❌ Error fetching language dashboards for latest conversation:', dashboardError);
+          reject(dashboardError);
+          return;
+        }
+
+        const dashboardIds = dashboardData?.map((d: any) => d.id) || [];
+        
+        if (dashboardIds.length === 0) {
+          resolve(null);
+          return;
+        }
+
+        query = query.in('language_dashboard_id', dashboardIds);
       }
 
       const { data, error } = await query
@@ -1312,15 +1348,32 @@ function getUserStreak(userId: number, language: string) {
         return;
       }
 
-      // Get conversations for this user and language
+      // First, get the language dashboard IDs for this user and language
+      const { data: dashboardData, error: dashboardError } = await supabase
+        .from('language_dashboards')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('language', language);
+
+      if (dashboardError) {
+        console.error('❌ Error fetching language dashboards for streak:', dashboardError);
+        reject(dashboardError);
+        return;
+      }
+
+      const dashboardIds = dashboardData?.map((d: any) => d.id) || [];
+      
+      if (dashboardIds.length === 0) {
+        resolve({ streak: 0 });
+        return;
+      }
+
+      // Get conversations for this user that match the language dashboard IDs
       const { data: conversations, error: conversationsError } = await supabase
         .from('conversations')
-        .select(`
-          id,
-          language_dashboards!inner(language)
-        `)
+        .select('id, created_at')
         .eq('user_id', userId)
-        .eq('language_dashboards.language', language)
+        .in('language_dashboard_id', dashboardIds)
         .order('created_at', { ascending: false });
 
       if (conversationsError) {
