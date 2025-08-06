@@ -60,10 +60,18 @@ exports.db = db;
 // Initialize database tables
 function initDatabase() {
     db.serialize(() => {
+        // Drop existing tables to start fresh
+        db.run('DROP TABLE IF EXISTS messages');
+        db.run('DROP TABLE IF EXISTS conversations');
+        db.run('DROP TABLE IF EXISTS personas');
+        db.run('DROP TABLE IF EXISTS language_dashboards');
+        db.run('DROP TABLE IF EXISTS sessions');
+        db.run('DROP TABLE IF EXISTS users');
+        // Create users table
         db.run(`
-      CREATE TABLE IF NOT EXISTS users (
+      CREATE TABLE users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        google_id TEXT,
+        google_id TEXT UNIQUE,
         email TEXT UNIQUE NOT NULL,
         name TEXT NOT NULL,
         password_hash TEXT,
@@ -74,13 +82,27 @@ function initDatabase() {
         learning_goals TEXT,
         practice_preference TEXT,
         motivation TEXT,
+        preferences TEXT,
         onboarding_complete BOOLEAN DEFAULT FALSE,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
+        // Create sessions table
         db.run(`
-      CREATE TABLE IF NOT EXISTS language_dashboards (
+      CREATE TABLE sessions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        chat_history TEXT,
+        language TEXT DEFAULT 'en',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users (id)
+      )
+    `);
+        // Create language_dashboards table
+        db.run(`
+      CREATE TABLE language_dashboards (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
         language TEXT NOT NULL,
@@ -88,7 +110,7 @@ function initDatabase() {
         talk_topics TEXT,
         learning_goals TEXT,
         practice_preference TEXT,
-        feedback_language TEXT,
+        feedback_language TEXT DEFAULT 'en',
         speak_speed REAL DEFAULT 1.0,
         romanization_display TEXT DEFAULT 'both',
         is_primary BOOLEAN DEFAULT FALSE,
@@ -98,8 +120,25 @@ function initDatabase() {
         UNIQUE(user_id, language)
       )
     `);
+        // Create personas table
         db.run(`
-      CREATE TABLE IF NOT EXISTS conversations (
+      CREATE TABLE personas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        description TEXT,
+        topics TEXT,
+        formality TEXT,
+        language TEXT,
+        conversation_id TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users (id)
+      )
+    `);
+        // Create conversations table
+        db.run(`
+      CREATE TABLE conversations (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
         language_dashboard_id INTEGER NOT NULL,
@@ -111,6 +150,8 @@ function initDatabase() {
         message_count INTEGER DEFAULT 0,
         uses_persona BOOLEAN DEFAULT FALSE,
         persona_id INTEGER,
+        progress_data TEXT,
+        learning_goals TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users (id),
@@ -118,8 +159,9 @@ function initDatabase() {
         FOREIGN KEY (persona_id) REFERENCES personas (id)
       )
     `);
+        // Create messages table
         db.run(`
-      CREATE TABLE IF NOT EXISTS messages (
+      CREATE TABLE messages (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         conversation_id INTEGER NOT NULL,
         sender TEXT NOT NULL,
@@ -133,58 +175,18 @@ function initDatabase() {
         FOREIGN KEY (conversation_id) REFERENCES conversations (id)
       )
     `);
-        db.run(`
-      CREATE TABLE IF NOT EXISTS personas (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        name TEXT NOT NULL,
-        description TEXT,
-        topics TEXT,
-        formality TEXT DEFAULT 'neutral',
-        language TEXT DEFAULT 'en',
-        conversation_id TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES users (id)
-      )
-    `);
-        // Add any missing columns to existing tables
-        addColumnsIfNotExist();
-    });
-}
-// Add new columns to existing databases
-function addColumnsIfNotExist() {
-    const newColumns = [
-        'ALTER TABLE users ADD COLUMN target_language TEXT',
-        'ALTER TABLE users ADD COLUMN proficiency_level TEXT',
-        'ALTER TABLE users ADD COLUMN talk_topics TEXT',
-        'ALTER TABLE users ADD COLUMN learning_goals TEXT',
-        'ALTER TABLE users ADD COLUMN practice_preference TEXT',
-        'ALTER TABLE users ADD COLUMN motivation TEXT',
-        'ALTER TABLE users ADD COLUMN preferences TEXT',
-        'ALTER TABLE users ADD COLUMN onboarding_complete BOOLEAN DEFAULT FALSE',
-        'ALTER TABLE conversations ADD COLUMN topics TEXT',
-        'ALTER TABLE conversations ADD COLUMN language_dashboard_id INTEGER',
-        'ALTER TABLE messages ADD COLUMN detailed_feedback TEXT',
-        'ALTER TABLE language_dashboards ADD COLUMN feedback_language TEXT',
-        'ALTER TABLE conversations ADD COLUMN formality TEXT',
-        'ALTER TABLE conversations ADD COLUMN description TEXT',
-        'ALTER TABLE conversations ADD COLUMN synopsis TEXT',
-        'ALTER TABLE language_dashboards ADD COLUMN speak_speed REAL DEFAULT 1.0',
-        'ALTER TABLE conversations ADD COLUMN uses_persona BOOLEAN DEFAULT FALSE',
-        'ALTER TABLE conversations ADD COLUMN persona_id INTEGER',
-        'ALTER TABLE conversations ADD COLUMN progress_data TEXT',
-        'ALTER TABLE conversations ADD COLUMN learning_goals TEXT',
-        'ALTER TABLE messages ADD COLUMN romanized_text TEXT',
-        'ALTER TABLE language_dashboards ADD COLUMN romanization_display TEXT DEFAULT "both"'
-    ];
-    newColumns.forEach(sql => {
-        db.run(sql, (err) => {
-            // Ignore errors for columns that already exist
-            if (err && !err.message.includes('duplicate column name')) {
-                console.error('Error adding column:', err.message);
-            }
-        });
+        // Create indexes for better performance
+        db.run('CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)');
+        db.run('CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id)');
+        db.run('CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)');
+        db.run('CREATE INDEX IF NOT EXISTS idx_language_dashboards_user_id ON language_dashboards(user_id)');
+        db.run('CREATE INDEX IF NOT EXISTS idx_language_dashboards_user_language ON language_dashboards(user_id, language)');
+        db.run('CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id)');
+        db.run('CREATE INDEX IF NOT EXISTS idx_conversations_language_dashboard_id ON conversations(language_dashboard_id)');
+        db.run('CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id)');
+        db.run('CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at)');
+        db.run('CREATE INDEX IF NOT EXISTS idx_personas_user_id ON personas(user_id)');
+        console.log('Database schema created successfully!');
     });
 }
 // User functions
@@ -192,12 +194,12 @@ function createUser(userData) {
     return new Promise((resolve, reject) => {
         const googleId = userData.googleId || userData.google_id;
         const passwordHash = userData.passwordHash || userData.password_hash;
-        const { email, name, role = 'user' } = userData;
+        const { email, name, role = 'user', onboarding_complete = false } = userData;
         const sql = `
-      INSERT OR REPLACE INTO users (google_id, email, name, password_hash, role, updated_at)
-      VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      INSERT OR REPLACE INTO users (google_id, email, name, password_hash, role, onboarding_complete, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     `;
-        db.run(sql, [googleId, email, name, passwordHash, role], function (err) {
+        db.run(sql, [googleId, email, name, passwordHash, role, onboarding_complete], function (err) {
             if (err) {
                 reject(err);
             }

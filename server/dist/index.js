@@ -21,7 +21,7 @@ const google_auth_library_1 = require("google-auth-library");
 const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs")); // Use fs, not fs/promises
 const child_process_1 = require("child_process");
-const bcrypt_1 = __importDefault(require("bcrypt"));
+const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const axios_1 = __importDefault(require("axios"));
 const JWT_SECRET = process.env.JWT_SECRET || 'your_super_secret_key';
@@ -290,7 +290,7 @@ app.post('/api/analyze', authenticateJWT, upload.single('audio'), (req, res) => 
             console.log('=== PYTHON API SUCCESS ===');
             console.log('Python API response received:', transcriptionResponse.data);
             transcription = transcriptionResponse.data.transcription || 'Speech recorded';
-            aiResponse = transcriptionResponse.data.ai_response || 'Thank you for your speech!';
+            aiResponse = transcriptionResponse.data.response || 'Thank you for your speech!';
             pythonApiAvailable = true;
             console.log('Using transcription from Python API:', transcription);
             console.log('Using AI response from Python API:', aiResponse);
@@ -530,6 +530,10 @@ app.post('/auth/google/token', (req, res) => __awaiter(void 0, void 0, void 0, f
             target_language: user.target_language,
             proficiency_level: user.proficiency_level
         };
+        console.log('Google auth - User created/found:', user);
+        console.log('Google auth - User response:', userResponse);
+        console.log('Google auth - onboarding_complete value:', user.onboarding_complete);
+        console.log('Google auth - Boolean onboarding_complete:', Boolean(user.onboarding_complete));
         res.json({ user: userResponse, token });
     }
     catch (error) {
@@ -547,13 +551,14 @@ app.post('/auth/register', (req, res) => __awaiter(void 0, void 0, void 0, funct
             return res.status(400).json({ error: 'User already exists' });
         }
         // Hash password
-        const passwordHash = yield bcrypt_1.default.hash(password, 10);
+        const passwordHash = yield bcryptjs_1.default.hash(password, 10);
         // Create user
         const user = yield (0, database_1.createUser)({
             email,
             name,
             password_hash: passwordHash,
-            role: 'user'
+            role: 'user',
+            onboarding_complete: false
         });
         // Generate JWT token for immediate login
         const token = jsonwebtoken_1.default.sign({ userId: user.id, email: user.email, name: user.name }, JWT_SECRET, { expiresIn: '7d' });
@@ -586,7 +591,7 @@ app.post('/auth/login', (req, res) => __awaiter(void 0, void 0, void 0, function
             return res.status(401).json({ error: 'This email is associated with a Google account. Please sign in with Google.' });
         }
         // Verify password
-        const isValid = yield bcrypt_1.default.compare(password, user.password_hash);
+        const isValid = yield bcryptjs_1.default.compare(password, user.password_hash);
         if (!isValid)
             return res.status(401).json({ error: 'Invalid credentials' });
         // Generate JWT token
@@ -921,8 +926,8 @@ app.post('/api/conversations', authenticateJWT, (req, res) => __awaiter(void 0, 
                     timeout: 30000
                 });
                 console.log('DEBUG: Sending formality to /initial_message:', formality || 'friendly');
-                console.log('DEBUG: Received ai_response from Python API:', aiRes.data.ai_response);
-                aiIntro = aiRes.data.ai_response && aiRes.data.ai_response.trim() ? aiRes.data.ai_response : 'Hello! What would you like to talk about today?';
+                console.log('DEBUG: Received message from Python API:', aiRes.data.message);
+                aiIntro = aiRes.data.message && aiRes.data.message.trim() ? aiRes.data.message : 'Hello! What would you like to talk about today?';
             }
             catch (err) {
                 console.error('Python API /initial_message error:', err.message);

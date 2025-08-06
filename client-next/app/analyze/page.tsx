@@ -1341,7 +1341,7 @@ function Analyze() {
       });
       
       console.log('[DEBUG] AI response response:', aiResponseResponse.data);
-      const aiResponse = aiResponseResponse.data.ai_response;
+      const aiResponse = aiResponseResponse.data.response;
       console.log('[DEBUG] AI response received:', aiResponse);
       
               // Add AI response if present

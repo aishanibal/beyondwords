@@ -44,7 +44,7 @@ import { OAuth2Client } from 'google-auth-library';
 import path from 'path';
 import fs from 'fs'; // Use fs, not fs/promises
 import { exec } from 'child_process';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import axios from 'axios';
 const JWT_SECRET = process.env.JWT_SECRET || 'your_super_secret_key';
@@ -349,7 +349,7 @@ app.post('/api/analyze', authenticateJWT, upload.single('audio'), async (req: Re
       console.log('=== PYTHON API SUCCESS ===');
       console.log('Python API response received:', transcriptionResponse.data);
       transcription = transcriptionResponse.data.transcription || 'Speech recorded';
-      aiResponse = transcriptionResponse.data.ai_response || 'Thank you for your speech!';
+      aiResponse = transcriptionResponse.data.response || 'Thank you for your speech!';
       pythonApiAvailable = true;
       console.log('Using transcription from Python API:', transcription);
       console.log('Using AI response from Python API:', aiResponse);
@@ -1074,8 +1074,8 @@ app.post('/api/conversations', authenticateJWT, async (req: Request, res: Respon
           timeout: 30000
         });
         console.log('DEBUG: Sending formality to /initial_message:', formality || 'friendly');
-        console.log('DEBUG: Received ai_response from Python API:', aiRes.data.ai_response);
-        aiIntro = aiRes.data.ai_response && aiRes.data.ai_response.trim() ? aiRes.data.ai_response : 'Hello! What would you like to talk about today?';
+        console.log('DEBUG: Received message from Python API:', aiRes.data.message);
+        aiIntro = aiRes.data.message && aiRes.data.message.trim() ? aiRes.data.message : 'Hello! What would you like to talk about today?';
       } catch (err: any) {
         console.error('Python API /initial_message error:', err.message);
         aiIntro = 'Hello! What would you like to talk about today?';

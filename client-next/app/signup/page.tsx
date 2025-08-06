@@ -215,7 +215,6 @@ export default function SignupPage() {
                 size="large"
                 text="signup_with"
                 shape="rectangular"
-                width="100%"
                 auto_select={false}
                 cancel_on_tap_outside={true}
               />

@@ -179,7 +179,6 @@ export default function LoginPage() {
                 size="large"
                 text="signin_with"
                 shape="rectangular"
-                width="100%"
                 auto_select={false}
                 cancel_on_tap_outside={true}
               />
