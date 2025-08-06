@@ -58,6 +58,8 @@ export default function SignupPage() {
         name: formData.name,
         email: formData.email,
         password: formData.password
+      }, {
+        timeout: 15000 // 15 second timeout
       });
       
       // Registration now returns token directly
@@ -94,6 +96,8 @@ export default function SignupPage() {
       // Use axios to call the Next.js API route
       const response = await axios.post('/api/auth/google/token', {
         credential: credentialResponse.credential
+      }, {
+        timeout: 15000 // 15 second timeout
       });
       
       console.log('Google signup response:', response.data);

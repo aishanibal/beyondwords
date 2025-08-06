@@ -75,8 +75,38 @@ app.use((req, res, next) => {
   next();
 });
 
+// Health check endpoint
+app.get('/health', (req: Request, res: Response) => {
+  res.json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    port: PORT,
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
+
 app.use(express.json());
-app.use(cors({ origin: 'http://localhost:3000', credentials: false }));
+
+// CORS configuration for production and development
+const allowedOrigins = [
+  'http://localhost:3000',
+  'https://speakbeyondwords-sigma.vercel.app'
+];
+
+app.use(cors({ 
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.log('🚫 CORS blocked origin:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: false 
+}));
 
 // Multer configuration for file uploads
 const storage: StorageEngine = multer.diskStorage({
@@ -626,14 +656,23 @@ app.post('/auth/google/token', async (req: Request, res: Response) => {
 
 // Email/password registration
 app.post('/auth/register', async (req: Request, res: Response) => {
+  console.log('🔍 Registration endpoint hit');
+  console.log('🔍 Request body:', req.body);
+  console.log('🔍 Request headers:', req.headers);
+  
   try {
     const { name, email, password } = req.body;
+    
+    console.log('🔍 Registration data:', { name, email, password: password ? '[HIDDEN]' : 'undefined' });
     
     // Check if user already exists
     const existingUser = await findUserByEmail(email);
     if (existingUser) {
+      console.log('❌ User already exists:', email);
       return res.status(400).json({ error: 'User already exists' });
     }
+    
+    console.log('✅ User does not exist, proceeding with registration');
     
     // Hash password
     const passwordHash = await bcrypt.hash(password, 10);
@@ -647,12 +686,16 @@ app.post('/auth/register', async (req: Request, res: Response) => {
       onboarding_complete: false
     });
     
+    console.log('✅ User created successfully:', user.id);
+    
     // Generate JWT token for immediate login
     const token = jwt.sign(
       { userId: user.id, email: user.email, name: user.name },
       JWT_SECRET,
       { expiresIn: '7d' }
     );
+    
+    console.log('✅ JWT token generated');
     
     res.json({ 
       token,
@@ -665,28 +708,44 @@ app.post('/auth/register', async (req: Request, res: Response) => {
       } 
     });
   } catch (error: any) {
-    console.error('Registration error:', error);
+    console.error('❌ Registration error:', error);
     res.status(500).json({ error: 'Registration failed' });
   }
 });
 
 // Email/password login with JWT
 app.post('/auth/login', async (req: Request, res: Response) => {
+  console.log('🔍 Login endpoint hit');
+  console.log('🔍 Request body:', req.body);
+  
   try {
     const { email, password } = req.body;
     const user = await findUserByEmail(email);
     
+    console.log('🔍 Login attempt for email:', email);
+    
     // Check if user exists
-    if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+    if (!user) {
+      console.log('❌ User not found:', email);
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    
+    console.log('✅ User found:', user.id);
     
     // Check if user has a password (not a Google-only account)
     if (!user.password_hash) {
+      console.log('❌ User has no password (Google-only account):', email);
       return res.status(401).json({ error: 'This email is associated with a Google account. Please sign in with Google.' });
     }
     
     // Verify password
     const isValid = await bcrypt.compare(password, user.password_hash);
-    if (!isValid) return res.status(401).json({ error: 'Invalid credentials' });
+    if (!isValid) {
+      console.log('❌ Invalid password for user:', email);
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    
+    console.log('✅ Password verified for user:', email);
     
     // Generate JWT token
     const token = jwt.sign(
@@ -694,6 +753,8 @@ app.post('/auth/login', async (req: Request, res: Response) => {
       JWT_SECRET,
       { expiresIn: '7d' }
     );
+    
+    console.log('✅ JWT token generated for login');
     
     // Return user data including onboarding status
     res.json({ 
@@ -707,7 +768,7 @@ app.post('/auth/login', async (req: Request, res: Response) => {
       } 
     });
   } catch (error: any) {
-    console.error('Login error:', error);
+    console.error('❌ Login error:', error);
     res.status(500).json({ error: 'Login failed' });
   }
 });
