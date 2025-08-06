@@ -64,12 +64,46 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
     if (!currentLanguage) return;
     
     try {
-      const response = await axios.get(`/api/user/language-dashboards`, { headers: getAuthHeaders() });
+      // Call the backend directly
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+      
+      const response = await axios.get(`${cleanBackendUrl}/api/user/language-dashboards`, { headers: getAuthHeaders() });
       const dashboards = response.data.dashboards || [];
       const dashboard = dashboards.find((d: any) => d.language === currentLanguage);
       
       if (dashboard) {
-        setCurrentDashboard(dashboard);
+        // Parse JSON strings for arrays
+        let talk_topics = dashboard.talk_topics || [];
+        let learning_goals = dashboard.learning_goals || [];
+        
+        // Parse talk_topics if it's a string
+        if (typeof talk_topics === 'string') {
+          try {
+            talk_topics = JSON.parse(talk_topics);
+          } catch (e) {
+            console.error('Error parsing talk_topics:', e);
+            talk_topics = [];
+          }
+        }
+        
+        // Parse learning_goals if it's a string
+        if (typeof learning_goals === 'string') {
+          try {
+            learning_goals = JSON.parse(learning_goals);
+          } catch (e) {
+            console.error('Error parsing learning_goals:', e);
+            learning_goals = [];
+          }
+        }
+        
+        const processedDashboard = {
+          ...dashboard,
+          talk_topics: Array.isArray(talk_topics) ? talk_topics : [],
+          learning_goals: Array.isArray(learning_goals) ? learning_goals : []
+        };
+        
+        setCurrentDashboard(processedDashboard);
         setDashboardExists(true);
       } else {
         setDashboardExists(false);
@@ -83,7 +117,11 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
   const fetchSavedPersonas = useCallback(async () => {
     setIsLoadingPersonas(true);
     try {
-      const response = await axios.get('/api/personas', { headers: getAuthHeaders() });
+      // Call the backend directly
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+      
+      const response = await axios.get(`${cleanBackendUrl}/api/personas`, { headers: getAuthHeaders() });
       setSavedPersonas(response.data.personas || []);
     } catch (err: any) {
       console.error('Error fetching saved personas:', err);
@@ -297,7 +335,11 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
       const token = localStorage.getItem('jwt');
       const dashboardLanguage = currentDashboard?.language || currentLanguage || 'en';
       
-      const response = await axios.post('/api/conversations', {
+      // Call the backend directly
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+      
+      const response = await axios.post(`${cleanBackendUrl}/api/conversations`, {
         language: dashboardLanguage,
         title: `${finalSubtopic} Discussion`,
         topics: [finalSubtopic],
@@ -318,7 +360,11 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
       let verified = null;
       for (let i = 0; i < 5; i++) {
         try {
-          const fetchRes = await axios.get(`/api/conversations/${conversation.id}`, { headers: { Authorization: `Bearer ${token}` } });
+          // Call the backend directly
+        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+        const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+        
+        const fetchRes = await axios.get(`${cleanBackendUrl}/api/conversations/${conversation.id}`, { headers: { Authorization: `Bearer ${token}` } });
           if (fetchRes.data && fetchRes.data.conversation) {
             verified = fetchRes.data.conversation;
             break;

@@ -5,8 +5,14 @@
   "main": "dist/index.js",
   "scripts": {
     "start": "node dist/index.js",
-    "build": "tsc",
-    "dev": "ts-node-dev --respawn --transpile-only index.ts",
+    "build": "npm ci && npm run build:ts",
+    "build:ts": "npx tsc --skipLibCheck",
+    "dev": "npm run build:ts && npm run start:dev",
+    "start:dev": "node dist/index.js",
+    "watch": "npx tsc --skipLibCheck --watch & npm run start:dev",
+    "dev:fast": "ts-node-dev --respawn --transpile-only --ignore-watch node_modules index.ts",
+    "dev:nodemon": "nodemon",
+    "postinstall": "node -e \"console.log('Postinstall: Checking module resolution...')\"",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
@@ -38,6 +44,9 @@
     "typescript": "^5.3.2"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": "18.x"
+  },
+  "overrides": {
+    "readable-stream": "^4.4.2"
   }
 }

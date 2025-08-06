@@ -9,6 +9,8 @@ audio_files/
 *.mp3
 *.log
 *.txt
+!requirements*.txt
+!runtime.txt
 whisper_words_*.
 archive/opensmile_features/
 archive/mfa_output/
@@ -21,3 +23,4 @@ node_modules/
 client/node_modules/
 server/node_modules/
 node_modules
+.vercel

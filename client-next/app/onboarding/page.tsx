@@ -161,7 +161,15 @@ export default function OnboardingPage() {
     setError('');
     try {
       const token = localStorage.getItem('jwt');
-      const response = await axios.post('/api/user/onboarding', {
+      // Call the backend directly
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+      
+      console.log('🔍 DEBUG: backendUrl =', backendUrl);
+      console.log('🔍 DEBUG: cleanBackendUrl =', cleanBackendUrl);
+      console.log('🔍 DEBUG: full URL =', `${cleanBackendUrl}/api/user/onboarding`);
+      
+      const response = await axios.post(`${cleanBackendUrl}/api/user/onboarding`, {
         language: onboardingData.language,
         proficiency: onboardingData.proficiency,
         talkTopics: onboardingData.talkTopics,

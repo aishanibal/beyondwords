@@ -6,10 +6,42 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.method !== 'POST') return res.status(405).end();
 
   try {
-    // Forward the login request to your Express backend at /auth/login
-    const response = await axios.post('http://localhost:4000/auth/login', req.body);
+    // Use environment variable for backend URL, fallback to localhost for development
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+    
+    // Ensure proper URL construction without double slashes
+    const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+    const loginUrl = `${cleanBackendUrl}/auth/login`;
+    
+    console.log('🔍 Login request - Backend URL:', cleanBackendUrl);
+    console.log('🔍 Login request - Full URL:', loginUrl);
+    
+    const response = await axios.post(loginUrl, req.body, {
+      timeout: 10000, // 10 second timeout
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    console.log('✅ Login successful - Status:', response.status);
     res.status(response.status).json(response.data);
   } catch (error: any) {
-    res.status(error.response?.status || 500).json(error.response?.data || { error: 'Login failed' });
+    console.error('❌ Login error:', error.message);
+    
+    if (error.code === 'ECONNABORTED') {
+      return res.status(408).json({ error: 'Login timeout - please try again' });
+    }
+    
+    if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+      return res.status(503).json({ error: 'Backend service unavailable - please try again later' });
+    }
+    
+    if (error.response) {
+      console.error('❌ Backend error response:', error.response.status, error.response.data);
+      return res.status(error.response.status).json(error.response.data);
+    }
+    
+    console.error('❌ Unknown error:', error);
+    res.status(500).json({ error: 'Login failed - please try again' });
   }
 } 

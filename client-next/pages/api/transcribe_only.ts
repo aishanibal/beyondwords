@@ -10,7 +10,7 @@ export const config = {
   },
 };
 
-const BACKEND_URL = 'http://localhost:5000/transcribe_only';
+const BACKEND_URL = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'}/api/analyze`;
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -36,75 +36,65 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       console.error('--- [api/transcribe_only] FORMIDABLE PARSE ERROR:', err);
       return res.status(400).json({ error: 'Error parsing form data', details: err.message });
     }
+    
     try {
-      const formData = new FormData();
-      Object.entries(fields).forEach(([key, value]) => {
-        if (Array.isArray(value)) {
-          value.forEach(v => formData.append(key, v != null ? String(v) : ''));
-        } else if (value !== undefined) {
-          formData.append(key, String(value));
-        }
-      });
-      
       let audioFile;
       if (Array.isArray(files.audio)) {
         audioFile = files.audio[0];
       } else if (files.audio) {
         audioFile = files.audio;
       }
-      if (audioFile && audioFile.filepath) {
-        console.log('--- [api/transcribe_only] SENDING AUDIO FILE:', audioFile.filepath, audioFile.originalFilename);
-        const fileStream = fs.createReadStream(audioFile.filepath);
-        formData.append('audio', fileStream, {
-          filename: audioFile.originalFilename || 'recording.webm',
-          contentType: 'audio/webm'
-        });
-      } else {
-        console.log('--- [api/transcribe_only] NO AUDIO FILE TO SEND');
+      
+      if (!audioFile || !audioFile.filepath) {
+        return res.status(400).json({ error: 'No audio file provided' });
       }
-      try {
-        // Send the audio file path to the Python API (like the current /transcribe endpoint)
-        const audioFilePath = audioFile?.filepath;
-        if (!audioFilePath) {
-          return res.status(400).json({ error: 'No audio file provided' });
-        }
-        
-        // Handle language field which might be an array
-        const languageField = fields.language;
-        const language = Array.isArray(languageField) ? languageField[0] : languageField || 'en';
-        
-        const requestData = {
-          audio_file: audioFilePath,
-          language: language
-        };
-        
-        console.log('--- [api/transcribe_only] SENDING TO PYTHON:', requestData);
-        
-        const response = await axios.post(BACKEND_URL, requestData, {
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: authHeader,
-          },
-          maxBodyLength: Infinity,
-          timeout: 120000, // 2 minutes
-        });
-        
-        console.log('--- [api/transcribe_only] PYTHON RESPONSE STATUS:', response.status);
-        console.log('--- [api/transcribe_only] PYTHON RESPONSE DATA:', response.data);
-        console.log('--- [api/transcribe_only] PYTHON RESPONSE HEADERS:', response.headers);
-        
-        res.status(response.status).json(response.data);
-      } catch (axiosError: any) {
-        console.error('--- [api/transcribe_only] AXIOS POST ERROR:', axiosError.message, axiosError.response?.data);
-        if (axiosError.response) {
-          res.status(axiosError.response.status).json(axiosError.response.data);
-        } else {
-          res.status(500).json({ error: 'Proxy error', details: axiosError.message });
-        }
-      }
+      
+      // Handle language field which might be an array
+      const languageField = fields.language;
+      const language = Array.isArray(languageField) ? languageField[0] : languageField || 'en';
+      
+      // Create form data for Express server
+      const formData = new FormData();
+      const fileStream = fs.createReadStream(audioFile.filepath);
+      formData.append('audio', fileStream, {
+        filename: audioFile.originalFilename || 'recording.webm',
+        contentType: 'audio/webm'
+      });
+      formData.append('language', language);
+      
+      console.log('--- [api/transcribe_only] SENDING TO EXPRESS:', { language, audioFile: audioFile.originalFilename });
+      
+      const response = await axios.post(BACKEND_URL, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          Authorization: authHeader,
+        },
+        maxBodyLength: Infinity,
+        timeout: 120000, // 2 minutes
+      });
+      
+      console.log('--- [api/transcribe_only] EXPRESS RESPONSE STATUS:', response.status);
+      console.log('--- [api/transcribe_only] EXPRESS RESPONSE DATA:', response.data);
+      
+      // Extract just the transcription from the Express response
+      const transcription = response.data.transcription || '';
+      
+      res.status(200).json({
+        transcription: transcription,
+        success: true
+      });
     } catch (error: any) {
-      console.error('--- [api/transcribe_only] UNEXPECTED ERROR:', error);
-      res.status(500).json({ error: 'Proxy error', details: error.message });
+      if (axios.isAxiosError(error)) {
+        console.error('--- [api/transcribe_only] AXIOS POST ERROR:', error.message, error.response?.data);
+        if (error.response) {
+          res.status(error.response.status).json(error.response.data);
+        } else {
+          res.status(500).json({ error: 'Proxy error', details: error.message });
+        }
+      } else {
+        console.error('--- [api/transcribe_only] UNEXPECTED ERROR:', error);
+        res.status(500).json({ error: 'Proxy error', details: error.message });
+      }
     }
   });
 } 

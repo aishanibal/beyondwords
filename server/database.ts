@@ -1,8 +1,19 @@
-import sqlite3 from 'sqlite3';
+import { createClient } from '@supabase/supabase-js';
 import path from 'path';
 
+// Initialize Supabase client only if environment variables are available
+let supabase: any = null;
+if (process.env.SUPABASE_URL && (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY)) {
+  // Use service role key if available (for admin operations), otherwise use anon key
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || '';
+  supabase = createClient(process.env.SUPABASE_URL, supabaseKey);
+  console.log('✅ Supabase client initialized with', process.env.SUPABASE_SERVICE_ROLE_KEY ? 'service role key' : 'anon key');
+} else {
+  console.log('⚠️ Supabase environment variables not found. Database functions will be disabled.');
+}
+
 export interface User {
-  id: number;
+  id: number; // Make ID required since we're using auto-generated IDs
   google_id?: string;
   googleId?: string;
   email: string;
@@ -66,6 +77,7 @@ export interface Conversation {
   persona_id?: number;
   progress_data?: string | { goals: string[]; percentages: number[] };
   learning_goals?: string[];
+  messages?: Message[];
   created_at?: string;
   updated_at?: string;
 }
@@ -96,378 +108,562 @@ export interface Persona {
   updated_at: string;
 }
 
-// Database file path
-const dbPath = path.join(__dirname, 'users.db');
-console.log('USING DATABASE FILE:', dbPath);
+// Database file path - commented out since we're using Supabase
+// const dbPath = path.join(__dirname, 'users.db');
+// console.log('USING DATABASE FILE:', dbPath);
 
 // Create database connection
-const db = new sqlite3.Database(dbPath, (err) => {
-  if (err) {
-    console.error('Error opening database:', err.message);
-  } else {
-    console.log('Connected to SQLite database');
-    initDatabase();
-  }
-});
+// const db = new sqlite3.Database(dbPath, (err) => {
+//   if (err) {
+//     console.error('Error opening database:', err.message);
+//   } else {
+//     console.log('Connected to SQLite database');
+//     initDatabase();
+//   }
+// });
 
 // Initialize database tables
-function initDatabase() {
-  db.serialize(() => {
-    // Create users table if it doesn't exist
-    db.run(`
-      CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        google_id TEXT UNIQUE,
-        email TEXT UNIQUE NOT NULL,
-        name TEXT NOT NULL,
-        password_hash TEXT,
-        role TEXT DEFAULT 'user',
-        target_language TEXT,
-        proficiency_level TEXT,
-        talk_topics TEXT,
-        learning_goals TEXT,
-        practice_preference TEXT,
-        motivation TEXT,
-        preferences TEXT,
-        onboarding_complete BOOLEAN DEFAULT FALSE,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
+// function initDatabase() {
+//   db.serialize(() => {
+//     // Drop existing tables to start fresh
+//     db.run('DROP TABLE IF EXISTS messages');
+//     db.run('DROP TABLE IF EXISTS conversations');
+//     db.run('DROP TABLE IF EXISTS personas');
+//     db.run('DROP TABLE IF EXISTS language_dashboards');
+//     db.run('DROP TABLE IF EXISTS sessions');
+//     db.run('DROP TABLE IF EXISTS users');
     
-    // Create sessions table if it doesn't exist
-    db.run(`
-      CREATE TABLE IF NOT EXISTS sessions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        chat_history TEXT,
-        language TEXT DEFAULT 'en',
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES users (id)
-      )
-    `);
+//     // Create users table
+//     db.run(`
+//       CREATE TABLE users (
+//         id INTEGER PRIMARY KEY AUTOINCREMENT,
+//         google_id TEXT UNIQUE,
+//         email TEXT UNIQUE NOT NULL,
+//         name TEXT NOT NULL,
+//         password_hash TEXT,
+//         role TEXT DEFAULT 'user',
+//         target_language TEXT,
+//         proficiency_level TEXT,
+//         talk_topics TEXT,
+//         learning_goals TEXT,
+//         practice_preference TEXT,
+//         motivation TEXT,
+//         preferences TEXT,
+//         onboarding_complete BOOLEAN DEFAULT FALSE,
+//         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+//         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+//       )
+//     `);
     
-    // Create language_dashboards table if it doesn't exist
-    db.run(`
-      CREATE TABLE IF NOT EXISTS language_dashboards (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        language TEXT NOT NULL,
-        proficiency_level TEXT,
-        talk_topics TEXT,
-        learning_goals TEXT,
-        practice_preference TEXT,
-        feedback_language TEXT DEFAULT 'en',
-        speak_speed REAL DEFAULT 1.0,
-        romanization_display TEXT DEFAULT 'both',
-        is_primary BOOLEAN DEFAULT FALSE,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES users (id),
-        UNIQUE(user_id, language)
-      )
-    `);
+//     // Create sessions table
+//     db.run(`
+//       CREATE TABLE sessions (
+//         id INTEGER PRIMARY KEY AUTOINCREMENT,
+//         user_id INTEGER NOT NULL,
+//         chat_history TEXT,
+//         language TEXT DEFAULT 'en',
+//         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+//         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+//         FOREIGN KEY (user_id) REFERENCES users (id)
+//       )
+//     `);
     
-    // Create personas table if it doesn't exist
-    db.run(`
-      CREATE TABLE IF NOT EXISTS personas (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        name TEXT NOT NULL,
-        description TEXT,
-        topics TEXT,
-        formality TEXT,
-        language TEXT,
-        conversation_id TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES users (id)
-      )
-    `);
+//     // Create language_dashboards table
+//     db.run(`
+//       CREATE TABLE language_dashboards (
+//         id INTEGER PRIMARY KEY AUTOINCREMENT,
+//         user_id INTEGER NOT NULL,
+//         language TEXT NOT NULL,
+//         proficiency_level TEXT,
+//         talk_topics TEXT,
+//         learning_goals TEXT,
+//         practice_preference TEXT,
+//         feedback_language TEXT DEFAULT 'en',
+//         speak_speed REAL DEFAULT 1.0,
+//         romanization_display TEXT DEFAULT 'both',
+//         is_primary BOOLEAN DEFAULT FALSE,
+//         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+//         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+//         FOREIGN KEY (user_id) REFERENCES users (id),
+//         UNIQUE(user_id, language)
+//       )
+//     `);
     
-    // Create conversations table if it doesn't exist
-    db.run(`
-      CREATE TABLE IF NOT EXISTS conversations (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        language_dashboard_id INTEGER NOT NULL,
-        title TEXT,
-        topics TEXT,
-        formality TEXT,
-        description TEXT,
-        synopsis TEXT,
-        message_count INTEGER DEFAULT 0,
-        uses_persona BOOLEAN DEFAULT FALSE,
-        persona_id INTEGER,
-        progress_data TEXT,
-        learning_goals TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES users (id),
-        FOREIGN KEY (language_dashboard_id) REFERENCES language_dashboards (id),
-        FOREIGN KEY (persona_id) REFERENCES personas (id)
-      )
-    `);
+//     // Create personas table
+//     db.run(`
+//       CREATE TABLE personas (
+//         id INTEGER PRIMARY KEY AUTOINCREMENT,
+//         user_id INTEGER NOT NULL,
+//         name TEXT NOT NULL,
+//         description TEXT,
+//         topics TEXT,
+//         formality TEXT,
+//         language TEXT,
+//         conversation_id TEXT,
+//         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+//         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+//         FOREIGN KEY (user_id) REFERENCES users (id)
+//       )
+//     `);
     
-    // Create messages table if it doesn't exist
-    db.run(`
-      CREATE TABLE IF NOT EXISTS messages (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        conversation_id INTEGER NOT NULL,
-        sender TEXT NOT NULL,
-        text TEXT NOT NULL,
-        romanized_text TEXT,
-        message_type TEXT DEFAULT 'text',
-        audio_file_path TEXT,
-        detailed_feedback TEXT,
-        message_order INTEGER NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (conversation_id) REFERENCES conversations (id)
-      )
-    `);
+//     // Create conversations table
+//     db.run(`
+//       CREATE TABLE conversations (
+//         id INTEGER PRIMARY KEY AUTOINCREMENT,
+//         user_id INTEGER NOT NULL,
+//         language_dashboard_id INTEGER NOT NULL,
+//         title TEXT,
+//         topics TEXT,
+//         formality TEXT,
+//         description TEXT,
+//         synopsis TEXT,
+//         message_count INTEGER DEFAULT 0,
+//         uses_persona BOOLEAN DEFAULT FALSE,
+//         persona_id INTEGER,
+//         progress_data TEXT,
+//         learning_goals TEXT,
+//         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+//         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+//         FOREIGN KEY (user_id) REFERENCES users (id),
+//         FOREIGN KEY (language_dashboard_id) REFERENCES language_dashboards (id),
+//         FOREIGN KEY (persona_id) REFERENCES personas (id)
+//       )
+//     `);
     
-    // Create indexes for better performance
-    db.run('CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)');
-    db.run('CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id)');
-    db.run('CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)');
-    db.run('CREATE INDEX IF NOT EXISTS idx_language_dashboards_user_id ON language_dashboards(user_id)');
-    db.run('CREATE INDEX IF NOT EXISTS idx_language_dashboards_user_language ON language_dashboards(user_id, language)');
-    db.run('CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id)');
-    db.run('CREATE INDEX IF NOT EXISTS idx_conversations_language_dashboard_id ON conversations(language_dashboard_id)');
-    db.run('CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id)');
-    db.run('CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at)');
-    db.run('CREATE INDEX IF NOT EXISTS idx_personas_user_id ON personas(user_id)');
+//     // Create messages table
+//     db.run(`
+//       CREATE TABLE messages (
+//         id INTEGER PRIMARY KEY AUTOINCREMENT,
+//         conversation_id INTEGER NOT NULL,
+//         sender TEXT NOT NULL,
+//         text TEXT NOT NULL,
+//         romanized_text TEXT,
+//         message_type TEXT DEFAULT 'text',
+//         audio_file_path TEXT,
+//         detailed_feedback TEXT,
+//         message_order INTEGER NOT NULL,
+//         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+//         FOREIGN KEY (conversation_id) REFERENCES conversations (id)
+//       )
+//     `);
     
-    console.log('Database tables initialized successfully');
-  });
-}
+//     // Create indexes for better performance
+//     db.run('CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)');
+//     db.run('CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id)');
+//     db.run('CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)');
+//     db.run('CREATE INDEX IF NOT EXISTS idx_language_dashboards_user_id ON language_dashboards(user_id)');
+//     db.run('CREATE INDEX IF NOT EXISTS idx_language_dashboards_user_language ON language_dashboards(user_id, language)');
+//     db.run('CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id)');
+//     db.run('CREATE INDEX IF NOT EXISTS idx_conversations_language_dashboard_id ON conversations(language_dashboard_id)');
+//     db.run('CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id)');
+//     db.run('CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at)');
+//     db.run('CREATE INDEX IF NOT EXISTS idx_personas_user_id ON personas(user_id)');
+    
+//     console.log('Database schema created successfully!');
+//   });
+// }
 
 // User functions
 function createUser(userData: Partial<User>) {
-  return new Promise<User>((resolve, reject) => {
-    const googleId = userData.googleId || userData.google_id;
-    const passwordHash = userData.passwordHash || userData.password_hash;
-    const { email, name, role = 'user', onboarding_complete = false } = userData;
-    
-    const sql = `
-      INSERT OR REPLACE INTO users (google_id, email, name, password_hash, role, onboarding_complete, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-    `;
-    
-    db.run(sql, [googleId, email, name, passwordHash, role, onboarding_complete], function(err) {
-      if (err) {
-        reject(err);
-      } else {
-        resolve({ id: this.lastID, ...userData } as User);
+  return new Promise<User>(async (resolve, reject) => {
+    try {
+      if (!supabase) {
+        reject(new Error('Supabase client not initialized'));
+        return;
       }
-    });
+
+      // For Supabase, we'll create the user directly in our custom users table
+      // The auth will be handled by the frontend or through other means
+      const { data, error } = await supabase
+        .from('users')
+        .insert({
+          google_id: userData.googleId || userData.google_id,
+          email: userData.email,
+          name: userData.name,
+          password_hash: userData.passwordHash || userData.password_hash,
+          role: userData.role || 'user',
+          onboarding_complete: userData.onboarding_complete || false
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('❌ Supabase createUser error:', error);
+        reject(error);
+      } else {
+        console.log('✅ User created successfully:', data);
+        // Ensure the returned user has an ID
+        const user = data as User;
+        if (!user.id) {
+          reject(new Error('User created but no ID returned'));
+          return;
+        }
+        resolve(user);
+      }
+    } catch (error) {
+      console.error('❌ createUser error:', error);
+      reject(error);
+    }
   });
 }
 
 function findUserByGoogleId(googleId: string) {
-  return new Promise<User | null>((resolve, reject) => {
-    const sql = 'SELECT * FROM users WHERE google_id = ?';
-    
-    db.get(sql, [googleId], (err, row) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(row ? (row as User) : null);
+  return new Promise<User | null>(async (resolve, reject) => {
+    try {
+      if (!supabase) {
+        reject(new Error('Supabase client not initialized'));
+        return;
       }
-    });
+
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('google_id', googleId)
+        .single();
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 is "not found"
+        console.error('❌ Supabase findUserByGoogleId error:', error);
+        reject(error);
+      } else {
+        resolve(data as User || null);
+      }
+    } catch (error) {
+      console.error('❌ findUserByGoogleId error:', error);
+      reject(error);
+    }
   });
 }
 
 function findUserByEmail(email: string) {
-  return new Promise<User | null>((resolve, reject) => {
-    const sql = 'SELECT * FROM users WHERE email = ?';
-    
-    db.get(sql, [email], (err, row) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(row ? (row as User) : null);
+  return new Promise<User | null>(async (resolve, reject) => {
+    try {
+      if (!supabase) {
+        reject(new Error('Supabase client not initialized'));
+        return;
       }
-    });
+
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', email)
+        .single();
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 is "not found"
+        console.error('❌ Supabase findUserByEmail error:', error);
+        reject(error);
+      } else {
+        const user = data as User;
+        if (user && !user.id) {
+          console.error('❌ User found but no ID:', user);
+          reject(new Error('User found but no ID returned'));
+          return;
+        }
+        resolve(user || null);
+      }
+    } catch (error) {
+      console.error('❌ findUserByEmail error:', error);
+      reject(error);
+    }
   });
 }
 
 function findUserById(id: number) {
-  return new Promise<User | null>((resolve, reject) => {
-    const sql = 'SELECT * FROM users WHERE id = ?';
-    
-    db.get(sql, [id], (err, row) => {
-      if (err) {
-        reject(err);
+  return new Promise<User | null>(async (resolve, reject) => {
+    try {
+      if (!supabase) {
+        reject(new Error('Supabase client not initialized'));
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 is "not found"
+        console.error('❌ Supabase findUserById error:', error);
+        reject(error);
       } else {
-        if (row) {
-          // Parse JSON fields
-          if ((row as User).talk_topics) {
+        // Parse JSON fields if they exist
+        if (data) {
+          if (data.talk_topics) {
             try {
-              (row as User).talk_topics = JSON.parse((row as User).talk_topics as any);
+              data.talk_topics = JSON.parse(data.talk_topics as any);
             } catch (e) {
-              (row as User).talk_topics = [];
+              data.talk_topics = [];
             }
           }
           
-          if ((row as User).learning_goals) {
+          if (data.learning_goals) {
             try {
-              (row as User).learning_goals = JSON.parse((row as User).learning_goals as any);
+              data.learning_goals = JSON.parse(data.learning_goals as any);
             } catch (e) {
-              (row as User).learning_goals = [];
+              data.learning_goals = [];
             }
           }
 
           // Parse preferences field
-          if ((row as User).preferences) {
+          if (data.preferences) {
             try {
-              (row as User).preferences = JSON.parse((row as User).preferences as any);
+              data.preferences = JSON.parse(data.preferences as any);
             } catch (e) {
-              (row as User).preferences = {};
+              data.preferences = {};
             }
           }
         }
-        resolve(row ? (row as User) : null);
+        const user = data as User;
+        if (user && !user.id) {
+          console.error('❌ User found but no ID:', user);
+          reject(new Error('User found but no ID returned'));
+          return;
+        }
+        resolve(user || null);
       }
-    });
+    } catch (error) {
+      console.error('❌ findUserById error:', error);
+      reject(error);
+    }
   });
 }
 
 function updateUser(id: number, updates: Partial<User>) {
-  return new Promise<{ changes: number }>((resolve, reject) => {
-    // Handle preferences field specially - convert to JSON string
-    const processedUpdates: any = { ...updates };
-    if (processedUpdates.preferences) {
-      processedUpdates.preferences = JSON.stringify(processedUpdates.preferences);
-    }
-    
-    const fields = Object.keys(processedUpdates).map(key => `${key} = ?`).join(', ');
-    const values = Object.values(processedUpdates);
-    
-    const sql = `UPDATE users SET ${fields}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`;
-    
-    db.run(sql, [...values, id], function(err) {
-      if (err) {
-        reject(err);
-      } else {
-        resolve({ changes: this.changes });
+  return new Promise<{ changes: number }>(async (resolve, reject) => {
+    try {
+      if (!supabase) {
+        reject(new Error('Supabase client not initialized'));
+        return;
       }
-    });
+
+      // Handle preferences field specially - convert to JSON string
+      const processedUpdates: any = { ...updates };
+      if (processedUpdates.preferences) {
+        processedUpdates.preferences = JSON.stringify(processedUpdates.preferences);
+      }
+
+      const { data, error } = await supabase
+        .from('users')
+        .update(processedUpdates)
+        .eq('id', id)
+        .select();
+
+      if (error) {
+        console.error('❌ Supabase updateUser error:', error);
+        reject(error);
+      } else {
+        console.log('✅ User updated successfully');
+        resolve({ changes: data ? data.length : 0 });
+      }
+    } catch (error) {
+      console.error('❌ updateUser error:', error);
+      reject(error);
+    }
   });
 }
 
 // Session functions
 function saveSession(userId: number, chatHistory: any[], language: string = 'en') {
-  return new Promise<{ id: number }>((resolve, reject) => {
-    const sql = `
-      INSERT OR REPLACE INTO sessions (user_id, chat_history, language, updated_at)
-      VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-    `;
-    
-    db.run(sql, [userId, JSON.stringify(chatHistory), language], function(err) {
-      if (err) {
-        reject(err);
-      } else {
-        resolve({ id: this.lastID });
+  return new Promise<Session>(async (resolve, reject) => {
+    try {
+      if (!supabase) {
+        reject(new Error('Supabase client not initialized'));
+        return;
       }
-    });
+
+      const { data, error } = await supabase
+        .from('sessions')
+        .insert({
+          user_id: userId,
+          chat_history: chatHistory,
+          language: language
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('❌ Supabase saveSession error:', error);
+        reject(error);
+      } else {
+        console.log('✅ Session saved successfully');
+        resolve(data as Session);
+      }
+    } catch (error) {
+      console.error('❌ saveSession error:', error);
+      reject(error);
+    }
   });
 }
 
 function getSession(userId: number) {
-  return new Promise<Session | null>((resolve, reject) => {
-    const sql = 'SELECT * FROM sessions WHERE user_id = ? ORDER BY updated_at DESC LIMIT 1';
-    
-    db.get(sql, [userId], (err, row) => {
-      if (err) {
-        reject(err);
-      } else {
-        if (row) {
-          (row as Session).chat_history = JSON.parse((row as Session).chat_history as any);
-        }
-        resolve(row ? (row as Session) : null);
+  return new Promise<Session | null>(async (resolve, reject) => {
+    try {
+      if (!supabase) {
+        reject(new Error('Supabase client not initialized'));
+        return;
       }
-    });
+
+      const { data, error } = await supabase
+        .from('sessions')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 is "not found"
+        console.error('❌ Supabase getSession error:', error);
+        reject(error);
+      } else {
+        resolve(data as Session || null);
+      }
+    } catch (error) {
+      console.error('❌ getSession error:', error);
+      reject(error);
+    }
   });
 }
 
 function getAllSessions(userId: number) {
-  return new Promise<Session[]>((resolve, reject) => {
-    const sql = 'SELECT * FROM sessions WHERE user_id = ? ORDER BY created_at DESC';
-    
-    db.all(sql, [userId], (err, rows) => {
-      if (err) {
-        reject(err);
-      } else {
-        (rows as Session[]).forEach(row => {
-          (row as Session).chat_history = JSON.parse((row as Session).chat_history as any);
-        });
-        resolve(rows as Session[]);
+  return new Promise<Session[]>(async (resolve, reject) => {
+    try {
+      if (!supabase) {
+        reject(new Error('Supabase client not initialized'));
+        return;
       }
-    });
+
+      const { data, error } = await supabase
+        .from('sessions')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('❌ Supabase getAllSessions error:', error);
+        reject(error);
+      } else {
+        resolve(data as Session[] || []);
+      }
+    } catch (error) {
+      console.error('❌ getAllSessions error:', error);
+      reject(error);
+    }
   });
 }
 
 function getAllUsers() {
-  return new Promise<User[]>((resolve, reject) => {
-    const sql = 'SELECT * FROM users ORDER BY created_at DESC';
-    db.all(sql, [], (err, rows) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve((rows as User[]));
+  return new Promise<User[]>(async (resolve, reject) => {
+    try {
+      if (!supabase) {
+        reject(new Error('Supabase client not initialized'));
+        return;
       }
-    });
+
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('❌ Supabase getAllUsers error:', error);
+        reject(error);
+      } else {
+        // Parse JSON fields for each user
+        const users = (data as User[] || []).map(user => {
+          if (user.talk_topics) {
+            try {
+              user.talk_topics = JSON.parse(user.talk_topics as any);
+            } catch (e) {
+              user.talk_topics = [];
+            }
+          }
+          
+          if (user.learning_goals) {
+            try {
+              user.learning_goals = JSON.parse(user.learning_goals as any);
+            } catch (e) {
+              user.learning_goals = [];
+            }
+          }
+
+          if (user.preferences) {
+            try {
+              user.preferences = JSON.parse(user.preferences as any);
+            } catch (e) {
+              user.preferences = {};
+            }
+          }
+          
+          return user;
+        });
+        
+        resolve(users);
+      }
+    } catch (error) {
+      console.error('❌ getAllUsers error:', error);
+      reject(error);
+    }
   });
 }
 
 // Conversation functions
 function createConversation(userId: number, language: string, title?: string, topics?: string[], formality?: string, description?: string, usesPersona?: boolean, personaId?: number, learningGoals?: string[]) {
-  return new Promise<{ id: number }>((resolve, reject) => {
-    console.log('🗄️ DATABASE: Creating conversation:', { userId, language, title, topics, formality, description, usesPersona, personaId, learningGoals });
-    
-    const topicsJson = topics ? JSON.stringify(topics) : null;
-    const learningGoalsJson = learningGoals ? JSON.stringify(learningGoals) : null;
-    
-    // First, get the language dashboard ID for this user and language
-    const getDashboardSql = `SELECT id FROM language_dashboards WHERE user_id = ? AND language = ?`;
-    
-    db.get(getDashboardSql, [userId, language], (err, dashboard) => {
-      if (err) {
-        console.error('❌ DATABASE: Error getting language dashboard:', err);
-        reject(err);
-      } else if (!dashboard) {
-        console.error('❌ DATABASE: Language dashboard not found for user:', userId, 'language:', language);
-        reject(new Error('Language dashboard not found'));
-      } else {
-        const sql = `
-          INSERT INTO conversations (user_id, language_dashboard_id, title, topics, formality, description, uses_persona, persona_id, learning_goals)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `;
-        
-        db.run(sql, [userId, (dashboard as { id: number }).id, title, topicsJson, formality, description, usesPersona || false, personaId || null, learningGoalsJson], function(err) {
-          if (err) {
-            console.error('❌ DATABASE: Error creating conversation:', err);
-            reject(err);
-          } else {
-            console.log('✅ DATABASE: Conversation created successfully:', { 
-              id: this.lastID, 
-              user_id: userId, 
-              language_dashboard_id: (dashboard as { id: number }).id,
-              title,
-              topics: topicsJson,
-              formality,
-              description,
-              uses_persona: usesPersona || false,
-              persona_id: personaId || null,
-              learning_goals: learningGoalsJson
-            });
-            resolve({ id: this.lastID });
-          }
-        });
+  return new Promise<Conversation>(async (resolve, reject) => {
+    try {
+      if (!supabase) {
+        reject(new Error('Supabase client not initialized'));
+        return;
       }
-    });
+
+      // First, get or create a language dashboard for this user and language
+      let languageDashboard = await getLanguageDashboard(userId, language);
+      
+      if (!languageDashboard) {
+        // Create a default language dashboard
+        languageDashboard = await createLanguageDashboard(
+          userId, 
+          language, 
+          'beginner', 
+          [], 
+          [], 
+          'conversation',
+          'en',
+          true
+        );
+      }
+
+      // Use language dashboard data as fallbacks for missing parameters
+      const finalTopics = topics && topics.length > 0 ? topics : (languageDashboard.talk_topics || []);
+      const finalLearningGoals = learningGoals && learningGoals.length > 0 ? learningGoals : (languageDashboard.learning_goals || []);
+      const finalFormality = formality || 'casual';
+      const finalTitle = title || `New ${language} Conversation`;
+
+      const { data, error } = await supabase
+        .from('conversations')
+        .insert({
+          user_id: userId,
+          language_dashboard_id: languageDashboard.id,
+          title: finalTitle,
+          topics: finalTopics,
+          formality: finalFormality,
+          description: description || '',
+          uses_persona: usesPersona || false,
+          persona_id: personaId || null,
+          learning_goals: finalLearningGoals
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('❌ Supabase createConversation error:', error);
+        reject(error);
+      } else {
+        console.log('✅ Conversation created successfully');
+        resolve(data as Conversation);
+      }
+    } catch (error) {
+      console.error('❌ createConversation error:', error);
+      reject(error);
+    }
   });
 }
 
@@ -481,572 +677,765 @@ function addMessage(
   messageOrder?: number,
   romanizedText?: string
 ) {
-  return new Promise<{ id: number }>((resolve, reject) => {
-    console.log('🗄️ DATABASE: Adding message:', { 
-      conversationId, 
-      sender, 
-      text: text.substring(0, 50) + (text.length > 50 ? '...' : ''), 
-      messageType, 
-      audioFilePath,
-      messageOrder
-    });
-
-    // If messageOrder is provided, use it; otherwise, auto-increment
-    const getOrder = (cb: (order: number) => void) => {
-      if (typeof messageOrder === 'number') {
-        cb(messageOrder);
-      } else {
-        const getOrderSql = `
-          SELECT COALESCE(MAX(message_order), 0) + 1 as next_order
-          FROM messages WHERE conversation_id = ?
-        `;
-        db.get(getOrderSql, [conversationId], (err, row) => {
-          if (err) {
-            console.error('❌ DATABASE: Error getting message order:', err);
-            reject(err);
-          } else {
-            cb((row as { next_order: number }).next_order);
-          }
-        });
+  return new Promise<Message>(async (resolve, reject) => {
+    try {
+      if (!supabase) {
+        reject(new Error('Supabase client not initialized'));
+        return;
       }
-    };
 
-    getOrder((finalOrder) => {
-      const insertSql = `
-        INSERT INTO messages (conversation_id, sender, text, romanized_text, message_type, audio_file_path, detailed_feedback, message_order)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `;
-      db.run(insertSql, [conversationId, sender, text, romanizedText, messageType, audioFilePath, detailedFeedback, finalOrder], function(err) {
-        if (err) {
-          console.error('❌ DATABASE: Error inserting message:', err);
-          reject(err);
-        } else {
-          console.log('✅ DATABASE: Message inserted successfully:', { 
-            id: this.lastID, 
-            conversationId, 
-            sender, 
-            messageType,
-            messageOrder: finalOrder,
-            textPreview: text.substring(0, 50) + (text.length > 50 ? '...' : '')
-          });
-          // Update conversation message count
-          const updateSql = `
-            UPDATE conversations 
-            SET message_count = message_count + 1, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-          `;
-          db.run(updateSql, [conversationId], (err) => {
-            if (err) {
-              console.error('❌ DATABASE: Error updating conversation message count:', err);
-              reject(err);
-            } else {
-              console.log('✅ DATABASE: Conversation message count updated for ID:', conversationId);
-              resolve({ id: this.lastID });
-            }
-          });
+      // Get the next message order if not provided
+      let finalOrder = messageOrder;
+      if (!finalOrder) {
+        const { data: orderData, error: orderError } = await supabase
+          .from('messages')
+          .select('message_order')
+          .eq('conversation_id', conversationId)
+          .order('message_order', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (orderError && orderError.code !== 'PGRST116') {
+          console.error('❌ Error getting message order:', orderError);
+          reject(orderError);
+          return;
         }
-      });
-    });
+
+        finalOrder = orderData ? orderData.message_order + 1 : 1;
+      }
+
+      const { data, error } = await supabase
+        .from('messages')
+        .insert({
+          conversation_id: conversationId,
+          sender: sender,
+          text: text,
+          romanized_text: romanizedText,
+          message_type: messageType,
+          audio_file_path: audioFilePath,
+          detailed_feedback: detailedFeedback,
+          message_order: finalOrder
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('❌ Supabase addMessage error:', error);
+        reject(error);
+      } else {
+        console.log('✅ Message added successfully');
+        resolve(data as Message);
+      }
+    } catch (error) {
+      console.error('❌ addMessage error:', error);
+      reject(error);
+    }
   });
 }
 
 function getUserConversations(userId: number, language?: string) {
-  return new Promise<Conversation[]>((resolve, reject) => {
-    let sql: string;
-    let params: any[];
-    
-    if (language) {
-      // Get conversations for specific language dashboard
-      sql = `
-        SELECT c.id, c.title, ld.language, c.message_count, c.created_at, c.updated_at, c.uses_persona, c.persona_id, p.name as persona_name, p.description as persona_description, c.synopsis, c.progress_data, c.learning_goals
-        FROM conversations c
-        JOIN language_dashboards ld ON c.language_dashboard_id = ld.id
-        LEFT JOIN personas p ON c.persona_id = p.id
-        WHERE c.user_id = ? AND ld.language = ?
-        ORDER BY c.updated_at DESC
-      `;
-      params = [userId, language];
-    } else {
-      // Get all conversations for user
-      sql = `
-        SELECT c.id, c.title, ld.language, c.message_count, c.created_at, c.updated_at, c.uses_persona, c.persona_id, p.name as persona_name, p.description as persona_description, c.synopsis, c.progress_data, c.learning_goals
-        FROM conversations c
-        JOIN language_dashboards ld ON c.language_dashboard_id = ld.id
-        LEFT JOIN personas p ON c.persona_id = p.id
-        WHERE c.user_id = ?
-        ORDER BY c.updated_at DESC
-      `;
-      params = [userId];
-    }
-    
-    db.all(sql, params, async (err, rows) => {
-      if (err) {
-        reject(err);
-      } else {
-        console.log('🗄️ DATABASE: Found conversations:', (rows as Conversation[]).length);
-        // For each conversation, get its messages
-        const conversationsWithMessages = await Promise.all(
-          (rows as Conversation[]).map(async (conversation) => {
-            try {
-              const messages = await new Promise<Message[]>((resolve, reject) => {
-                db.all(
-                  'SELECT id, sender, text, message_type, audio_file_path, detailed_feedback, message_order, created_at FROM messages WHERE conversation_id = ? ORDER BY message_order',
-                  [conversation.id],
-                  (err, messages) => {
-                    if (err) reject(err);
-                    else resolve(messages as Message[]);
-                  }
-                );
-              });
-              console.log(`Conversation ${conversation.id}: ${messages.length} messages, synopsis: ${conversation.synopsis ? 'YES' : 'NO'}`);
-              
-              // Parse JSON fields
-              const parsedConversation = {
-                ...conversation,
-                topics: (conversation as any).topics ? JSON.parse((conversation as any).topics) : null,
-                learning_goals: (conversation as any).learning_goals ? JSON.parse((conversation as any).learning_goals) : null,
-                progress_data: (() => {
-                  try {
-                    return (conversation as any).progress_data ? JSON.parse((conversation as any).progress_data) : null;
-                  } catch (error) {
-                    console.error('❌ Error parsing progress data from conversation:', conversation.id, error);
-                    return null;
-                  }
-                })(),
-                messages
-              };
-              
-              return parsedConversation;
-            } catch (error) {
-              console.error('Error fetching messages for conversation:', conversation.id, error);
-              return { ...conversation, messages: [] };
-            }
-          })
-        );
-        console.log('Returning conversations with messages:', conversationsWithMessages.length);
-        resolve(conversationsWithMessages);
+  return new Promise<Conversation[]>(async (resolve, reject) => {
+    try {
+      if (!supabase) {
+        reject(new Error('Supabase client not initialized'));
+        return;
       }
-    });
+
+      let query = supabase
+        .from('conversations')
+        .select('*')
+        .eq('user_id', userId);
+
+      const { data, error } = await query
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('❌ Supabase getUserConversations error:', error);
+        reject(error);
+      } else {
+        // If language is specified, filter conversations by getting their language dashboards
+        let conversations = data as Conversation[] || [];
+        
+        if (language) {
+          // Get all language dashboard IDs for this user and language
+          const { data: dashboardData, error: dashboardError } = await supabase
+            .from('language_dashboards')
+            .select('id')
+            .eq('user_id', userId)
+            .eq('language', language);
+
+          if (dashboardError) {
+            console.error('❌ Error fetching language dashboards for filtering:', dashboardError);
+            reject(dashboardError);
+            return;
+          }
+
+          const dashboardIds = dashboardData?.map((d: any) => d.id) || [];
+          
+          // Filter conversations to only include those with matching language dashboard IDs
+          conversations = conversations.filter(conversation => 
+            dashboardIds.includes(conversation.language_dashboard_id)
+          );
+        }
+
+        // Parse JSON fields for each conversation
+        const processedConversations = conversations.map(conversation => {
+          if (conversation.topics) {
+            try {
+              conversation.topics = JSON.parse(conversation.topics as any);
+            } catch (e) {
+              conversation.topics = [];
+            }
+          }
+          
+          if (conversation.learning_goals) {
+            try {
+              conversation.learning_goals = JSON.parse(conversation.learning_goals as any);
+            } catch (e) {
+              conversation.learning_goals = [];
+            }
+          }
+
+          if (conversation.progress_data) {
+            try {
+              conversation.progress_data = JSON.parse(conversation.progress_data as any);
+            } catch (e) {
+              conversation.progress_data = { goals: [], percentages: [] };
+            }
+          }
+          
+          return conversation;
+        });
+        
+        resolve(processedConversations);
+      }
+    } catch (error) {
+      console.error('❌ getUserConversations error:', error);
+      reject(error);
+    }
   });
 }
 
 function getConversationWithMessages(conversationId: number) {
-  return new Promise<Conversation & { messages: Message[] } | null>((resolve, reject) => {
-    console.log('🗄️ DATABASE: Getting conversation with messages:', conversationId);
-    const conversationSql = `
-      SELECT c.*, u.name as user_name, ld.language, c.learning_goals
-      FROM conversations c
-      JOIN users u ON c.user_id = u.id
-      JOIN language_dashboards ld ON c.language_dashboard_id = ld.id
-      WHERE c.id = ?
-    `;
-    
-    const messagesSql = `
-      SELECT id, sender, text, romanized_text, message_type, audio_file_path, detailed_feedback, message_order, created_at
-      FROM messages 
-      WHERE conversation_id = ?
-      ORDER BY message_order
-    `;
-    
-    db.get(conversationSql, [conversationId], (err, conversation) => {
-      if (err) {
-        console.error('❌ DATABASE: Error getting conversation:', err);
-        reject(err);
-      } else if (conversation) {
-        const conv = conversation as Conversation;
-        console.log('✅ DATABASE: Conversation found:', {
-          id: conv.id,
-          title: conv.title,
-          message_count: conv.message_count
-        });
-        console.log('🔍 DATABASE: Executing message query with conversationId:', conversationId, 'type:', typeof conversationId);
-        db.all(messagesSql, [conversationId], (err, messages) => {
-          if (err) {
-            console.error('❌ DATABASE: Error getting messages:', err);
-            reject(err);
-          } else {
-            console.log('📋 DATABASE: Found', messages.length, 'messages for conversation', conversationId);
-            if ((messages as Message[]).length > 0) {
-              console.log('📝 DATABASE: Sample messages:', (messages as Message[]).slice(0, 2).map((m: any) => ({
-                id: m.id,
-                sender: m.sender,
-                text: m.text.substring(0, 50) + '...',
-                message_order: m.message_order
-              })));
-            } else {
-              // If no messages found, let's check if there are any messages in the database at all
-              console.log('🔍 DATABASE: No messages found, checking all messages in database...');
-              db.all('SELECT conversation_id, COUNT(*) as count FROM messages GROUP BY conversation_id', [], (err, allMessages) => {
-                if (!err) {
-                  console.log('📊 DATABASE: All messages by conversation:', allMessages);
-                }
-              });
-            }
-            // Parse topics from JSON if present
-            const conv = conversation as Conversation;
-            const parsedConversation = {
-              ...conv,
-              topics: (conv as any).topics ? JSON.parse((conv as any).topics) : null,
-              formality: (conv as any).formality,
-              learning_goals: (conv as any).learning_goals ? JSON.parse((conv as any).learning_goals) : null,
-              progress_data: (() => {
-                try {
-                  return (conv as any).progress_data ? JSON.parse((conv as any).progress_data) : null;
-                } catch (error) {
-                  console.error('❌ Error parsing progress data from conversation:', conv.id, error);
-                  return null;
-                }
-              })(),
-              messages: messages as Message[]
-            };
-            
-            console.log('🔍 DATABASE: Raw learning_goals from DB:', (conv as any).learning_goals);
-            console.log('🔍 DATABASE: Parsed learning_goals:', parsedConversation.learning_goals);
-            
-            resolve(parsedConversation as Conversation & { messages: Message[] });
-          }
-        });
-      } else {
-        console.log('❌ DATABASE: Conversation not found:', conversationId);
-        resolve(null);
+  return new Promise<Conversation | null>(async (resolve, reject) => {
+    try {
+      if (!supabase) {
+        reject(new Error('Supabase client not initialized'));
+        return;
       }
-    });
+
+      // Get the conversation
+      const { data: conversationData, error: conversationError } = await supabase
+        .from('conversations')
+        .select(`
+          *,
+          language_dashboards(language)
+        `)
+        .eq('id', conversationId)
+        .single();
+
+      if (conversationError) {
+        console.error('❌ Supabase getConversationWithMessages error:', conversationError);
+        reject(conversationError);
+        return;
+      }
+
+      if (!conversationData) {
+        resolve(null);
+        return;
+      }
+
+      // Get the messages for this conversation
+      const { data: messagesData, error: messagesError } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('conversation_id', conversationId)
+        .order('message_order', { ascending: true });
+
+      if (messagesError) {
+        console.error('❌ Error fetching messages:', messagesError);
+        reject(messagesError);
+        return;
+      }
+
+      // Parse JSON fields
+      const conversation = conversationData as Conversation;
+      if (conversation.topics) {
+        try {
+          conversation.topics = JSON.parse(conversation.topics as any);
+        } catch (e) {
+          conversation.topics = [];
+        }
+      }
+      
+      if (conversation.learning_goals) {
+        try {
+          conversation.learning_goals = JSON.parse(conversation.learning_goals as any);
+        } catch (e) {
+          conversation.learning_goals = [];
+        }
+      }
+
+      if (conversation.progress_data) {
+        try {
+          conversation.progress_data = JSON.parse(conversation.progress_data as any);
+        } catch (e) {
+          conversation.progress_data = { goals: [], percentages: [] };
+        }
+      }
+
+      // Add messages to conversation
+      conversation.messages = messagesData as Message[] || [];
+
+      console.log('✅ Conversation with messages fetched successfully');
+      resolve(conversation);
+    } catch (error) {
+      console.error('❌ getConversationWithMessages error:', error);
+      reject(error);
+    }
   });
 }
 
 function getLatestConversation(userId: number, language?: string) {
-  return new Promise<Conversation & { messages: Message[] } | null>((resolve, reject) => {
-    let sql: string;
-    let params: any[];
-    
-    if (language) {
-      sql = `
-        SELECT c.id FROM conversations c
-        JOIN language_dashboards ld ON c.language_dashboard_id = ld.id
-        WHERE c.user_id = ? AND ld.language = ?
-        ORDER BY c.updated_at DESC 
-        LIMIT 1
-      `;
-      params = [userId, language];
-    } else {
-      sql = `
-        SELECT id FROM conversations 
-        WHERE user_id = ? 
-        ORDER BY updated_at DESC 
-        LIMIT 1
-      `;
-      params = [userId];
-    }
-    
-    db.get(sql, params, (err, row) => {
-      if (err) {
-        reject(err);
-      } else if (row) {
-        // Get the full conversation with messages
-        getConversationWithMessages((row as { id: number }).id).then(resolve).catch(reject);
-      } else {
-        resolve(null);
+  return new Promise<Conversation | null>(async (resolve, reject) => {
+    try {
+      if (!supabase) {
+        reject(new Error('Supabase client not initialized'));
+        return;
       }
-    });
+
+      let query = supabase
+        .from('conversations')
+        .select('*')
+        .eq('user_id', userId);
+
+      // If language is specified, filter by language dashboard IDs
+      if (language) {
+        // Get all language dashboard IDs for this user and language
+        const { data: dashboardData, error: dashboardError } = await supabase
+          .from('language_dashboards')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('language', language);
+
+        if (dashboardError) {
+          console.error('❌ Error fetching language dashboards for latest conversation:', dashboardError);
+          reject(dashboardError);
+          return;
+        }
+
+        const dashboardIds = dashboardData?.map((d: any) => d.id) || [];
+        
+        if (dashboardIds.length === 0) {
+          resolve(null);
+          return;
+        }
+
+        query = query.in('language_dashboard_id', dashboardIds);
+      }
+
+      const { data, error } = await query
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 is "not found"
+        console.error('❌ Supabase getLatestConversation error:', error);
+        reject(error);
+      } else {
+        if (data) {
+          // Parse JSON fields
+          const conversation = data as Conversation;
+          if (conversation.topics) {
+            try {
+              conversation.topics = JSON.parse(conversation.topics as any);
+            } catch (e) {
+              conversation.topics = [];
+            }
+          }
+          
+          if (conversation.learning_goals) {
+            try {
+              conversation.learning_goals = JSON.parse(conversation.learning_goals as any);
+            } catch (e) {
+              conversation.learning_goals = [];
+            }
+          }
+
+          if (conversation.progress_data) {
+            try {
+              conversation.progress_data = JSON.parse(conversation.progress_data as any);
+            } catch (e) {
+              conversation.progress_data = { goals: [], percentages: [] };
+            }
+          }
+          
+          resolve(conversation);
+        } else {
+          resolve(null);
+        }
+      }
+    } catch (error) {
+      console.error('❌ getLatestConversation error:', error);
+      reject(error);
+    }
   });
 }
 
 function updateConversationTitle(conversationId: number, title: string) {
-  return new Promise<{ changes: number }>((resolve, reject) => {
-    const sql = `
-      UPDATE conversations 
-      SET title = ?, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `;
-    
-    db.run(sql, [title, conversationId], function(err) {
-      if (err) {
-        reject(err);
-      } else {
-        resolve({ changes: this.changes });
+  return new Promise<{ changes: number }>(async (resolve, reject) => {
+    try {
+      if (!supabase) {
+        reject(new Error('Supabase client not initialized'));
+        return;
       }
-    });
+
+      const { data, error } = await supabase
+        .from('conversations')
+        .update({ title: title })
+        .eq('id', conversationId)
+        .select();
+
+      if (error) {
+        console.error('❌ Supabase updateConversationTitle error:', error);
+        reject(error);
+      } else {
+        console.log('✅ Conversation title updated successfully');
+        resolve({ changes: data ? data.length : 0 });
+      }
+    } catch (error) {
+      console.error('❌ updateConversationTitle error:', error);
+      reject(error);
+    }
   });
 }
 
 function updateConversationSynopsis(conversationId: number, synopsis: string, progressData?: string) {
-  return new Promise<{ changes: number }>((resolve, reject) => {
-    console.log('🗄️ DATABASE: Updating conversation synopsis:', { conversationId, synopsis: synopsis.substring(0, 50) + '...', progressData });
-    
-    const sql = `UPDATE conversations SET synopsis = ?, progress_data = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`;
-    console.log('🗄️ DATABASE: SQL query:', sql);
-    console.log('🗄️ DATABASE: Parameters:', [synopsis.substring(0, 50) + '...', progressData, conversationId]);
-    
-    db.run(sql, [synopsis, progressData || null, conversationId], function(err) {
-      if (err) {
-        console.error('❌ DATABASE: Error updating conversation synopsis:', err);
-        reject(err);
-      } else {
-        console.log('✅ DATABASE: Conversation synopsis and progress updated successfully, changes:', this.changes);
-        resolve({ changes: this.changes });
+  return new Promise<{ changes: number }>(async (resolve, reject) => {
+    try {
+      if (!supabase) {
+        reject(new Error('Supabase client not initialized'));
+        return;
       }
-    });
+
+      const updateData: any = { 
+        synopsis: synopsis 
+      };
+
+      if (progressData) {
+        updateData.progress_data = progressData;
+      }
+
+      const { data, error } = await supabase
+        .from('conversations')
+        .update(updateData)
+        .eq('id', conversationId)
+        .select();
+
+      if (error) {
+        console.error('❌ Supabase updateConversationSynopsis error:', error);
+        reject(error);
+      } else {
+        console.log('✅ Conversation synopsis updated successfully');
+        resolve({ changes: data ? data.length : 0 });
+      }
+    } catch (error) {
+      console.error('❌ updateConversationSynopsis error:', error);
+      reject(error);
+    }
   });
 }
 
 function deleteConversation(conversationId: number) {
-  return new Promise<{ changes: number }>((resolve, reject) => {
-    // First delete all messages in the conversation
-    const deleteMessagesSql = `DELETE FROM messages WHERE conversation_id = ?`;
-    
-    db.run(deleteMessagesSql, [conversationId], (err) => {
-      if (err) {
-        reject(err);
-      } else {
-        // Then delete the conversation
-        const deleteConversationSql = `DELETE FROM conversations WHERE id = ?`;
-        
-        db.run(deleteConversationSql, [conversationId], function(err) {
-          if (err) {
-            reject(err);
-          } else {
-            resolve({ changes: this.changes });
-          }
-        });
+  return new Promise<{ changes: number }>(async (resolve, reject) => {
+    try {
+      if (!supabase) {
+        reject(new Error('Supabase client not initialized'));
+        return;
       }
-    });
+
+      // First delete all messages in the conversation
+      const { error: messagesError } = await supabase
+        .from('messages')
+        .delete()
+        .eq('conversation_id', conversationId);
+
+      if (messagesError) {
+        console.error('❌ Error deleting messages:', messagesError);
+        reject(messagesError);
+        return;
+      }
+
+      // Then delete the conversation
+      const { data, error } = await supabase
+        .from('conversations')
+        .delete()
+        .eq('id', conversationId)
+        .select();
+
+      if (error) {
+        console.error('❌ Supabase deleteConversation error:', error);
+        reject(error);
+      } else {
+        console.log('✅ Conversation deleted successfully');
+        resolve({ changes: data ? data.length : 0 });
+      }
+    } catch (error) {
+      console.error('❌ deleteConversation error:', error);
+      reject(error);
+    }
   });
 }
 
 function updateConversationPersona(conversationId: number, usesPersona: boolean, personaId?: number) {
-  return new Promise<void>((resolve, reject) => {
-    const sql = `UPDATE conversations SET uses_persona = ?, persona_id = ? WHERE id = ?`;
-    db.run(sql, [usesPersona, personaId || null, conversationId], function(err) {
-      if (err) {
-        reject(err);
-      } else {
-        resolve();
+  return new Promise<{ changes: number }>(async (resolve, reject) => {
+    try {
+      if (!supabase) {
+        reject(new Error('Supabase client not initialized'));
+        return;
       }
-    });
+
+      const updateData: any = {
+        uses_persona: usesPersona
+      };
+
+      if (personaId !== undefined) {
+        updateData.persona_id = personaId;
+      }
+
+      const { data, error } = await supabase
+        .from('conversations')
+        .update(updateData)
+        .eq('id', conversationId)
+        .select();
+
+      if (error) {
+        console.error('❌ Supabase updateConversationPersona error:', error);
+        reject(error);
+      } else {
+        console.log('✅ Conversation persona updated successfully');
+        resolve({ changes: data ? data.length : 0 });
+      }
+    } catch (error) {
+      console.error('❌ updateConversationPersona error:', error);
+      reject(error);
+    }
   });
 }
 
 // Close database connection
-function closeDatabase() {
-  db.close((err) => {
-    if (err) {
-      console.error('Error closing database:', err.message);
-    } else {
-      console.log('Database connection closed');
-    }
-  });
-}
+// function closeDatabase() {
+//   db.close((err) => {
+//     if (err) {
+//       console.error('Error closing database:', err.message);
+//     } else {
+//       console.log('Database connection closed');
+//     }
+//   });
+// }
 
 // Language Dashboard functions
 function createLanguageDashboard(userId: number, language: string, proficiencyLevel: string, talkTopics: string[], learningGoals: string[], practicePreference: string, feedbackLanguage: string = 'en', isPrimary: boolean = false) {
-  return new Promise<LanguageDashboard>((resolve, reject) => {
-    const topicsJson = talkTopics ? JSON.stringify(talkTopics) : null;
-    const goalsJson = learningGoals ? JSON.stringify(learningGoals) : null;
-    
-    const sql = `
-      INSERT INTO language_dashboards (user_id, language, proficiency_level, talk_topics, learning_goals, practice_preference, feedback_language, speak_speed, is_primary)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `;
-    
-    db.run(sql, [userId, language, proficiencyLevel, topicsJson, goalsJson, practicePreference, feedbackLanguage, 1.0, isPrimary], function(err) {
-      if (err) {
-        reject(err);
-      } else {
-        resolve({ 
-          id: this.lastID, 
-          user_id: userId, 
-          language, 
-          proficiency_level: proficiencyLevel, 
-          talk_topics: talkTopics, 
-          learning_goals: learningGoals, 
-          practice_preference: practicePreference, 
+  return new Promise<LanguageDashboard>(async (resolve, reject) => {
+    try {
+      console.log('🔍 DB: createLanguageDashboard called with:', { userId, language, proficiencyLevel, talkTopics, learningGoals, practicePreference, feedbackLanguage, isPrimary });
+      
+      if (!supabase) {
+        console.error('❌ DB: Supabase client not initialized');
+        reject(new Error('Supabase client not initialized'));
+        return;
+      }
+
+      // Convert arrays to JSON strings for database storage
+      const { data, error } = await supabase
+        .from('language_dashboards')
+        .insert({
+          user_id: userId,
+          language: language,
+          proficiency_level: proficiencyLevel,
+          talk_topics: JSON.stringify(talkTopics),
+          learning_goals: JSON.stringify(learningGoals),
+          practice_preference: practicePreference,
           feedback_language: feedbackLanguage,
           speak_speed: 1.0,
-          is_primary: isPrimary 
-        });
+          romanization_display: 'both',
+          is_primary: isPrimary
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('❌ Supabase createLanguageDashboard error:', error);
+        reject(error);
+      } else {
+        console.log('✅ Language dashboard created successfully');
+        resolve(data as LanguageDashboard);
       }
-    });
+    } catch (error) {
+      console.error('❌ createLanguageDashboard error:', error);
+      reject(error);
+    }
   });
 }
 
 function getUserLanguageDashboards(userId: number) {
-  return new Promise<LanguageDashboard[]>((resolve, reject) => {
-    const sql = `
-      SELECT id, language, proficiency_level, talk_topics, learning_goals, practice_preference, feedback_language, speak_speed, romanization_display, is_primary, created_at, updated_at
-      FROM language_dashboards 
-      WHERE user_id = ?
-      ORDER BY is_primary DESC, created_at ASC
-    `;
-    
-    db.all(sql, [userId], (err, rows) => {
-      if (err) {
-        reject(err);
-      } else {
-        const dashboards = (rows as LanguageDashboard[]).map(row => ({
-          ...row,
-          talk_topics: (row as any).talk_topics ? JSON.parse((row as any).talk_topics) : [],
-          learning_goals: (row as any).learning_goals ? JSON.parse((row as any).learning_goals) : []
-        }));
-        resolve(dashboards as LanguageDashboard[]);
+  return new Promise<LanguageDashboard[]>(async (resolve, reject) => {
+    try {
+      if (!supabase) {
+        reject(new Error('Supabase client not initialized'));
+        return;
       }
-    });
+
+      const { data, error } = await supabase
+        .from('language_dashboards')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('❌ Supabase getUserLanguageDashboards error:', error);
+        reject(error);
+      } else {
+        // Parse JSON fields for each dashboard
+        const dashboards = (data as LanguageDashboard[] || []).map(dashboard => {
+          if (dashboard.talk_topics) {
+            try {
+              dashboard.talk_topics = JSON.parse(dashboard.talk_topics as any);
+            } catch (e) {
+              dashboard.talk_topics = [];
+            }
+          }
+          
+          if (dashboard.learning_goals) {
+            try {
+              dashboard.learning_goals = JSON.parse(dashboard.learning_goals as any);
+            } catch (e) {
+              dashboard.learning_goals = [];
+            }
+          }
+          
+          return dashboard;
+        });
+        
+        resolve(dashboards);
+      }
+    } catch (error) {
+      console.error('❌ getUserLanguageDashboards error:', error);
+      reject(error);
+    }
   });
 }
 
 function getLanguageDashboard(userId: number, language: string) {
-  return new Promise<LanguageDashboard | null>((resolve, reject) => {
-    const sql = `
-      SELECT id, language, proficiency_level, talk_topics, learning_goals, practice_preference, feedback_language, speak_speed, romanization_display, is_primary, created_at, updated_at
-      FROM language_dashboards 
-      WHERE user_id = ? AND language = ?
-    `;
-    
-    db.get(sql, [userId, language], (err, row) => {
-      if (err) {
-        reject(err);
-      } else if (row) {
-        const dash = row as LanguageDashboard;
-        const dashboard = {
-          ...dash,
-          talk_topics: (dash as any).talk_topics ? JSON.parse((dash as any).talk_topics) : [],
-          learning_goals: (dash as any).learning_goals ? JSON.parse((dash as any).learning_goals) : []
-        };
-        resolve(dashboard as LanguageDashboard);
-      } else {
-        resolve(null);
+  return new Promise<LanguageDashboard | null>(async (resolve, reject) => {
+    try {
+      if (!supabase) {
+        reject(new Error('Supabase client not initialized'));
+        return;
       }
-    });
+
+      const { data, error } = await supabase
+        .from('language_dashboards')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('language', language)
+        .single();
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 is "not found"
+        console.error('❌ Supabase getLanguageDashboard error:', error);
+        reject(error);
+      } else {
+        if (data) {
+          // Parse JSON fields
+          const dashboard = data as LanguageDashboard;
+          if (dashboard.talk_topics) {
+            try {
+              dashboard.talk_topics = JSON.parse(dashboard.talk_topics as any);
+            } catch (e) {
+              dashboard.talk_topics = [];
+            }
+          }
+          
+          if (dashboard.learning_goals) {
+            try {
+              dashboard.learning_goals = JSON.parse(dashboard.learning_goals as any);
+            } catch (e) {
+              dashboard.learning_goals = [];
+            }
+          }
+          
+          resolve(dashboard);
+        } else {
+          resolve(null);
+        }
+      }
+    } catch (error) {
+      console.error('❌ getLanguageDashboard error:', error);
+      reject(error);
+    }
   });
 }
 
 function updateLanguageDashboard(userId: number, language: string, updates: Partial<LanguageDashboard>) {
-  return new Promise<{ changes: number }>((resolve, reject) => {
-    console.log('[DEBUG] updateLanguageDashboard called with:', { userId, language, updates });
-    
-    const processedUpdates = { ...updates };
-    
-    // Convert arrays to JSON strings if present
-    if (processedUpdates.talk_topics && Array.isArray(processedUpdates.talk_topics)) {
-      processedUpdates.talk_topics = JSON.stringify(processedUpdates.talk_topics) as unknown as string[];
-    }
-    if (processedUpdates.learning_goals && Array.isArray(processedUpdates.learning_goals)) {
-      processedUpdates.learning_goals = JSON.stringify(processedUpdates.learning_goals) as unknown as string[];
-    }
-    
-    const fields = Object.keys(processedUpdates).map(key => `${key} = ?`).join(', ');
-    const values = Object.values(processedUpdates);
-    
-    const sql = `UPDATE language_dashboards SET ${fields}, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND language = ?`;
-    
-    console.log('[DEBUG] SQL query:', sql);
-    console.log('[DEBUG] Values:', [...values, userId, language]);
-    
-    db.run(sql, [...values, userId, language], function(err) {
-      if (err) {
-        console.error('[DEBUG] Database error:', err);
-        reject(err);
-      } else {
-        console.log('[DEBUG] Update successful, changes:', this.changes);
-        resolve({ changes: this.changes });
+  return new Promise<{ changes: number }>(async (resolve, reject) => {
+    try {
+      if (!supabase) {
+        reject(new Error('Supabase client not initialized'));
+        return;
       }
-    });
+
+      // Handle JSON fields
+      const processedUpdates: any = { ...updates };
+      if (processedUpdates.talk_topics) {
+        processedUpdates.talk_topics = JSON.stringify(processedUpdates.talk_topics);
+      }
+      if (processedUpdates.learning_goals) {
+        processedUpdates.learning_goals = JSON.stringify(processedUpdates.learning_goals);
+      }
+
+      const { data, error } = await supabase
+        .from('language_dashboards')
+        .update(processedUpdates)
+        .eq('user_id', userId)
+        .eq('language', language)
+        .select();
+
+      if (error) {
+        console.error('❌ Supabase updateLanguageDashboard error:', error);
+        reject(error);
+      } else {
+        console.log('✅ Language dashboard updated successfully');
+        resolve({ changes: data ? data.length : 0 });
+      }
+    } catch (error) {
+      console.error('❌ updateLanguageDashboard error:', error);
+      reject(error);
+    }
   });
 }
 
 function deleteLanguageDashboard(userId: number, language: string) {
-  return new Promise<{ changes: number }>((resolve, reject) => {
-    // First, delete all conversations and messages for this dashboard
-    const getConversationsSql = `SELECT id FROM conversations WHERE user_id = ? AND language_dashboard_id = (SELECT id FROM language_dashboards WHERE user_id = ? AND language = ?)`;
-    
-    db.all(getConversationsSql, [userId, userId, language], (err, conversations) => {
-      if (err) {
-        reject(err);
-      } else {
-        const conversationIds = (conversations as { id: number }[]).map(c => c.id);
-        
-        if (conversationIds.length > 0) {
-          const deleteMessagesSql = `DELETE FROM messages WHERE conversation_id IN (${conversationIds.map(() => '?').join(',')})`;
-          db.run(deleteMessagesSql, conversationIds, (err) => {
-            if (err) {
-              reject(err);
-            } else {
-              const deleteConversationsSql = `DELETE FROM conversations WHERE id IN (${conversationIds.map(() => '?').join(',')})`;
-              db.run(deleteConversationsSql, conversationIds, (err) => {
-                if (err) {
-                  reject(err);
-                } else {
-                  // Finally delete the dashboard
-                  const deleteDashboardSql = `DELETE FROM language_dashboards WHERE user_id = ? AND language = ?`;
-                  db.run(deleteDashboardSql, [userId, language], function(err) {
-                    if (err) {
-                      reject(err);
-                    } else {
-                      resolve({ changes: this.changes });
-                    }
-                  });
-                }
-              });
-            }
-          });
-        } else {
-          // No conversations, just delete the dashboard
-          const deleteDashboardSql = `DELETE FROM language_dashboards WHERE user_id = ? AND language = ?`;
-          db.run(deleteDashboardSql, [userId, language], function(err) {
-            if (err) {
-              reject(err);
-            } else {
-              resolve({ changes: this.changes });
-            }
-          });
-        }
+  return new Promise<{ changes: number }>(async (resolve, reject) => {
+    try {
+      if (!supabase) {
+        reject(new Error('Supabase client not initialized'));
+        return;
       }
-    });
+
+      const { data, error } = await supabase
+        .from('language_dashboards')
+        .delete()
+        .eq('user_id', userId)
+        .eq('language', language)
+        .select();
+
+      if (error) {
+        console.error('❌ Supabase deleteLanguageDashboard error:', error);
+        reject(error);
+      } else {
+        console.log('✅ Language dashboard deleted successfully');
+        resolve({ changes: data ? data.length : 0 });
+      }
+    } catch (error) {
+      console.error('❌ deleteLanguageDashboard error:', error);
+      reject(error);
+    }
   });
 }
 
 function getUserStreak(userId: number, language: string) {
-  return new Promise<{ streak: number; last_active: string | null; days: string[] }>((resolve, reject) => {
-    // Get all user messages for the language, grouped by date
-    const sql = `
-      SELECT DATE(m.created_at) as day
-      FROM messages m
-      JOIN conversations c ON m.conversation_id = c.id
-      JOIN language_dashboards ld ON c.language_dashboard_id = ld.id
-      WHERE c.user_id = ? AND ld.language = ? AND m.sender = 'User'
-      GROUP BY day
-      ORDER BY day DESC
-    `;
-    db.all(sql, [userId, language], (err, rows) => {
-      if (err) return reject(err);
-      const days = (rows as { day: string }[]).map(r => r.day);
-      console.log('[STREAK DEBUG] User:', userId, 'Language:', language);
-      console.log('[STREAK DEBUG] Message days:', days);
-      if (days.length === 0) {
-        console.log('[STREAK DEBUG] No days found, streak is 0');
-        return resolve({ streak: 0, last_active: null, days: [] });
+  return new Promise<{ streak: number }>(async (resolve, reject) => {
+    try {
+      if (!supabase) {
+        reject(new Error('Supabase client not initialized'));
+        return;
       }
 
-      // Calculate streak in US Eastern Time by comparing date strings
-      const tz = 'America/New_York';
-      const now = new Date();
+      // First, get the language dashboard IDs for this user and language
+      const { data: dashboardData, error: dashboardError } = await supabase
+        .from('language_dashboards')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('language', language);
+
+      if (dashboardError) {
+        console.error('❌ Error fetching language dashboards for streak:', dashboardError);
+        reject(dashboardError);
+        return;
+      }
+
+      const dashboardIds = dashboardData?.map((d: any) => d.id) || [];
+      
+      if (dashboardIds.length === 0) {
+        resolve({ streak: 0 });
+        return;
+      }
+
+      // Get conversations for this user that match the language dashboard IDs
+      const { data: conversations, error: conversationsError } = await supabase
+        .from('conversations')
+        .select('id, created_at')
+        .eq('user_id', userId)
+        .in('language_dashboard_id', dashboardIds)
+        .order('created_at', { ascending: false });
+
+      if (conversationsError) {
+        console.error('❌ Error fetching conversations for streak:', conversationsError);
+        reject(conversationsError);
+        return;
+      }
+
+      if (!conversations || conversations.length === 0) {
+        resolve({ streak: 0 });
+        return;
+      }
+
+      // Calculate streak based on consecutive days with conversations
       let streak = 0;
-      let lastActive = null;
-      for (let i = 0; i < days.length; i++) {
-        if (i === 0) lastActive = days[i];
-        // Calculate expected date string for streak
-        const expectedDate = new Date(now);
-        expectedDate.setDate(expectedDate.getDate() - streak);
-        const expectedStr = expectedDate.toLocaleDateString('en-CA', { timeZone: tz }); // 'YYYY-MM-DD'
-        console.log(`[STREAK DEBUG] Comparing day: ${days[i]} to expected: ${expectedStr}`);
-        if (days[i] === expectedStr) {
-          streak++;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // Get unique dates from conversations (sorted by date, newest first)
+      const conversationDates = conversations.map((conv: any) => {
+        const date = new Date(conv.created_at);
+        date.setHours(0, 0, 0, 0);
+        return date;
+      });
+
+      // Remove duplicates and sort by date (newest first)
+      const uniqueDates = [...new Set(conversationDates.map((d: Date) => d.getTime()))]
+        .map((time: unknown) => new Date(time as number))
+        .sort((a, b) => b.getTime() - a.getTime());
+
+      // Calculate consecutive days starting from today
+      let currentDate = new Date(today);
+      let consecutiveDays = 0;
+
+      for (let i = 0; i < uniqueDates.length; i++) {
+        const conversationDate = uniqueDates[i];
+        const daysDiff = Math.floor((currentDate.getTime() - conversationDate.getTime()) / (1000 * 60 * 60 * 24));
+        
+        if (daysDiff === consecutiveDays) {
+          // This conversation is from the expected consecutive day
+          consecutiveDays++;
+          currentDate.setDate(currentDate.getDate() - 1); // Move to previous day
+        } else if (daysDiff < consecutiveDays) {
+          // This conversation is from a future date (shouldn't happen with sorted data)
+          continue;
         } else {
+          // Gap found, streak is broken
           break;
         }
       }
-      console.log('[STREAK DEBUG] Final streak:', streak, 'Last active:', lastActive);
-      resolve({ streak, last_active: lastActive, days });
-    });
+
+      streak = consecutiveDays;
+
+      console.log('✅ User streak calculated:', streak);
+      resolve({ streak });
+    } catch (error) {
+      console.error('❌ getUserStreak error:', error);
+      reject(error);
+    }
   });
 }
 
@@ -1059,75 +1448,110 @@ function createPersona(userId: number, personaData: {
   language: string;
   conversationId?: string;
 }) {
-  return new Promise<Persona>((resolve, reject) => {
-    const sql = `
-      INSERT INTO personas (user_id, name, description, topics, formality, language, conversation_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `;
-    const topicsJson = JSON.stringify(personaData.topics);
-    
-    db.run(sql, [
-      userId,
-      personaData.name,
-      personaData.description || null,
-      topicsJson,
-      personaData.formality,
-      personaData.language,
-      personaData.conversationId || null
-    ], function(err) {
-      if (err) {
-        reject(err);
-      } else {
-        // Get the created persona
-        const selectSql = `SELECT * FROM personas WHERE id = ?`;
-        db.get(selectSql, [this.lastID], (err, row) => {
-          if (err) {
-            reject(err);
-          } else {
-            const persona = row as any;
-            resolve({
-              ...persona,
-              topics: JSON.parse(persona.topics || '[]')
-            });
-          }
-        });
+  return new Promise<Persona>(async (resolve, reject) => {
+    try {
+      if (!supabase) {
+        reject(new Error('Supabase client not initialized'));
+        return;
       }
-    });
+
+      const { data, error } = await supabase
+        .from('personas')
+        .insert({
+          user_id: userId,
+          name: personaData.name,
+          description: personaData.description,
+          topics: personaData.topics,
+          formality: personaData.formality,
+          language: personaData.language,
+          conversation_id: personaData.conversationId
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('❌ Supabase createPersona error:', error);
+        reject(error);
+      } else {
+        console.log('✅ Persona created successfully');
+        resolve(data as Persona);
+      }
+    } catch (error) {
+      console.error('❌ createPersona error:', error);
+      reject(error);
+    }
   });
 }
 
 function getUserPersonas(userId: number) {
-  return new Promise<Persona[]>((resolve, reject) => {
-    const sql = `SELECT * FROM personas WHERE user_id = ? ORDER BY created_at DESC`;
-    db.all(sql, [userId], (err, rows) => {
-      if (err) {
-        reject(err);
+  return new Promise<Persona[]>(async (resolve, reject) => {
+    try {
+      if (!supabase) {
+        reject(new Error('Supabase client not initialized'));
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('personas')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('❌ Supabase getUserPersonas error:', error);
+        reject(error);
       } else {
-        const personas = (rows as any[]).map(row => ({
-          ...row,
-          topics: JSON.parse(row.topics || '[]')
-        }));
+        // Parse JSON fields for each persona
+        const personas = (data as Persona[] || []).map(persona => {
+          if (persona.topics) {
+            try {
+              persona.topics = JSON.parse(persona.topics as any);
+            } catch (e) {
+              persona.topics = [];
+            }
+          }
+          return persona;
+        });
+        
         resolve(personas);
       }
-    });
+    } catch (error) {
+      console.error('❌ getUserPersonas error:', error);
+      reject(error);
+    }
   });
 }
 
 function deletePersona(personaId: number) {
-  return new Promise<{ changes: number }>((resolve, reject) => {
-    const sql = `DELETE FROM personas WHERE id = ?`;
-    db.run(sql, [personaId], function(err) {
-      if (err) {
-        reject(err);
-      } else {
-        resolve({ changes: this.changes });
+  return new Promise<{ changes: number }>(async (resolve, reject) => {
+    try {
+      if (!supabase) {
+        reject(new Error('Supabase client not initialized'));
+        return;
       }
-    });
+
+      const { data, error } = await supabase
+        .from('personas')
+        .delete()
+        .eq('id', personaId)
+        .select();
+
+      if (error) {
+        console.error('❌ Supabase deletePersona error:', error);
+        reject(error);
+      } else {
+        console.log('✅ Persona deleted successfully');
+        resolve({ changes: data ? data.length : 0 });
+      }
+    } catch (error) {
+      console.error('❌ deletePersona error:', error);
+      reject(error);
+    }
   });
 }
 
 export {
-  db,
+  // db,
   createUser,
   findUserByGoogleId,
   findUserByEmail,
@@ -1136,7 +1560,7 @@ export {
   saveSession,
   getSession,
   getAllSessions,
-  closeDatabase,
+  // closeDatabase,
   getAllUsers,
   // New conversation functions
   createConversation,

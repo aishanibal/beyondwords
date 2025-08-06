@@ -152,7 +152,11 @@ function LanguageOnboarding({ onComplete, existingLanguages = [] }: LanguageOnbo
     setError('');
     try {
       const token = localStorage.getItem('jwt');
-      const response = await axios.post('/api/user/language-dashboards', {
+      // Call the backend directly
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+      
+      const response = await axios.post(`${cleanBackendUrl}/api/user/language-dashboards`, {
         language: onboardingData.language,
         proficiency: onboardingData.proficiency,
         talkTopics: onboardingData.talkTopics,

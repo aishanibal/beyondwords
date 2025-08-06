@@ -46,7 +46,11 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       setIsLoading(false);
     }, 5000);
     if (token) {
-      axios.get('/api/user/profile', {
+      // Call the backend directly
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+      
+              axios.get(`${cleanBackendUrl}/api/user/profile`, {
         headers: { Authorization: `Bearer ${token}` }
       })
         .then((res: any) => {

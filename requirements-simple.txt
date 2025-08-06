@@ -1,0 +1,14 @@
+flask
+flask-cors
+google-generativeai
+google-cloud-texttospeech
+google-cloud-speech
+google-auth
+google-auth-oauthlib
+google-auth-httplib2
+supabase
+python-dotenv
+numpy
+requests
+gunicorn
+werkzeug 

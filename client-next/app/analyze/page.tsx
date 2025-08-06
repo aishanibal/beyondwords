@@ -559,7 +559,11 @@ function Analyze() {
   // Function to fetch user's dashboard preferences
   const fetchUserDashboardPreferences = async (languageCode: string) => {
     try {
-      const response = await axios.get(`/api/user/language-dashboards`, { headers: getAuthHeaders() });
+      // Call the backend directly
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+      
+      const response = await axios.get(`${cleanBackendUrl}/api/user/language-dashboards`, { headers: getAuthHeaders() });
       const dashboards = response.data.dashboards || [];
       const dashboard = dashboards.find((d: any) => d.language === languageCode);
       
@@ -587,7 +591,11 @@ function Analyze() {
     console.log('[DEBUG] Loading existing conversation:', convId);
     setIsLoadingConversation(true);
     try {
-      const response = await axios.get(`/api/conversations/${convId}`, { headers: getAuthHeaders() });
+      // Call the backend directly
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+      
+      const response = await axios.get(`${cleanBackendUrl}/api/conversations/${convId}`, { headers: getAuthHeaders() });
       console.log('[DEBUG] Conversation load response:', response.data);
       const conversation = response.data.conversation;
       setConversationId(conversation.id);
@@ -712,7 +720,11 @@ function Analyze() {
   ) => {
     if (user && urlConversationId) {
       try {
-        const response = await axios.get(`/api/conversations/${urlConversationId}`, { headers: getAuthHeaders() });
+        // Call the backend directly
+        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+        const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+        
+        const response = await axios.get(`${cleanBackendUrl}/api/conversations/${urlConversationId}`, { headers: getAuthHeaders() });
         if (!response.data.conversation) {
           removeConversationParam();
         }
@@ -1060,8 +1072,8 @@ function Analyze() {
       console.log('[DEBUG] TTS request payload:', { text, language });
       console.log('[DEBUG] User token available:', !!token);
       
-      // Call the Node.js server which will route to Python API with admin controls
-      const response = await axios.post('http://localhost:4000/api/tts-test', {
+      // Call the Next.js API route which forwards to Python API
+      const response = await axios.post(`/api/tts`, {
         text,
         language
       });
@@ -1096,7 +1108,9 @@ function Analyze() {
       const ttsUrl = await generateTTSForText(text, language, cacheKey);
       if (ttsUrl) {
         // Handle both relative and absolute URLs from backend
-        const audioUrl = ttsUrl.startsWith('http') ? ttsUrl : `http://localhost:4000${ttsUrl}`;
+        const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || '';
+        const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+        const audioUrl = ttsUrl.startsWith('http') ? ttsUrl : `${cleanBackendUrl}${ttsUrl}`;
         const audio = new window.Audio(audioUrl);
         ttsAudioRef.current = audio;
         
@@ -1154,9 +1168,11 @@ function Analyze() {
     setIsPlayingTTS(prev => ({ ...prev, [cacheKey]: true }));
     setIsPlayingAnyTTS(true);
     
-    try {
+        try {
       // Handle both relative and absolute URLs from backend
-      const audioUrl = ttsUrl.startsWith('http') ? ttsUrl : `http://localhost:4000${ttsUrl}`;
+      const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || '';
+      const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+      const audioUrl = ttsUrl.startsWith('http') ? ttsUrl : `${cleanBackendUrl}${ttsUrl}`;
       const audio = new window.Audio(audioUrl);
       ttsAudioRef.current = audio;
       
@@ -1256,7 +1272,9 @@ function Analyze() {
       // Add JWT token to headers
       const token = localStorage.getItem('jwt');
       console.log('[DEBUG] Sending transcription request to /api/transcribe_only');
-      const transcriptionResponse = await axios.post('/api/transcribe_only', formData, {
+      
+      // Make relative request to Next.js API route
+      const transcriptionResponse = await axios.post(`/api/transcribe_only`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
           ...(token ? { Authorization: `Bearer ${token}` } : {})
@@ -1330,7 +1348,7 @@ function Analyze() {
       const aiResponseData = {
         transcription: transcription,
         chat_history: updatedChatHistory,
-        language: language,
+        language: language || 'en', // Add fallback to 'en'
         user_level: userPreferences.userLevel,
         user_topics: userPreferences.topics,
         user_goals: user?.learning_goals ? (typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : user.learning_goals) : [],
@@ -1338,8 +1356,11 @@ function Analyze() {
         feedback_language: userPreferences.feedbackLanguage
       };
       
+      console.log('[DEBUG] Language value:', language);
       console.log('[DEBUG] Sending AI response request to /api/ai_response with data:', aiResponseData);
-      const aiResponseResponse = await axios.post('/api/ai_response', aiResponseData, {
+      
+      // Make relative request to Next.js API route
+      const aiResponseResponse = await axios.post(`/api/ai_response`, aiResponseData, {
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {})
@@ -1623,7 +1644,11 @@ function Analyze() {
         // Try to fetch the conversation again to get the learning goals
         try {
           const token = localStorage.getItem('jwt');
-          const response = await axios.get(`/api/conversations/${conversationId}`, {
+          // Call the backend directly
+        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+        const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+        
+        const response = await axios.get(`${cleanBackendUrl}/api/conversations/${conversationId}`, {
             headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
           });
           const conversation = response.data.conversation;
@@ -1714,8 +1739,12 @@ function Analyze() {
       
       console.log('[DEBUG] Request payload:', requestPayload);
 
-      const token = localStorage.getItem('jwt');
-      const response = await axios.post('/api/conversation-summary', requestPayload, {
+              const token = localStorage.getItem('jwt');
+        // Call the backend directly
+        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+        const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+        
+        const response = await axios.post(`${cleanBackendUrl}/api/conversation-summary`, requestPayload, {
         headers: {
           ...(token ? { Authorization: `Bearer ${token}` } : {})
         }
@@ -1731,7 +1760,11 @@ function Analyze() {
           
           // Check if the conversation already has a title
           try {
-            const conversationResponse = await axios.get(`/api/conversations/${conversationId}`, {
+            // Call the backend directly
+        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+        const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+        
+        const conversationResponse = await axios.get(`${cleanBackendUrl}/api/conversations/${conversationId}`, {
               headers: {
                 ...(token ? { Authorization: `Bearer ${token}` } : {})
               }
@@ -1759,7 +1792,11 @@ function Analyze() {
           
           if (shouldUpdateTitle && response.data.title && response.data.title.trim() !== '' && response.data.title !== '[No Title]') {
             console.log('[DEBUG] Updating conversation title:', response.data.title);
-            await axios.put(`/api/conversations/${conversationId}/title`, {
+            // Call the backend directly
+        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+        const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+        
+        await axios.put(`${cleanBackendUrl}/api/conversations/${conversationId}/title`, {
               title: response.data.title
             }, {
               headers: {
@@ -2137,7 +2174,8 @@ function Analyze() {
       if ((aiMessage as any).ttsUrl) {
         // Handle both relative and absolute URLs from backend
         const ttsUrl = (aiMessage as any).ttsUrl;
-        const audioUrl = ttsUrl.startsWith('http') ? ttsUrl : `http://localhost:4000${ttsUrl}`;
+        const backendUrl = process.env.NEXT_PUBLIC_API_URL || '';
+        const audioUrl = ttsUrl.startsWith('http') ? ttsUrl : `${backendUrl}${ttsUrl}`;
         try {
           const headResponse = await fetch(audioUrl, { method: 'HEAD' });
           if (headResponse.ok) {
@@ -2208,8 +2246,11 @@ function Analyze() {
     console.log('[DEBUG] Saving message to backend:', { sender, text, messageType, audioFilePath, romanizedText, conversationId: useConversationId });
     try {
       const token = localStorage.getItem('jwt');
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+      
       const response = await axios.post(
-        `/api/conversations/${useConversationId}/messages`,
+        `${cleanBackendUrl}/api/conversations/${useConversationId}/messages`,
         {
           sender,
           text,
@@ -2425,7 +2466,11 @@ function Analyze() {
       
       // Test server connectivity first
       try {
-        const healthCheck = await axios.get('/api/health');
+        // Call the backend directly
+        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+        const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+        
+        const healthCheck = await axios.get(`${cleanBackendUrl}/api/health`);
         console.log('[DEBUG] Server health check:', healthCheck.status);
       } catch (healthError: unknown) {
         console.error('[DEBUG] Server health check failed:', (healthError as any).message);
@@ -2915,8 +2960,12 @@ function Analyze() {
         userId: user?.id
       };
 
-      // Save persona to database
-      const response = await axios.post('/api/personas', personaData, {
+              // Call the backend directly
+        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+        const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+        
+        // Save persona to database
+        const response = await axios.post(`${cleanBackendUrl}/api/personas`, personaData, {
         headers: getAuthHeaders()
       });
 
@@ -3099,9 +3148,13 @@ function Analyze() {
               setIsUsingPersona(true);
               setIsNewPersona(false);
               
-              // Create conversation with persona information
-              const token = localStorage.getItem('jwt');
-              const response = await axios.post('/api/conversations', {
+                              // Call the backend directly
+                const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+                const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+                
+                // Create conversation with persona information
+                const token = localStorage.getItem('jwt');
+                const response = await axios.post(`${cleanBackendUrl}/api/conversations`, {
                 language: language,
                 title: topics.length === 1 ? `${topics[0]} Discussion` : 'Multi-topic Discussion',
                 topics: topics,
@@ -3109,7 +3162,7 @@ function Analyze() {
                 description: persona.description,
                 usesPersona: true,
                 personaId: null, // This is a new persona, not a saved one
-                learningGoals: [] // Personas don't have specific learning goals
+                learningGoals: undefined // Let the server use user's dashboard learning goals as fallback
               }, {
                 headers: { Authorization: `Bearer ${token}` }
               });

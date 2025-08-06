@@ -3,22 +3,30 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import axios from 'axios';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const { language } = req.query;
   const authHeader = req.headers.authorization || '';
-  if (req.method === 'GET') {
-    try {
-      const response = await axios.get(`http://localhost:4000/api/user/language-dashboards/${language}`, {
+  const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+
+  try {
+    // GET /api/user/language-dashboards/[language]
+    if (req.method === 'GET') {
+      const { language } = req.query;
+      if (!language) {
+        return res.status(400).json({ error: 'Language parameter is required' });
+      }
+      
+      const response = await axios.get(`${backendUrl}/api/user/language-dashboards/${language}`, {
         headers: { Authorization: authHeader }
       });
-      res.status(response.status).json(response.data);
-    } catch (err: any) {
-      if (err.response?.status === 404) {
-        res.status(200).json({ dashboard: null });
-      } else {
-        res.status(err.response?.status || 500).json(err.response?.data || { error: 'Failed to fetch language dashboard' });
-      }
+      return res.status(response.status).json(response.data);
     }
-    return;
+
+    // Fallback for unsupported methods
+    res.setHeader('Allow', ['GET']);
+    res.status(405).end(`Method ${req.method} Not Allowed`);
+  } catch (err: any) {
+    if (err.response) {
+      return res.status(err.response.status).json(err.response.data);
+    }
+    res.status(500).json({ error: 'Proxy error', details: err.message });
   }
-  res.status(405).end();
 } 

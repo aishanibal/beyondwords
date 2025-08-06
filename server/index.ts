@@ -14,7 +14,7 @@ import {
   saveSession,
   getSession,
   getAllSessions,
-  closeDatabase,
+  // closeDatabase,
   getAllUsers,
   getConversationWithMessages,
   createConversation,
@@ -47,7 +47,12 @@ import { exec } from 'child_process';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import axios from 'axios';
-const JWT_SECRET = process.env.JWT_SECRET || 'your_super_secret_key';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  console.error('JWT_SECRET environment variable is required');
+  process.exit(1);
+}
+const JWT_SECRET_FINAL = JWT_SECRET as string;
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 // Extend Express Request to include 'user'
@@ -75,8 +80,39 @@ app.use((req, res, next) => {
   next();
 });
 
+// Health check endpoint
+app.get('/health', (req: Request, res: Response) => {
+  res.json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    port: PORT,
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
+
 app.use(express.json());
-app.use(cors({ origin: 'http://localhost:3000', credentials: false }));
+
+// CORS configuration for production and development
+const allowedOrigins = [
+  'http://localhost:3000',
+  'https://speakbeyondwords-sigma.vercel.app',
+  'https://speakbeyondwords-dhg8jmlwl-aishanibals-projects.vercel.app'
+];
+
+app.use(cors({ 
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.log('🚫 CORS blocked origin:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: false 
+}));
 
 // Multer configuration for file uploads
 const storage: StorageEngine = multer.diskStorage({
@@ -206,7 +242,7 @@ function authenticateJWT(req: ExpressRequest, res: Response, next: NextFunction)
   const authHeader = req.headers.authorization;
   if (!authHeader) return res.status(401).json({ error: 'No token provided' });
   const token = authHeader.split(' ')[1];
-  jwt.verify(token, JWT_SECRET, (err: any, user: any) => {
+        jwt.verify(token, JWT_SECRET_FINAL, (err: any, user: any) => {
     if (err) return res.status(403).json({ error: 'Invalid token' });
     req.user = user;
     next();
@@ -258,15 +294,12 @@ app.get('/api/logout', (req: Request, res: Response) => {
 });
 
 // Add streak endpoint
-app.get('/api/user/streak', async (req: Request, res: Response) => {
-  console.log('[STREAK DEBUG] /api/user/streak called', { userId: req.user?.id || req.query.userId, language: req.query.language });
-  let userId = req.user?.id;
-  if (!userId && req.query.userId) {
-    userId = Array.isArray(req.query.userId) ? req.query.userId[0] : req.query.userId;
-  }
+app.get('/api/user/streak', authenticateJWT, async (req: Request, res: Response) => {
+  console.log('[STREAK DEBUG] /api/user/streak called', { userId: req.user?.userId, language: req.query.language });
+  const userId = req.user?.userId;
   let language = req.query.language;
   if (Array.isArray(language)) language = language[0];
-  if (typeof userId !== 'string' || typeof language !== 'string') {
+  if (!userId || typeof language !== 'string') {
     return res.status(400).json({ error: 'Missing user or language' });
   }
 
@@ -602,14 +635,14 @@ app.post('/auth/google/token', async (req: Request, res: Response) => {
     
     // Generate JWT token
     const token = jwt.sign(
-      { userId: user.id, email: user.email, name: user.name },
-      JWT_SECRET,
+      { userId: user.id!, email: user.email, name: user.name },
+      JWT_SECRET_FINAL,
       { expiresIn: '7d' }
     );
 
     // Ensure user object includes onboarding status
     const userResponse = {
-      id: user.id,
+      id: user.id!,
       email: user.email,
       name: user.name,
       role: user.role,
@@ -632,14 +665,23 @@ app.post('/auth/google/token', async (req: Request, res: Response) => {
 
 // Email/password registration
 app.post('/auth/register', async (req: Request, res: Response) => {
+  console.log('🔍 Registration endpoint hit');
+  console.log('🔍 Request body:', req.body);
+  console.log('🔍 Request headers:', req.headers);
+  
   try {
     const { name, email, password } = req.body;
+    
+    console.log('🔍 Registration data:', { name, email, password: password ? '[HIDDEN]' : 'undefined' });
     
     // Check if user already exists
     const existingUser = await findUserByEmail(email);
     if (existingUser) {
+      console.log('❌ User already exists:', email);
       return res.status(400).json({ error: 'User already exists' });
     }
+    
+    console.log('✅ User does not exist, proceeding with registration');
     
     // Hash password
     const passwordHash = await bcrypt.hash(password, 10);
@@ -653,17 +695,21 @@ app.post('/auth/register', async (req: Request, res: Response) => {
       onboarding_complete: false
     });
     
+    console.log('✅ User created successfully:', user.id);
+    
     // Generate JWT token for immediate login
     const token = jwt.sign(
-      { userId: user.id, email: user.email, name: user.name },
-      JWT_SECRET,
+      { userId: user.id!, email: user.email, name: user.name },
+      JWT_SECRET_FINAL,
       { expiresIn: '7d' }
     );
+    
+    console.log('✅ JWT token generated');
     
     res.json({ 
       token,
       user: { 
-        id: user.id, 
+        id: user.id!, 
         name: user.name, 
         email: user.email, 
         role: user.role,
@@ -671,41 +717,59 @@ app.post('/auth/register', async (req: Request, res: Response) => {
       } 
     });
   } catch (error: any) {
-    console.error('Registration error:', error);
+    console.error('❌ Registration error:', error);
     res.status(500).json({ error: 'Registration failed' });
   }
 });
 
 // Email/password login with JWT
 app.post('/auth/login', async (req: Request, res: Response) => {
+  console.log('🔍 Login endpoint hit');
+  console.log('🔍 Request body:', req.body);
+  
   try {
     const { email, password } = req.body;
     const user = await findUserByEmail(email);
     
+    console.log('🔍 Login attempt for email:', email);
+    
     // Check if user exists
-    if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+    if (!user) {
+      console.log('❌ User not found:', email);
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    
+    console.log('✅ User found:', user.id);
     
     // Check if user has a password (not a Google-only account)
     if (!user.password_hash) {
+      console.log('❌ User has no password (Google-only account):', email);
       return res.status(401).json({ error: 'This email is associated with a Google account. Please sign in with Google.' });
     }
     
     // Verify password
     const isValid = await bcrypt.compare(password, user.password_hash);
-    if (!isValid) return res.status(401).json({ error: 'Invalid credentials' });
+    if (!isValid) {
+      console.log('❌ Invalid password for user:', email);
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    
+    console.log('✅ Password verified for user:', email);
     
     // Generate JWT token
     const token = jwt.sign(
-      { userId: user.id, email: user.email, name: user.name },
-      JWT_SECRET,
+      { userId: user.id!, email: user.email, name: user.name },
+      JWT_SECRET_FINAL,
       { expiresIn: '7d' }
     );
+    
+    console.log('✅ JWT token generated for login');
     
     // Return user data including onboarding status
     res.json({ 
       token, 
       user: { 
-        id: user.id, 
+        id: user.id!, 
         email: user.email, 
         name: user.name,
         role: user.role,
@@ -713,7 +777,7 @@ app.post('/auth/login', async (req: Request, res: Response) => {
       } 
     });
   } catch (error: any) {
-    console.error('Login error:', error);
+    console.error('❌ Login error:', error);
     res.status(500).json({ error: 'Login failed' });
   }
 });
@@ -721,16 +785,19 @@ app.post('/auth/login', async (req: Request, res: Response) => {
 // Onboarding route (protected) - Creates first language dashboard
 app.post('/api/user/onboarding', authenticateJWT, async (req: Request, res: Response) => {
   try {
-    console.log('Onboarding request received:', req.body);
+    console.log('🔍 ONBOARDING: Request received');
+    console.log('🔍 ONBOARDING: Request body:', req.body);
+    console.log('🔍 ONBOARDING: User ID:', req.user?.userId);
     const { language, proficiency, talkTopics, learningGoals, practicePreference } = req.body;
     
-    console.log('Extracted fields:', { language, proficiency, talkTopics, learningGoals, practicePreference });
+    console.log('🔍 ONBOARDING: Extracted fields:', { language, proficiency, talkTopics, learningGoals, practicePreference });
     
     if (!language || !proficiency || !talkTopics || !learningGoals || !practicePreference) {
-      console.log('Missing required fields validation failed');
+      console.log('❌ ONBOARDING: Missing required fields validation failed');
       return res.status(400).json({ error: 'Missing required onboarding fields' });
     }
     
+    console.log('🔍 ONBOARDING: About to create language dashboard...');
     // Create the first language dashboard (primary)
     const dashboard = await createLanguageDashboard(
       req.user.userId,
@@ -743,13 +810,18 @@ app.post('/api/user/onboarding', authenticateJWT, async (req: Request, res: Resp
       true // isPrimary as boolean
     );
     
+    console.log('✅ ONBOARDING: Language dashboard created successfully');
+    
     // Update user to mark onboarding as complete
+    console.log('🔍 ONBOARDING: About to update user...');
     await updateUser(req.user.userId, {
       onboarding_complete: true
     });
     
+    console.log('🔍 ONBOARDING: About to fetch updated user...');
     const user = await findUserById(req.user.userId);
     
+    console.log('✅ ONBOARDING: Successfully completed onboarding');
     res.json({ 
       user: {
         ...user,
@@ -758,7 +830,7 @@ app.post('/api/user/onboarding', authenticateJWT, async (req: Request, res: Resp
       dashboard 
     });
   } catch (error: any) {
-    console.error('Onboarding error:', error);
+    console.error('❌ ONBOARDING: Error during onboarding:', error);
     res.status(500).json({ error: 'Failed to save onboarding' });
   }
 });
@@ -1011,7 +1083,7 @@ app.post('/api/admin/promote', authenticateJWT, async (req: Request, res: Respon
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: 'Email required' });
     const user = await findUserByEmail(email);
-    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (!user || !user.id) return res.status(404).json({ error: 'User not found' });
     await updateUser(user.id, { role: 'admin' });
     res.json({ success: true, message: `${email} promoted to admin.` });
   } catch (error: any) {
@@ -1028,7 +1100,7 @@ app.post('/api/admin/demote', authenticateJWT, async (req: Request, res: Respons
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: 'Email required' });
     const user = await findUserByEmail(email);
-    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (!user || !user.id) return res.status(404).json({ error: 'User not found' });
     await updateUser(user.id, { role: 'user' });
     res.json({ success: true, message: `${email} demoted to user.` });
   } catch (error: any) {
@@ -1063,8 +1135,13 @@ app.post('/api/conversations', authenticateJWT, async (req: Request, res: Respon
     let ttsUrl = null;
     try {
       const user = await findUserById(req.user.userId);
-      const userLevel = user?.proficiency_level || 'beginner';
-      const userTopics = user?.talk_topics && typeof user.talk_topics === 'string' ? JSON.parse(user.talk_topics) : Array.isArray(user?.talk_topics) ? user.talk_topics : [];
+      
+      // Get the language dashboard for this user and language to use proper onboarding data
+      const languageDashboard = await getLanguageDashboard(req.user.userId, language);
+      const userLevel = languageDashboard?.proficiency_level || user?.proficiency_level || 'beginner';
+      const userTopics = languageDashboard?.talk_topics || [];
+      const userLearningGoals = languageDashboard?.learning_goals || [];
+      
       const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5000';
       const topicsToSend = topics && topics.length > 0 ? topics : userTopics;
       try {
@@ -1228,9 +1305,12 @@ app.post('/api/suggestions', authenticateJWT, async (req: Request, res: Response
     
     // Get user data for personalized suggestions
     const user = await findUserById(req.user.userId);
-    const userLevel = req.body.user_level || user?.proficiency_level || 'beginner';
-    const userTopics = req.body.user_topics || (user?.talk_topics && typeof user.talk_topics === 'string' ? JSON.parse(user.talk_topics) : Array.isArray(user?.talk_topics) ? user.talk_topics : []);
-    const userGoals = req.body.user_goals || (user?.learning_goals && typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : Array.isArray(user?.learning_goals) ? user.learning_goals : []);
+    
+    // Get language dashboard data for this user and language
+    const languageDashboard = await getLanguageDashboard(req.user.userId, language || user?.target_language || 'en');
+    const userLevel = req.body.user_level || languageDashboard?.proficiency_level || user?.proficiency_level || 'beginner';
+    const userTopics = req.body.user_topics || languageDashboard?.talk_topics || [];
+    const userGoals = req.body.user_goals || languageDashboard?.learning_goals || [];
     
     let chatHistory: any[] = [];
     if (conversationId) {
@@ -1601,6 +1681,39 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 // Also serve files from the current directory (where Python API might create files)
 app.use('/files', express.static(path.join(__dirname, '..')));
 
+// Cleanup old audio files (older than 1 day)
+function cleanupOldFiles() {
+  const uploadsDir = path.join(__dirname, 'uploads');
+  if (!fs.existsSync(uploadsDir)) return;
+  
+  const files = fs.readdirSync(uploadsDir);
+  const now = Date.now();
+  const maxAge = 24 * 60 * 60 * 1000; // 1 day in milliseconds
+  
+  files.forEach(file => {
+    const filePath = path.join(uploadsDir, file);
+    const stats = fs.statSync(filePath);
+    const age = now - stats.mtime.getTime();
+    
+    if (age > maxAge) {
+      try {
+        fs.unlinkSync(filePath);
+        console.log(`🗑️ Cleaned up old file: ${file}`);
+      } catch (error) {
+        console.error(`❌ Failed to delete ${file}:`, error);
+      }
+    }
+  });
+}
+
+// Run cleanup every 6 hours
+setInterval(cleanupOldFiles, 6 * 60 * 60 * 1000);
+
+// Also run cleanup on startup
+cleanupOldFiles();
+
+// Simple cleanup - delete files older than 1 day
+
 // Helper function to check Python API health
 async function checkPythonAPIHealth(): Promise<boolean> {
   try {
@@ -1688,5 +1801,5 @@ const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Python API URL: ${process.env.PYTHON_API_URL || 'http://localhost:5000'}`);
-  console.log('Note: Using SQLite database for temporary storage');
-}); 
+  console.log('Note: Using Supabase database for storage');
+});
