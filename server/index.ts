@@ -85,7 +85,7 @@ app.get('/health', (req: Request, res: Response) => {
   res.json({ 
     status: 'ok', 
     timestamp: new Date().toISOString(),
-    port: PORT,
+    port: process.env.PORT || 4000,
     environment: process.env.NODE_ENV || 'development'
   });
 });
