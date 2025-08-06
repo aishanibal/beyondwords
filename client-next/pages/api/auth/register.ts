@@ -9,10 +9,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Use environment variable for backend URL, fallback to localhost for development
     const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
     
-    console.log('🔍 Registration request - Backend URL:', backendUrl);
+    // Ensure proper URL construction without double slashes
+    const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+    const registerUrl = `${cleanBackendUrl}/auth/register`;
+    
+    console.log('🔍 Registration request - Backend URL:', cleanBackendUrl);
+    console.log('🔍 Registration request - Full URL:', registerUrl);
     console.log('🔍 Registration request - Body:', req.body);
     
-    const response = await axios.post(`${backendUrl}/auth/register`, req.body, {
+    const response = await axios.post(registerUrl, req.body, {
       timeout: 10000, // 10 second timeout
       headers: {
         'Content-Type': 'application/json'
