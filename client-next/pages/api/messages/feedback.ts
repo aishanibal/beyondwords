@@ -4,14 +4,18 @@ import axios from 'axios';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end();
-  const { messageId, feedback } = req.body;
-  if (!messageId || !feedback) {
-    return res.status(400).json({ error: 'Missing messageId or feedback' });
-  }
+
   try {
-    const response = await axios.post('http://localhost:4000/messages/feedback', { messageId, feedback });
-    res.json(response.data);
+    const { messageId, feedback } = req.body;
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+    
+    if (!messageId || !feedback) {
+      return res.status(400).json({ error: 'Missing messageId or feedback' });
+    }
+
+    const response = await axios.post(`${backendUrl}/messages/feedback`, { messageId, feedback });
+    res.status(response.status).json(response.data);
   } catch (error: any) {
-    res.status(500).json({ error: 'Error storing feedback', details: error.message });
+    res.status(error.response?.status || 500).json(error.response?.data || { error: 'Feedback submission failed' });
   }
 } 

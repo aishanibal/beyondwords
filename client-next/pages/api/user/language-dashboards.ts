@@ -4,48 +4,48 @@ import axios from 'axios';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const authHeader = req.headers.authorization || '';
+  const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
   try {
+    // GET /api/user/language-dashboards
     if (req.method === 'GET') {
-      // Forward GET to backend, with Authorization header
-      const response = await axios.get('http://localhost:4000/api/user/language-dashboards', {
+      const response = await axios.get(`${backendUrl}/api/user/language-dashboards`, {
         headers: { Authorization: authHeader }
       });
       return res.status(response.status).json(response.data);
     }
+
+    // POST /api/user/language-dashboards
     if (req.method === 'POST') {
-      const { language, proficiency, talkTopics, learningGoals, practicePreference, isPrimary } = req.body;
-      if (!language || !proficiency || !talkTopics || !learningGoals || !practicePreference) {
-        return res.status(400).json({ error: 'Missing required fields' });
-      }
-      const response = await axios.post('http://localhost:4000/api/user/language-dashboards', {
-        language, proficiency, talkTopics, learningGoals, practicePreference, isPrimary
-      }, {
+      const response = await axios.post(`${backendUrl}/api/user/language-dashboards`, req.body, {
         headers: { Authorization: authHeader }
       });
       return res.status(response.status).json(response.data);
     }
+
+    // PUT /api/user/language-dashboards
     if (req.method === 'PUT') {
-      const { language, updates } = req.body;
-      if (!language || !updates) return res.status(400).json({ error: 'Missing language or updates' });
-      const response = await axios.put('http://localhost:4000/api/user/language-dashboards', {
-        language, updates
-      }, {
+      const response = await axios.put(`${backendUrl}/api/user/language-dashboards`, req.body, {
         headers: { Authorization: authHeader }
       });
       return res.status(response.status).json(response.data);
     }
+
+    // DELETE /api/user/language-dashboards
     if (req.method === 'DELETE') {
-      const { language } = req.body;
-      if (!language) return res.status(400).json({ error: 'Missing language' });
-      const response = await axios.delete('http://localhost:4000/api/user/language-dashboards', {
-        data: { language },
+      const response = await axios.delete(`${backendUrl}/api/user/language-dashboards`, {
         headers: { Authorization: authHeader }
       });
       return res.status(response.status).json(response.data);
     }
-    return res.status(405).end();
-  } catch (error: any) {
-    res.status(error.response?.status || 500).json(error.response?.data || { error: 'Failed to process language dashboard request' });
+
+    // Fallback for unsupported methods
+    res.setHeader('Allow', ['GET', 'POST', 'PUT', 'DELETE']);
+    res.status(405).end(`Method ${req.method} Not Allowed`);
+  } catch (err: any) {
+    if (err.response) {
+      return res.status(err.response.status).json(err.response.data);
+    }
+    res.status(500).json({ error: 'Proxy error', details: err.message });
   }
 } 

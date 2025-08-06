@@ -3,20 +3,25 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import axios from 'axios';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'GET') return res.status(405).end();
-  const { userId, language } = req.query;
-  if (!userId || !language) return res.status(400).json({ error: 'Missing user or language' });
+  const authHeader = req.headers.authorization || '';
+  const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+
   try {
-    const response = await axios.get('http://localhost:4000/api/user/streak', {
-      params: { userId, language }
-    });
-    res.json(response.data);
-  } catch (err: any) {
-    if (err.response?.status === 404) {
-      // No streak yet, return 0
-      res.status(200).json({ streak: 0 });
-    } else {
-      res.status(500).json({ error: err.message });
+    // GET /api/user/streak
+    if (req.method === 'GET') {
+      const response = await axios.get(`${backendUrl}/api/user/streak`, {
+        headers: { Authorization: authHeader }
+      });
+      return res.status(response.status).json(response.data);
     }
+
+    // Fallback for unsupported methods
+    res.setHeader('Allow', ['GET']);
+    res.status(405).end(`Method ${req.method} Not Allowed`);
+  } catch (err: any) {
+    if (err.response) {
+      return res.status(err.response.status).json(err.response.data);
+    }
+    res.status(500).json({ error: 'Proxy error', details: err.message });
   }
 } 
