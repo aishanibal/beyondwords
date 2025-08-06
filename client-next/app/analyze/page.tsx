@@ -812,10 +812,6 @@ function Analyze() {
 
   // Replace startRecording and stopRecording with MediaRecorder + SpeechRecognition logic
   const startRecording = async () => {
-    // Hide suggestion carousel as soon as recording starts
-    setShowSuggestionCarousel(false);
-    setSuggestionMessages([]);
-    
     setWasInterrupted(false);
     if (!MediaRecorderClassRef.current) {
       alert('MediaRecorder API not supported in this browser.');
@@ -1210,8 +1206,7 @@ function Analyze() {
         isProcessing: true // Add flag to identify processing messages
       };
       
-      // Clear suggestion carousel when user sends a message
-      clearSuggestionCarousel();
+      // Note: Suggestions will be hidden by the !isProcessing condition in the render
       
       // Add placeholder message immediately
       console.log('[DEBUG] Adding placeholder message:', placeholderMessage);
