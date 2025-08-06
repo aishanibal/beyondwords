@@ -4988,19 +4988,6 @@ Yes, the current serials don't have the same quality as the old ones, right?
               )}
             </div>
           ))}
-          {isProcessing && (
-            <div style={{
-              alignSelf: 'center',
-              padding: '0.5rem 1rem',
-              background: '#f5f1ec',
-              borderRadius: 8,
-              color: 'var(--rose-primary)',
-              fontSize: '0.95rem',
-              fontWeight: 500
-            }}>
-              ⏳ Processing your speech...
-            </div>
-          )}
           
           {/* Suggestion Carousel */}
           {!isProcessing && showSuggestionCarousel && suggestionMessages.length > 0 && (
@@ -5231,7 +5218,6 @@ Yes, the current serials don't have the same quality as the old ones, right?
             style={{ 
               position: 'relative',
               padding: '1rem 1rem 2.5rem 1rem', 
-              borderTop: isDarkMode ? '1px solid var(--border)' : '1px solid rgba(195,141,148,0.2)',
               background: isDarkMode 
                 ? 'linear-gradient(135deg, var(--muted) 0%, rgba(255,255,255,0.02) 100%)' 
                 : 'linear-gradient(135deg, rgba(195,141,148,0.08) 0%, rgba(195,141,148,0.03) 100%)',
@@ -5239,8 +5225,7 @@ Yes, the current serials don't have the same quality as the old ones, right?
               textAlign: 'center',
               transition: 'all 0.3s ease',
               boxShadow: '0 -2px 8px rgba(195,141,148,0.1)',
-              flexShrink: 0,
-              marginBottom: '2rem'
+              flexShrink: 0
             }}
           >
             {/* Main controls layout */}
