@@ -198,7 +198,7 @@ Reply naturally in {self.language_name}."""
       
 You are a {tone_guidance} language tutor helping a heritage speaker improve their {self.language_name}.
 
-Your job is to identify and gently explain any grammar or phrasing mistakes in the user's message. 
+Your job is to identify and honestly explain any grammar or phrasing mistakes in the user's message. 
 They are speaking with someone with a  {self.user_closeness} closeness level.
 Ensure they are speaking with the correct appropriateness, tone, pronouns, and grammar to match this level of closeness: {self.CLOSENESS_LEVELS[self.user_closeness]}.
 USER INPUT:
@@ -209,10 +209,10 @@ USER INPUT:
 
 YOUR RESPONSE STRUCTURE (use {self.feedback_language} for explanations):
 
-- If the input is correct and natural, simply say:
-"Correct, that sounds great!" or something similar with the same sentiment and length in {self.feedback_language}.
+- If the input is PERFECTLY correct and natural (no grammar errors, proper formality, native-like phrasing), say:
+"Correct, that sounds natural!" or something similar in {self.feedback_language}.
 
-- If there are errors, follow this EXACT format, the brackets are to show placement, DO NOT include them in the reponse:
+- If there are ANY errors (grammar, formality, unnatural phrasing, wrong vocabulary), follow this EXACT format, the brackets are to show placement, DO NOT include them in the response:
 
 **Your Sentence**
 """
@@ -261,6 +261,9 @@ TIPS:
 - Limit Explanations to 15-20 words.
 - Focus on grammar, natural sentence structure, and phrasing that sounds native.
 - If the user used a non-{self.language_name} word that has a better equivalent, suggest a replacement like: "Instead of saying 'X', you'll sound more fluent if you say 'Y'." in {self.feedback_language}.
+- Be HONEST and CRITICAL - don't sugarcoat mistakes. If something is wrong, point it out clearly.
+- Only say "Correct" if the sentence is PERFECTLY natural and grammatically correct for the user's level.
+- Pay special attention to formality levels, verb conjugations, particle usage, and word order.
 Always use {self.feedback_language} for explanations.
 """
         
@@ -1799,14 +1802,15 @@ def get_short_feedback(user_input: str, context: str = "", language: str = 'en',
         description_guidance = f"\nConversation context: The user is talking with {description}. Consider this persona when giving feedback."
     
     prompt = (
-        f"You are a friendly language tutor. The user just said: \"{user_input}\".\n"
+        f"You are an honest language tutor. The user just said: \"{user_input}\".\n"
         f"Context: {context}\n"
         f"User level: {user_level}\n"
         f"Preferred topics: {', '.join(user_topics) if user_topics else 'none'}\n"
         f"{goals_guidance}"
         f"{description_guidance}\n"
-        f"Give a very short (1-2 sentences) tip or correction about grammar or style, only if needed. "
-        f"If there are no issues, say something encouraging. "
+        f"Give a very short (1-2 sentences) tip or correction about grammar or style. "
+        f"Be HONEST - if there are mistakes, point them out clearly. "
+        f"Only say something encouraging if the sentence is PERFECTLY correct and natural. "
         f"Be brief and natural, like a quick chat comment. "
         f"Respond in {feedback_language}."
     )

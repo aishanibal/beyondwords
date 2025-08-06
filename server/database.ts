@@ -113,17 +113,9 @@ const db = new sqlite3.Database(dbPath, (err) => {
 // Initialize database tables
 function initDatabase() {
   db.serialize(() => {
-    // Drop existing tables to start fresh
-    db.run('DROP TABLE IF EXISTS messages');
-    db.run('DROP TABLE IF EXISTS conversations');
-    db.run('DROP TABLE IF EXISTS personas');
-    db.run('DROP TABLE IF EXISTS language_dashboards');
-    db.run('DROP TABLE IF EXISTS sessions');
-    db.run('DROP TABLE IF EXISTS users');
-    
-    // Create users table
+    // Create users table if it doesn't exist
     db.run(`
-      CREATE TABLE users (
+      CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         google_id TEXT UNIQUE,
         email TEXT UNIQUE NOT NULL,
@@ -143,9 +135,9 @@ function initDatabase() {
       )
     `);
     
-    // Create sessions table
+    // Create sessions table if it doesn't exist
     db.run(`
-      CREATE TABLE sessions (
+      CREATE TABLE IF NOT EXISTS sessions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
         chat_history TEXT,
@@ -156,9 +148,9 @@ function initDatabase() {
       )
     `);
     
-    // Create language_dashboards table
+    // Create language_dashboards table if it doesn't exist
     db.run(`
-      CREATE TABLE language_dashboards (
+      CREATE TABLE IF NOT EXISTS language_dashboards (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
         language TEXT NOT NULL,
@@ -177,9 +169,9 @@ function initDatabase() {
       )
     `);
     
-    // Create personas table
+    // Create personas table if it doesn't exist
     db.run(`
-      CREATE TABLE personas (
+      CREATE TABLE IF NOT EXISTS personas (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
         name TEXT NOT NULL,
@@ -194,9 +186,9 @@ function initDatabase() {
       )
     `);
     
-    // Create conversations table
+    // Create conversations table if it doesn't exist
     db.run(`
-      CREATE TABLE conversations (
+      CREATE TABLE IF NOT EXISTS conversations (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
         language_dashboard_id INTEGER NOT NULL,
@@ -218,9 +210,9 @@ function initDatabase() {
       )
     `);
     
-    // Create messages table
+    // Create messages table if it doesn't exist
     db.run(`
-      CREATE TABLE messages (
+      CREATE TABLE IF NOT EXISTS messages (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         conversation_id INTEGER NOT NULL,
         sender TEXT NOT NULL,
@@ -247,7 +239,7 @@ function initDatabase() {
     db.run('CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at)');
     db.run('CREATE INDEX IF NOT EXISTS idx_personas_user_id ON personas(user_id)');
     
-    console.log('Database schema created successfully!');
+    console.log('Database tables initialized successfully');
   });
 }
 
