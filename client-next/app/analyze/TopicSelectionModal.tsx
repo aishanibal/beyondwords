@@ -64,7 +64,11 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
     if (!currentLanguage) return;
     
     try {
-      const response = await axios.get(`/api/user/language-dashboards`, { headers: getAuthHeaders() });
+      // Call the backend directly
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+      
+      const response = await axios.get(`${cleanBackendUrl}/api/user/language-dashboards`, { headers: getAuthHeaders() });
       const dashboards = response.data.dashboards || [];
       const dashboard = dashboards.find((d: any) => d.language === currentLanguage);
       
@@ -356,7 +360,11 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
       let verified = null;
       for (let i = 0; i < 5; i++) {
         try {
-          const fetchRes = await axios.get(`/api/conversations/${conversation.id}`, { headers: { Authorization: `Bearer ${token}` } });
+          // Call the backend directly
+        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+        const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+        
+        const fetchRes = await axios.get(`${cleanBackendUrl}/api/conversations/${conversation.id}`, { headers: { Authorization: `Bearer ${token}` } });
           if (fetchRes.data && fetchRes.data.conversation) {
             verified = fetchRes.data.conversation;
             break;

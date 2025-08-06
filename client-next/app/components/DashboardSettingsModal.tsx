@@ -139,7 +139,11 @@ export default function DashboardSettingsModal({
       console.log('[DEBUG] Language:', dashboard.language);
       console.log('[DEBUG] Is script language:', isScriptLanguage(dashboard.language));
 
-      const response = await axios.put(`/api/user/language-dashboards/${dashboard.language}`, updateData, {
+      // Call the backend directly
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+      
+      const response = await axios.put(`${cleanBackendUrl}/api/user/language-dashboards/${dashboard.language}`, updateData, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -168,7 +172,11 @@ export default function DashboardSettingsModal({
     setSaveError('');
     try {
       const token = localStorage.getItem('jwt');
-      await axios.delete(`/api/user/language-dashboards/${dashboard.language}`, {
+      // Call the backend directly
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+      
+      await axios.delete(`${cleanBackendUrl}/api/user/language-dashboards/${dashboard.language}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (onDelete) {

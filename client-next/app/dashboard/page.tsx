@@ -462,7 +462,11 @@ export default function DashboardPage() {
       try {
         setConversations([]);
         const token = localStorage.getItem('jwt');
-        const conversationsRes = await axios.get(`/api/conversations?language=${selectedLanguage}`, {
+        // Call the backend directly
+        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+        const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+        
+        const conversationsRes = await axios.get(`${cleanBackendUrl}/api/conversations?language=${selectedLanguage}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         
@@ -510,7 +514,11 @@ export default function DashboardPage() {
       if (user?.id) {
         try {
           const token = localStorage.getItem('jwt');
-          const personasRes = await axios.get(`/api/personas?userId=${user.id}`, {
+          // Call the backend directly
+          const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+          const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+          
+          const personasRes = await axios.get(`${cleanBackendUrl}/api/personas?userId=${user.id}`, {
             headers: { Authorization: `Bearer ${token}` }
           });
           setPersonas(personasRes.data.personas || []);
@@ -529,7 +537,11 @@ export default function DashboardPage() {
       return;
     }
     try {
-      await axios.delete(`/api/conversations/${conversationId}`);
+      // Call the backend directly
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+      
+      await axios.delete(`${cleanBackendUrl}/api/conversations/${conversationId}`);
       setConversations((prev: ConversationType[]) => prev.filter((conv: ConversationType) => conv.id !== conversationId));
     } catch (error) {
       alert('Failed to delete conversation. Please try again.');
@@ -542,7 +554,11 @@ export default function DashboardPage() {
     }
     try {
       const token = localStorage.getItem('jwt');
-      await axios.delete(`/api/personas/${personaId}`, {
+      // Call the backend directly
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+      
+      await axios.delete(`${cleanBackendUrl}/api/personas/${personaId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setPersonas((prev: PersonaType[]) => prev.filter((persona: PersonaType) => persona.id !== personaId));
@@ -633,9 +649,13 @@ export default function DashboardPage() {
       if (user?.id && selectedLanguage) {
         try {
           const token = localStorage.getItem('jwt');
-          const res = await axios.get(`/api/user/streak?language=${selectedLanguage}`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
+                  // Call the backend directly
+        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+        const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+        
+        const res = await axios.get(`${cleanBackendUrl}/api/user/streak?language=${selectedLanguage}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
           setStreak(res.data.streak || 0);
         } catch (err) {
           setStreak(0);

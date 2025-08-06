@@ -551,7 +551,11 @@ function Analyze() {
   // Function to fetch user's dashboard preferences
   const fetchUserDashboardPreferences = async (languageCode: string) => {
     try {
-      const response = await axios.get(`/api/user/language-dashboards`, { headers: getAuthHeaders() });
+      // Call the backend directly
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+      
+      const response = await axios.get(`${cleanBackendUrl}/api/user/language-dashboards`, { headers: getAuthHeaders() });
       const dashboards = response.data.dashboards || [];
       const dashboard = dashboards.find((d: any) => d.language === languageCode);
       
@@ -579,7 +583,11 @@ function Analyze() {
     console.log('[DEBUG] Loading existing conversation:', convId);
     setIsLoadingConversation(true);
     try {
-      const response = await axios.get(`/api/conversations/${convId}`, { headers: getAuthHeaders() });
+      // Call the backend directly
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+      
+      const response = await axios.get(`${cleanBackendUrl}/api/conversations/${convId}`, { headers: getAuthHeaders() });
       console.log('[DEBUG] Conversation load response:', response.data);
       const conversation = response.data.conversation;
       setConversationId(conversation.id);
@@ -704,7 +712,11 @@ function Analyze() {
   ) => {
     if (user && urlConversationId) {
       try {
-        const response = await axios.get(`/api/conversations/${urlConversationId}`, { headers: getAuthHeaders() });
+        // Call the backend directly
+        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+        const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+        
+        const response = await axios.get(`${cleanBackendUrl}/api/conversations/${urlConversationId}`, { headers: getAuthHeaders() });
         if (!response.data.conversation) {
           removeConversationParam();
         }
@@ -1622,7 +1634,11 @@ function Analyze() {
         // Try to fetch the conversation again to get the learning goals
         try {
           const token = localStorage.getItem('jwt');
-          const response = await axios.get(`/api/conversations/${conversationId}`, {
+          // Call the backend directly
+        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+        const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+        
+        const response = await axios.get(`${cleanBackendUrl}/api/conversations/${conversationId}`, {
             headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
           });
           const conversation = response.data.conversation;
@@ -1734,7 +1750,11 @@ function Analyze() {
           
           // Check if the conversation already has a title
           try {
-            const conversationResponse = await axios.get(`/api/conversations/${conversationId}`, {
+            // Call the backend directly
+        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+        const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+        
+        const conversationResponse = await axios.get(`${cleanBackendUrl}/api/conversations/${conversationId}`, {
               headers: {
                 ...(token ? { Authorization: `Bearer ${token}` } : {})
               }
@@ -1762,7 +1782,11 @@ function Analyze() {
           
           if (shouldUpdateTitle && response.data.title && response.data.title.trim() !== '' && response.data.title !== '[No Title]') {
             console.log('[DEBUG] Updating conversation title:', response.data.title);
-            await axios.put(`/api/conversations/${conversationId}/title`, {
+            // Call the backend directly
+        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+        const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+        
+        await axios.put(`${cleanBackendUrl}/api/conversations/${conversationId}/title`, {
               title: response.data.title
             }, {
               headers: {
