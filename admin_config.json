@@ -28,13 +28,13 @@
         "total_cost": 0.0031280000000000006
       },
       "2025-08-06": {
-        "google_cloud": 6,
+        "google_cloud": 9,
         "gemini": 0,
         "system": 1,
-        "total_cost": 0.001728
+        "total_cost": 0.00234
       }
     },
-    "total_cost": 0.06485599999999998,
+    "total_cost": 0.06546799999999997,
     "last_reset": "2025-08-04T18:51:13.952106"
   },
   "admin_features": {
