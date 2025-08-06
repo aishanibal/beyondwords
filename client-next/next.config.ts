@@ -52,7 +52,7 @@ const nextConfig: NextConfig = {
       },
       {
         source: '/api/auth/:path*',
-        destination: `${apiUrl}/api/auth/:path*`,
+        destination: `${apiUrl}/auth/:path*`,
       },
       {
         source: '/api/conversations/:path*',            

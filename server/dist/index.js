@@ -33,8 +33,36 @@ app.use((req, res, next) => {
     console.log('INCOMING REQUEST:', req.method, req.url, 'Headers:', req.headers);
     next();
 });
+// Health check endpoint
+app.get('/health', (req, res) => {
+    res.json({
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        port: PORT,
+        environment: process.env.NODE_ENV || 'development'
+    });
+});
 app.use(express_1.default.json());
-app.use((0, cors_1.default)({ origin: 'http://localhost:3000', credentials: false }));
+// CORS configuration for production and development
+const allowedOrigins = [
+    'http://localhost:3000',
+    'https://speakbeyondwords-sigma.vercel.app'
+];
+app.use((0, cors_1.default)({
+    origin: function (origin, callback) {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin)
+            return callback(null, true);
+        if (allowedOrigins.indexOf(origin) !== -1) {
+            callback(null, true);
+        }
+        else {
+            console.log('🚫 CORS blocked origin:', origin);
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    credentials: false
+}));
 // Multer configuration for file uploads
 const storage = multer_1.default.diskStorage({
     destination: function (req, file, cb) {
@@ -200,17 +228,14 @@ app.get('/api/logout', (req, res) => {
     res.json({ message: 'Logged out' });
 });
 // Add streak endpoint
-app.get('/api/user/streak', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+app.get('/api/user/streak', authenticateJWT, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     var _a, _b;
-    console.log('[STREAK DEBUG] /api/user/streak called', { userId: ((_a = req.user) === null || _a === void 0 ? void 0 : _a.id) || req.query.userId, language: req.query.language });
-    let userId = (_b = req.user) === null || _b === void 0 ? void 0 : _b.id;
-    if (!userId && req.query.userId) {
-        userId = Array.isArray(req.query.userId) ? req.query.userId[0] : req.query.userId;
-    }
+    console.log('[STREAK DEBUG] /api/user/streak called', { userId: (_a = req.user) === null || _a === void 0 ? void 0 : _a.userId, language: req.query.language });
+    const userId = (_b = req.user) === null || _b === void 0 ? void 0 : _b.userId;
     let language = req.query.language;
     if (Array.isArray(language))
         language = language[0];
-    if (typeof userId !== 'string' || typeof language !== 'string') {
+    if (!userId || typeof language !== 'string') {
         return res.status(400).json({ error: 'Missing user or language' });
     }
     try {
@@ -543,13 +568,19 @@ app.post('/auth/google/token', (req, res) => __awaiter(void 0, void 0, void 0, f
 }));
 // Email/password registration
 app.post('/auth/register', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    console.log('🔍 Registration endpoint hit');
+    console.log('🔍 Request body:', req.body);
+    console.log('🔍 Request headers:', req.headers);
     try {
         const { name, email, password } = req.body;
+        console.log('🔍 Registration data:', { name, email, password: password ? '[HIDDEN]' : 'undefined' });
         // Check if user already exists
         const existingUser = yield (0, database_1.findUserByEmail)(email);
         if (existingUser) {
+            console.log('❌ User already exists:', email);
             return res.status(400).json({ error: 'User already exists' });
         }
+        console.log('✅ User does not exist, proceeding with registration');
         // Hash password
         const passwordHash = yield bcrypt_1.default.hash(password, 10);
         // Create user
@@ -560,8 +591,10 @@ app.post('/auth/register', (req, res) => __awaiter(void 0, void 0, void 0, funct
             role: 'user',
             onboarding_complete: false
         });
+        console.log('✅ User created successfully:', user.id);
         // Generate JWT token for immediate login
         const token = jsonwebtoken_1.default.sign({ userId: user.id, email: user.email, name: user.name }, JWT_SECRET, { expiresIn: '7d' });
+        console.log('✅ JWT token generated');
         res.json({
             token,
             user: {
@@ -574,28 +607,39 @@ app.post('/auth/register', (req, res) => __awaiter(void 0, void 0, void 0, funct
         });
     }
     catch (error) {
-        console.error('Registration error:', error);
+        console.error('❌ Registration error:', error);
         res.status(500).json({ error: 'Registration failed' });
     }
 }));
 // Email/password login with JWT
 app.post('/auth/login', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    console.log('🔍 Login endpoint hit');
+    console.log('🔍 Request body:', req.body);
     try {
         const { email, password } = req.body;
         const user = yield (0, database_1.findUserByEmail)(email);
+        console.log('🔍 Login attempt for email:', email);
         // Check if user exists
-        if (!user)
+        if (!user) {
+            console.log('❌ User not found:', email);
             return res.status(401).json({ error: 'Invalid credentials' });
+        }
+        console.log('✅ User found:', user.id);
         // Check if user has a password (not a Google-only account)
         if (!user.password_hash) {
+            console.log('❌ User has no password (Google-only account):', email);
             return res.status(401).json({ error: 'This email is associated with a Google account. Please sign in with Google.' });
         }
         // Verify password
         const isValid = yield bcrypt_1.default.compare(password, user.password_hash);
-        if (!isValid)
+        if (!isValid) {
+            console.log('❌ Invalid password for user:', email);
             return res.status(401).json({ error: 'Invalid credentials' });
+        }
+        console.log('✅ Password verified for user:', email);
         // Generate JWT token
         const token = jsonwebtoken_1.default.sign({ userId: user.id, email: user.email, name: user.name }, JWT_SECRET, { expiresIn: '7d' });
+        console.log('✅ JWT token generated for login');
         // Return user data including onboarding status
         res.json({
             token,
@@ -609,7 +653,7 @@ app.post('/auth/login', (req, res) => __awaiter(void 0, void 0, void 0, function
         });
     }
     catch (error) {
-        console.error('Login error:', error);
+        console.error('❌ Login error:', error);
         res.status(500).json({ error: 'Login failed' });
     }
 }));
@@ -909,8 +953,11 @@ app.post('/api/conversations', authenticateJWT, (req, res) => __awaiter(void 0, 
         let ttsUrl = null;
         try {
             const user = yield (0, database_1.findUserById)(req.user.userId);
-            const userLevel = (user === null || user === void 0 ? void 0 : user.proficiency_level) || 'beginner';
-            const userTopics = (user === null || user === void 0 ? void 0 : user.talk_topics) && typeof user.talk_topics === 'string' ? JSON.parse(user.talk_topics) : Array.isArray(user === null || user === void 0 ? void 0 : user.talk_topics) ? user.talk_topics : [];
+            // Get the language dashboard for this user and language to use proper onboarding data
+            const languageDashboard = yield (0, database_1.getLanguageDashboard)(req.user.userId, language);
+            const userLevel = (languageDashboard === null || languageDashboard === void 0 ? void 0 : languageDashboard.proficiency_level) || (user === null || user === void 0 ? void 0 : user.proficiency_level) || 'beginner';
+            const userTopics = (languageDashboard === null || languageDashboard === void 0 ? void 0 : languageDashboard.talk_topics) || [];
+            const userLearningGoals = (languageDashboard === null || languageDashboard === void 0 ? void 0 : languageDashboard.learning_goals) || [];
             const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5000';
             const topicsToSend = topics && topics.length > 0 ? topics : userTopics;
             try {
@@ -1064,9 +1111,11 @@ app.post('/api/suggestions', authenticateJWT, (req, res) => __awaiter(void 0, vo
         const { conversationId, language } = req.body;
         // Get user data for personalized suggestions
         const user = yield (0, database_1.findUserById)(req.user.userId);
-        const userLevel = req.body.user_level || (user === null || user === void 0 ? void 0 : user.proficiency_level) || 'beginner';
-        const userTopics = req.body.user_topics || ((user === null || user === void 0 ? void 0 : user.talk_topics) && typeof user.talk_topics === 'string' ? JSON.parse(user.talk_topics) : Array.isArray(user === null || user === void 0 ? void 0 : user.talk_topics) ? user.talk_topics : []);
-        const userGoals = req.body.user_goals || ((user === null || user === void 0 ? void 0 : user.learning_goals) && typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : Array.isArray(user === null || user === void 0 ? void 0 : user.learning_goals) ? user.learning_goals : []);
+        // Get language dashboard data for this user and language
+        const languageDashboard = yield (0, database_1.getLanguageDashboard)(req.user.userId, language || (user === null || user === void 0 ? void 0 : user.target_language) || 'en');
+        const userLevel = req.body.user_level || (languageDashboard === null || languageDashboard === void 0 ? void 0 : languageDashboard.proficiency_level) || (user === null || user === void 0 ? void 0 : user.proficiency_level) || 'beginner';
+        const userTopics = req.body.user_topics || (languageDashboard === null || languageDashboard === void 0 ? void 0 : languageDashboard.talk_topics) || [];
+        const userGoals = req.body.user_goals || (languageDashboard === null || languageDashboard === void 0 ? void 0 : languageDashboard.learning_goals) || [];
         let chatHistory = [];
         if (conversationId) {
             // Get conversation history

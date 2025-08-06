@@ -47,7 +47,12 @@ import { exec } from 'child_process';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import axios from 'axios';
-const JWT_SECRET = process.env.JWT_SECRET || 'your_super_secret_key';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  console.error('JWT_SECRET environment variable is required');
+  process.exit(1);
+}
+const JWT_SECRET_FINAL = JWT_SECRET as string;
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 // Extend Express Request to include 'user'
@@ -236,7 +241,7 @@ function authenticateJWT(req: ExpressRequest, res: Response, next: NextFunction)
   const authHeader = req.headers.authorization;
   if (!authHeader) return res.status(401).json({ error: 'No token provided' });
   const token = authHeader.split(' ')[1];
-  jwt.verify(token, JWT_SECRET, (err: any, user: any) => {
+        jwt.verify(token, JWT_SECRET_FINAL, (err: any, user: any) => {
     if (err) return res.status(403).json({ error: 'Invalid token' });
     req.user = user;
     next();
@@ -282,15 +287,12 @@ app.get('/api/logout', (req: Request, res: Response) => {
 });
 
 // Add streak endpoint
-app.get('/api/user/streak', async (req: Request, res: Response) => {
-  console.log('[STREAK DEBUG] /api/user/streak called', { userId: req.user?.id || req.query.userId, language: req.query.language });
-  let userId = req.user?.id;
-  if (!userId && req.query.userId) {
-    userId = Array.isArray(req.query.userId) ? req.query.userId[0] : req.query.userId;
-  }
+app.get('/api/user/streak', authenticateJWT, async (req: Request, res: Response) => {
+  console.log('[STREAK DEBUG] /api/user/streak called', { userId: req.user?.userId, language: req.query.language });
+  const userId = req.user?.userId;
   let language = req.query.language;
   if (Array.isArray(language)) language = language[0];
-  if (typeof userId !== 'string' || typeof language !== 'string') {
+  if (!userId || typeof language !== 'string') {
     return res.status(400).json({ error: 'Missing user or language' });
   }
 
@@ -691,7 +693,7 @@ app.post('/auth/register', async (req: Request, res: Response) => {
     // Generate JWT token for immediate login
     const token = jwt.sign(
       { userId: user.id, email: user.email, name: user.name },
-      JWT_SECRET,
+      JWT_SECRET_FINAL,
       { expiresIn: '7d' }
     );
     
@@ -750,7 +752,7 @@ app.post('/auth/login', async (req: Request, res: Response) => {
     // Generate JWT token
     const token = jwt.sign(
       { userId: user.id, email: user.email, name: user.name },
-      JWT_SECRET,
+      JWT_SECRET_FINAL,
       { expiresIn: '7d' }
     );
     
@@ -1118,8 +1120,13 @@ app.post('/api/conversations', authenticateJWT, async (req: Request, res: Respon
     let ttsUrl = null;
     try {
       const user = await findUserById(req.user.userId);
-      const userLevel = user?.proficiency_level || 'beginner';
-      const userTopics = user?.talk_topics && typeof user.talk_topics === 'string' ? JSON.parse(user.talk_topics) : Array.isArray(user?.talk_topics) ? user.talk_topics : [];
+      
+      // Get the language dashboard for this user and language to use proper onboarding data
+      const languageDashboard = await getLanguageDashboard(req.user.userId, language);
+      const userLevel = languageDashboard?.proficiency_level || user?.proficiency_level || 'beginner';
+      const userTopics = languageDashboard?.talk_topics || [];
+      const userLearningGoals = languageDashboard?.learning_goals || [];
+      
       const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5000';
       const topicsToSend = topics && topics.length > 0 ? topics : userTopics;
       try {
@@ -1283,9 +1290,12 @@ app.post('/api/suggestions', authenticateJWT, async (req: Request, res: Response
     
     // Get user data for personalized suggestions
     const user = await findUserById(req.user.userId);
-    const userLevel = req.body.user_level || user?.proficiency_level || 'beginner';
-    const userTopics = req.body.user_topics || (user?.talk_topics && typeof user.talk_topics === 'string' ? JSON.parse(user.talk_topics) : Array.isArray(user?.talk_topics) ? user.talk_topics : []);
-    const userGoals = req.body.user_goals || (user?.learning_goals && typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : Array.isArray(user?.learning_goals) ? user.learning_goals : []);
+    
+    // Get language dashboard data for this user and language
+    const languageDashboard = await getLanguageDashboard(req.user.userId, language || user?.target_language || 'en');
+    const userLevel = req.body.user_level || languageDashboard?.proficiency_level || user?.proficiency_level || 'beginner';
+    const userTopics = req.body.user_topics || languageDashboard?.talk_topics || [];
+    const userGoals = req.body.user_goals || languageDashboard?.learning_goals || [];
     
     let chatHistory: any[] = [];
     if (conversationId) {

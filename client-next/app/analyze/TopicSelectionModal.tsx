@@ -69,7 +69,37 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
       const dashboard = dashboards.find((d: any) => d.language === currentLanguage);
       
       if (dashboard) {
-        setCurrentDashboard(dashboard);
+        // Parse JSON strings for arrays
+        let talk_topics = dashboard.talk_topics || [];
+        let learning_goals = dashboard.learning_goals || [];
+        
+        // Parse talk_topics if it's a string
+        if (typeof talk_topics === 'string') {
+          try {
+            talk_topics = JSON.parse(talk_topics);
+          } catch (e) {
+            console.error('Error parsing talk_topics:', e);
+            talk_topics = [];
+          }
+        }
+        
+        // Parse learning_goals if it's a string
+        if (typeof learning_goals === 'string') {
+          try {
+            learning_goals = JSON.parse(learning_goals);
+          } catch (e) {
+            console.error('Error parsing learning_goals:', e);
+            learning_goals = [];
+          }
+        }
+        
+        const processedDashboard = {
+          ...dashboard,
+          talk_topics: Array.isArray(talk_topics) ? talk_topics : [],
+          learning_goals: Array.isArray(learning_goals) ? learning_goals : []
+        };
+        
+        setCurrentDashboard(processedDashboard);
         setDashboardExists(true);
       } else {
         setDashboardExists(false);

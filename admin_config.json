@@ -24,8 +24,14 @@
       "2025-08-05": {
         "google_cloud": 14,
         "gemini": 0,
-        "system": 7,
+        "system": 8,
         "total_cost": 0.0031280000000000006
+      },
+      "2025-08-06": {
+        "google_cloud": 0,
+        "gemini": 0,
+        "system": 2,
+        "total_cost": 0.0
       }
     },
     "total_cost": 0.06312799999999999,

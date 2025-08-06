@@ -9,7 +9,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     // GET /api/user/streak
     if (req.method === 'GET') {
-      const response = await axios.get(`${backendUrl}/api/user/streak`, {
+      // Forward query parameters to backend
+      const queryParams = new URLSearchParams(req.query as Record<string, string>).toString();
+      const url = queryParams ? `${backendUrl}/api/user/streak?${queryParams}` : `${backendUrl}/api/user/streak`;
+      
+      const response = await axios.get(url, {
         headers: { Authorization: authHeader }
       });
       return res.status(response.status).json(response.data);

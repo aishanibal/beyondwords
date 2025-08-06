@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import axios from 'axios';
 
-const BACKEND_URL = 'http://localhost:5000/conversation_summary';
+const BACKEND_URL = `${process.env.NEXT_PUBLIC_API_URL || ''}/conversation_summary`;
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {

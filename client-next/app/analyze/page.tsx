@@ -1052,7 +1052,8 @@ function Analyze() {
       console.log('[DEBUG] TTS request payload:', { text, language });
       
       // Call the Node.js server which will route to Python API with admin controls
-      const response = await axios.post('http://localhost:4000/api/tts', {
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || '';
+      const response = await axios.post(`${backendUrl}/api/tts`, {
         text,
         language
       }, {
@@ -1089,7 +1090,8 @@ function Analyze() {
       const ttsUrl = await generateTTSForText(text, language, cacheKey);
       if (ttsUrl) {
         // Handle both relative and absolute URLs from backend
-        const audioUrl = ttsUrl.startsWith('http') ? ttsUrl : `http://localhost:4000${ttsUrl}`;
+        const backendUrl = process.env.NEXT_PUBLIC_API_URL || '';
+        const audioUrl = ttsUrl.startsWith('http') ? ttsUrl : `${backendUrl}${ttsUrl}`;
         const audio = new window.Audio(audioUrl);
         ttsAudioRef.current = audio;
         
@@ -1148,8 +1150,9 @@ function Analyze() {
     setIsPlayingAnyTTS(true);
     
     try {
-      // Handle both relative and absolute URLs from backend
-      const audioUrl = ttsUrl.startsWith('http') ? ttsUrl : `http://localhost:4000${ttsUrl}`;
+              // Handle both relative and absolute URLs from backend
+        const backendUrl = process.env.NEXT_PUBLIC_API_URL || '';
+        const audioUrl = ttsUrl.startsWith('http') ? ttsUrl : `${backendUrl}${ttsUrl}`;
       const audio = new window.Audio(audioUrl);
       ttsAudioRef.current = audio;
       
@@ -2129,7 +2132,8 @@ function Analyze() {
       if ((aiMessage as any).ttsUrl) {
         // Handle both relative and absolute URLs from backend
         const ttsUrl = (aiMessage as any).ttsUrl;
-        const audioUrl = ttsUrl.startsWith('http') ? ttsUrl : `http://localhost:4000${ttsUrl}`;
+        const backendUrl = process.env.NEXT_PUBLIC_API_URL || '';
+        const audioUrl = ttsUrl.startsWith('http') ? ttsUrl : `${backendUrl}${ttsUrl}`;
         try {
           const headResponse = await fetch(audioUrl, { method: 'HEAD' });
           if (headResponse.ok) {
@@ -3101,7 +3105,7 @@ function Analyze() {
                 description: persona.description,
                 usesPersona: true,
                 personaId: null, // This is a new persona, not a saved one
-                learningGoals: [] // Personas don't have specific learning goals
+                learningGoals: undefined // Let the server use user's dashboard learning goals as fallback
               }, {
                 headers: { Authorization: `Bearer ${token}` }
               });

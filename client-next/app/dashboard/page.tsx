@@ -331,13 +331,39 @@ export default function DashboardPage() {
         headers: { Authorization: `Bearer ${token}` }
       });
       const dashboards: DashboardType[] = dashboardsRes.data.dashboards || [];
-      const processedDashboards: DashboardType[] = dashboards.map((dashboard: DashboardType) => ({
-        ...dashboard,
-        talk_topics: dashboard.talk_topics || [],
-        learning_goals: dashboard.learning_goals || [],
-        speak_speed: dashboard.speak_speed || 1.0,
-        romanization_display: dashboard.romanization_display || 'both'
-      }));
+      const processedDashboards: DashboardType[] = dashboards.map((dashboard: DashboardType) => {
+        // Parse JSON strings for arrays
+        let talk_topics = dashboard.talk_topics || [];
+        let learning_goals = dashboard.learning_goals || [];
+        
+        // Parse talk_topics if it's a string
+        if (typeof talk_topics === 'string') {
+          try {
+            talk_topics = JSON.parse(talk_topics);
+          } catch (e) {
+            console.error('Error parsing talk_topics:', e);
+            talk_topics = [];
+          }
+        }
+        
+        // Parse learning_goals if it's a string
+        if (typeof learning_goals === 'string') {
+          try {
+            learning_goals = JSON.parse(learning_goals);
+          } catch (e) {
+            console.error('Error parsing learning_goals:', e);
+            learning_goals = [];
+          }
+        }
+        
+        return {
+          ...dashboard,
+          talk_topics: Array.isArray(talk_topics) ? talk_topics : [],
+          learning_goals: Array.isArray(learning_goals) ? learning_goals : [],
+          speak_speed: dashboard.speak_speed || 1.0,
+          romanization_display: dashboard.romanization_display || 'both'
+        };
+      });
       setLanguageDashboards(processedDashboards);
       
       // Get saved language from localStorage
@@ -536,10 +562,34 @@ export default function DashboardPage() {
   };
 
   const handleLanguageOnboardingComplete = (newDashboard: DashboardType) => {
+    // Parse JSON strings for arrays
+    let talk_topics = newDashboard.talk_topics || [];
+    let learning_goals = newDashboard.learning_goals || [];
+    
+    // Parse talk_topics if it's a string
+    if (typeof talk_topics === 'string') {
+      try {
+        talk_topics = JSON.parse(talk_topics);
+      } catch (e) {
+        console.error('Error parsing talk_topics:', e);
+        talk_topics = [];
+      }
+    }
+    
+    // Parse learning_goals if it's a string
+    if (typeof learning_goals === 'string') {
+      try {
+        learning_goals = JSON.parse(learning_goals);
+      } catch (e) {
+        console.error('Error parsing learning_goals:', e);
+        learning_goals = [];
+      }
+    }
+    
     const processedDashboard: DashboardType = {
       ...newDashboard,
-      talk_topics: newDashboard.talk_topics || [],
-      learning_goals: newDashboard.learning_goals || [],
+      talk_topics: Array.isArray(talk_topics) ? talk_topics : [],
+      learning_goals: Array.isArray(learning_goals) ? learning_goals : [],
       speak_speed: newDashboard.speak_speed || 1.0,
       romanization_display: newDashboard.romanization_display || 'both'
     };
@@ -552,6 +602,22 @@ export default function DashboardPage() {
 
   const currentDashboard = languageDashboards.find((d: DashboardType) => d.language === selectedLanguage);
   if (currentDashboard) {
+    // Ensure arrays are properly parsed
+    if (typeof currentDashboard.talk_topics === 'string') {
+      try {
+        currentDashboard.talk_topics = JSON.parse(currentDashboard.talk_topics);
+      } catch (e) {
+        currentDashboard.talk_topics = [];
+      }
+    }
+    if (typeof currentDashboard.learning_goals === 'string') {
+      try {
+        currentDashboard.learning_goals = JSON.parse(currentDashboard.learning_goals);
+      } catch (e) {
+        currentDashboard.learning_goals = [];
+      }
+    }
+    
     currentDashboard.talk_topics = currentDashboard.talk_topics || [];
     currentDashboard.learning_goals = currentDashboard.learning_goals || [];
     currentDashboard.romanization_display = currentDashboard.romanization_display || 'both';
@@ -562,7 +628,10 @@ export default function DashboardPage() {
     async function fetchStreak() {
       if (user?.id && selectedLanguage) {
         try {
-          const res = await axios.get(`/api/user/streak?userId=${user.id}&language=${selectedLanguage}`);
+          const token = localStorage.getItem('jwt');
+          const res = await axios.get(`/api/user/streak?language=${selectedLanguage}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
           setStreak(res.data.streak || 0);
         } catch (err) {
           setStreak(0);
