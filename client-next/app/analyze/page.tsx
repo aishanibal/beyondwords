@@ -1058,13 +1058,12 @@ function Analyze() {
       
       console.log('[DEBUG] Sending TTS request with text:', text);
       console.log('[DEBUG] TTS request payload:', { text, language });
+      console.log('[DEBUG] User token available:', !!token);
       
       // Call the Node.js server which will route to Python API with admin controls
-      const response = await axios.post('http://localhost:4000/api/tts', {
+      const response = await axios.post('http://localhost:4000/api/tts-test', {
         text,
         language
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
       });
       
       const ttsUrl = response.data.ttsUrl;
@@ -5094,14 +5093,14 @@ Yes, the current serials don't have the same quality as the old ones, right?
                       padding: '0.5rem 0.8rem',
                       borderRadius: message.sender === 'User' ? '8px 8px 2px 8px' : '8px 8px 8px 2px',
                       background: isDarkMode 
-                        ? 'rgba(16, 185, 129, 0.1)' 
-                        : 'rgba(16, 185, 129, 0.08)',
-                      color: isDarkMode ? '#10b981' : '#059669',
+                        ? 'rgba(16, 185, 129, 0.25)' 
+                        : 'rgba(16, 185, 129, 0.2)',
+                      color: isDarkMode ? '#10b981' : '#047857',
                       fontSize: '0.85rem',
                       fontWeight: 400,
                       maxWidth: '70%',
                       wordWrap: 'break-word',
-                      border: `1px solid ${isDarkMode ? 'rgba(16, 185, 129, 0.2)' : 'rgba(16, 185, 129, 0.15)'}`,
+                      border: `1px solid ${isDarkMode ? 'rgba(16, 185, 129, 0.4)' : 'rgba(16, 185, 129, 0.3)'}`,
                       position: 'relative'
                     }}
                   >
