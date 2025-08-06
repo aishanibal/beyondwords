@@ -24,7 +24,12 @@ const child_process_1 = require("child_process");
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const axios_1 = __importDefault(require("axios"));
-const JWT_SECRET = process.env.JWT_SECRET || 'your_super_secret_key';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+    console.error('JWT_SECRET environment variable is required');
+    process.exit(1);
+}
+const JWT_SECRET_FINAL = JWT_SECRET;
 const googleClient = new google_auth_library_1.OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 const globalAny = global;
 const app = (0, express_1.default)();
@@ -46,7 +51,8 @@ app.use(express_1.default.json());
 // CORS configuration for production and development
 const allowedOrigins = [
     'http://localhost:3000',
-    'https://speakbeyondwords-sigma.vercel.app'
+    'https://speakbeyondwords-sigma.vercel.app',
+    'https://speakbeyondwords-dhg8jmlwl-aishanibals-projects.vercel.app'
 ];
 app.use((0, cors_1.default)({
     origin: function (origin, callback) {
@@ -178,7 +184,7 @@ function authenticateJWT(req, res, next) {
     if (!authHeader)
         return res.status(401).json({ error: 'No token provided' });
     const token = authHeader.split(' ')[1];
-    jsonwebtoken_1.default.verify(token, JWT_SECRET, (err, user) => {
+    jsonwebtoken_1.default.verify(token, JWT_SECRET_FINAL, (err, user) => {
         if (err)
             return res.status(403).json({ error: 'Invalid token' });
         req.user = user;
@@ -544,7 +550,7 @@ app.post('/auth/google/token', (req, res) => __awaiter(void 0, void 0, void 0, f
             });
         }
         // Generate JWT token
-        const token = jsonwebtoken_1.default.sign({ userId: user.id, email: user.email, name: user.name }, JWT_SECRET, { expiresIn: '7d' });
+        const token = jsonwebtoken_1.default.sign({ userId: user.id, email: user.email, name: user.name }, JWT_SECRET_FINAL, { expiresIn: '7d' });
         // Ensure user object includes onboarding status
         const userResponse = {
             id: user.id,
@@ -593,7 +599,7 @@ app.post('/auth/register', (req, res) => __awaiter(void 0, void 0, void 0, funct
         });
         console.log('✅ User created successfully:', user.id);
         // Generate JWT token for immediate login
-        const token = jsonwebtoken_1.default.sign({ userId: user.id, email: user.email, name: user.name }, JWT_SECRET, { expiresIn: '7d' });
+        const token = jsonwebtoken_1.default.sign({ userId: user.id, email: user.email, name: user.name }, JWT_SECRET_FINAL, { expiresIn: '7d' });
         console.log('✅ JWT token generated');
         res.json({
             token,
@@ -638,7 +644,7 @@ app.post('/auth/login', (req, res) => __awaiter(void 0, void 0, void 0, function
         }
         console.log('✅ Password verified for user:', email);
         // Generate JWT token
-        const token = jsonwebtoken_1.default.sign({ userId: user.id, email: user.email, name: user.name }, JWT_SECRET, { expiresIn: '7d' });
+        const token = jsonwebtoken_1.default.sign({ userId: user.id, email: user.email, name: user.name }, JWT_SECRET_FINAL, { expiresIn: '7d' });
         console.log('✅ JWT token generated for login');
         // Return user data including onboarding status
         res.json({
@@ -659,30 +665,38 @@ app.post('/auth/login', (req, res) => __awaiter(void 0, void 0, void 0, function
 }));
 // Onboarding route (protected) - Creates first language dashboard
 app.post('/api/user/onboarding', authenticateJWT, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
     try {
-        console.log('Onboarding request received:', req.body);
+        console.log('🔍 ONBOARDING: Request received');
+        console.log('🔍 ONBOARDING: Request body:', req.body);
+        console.log('🔍 ONBOARDING: User ID:', (_a = req.user) === null || _a === void 0 ? void 0 : _a.userId);
         const { language, proficiency, talkTopics, learningGoals, practicePreference } = req.body;
-        console.log('Extracted fields:', { language, proficiency, talkTopics, learningGoals, practicePreference });
+        console.log('🔍 ONBOARDING: Extracted fields:', { language, proficiency, talkTopics, learningGoals, practicePreference });
         if (!language || !proficiency || !talkTopics || !learningGoals || !practicePreference) {
-            console.log('Missing required fields validation failed');
+            console.log('❌ ONBOARDING: Missing required fields validation failed');
             return res.status(400).json({ error: 'Missing required onboarding fields' });
         }
+        console.log('🔍 ONBOARDING: About to create language dashboard...');
         // Create the first language dashboard (primary)
         const dashboard = yield (0, database_1.createLanguageDashboard)(req.user.userId, language, proficiency, talkTopics, learningGoals, practicePreference, 'en', // feedbackLanguage
         true // isPrimary as boolean
         );
+        console.log('✅ ONBOARDING: Language dashboard created successfully');
         // Update user to mark onboarding as complete
+        console.log('🔍 ONBOARDING: About to update user...');
         yield (0, database_1.updateUser)(req.user.userId, {
             onboarding_complete: true
         });
+        console.log('🔍 ONBOARDING: About to fetch updated user...');
         const user = yield (0, database_1.findUserById)(req.user.userId);
+        console.log('✅ ONBOARDING: Successfully completed onboarding');
         res.json({
             user: Object.assign(Object.assign({}, user), { onboarding_complete: Boolean(user === null || user === void 0 ? void 0 : user.onboarding_complete) }),
             dashboard
         });
     }
     catch (error) {
-        console.error('Onboarding error:', error);
+        console.error('❌ ONBOARDING: Error during onboarding:', error);
         res.status(500).json({ error: 'Failed to save onboarding' });
     }
 }));
@@ -898,7 +912,7 @@ app.post('/api/admin/promote', authenticateJWT, (req, res) => __awaiter(void 0, 
         if (!email)
             return res.status(400).json({ error: 'Email required' });
         const user = yield (0, database_1.findUserByEmail)(email);
-        if (!user)
+        if (!user || !user.id)
             return res.status(404).json({ error: 'User not found' });
         yield (0, database_1.updateUser)(user.id, { role: 'admin' });
         res.json({ success: true, message: `${email} promoted to admin.` });
@@ -917,7 +931,7 @@ app.post('/api/admin/demote', authenticateJWT, (req, res) => __awaiter(void 0, v
         if (!email)
             return res.status(400).json({ error: 'Email required' });
         const user = yield (0, database_1.findUserByEmail)(email);
-        if (!user)
+        if (!user || !user.id)
             return res.status(404).json({ error: 'User not found' });
         yield (0, database_1.updateUser)(user.id, { role: 'user' });
         res.json({ success: true, message: `${email} demoted to user.` });
@@ -1444,6 +1458,34 @@ app.post('/api/quick_translation', authenticateJWT, (req, res) => __awaiter(void
 app.use('/uploads', express_1.default.static(path_1.default.join(__dirname, 'uploads')));
 // Also serve files from the current directory (where Python API might create files)
 app.use('/files', express_1.default.static(path_1.default.join(__dirname, '..')));
+// Cleanup old audio files (older than 1 day)
+function cleanupOldFiles() {
+    const uploadsDir = path_1.default.join(__dirname, 'uploads');
+    if (!fs_1.default.existsSync(uploadsDir))
+        return;
+    const files = fs_1.default.readdirSync(uploadsDir);
+    const now = Date.now();
+    const maxAge = 24 * 60 * 60 * 1000; // 1 day in milliseconds
+    files.forEach(file => {
+        const filePath = path_1.default.join(uploadsDir, file);
+        const stats = fs_1.default.statSync(filePath);
+        const age = now - stats.mtime.getTime();
+        if (age > maxAge) {
+            try {
+                fs_1.default.unlinkSync(filePath);
+                console.log(`🗑️ Cleaned up old file: ${file}`);
+            }
+            catch (error) {
+                console.error(`❌ Failed to delete ${file}:`, error);
+            }
+        }
+    });
+}
+// Run cleanup every 6 hours
+setInterval(cleanupOldFiles, 6 * 60 * 60 * 1000);
+// Also run cleanup on startup
+cleanupOldFiles();
+// Simple cleanup - delete files older than 1 day
 // Helper function to check Python API health
 function checkPythonAPIHealth() {
     return __awaiter(this, void 0, void 0, function* () {

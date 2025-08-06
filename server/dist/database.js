@@ -200,27 +200,11 @@ function createUser(userData) {
                 reject(new Error('Supabase client not initialized'));
                 return;
             }
-            // For Supabase, we need to create the user in auth.users first
-            // Then insert into our custom users table
-            const { data: authData, error: authError } = yield supabase.auth.admin.createUser({
-                email: userData.email,
-                password: userData.passwordHash || userData.password_hash || 'temporary_password',
-                email_confirm: true
-            });
-            if (authError) {
-                console.error('❌ Supabase auth createUser error:', authError);
-                reject(authError);
-                return;
-            }
-            if (!authData.user) {
-                reject(new Error('Failed to create auth user'));
-                return;
-            }
-            // Now insert into our custom users table
+            // For Supabase, we'll create the user directly in our custom users table
+            // The auth will be handled by the frontend or through other means
             const { data, error } = yield supabase
                 .from('users')
                 .insert({
-                id: authData.user.id, // Use the UUID from auth.users
                 google_id: userData.googleId || userData.google_id,
                 email: userData.email,
                 name: userData.name,
@@ -236,7 +220,13 @@ function createUser(userData) {
             }
             else {
                 console.log('✅ User created successfully:', data);
-                resolve(data);
+                // Ensure the returned user has an ID
+                const user = data;
+                if (!user.id) {
+                    reject(new Error('User created but no ID returned'));
+                    return;
+                }
+                resolve(user);
             }
         }
         catch (error) {
@@ -288,7 +278,13 @@ function findUserByEmail(email) {
                 reject(error);
             }
             else {
-                resolve(data || null);
+                const user = data;
+                if (user && !user.id) {
+                    console.error('❌ User found but no ID:', user);
+                    reject(new Error('User found but no ID returned'));
+                    return;
+                }
+                resolve(user || null);
             }
         }
         catch (error) {
@@ -342,7 +338,13 @@ function findUserById(id) {
                         }
                     }
                 }
-                resolve(data || null);
+                const user = data;
+                if (user && !user.id) {
+                    console.error('❌ User found but no ID:', user);
+                    reject(new Error('User found but no ID returned'));
+                    return;
+                }
+                resolve(user || null);
             }
         }
         catch (error) {
@@ -633,14 +635,8 @@ function getUserConversations(userId, language) {
             }
             let query = supabase
                 .from('conversations')
-                .select(`
-          *,
-          language_dashboards!inner(language)
-        `)
+                .select('*')
                 .eq('user_id', userId);
-            if (language) {
-                query = query.eq('language_dashboards.language', language);
-            }
             const { data, error } = yield query
                 .order('created_at', { ascending: false });
             if (error) {
@@ -648,8 +644,26 @@ function getUserConversations(userId, language) {
                 reject(error);
             }
             else {
+                // If language is specified, filter conversations by getting their language dashboards
+                let conversations = data || [];
+                if (language) {
+                    // Get all language dashboard IDs for this user and language
+                    const { data: dashboardData, error: dashboardError } = yield supabase
+                        .from('language_dashboards')
+                        .select('id')
+                        .eq('user_id', userId)
+                        .eq('language', language);
+                    if (dashboardError) {
+                        console.error('❌ Error fetching language dashboards for filtering:', dashboardError);
+                        reject(dashboardError);
+                        return;
+                    }
+                    const dashboardIds = (dashboardData === null || dashboardData === void 0 ? void 0 : dashboardData.map((d) => d.id)) || [];
+                    // Filter conversations to only include those with matching language dashboard IDs
+                    conversations = conversations.filter(conversation => dashboardIds.includes(conversation.language_dashboard_id));
+                }
                 // Parse JSON fields for each conversation
-                const conversations = (data || []).map(conversation => {
+                const processedConversations = conversations.map(conversation => {
                     if (conversation.topics) {
                         try {
                             conversation.topics = JSON.parse(conversation.topics);
@@ -676,7 +690,7 @@ function getUserConversations(userId, language) {
                     }
                     return conversation;
                 });
-                resolve(conversations);
+                resolve(processedConversations);
             }
         }
         catch (error) {
@@ -767,13 +781,27 @@ function getLatestConversation(userId, language) {
             }
             let query = supabase
                 .from('conversations')
-                .select(`
-          *,
-          language_dashboards!inner(language)
-        `)
+                .select('*')
                 .eq('user_id', userId);
+            // If language is specified, filter by language dashboard IDs
             if (language) {
-                query = query.eq('language_dashboards.language', language);
+                // Get all language dashboard IDs for this user and language
+                const { data: dashboardData, error: dashboardError } = yield supabase
+                    .from('language_dashboards')
+                    .select('id')
+                    .eq('user_id', userId)
+                    .eq('language', language);
+                if (dashboardError) {
+                    console.error('❌ Error fetching language dashboards for latest conversation:', dashboardError);
+                    reject(dashboardError);
+                    return;
+                }
+                const dashboardIds = (dashboardData === null || dashboardData === void 0 ? void 0 : dashboardData.map((d) => d.id)) || [];
+                if (dashboardIds.length === 0) {
+                    resolve(null);
+                    return;
+                }
+                query = query.in('language_dashboard_id', dashboardIds);
             }
             const { data, error } = yield query
                 .order('created_at', { ascending: false })
@@ -969,7 +997,9 @@ function updateConversationPersona(conversationId, usesPersona, personaId) {
 function createLanguageDashboard(userId, language, proficiencyLevel, talkTopics, learningGoals, practicePreference, feedbackLanguage = 'en', isPrimary = false) {
     return new Promise((resolve, reject) => __awaiter(this, void 0, void 0, function* () {
         try {
+            console.log('🔍 DB: createLanguageDashboard called with:', { userId, language, proficiencyLevel, talkTopics, learningGoals, practicePreference, feedbackLanguage, isPrimary });
             if (!supabase) {
+                console.error('❌ DB: Supabase client not initialized');
                 reject(new Error('Supabase client not initialized'));
                 return;
             }
@@ -1172,15 +1202,28 @@ function getUserStreak(userId, language) {
                 reject(new Error('Supabase client not initialized'));
                 return;
             }
-            // Get conversations for this user and language
+            // First, get the language dashboard IDs for this user and language
+            const { data: dashboardData, error: dashboardError } = yield supabase
+                .from('language_dashboards')
+                .select('id')
+                .eq('user_id', userId)
+                .eq('language', language);
+            if (dashboardError) {
+                console.error('❌ Error fetching language dashboards for streak:', dashboardError);
+                reject(dashboardError);
+                return;
+            }
+            const dashboardIds = (dashboardData === null || dashboardData === void 0 ? void 0 : dashboardData.map((d) => d.id)) || [];
+            if (dashboardIds.length === 0) {
+                resolve({ streak: 0 });
+                return;
+            }
+            // Get conversations for this user that match the language dashboard IDs
             const { data: conversations, error: conversationsError } = yield supabase
                 .from('conversations')
-                .select(`
-          id,
-          language_dashboards!inner(language)
-        `)
+                .select('id, created_at')
                 .eq('user_id', userId)
-                .eq('language_dashboards.language', language)
+                .in('language_dashboard_id', dashboardIds)
                 .order('created_at', { ascending: false });
             if (conversationsError) {
                 console.error('❌ Error fetching conversations for streak:', conversationsError);
