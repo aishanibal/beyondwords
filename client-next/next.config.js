@@ -1,6 +1,8 @@
 module.exports = {
   async rewrites() {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+    console.log('🔍 DEBUG: NEXT_PUBLIC_API_URL =', process.env.NEXT_PUBLIC_API_URL);
+    console.log('🔍 DEBUG: Using apiUrl =', apiUrl);
     
     return [
       {
