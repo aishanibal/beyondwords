@@ -3,6 +3,10 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import axios from 'axios';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  console.log('🔍 Register API route called - Method:', req.method);
+  console.log('🔍 Register API route called - URL:', req.url);
+  console.log('🔍 Register API route called - Headers:', req.headers);
+  
   if (req.method !== 'POST') return res.status(405).end();
 
   try {
