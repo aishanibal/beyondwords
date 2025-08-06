@@ -327,7 +327,11 @@ export default function DashboardPage() {
     setError('');
     try {
       const token = localStorage.getItem('jwt');
-      const dashboardsRes = await axios.get('/api/user/language-dashboards', {
+      // Call the backend directly
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+      
+      const dashboardsRes = await axios.get(`${cleanBackendUrl}/api/user/language-dashboards`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const dashboards: DashboardType[] = dashboardsRes.data.dashboards || [];

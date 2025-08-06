@@ -53,8 +53,11 @@ export default function SignupPage() {
     }
 
     try {
-      // Use axios to call the Next.js API route
-      const response = await axios.post('/api/auth/register', {
+      // Call the backend directly
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+      
+      const response = await axios.post(`${cleanBackendUrl}/auth/register`, {
         name: formData.name,
         email: formData.email,
         password: formData.password
@@ -93,8 +96,11 @@ export default function SignupPage() {
     setError('');
 
     try {
-      // Use axios to call the Next.js API route
-      const response = await axios.post('/api/auth/google/token', {
+      // Call the backend directly
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+      
+      const response = await axios.post(`${cleanBackendUrl}/auth/google/token`, {
         credential: credentialResponse.credential
       }, {
         timeout: 15000 // 15 second timeout

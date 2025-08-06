@@ -37,7 +37,11 @@ export default function LoginPage() {
     setIsLoading(true);
     setError('');
     try {
-      const response = await axios.post('/api/auth/login', formData, {
+      // Call the backend directly
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+      
+      const response = await axios.post(`${cleanBackendUrl}/auth/login`, formData, {
         timeout: 15000 // 15 second timeout
       });
       localStorage.setItem('jwt', response.data.token);
@@ -58,7 +62,11 @@ export default function LoginPage() {
     setError('');
 
     try {
-      const response = await axios.post('/api/auth/google/token', {
+      // Call the backend directly
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+      
+      const response = await axios.post(`${cleanBackendUrl}/auth/google/token`, {
         credential: credentialResponse.credential
       }, {
         timeout: 15000 // 15 second timeout
