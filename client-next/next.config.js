@@ -1,69 +1,71 @@
 module.exports = {
   async rewrites() {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+    
     return [
       {
         source: '/api/analyze',
-        destination: 'http://localhost:4000/api/analyze', // Express backend
+        destination: `${apiUrl}/api/analyze`,
       },
       {
         source: '/api/conversations/:id/messages',
-        destination: 'http://localhost:4000/api/conversations/:id/messages', // Express backend
+        destination: `${apiUrl}/api/conversations/:id/messages`,
       },
       {
         source: '/api/suggestions',
-        destination: 'http://localhost:4000/api/suggestions', // Express backend
+        destination: `${apiUrl}/api/suggestions`,
       },
       {
         source: '/api/short_feedback',
-        destination: 'http://localhost:4000/api/short_feedback', // Express backend
+        destination: `${apiUrl}/api/short_feedback`,
       },
       {
         source: '/api/feedback',
-        destination: 'http://localhost:4000/api/feedback', // Express backend
+        destination: `${apiUrl}/api/feedback`,
       },
       {
         source: '/api/detailed_breakdown',
-        destination: 'http://localhost:4000/api/detailed_breakdown', // Express backend
+        destination: `${apiUrl}/api/detailed_breakdown`,
       },
       {
         source: '/api/translate',
-        destination: 'http://localhost:4000/api/translate', // Express backend
+        destination: `${apiUrl}/api/translate`,
       },
       {
         source: '/api/user/:path*',
-        destination: 'http://localhost:4000/api/user/:path*', // Express backend
+        destination: `${apiUrl}/api/user/:path*`,
       },
       {
         source: '/api/auth/:path*',
-        destination: 'http://localhost:4000/api/auth/:path*', // Express backend
+        destination: `${apiUrl}/api/auth/:path*`,
       },
       {
         source: '/api/conversations/:path*',            
-        destination: 'http://localhost:4000/api/conversations/:path*', // Express backend
+        destination: `${apiUrl}/api/conversations/:path*`,
       },
       {
         source: '/api/messages/:path*',
-        destination: 'http://localhost:4000/api/messages/:path*', // Express backend
+        destination: `${apiUrl}/api/messages/:path*`,
       },
       {
         source: '/api/health',
-        destination: 'http://localhost:4000/api/health', // Express backend
+        destination: `${apiUrl}/api/health`,
       },
       {
         source: '/api/conversations',
-        destination: 'http://localhost:4000/api/conversations', // Express backend
+        destination: `${apiUrl}/api/conversations`,
       },
       {
         source: '/api/conversations/:id',
-        destination: 'http://localhost:4000/api/conversations/:id', // Express backend
+        destination: `${apiUrl}/api/conversations/:id`,
       },
       {
         source: '/api/messages/feedback',
-        destination: 'http://localhost:4000/api/messages/feedback', // Express backend
+        destination: `${apiUrl}/api/messages/feedback`,
       },
       {
         source: '/api/explain_suggestion',
-        destination: 'http://localhost:4000/api/explain_suggestion', // Express backend
+        destination: `${apiUrl}/api/explain_suggestion`,
       }
     ];
   },
