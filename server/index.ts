@@ -1068,7 +1068,7 @@ app.post('/api/admin/promote', authenticateJWT, async (req: Request, res: Respon
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: 'Email required' });
     const user = await findUserByEmail(email);
-    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (!user || !user.id) return res.status(404).json({ error: 'User not found' });
     await updateUser(user.id, { role: 'admin' });
     res.json({ success: true, message: `${email} promoted to admin.` });
   } catch (error: any) {
@@ -1085,7 +1085,7 @@ app.post('/api/admin/demote', authenticateJWT, async (req: Request, res: Respons
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: 'Email required' });
     const user = await findUserByEmail(email);
-    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (!user || !user.id) return res.status(404).json({ error: 'User not found' });
     await updateUser(user.id, { role: 'user' });
     res.json({ success: true, message: `${email} demoted to user.` });
   } catch (error: any) {

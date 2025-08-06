@@ -13,7 +13,7 @@ if (process.env.SUPABASE_URL && (process.env.SUPABASE_SERVICE_ROLE_KEY || proces
 }
 
 export interface User {
-  id?: number; // Make ID optional since it might be auto-generated
+  id: number; // Make ID required since we're using auto-generated IDs
   google_id?: string;
   googleId?: string;
   email: string;
@@ -292,7 +292,13 @@ function createUser(userData: Partial<User>) {
         reject(error);
       } else {
         console.log('✅ User created successfully:', data);
-        resolve(data as User);
+        // Ensure the returned user has an ID
+        const user = data as User;
+        if (!user.id) {
+          reject(new Error('User created but no ID returned'));
+          return;
+        }
+        resolve(user);
       }
     } catch (error) {
       console.error('❌ createUser error:', error);
@@ -346,7 +352,13 @@ function findUserByEmail(email: string) {
         console.error('❌ Supabase findUserByEmail error:', error);
         reject(error);
       } else {
-        resolve(data as User || null);
+        const user = data as User;
+        if (user && !user.id) {
+          console.error('❌ User found but no ID:', user);
+          reject(new Error('User found but no ID returned'));
+          return;
+        }
+        resolve(user || null);
       }
     } catch (error) {
       console.error('❌ findUserByEmail error:', error);
@@ -400,7 +412,13 @@ function findUserById(id: number) {
             }
           }
         }
-        resolve(data as User || null);
+        const user = data as User;
+        if (user && !user.id) {
+          console.error('❌ User found but no ID:', user);
+          reject(new Error('User found but no ID returned'));
+          return;
+        }
+        resolve(user || null);
       }
     } catch (error) {
       console.error('❌ findUserById error:', error);

@@ -47,7 +47,11 @@ export default function SettingsPage() {
     async function fetchProfile() {
       try {
         const token = localStorage.getItem('jwt');
-        const response = await axios.get('/api/user/profile', {
+        // Call the backend directly
+        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+        const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+        
+        const response = await axios.get(`${cleanBackendUrl}/api/user/profile`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         
@@ -100,8 +104,12 @@ export default function SettingsPage() {
     setMessage(null);
 
     try {
+      // Call the backend directly
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+      
       const token = localStorage.getItem('jwt');
-      await axios.put('/api/user/profile', {
+      await axios.put(`${cleanBackendUrl}/api/user/profile`, {
         first_name: formData.first_name,
         last_name: formData.last_name,
         email: profile?.email || '',
@@ -130,8 +138,12 @@ export default function SettingsPage() {
     }
 
     try {
+      // Call the backend directly
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+      
       const token = localStorage.getItem('jwt');
-      await axios.delete('/api/user/profile', {
+      await axios.delete(`${cleanBackendUrl}/api/user/profile`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       

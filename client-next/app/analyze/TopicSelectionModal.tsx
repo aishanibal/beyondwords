@@ -113,7 +113,11 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
   const fetchSavedPersonas = useCallback(async () => {
     setIsLoadingPersonas(true);
     try {
-      const response = await axios.get('/api/personas', { headers: getAuthHeaders() });
+      // Call the backend directly
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+      
+      const response = await axios.get(`${cleanBackendUrl}/api/personas`, { headers: getAuthHeaders() });
       setSavedPersonas(response.data.personas || []);
     } catch (err: any) {
       console.error('Error fetching saved personas:', err);
@@ -327,7 +331,11 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
       const token = localStorage.getItem('jwt');
       const dashboardLanguage = currentDashboard?.language || currentLanguage || 'en';
       
-      const response = await axios.post('/api/conversations', {
+      // Call the backend directly
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+      
+      const response = await axios.post(`${cleanBackendUrl}/api/conversations`, {
         language: dashboardLanguage,
         title: `${finalSubtopic} Discussion`,
         topics: [finalSubtopic],

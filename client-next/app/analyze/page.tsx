@@ -1253,7 +1253,11 @@ function Analyze() {
       // Add JWT token to headers
       const token = localStorage.getItem('jwt');
       console.log('[DEBUG] Sending transcription request to /api/transcribe_only');
-      const transcriptionResponse = await axios.post('/api/transcribe_only', formData, {
+              // Call the backend directly
+        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+        const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+        
+        const transcriptionResponse = await axios.post(`${cleanBackendUrl}/api/transcribe_only`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
           ...(token ? { Authorization: `Bearer ${token}` } : {})
@@ -1336,7 +1340,7 @@ function Analyze() {
       };
       
       console.log('[DEBUG] Sending AI response request to /api/ai_response with data:', aiResponseData);
-      const aiResponseResponse = await axios.post('/api/ai_response', aiResponseData, {
+              const aiResponseResponse = await axios.post(`${cleanBackendUrl}/api/ai_response`, aiResponseData, {
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {})
@@ -1709,8 +1713,12 @@ function Analyze() {
       
       console.log('[DEBUG] Request payload:', requestPayload);
 
-      const token = localStorage.getItem('jwt');
-      const response = await axios.post('/api/conversation-summary', requestPayload, {
+              const token = localStorage.getItem('jwt');
+        // Call the backend directly
+        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+        const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+        
+        const response = await axios.post(`${cleanBackendUrl}/api/conversation-summary`, requestPayload, {
         headers: {
           ...(token ? { Authorization: `Bearer ${token}` } : {})
         }
@@ -2421,7 +2429,11 @@ function Analyze() {
       
       // Test server connectivity first
       try {
-        const healthCheck = await axios.get('/api/health');
+        // Call the backend directly
+        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+        const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+        
+        const healthCheck = await axios.get(`${cleanBackendUrl}/api/health`);
         console.log('[DEBUG] Server health check:', healthCheck.status);
       } catch (healthError: unknown) {
         console.error('[DEBUG] Server health check failed:', (healthError as any).message);
@@ -2911,8 +2923,12 @@ function Analyze() {
         userId: user?.id
       };
 
-      // Save persona to database
-      const response = await axios.post('/api/personas', personaData, {
+              // Call the backend directly
+        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+        const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+        
+        // Save persona to database
+        const response = await axios.post(`${cleanBackendUrl}/api/personas`, personaData, {
         headers: getAuthHeaders()
       });
 
@@ -3095,9 +3111,13 @@ function Analyze() {
               setIsUsingPersona(true);
               setIsNewPersona(false);
               
-              // Create conversation with persona information
-              const token = localStorage.getItem('jwt');
-              const response = await axios.post('/api/conversations', {
+                              // Call the backend directly
+                const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+                const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+                
+                // Create conversation with persona information
+                const token = localStorage.getItem('jwt');
+                const response = await axios.post(`${cleanBackendUrl}/api/conversations`, {
                 language: language,
                 title: topics.length === 1 ? `${topics[0]} Discussion` : 'Multi-topic Discussion',
                 topics: topics,
