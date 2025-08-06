@@ -1063,10 +1063,8 @@ function Analyze() {
       console.log('[DEBUG] Sending TTS request with text:', text);
       console.log('[DEBUG] TTS request payload:', { text, language });
       
-      // Call the Node.js server which will route to Python API with admin controls
-      const backendUrl = process.env.NEXT_PUBLIC_API_URL || '';
-      const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
-      const response = await axios.post(`${cleanBackendUrl}/api/tts`, {
+      // Call the Next.js API route which forwards to Python API
+      const response = await axios.post(`/api/tts`, {
         text,
         language
       }, {
@@ -1103,7 +1101,7 @@ function Analyze() {
       const ttsUrl = await generateTTSForText(text, language, cacheKey);
       if (ttsUrl) {
         // Handle both relative and absolute URLs from backend
-        const backendUrl = process.env.NEXT_PUBLIC_API_URL || '';
+        const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || '';
         const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
         const audioUrl = ttsUrl.startsWith('http') ? ttsUrl : `${cleanBackendUrl}${ttsUrl}`;
         const audio = new window.Audio(audioUrl);
@@ -1163,9 +1161,9 @@ function Analyze() {
     setIsPlayingTTS(prev => ({ ...prev, [cacheKey]: true }));
     setIsPlayingAnyTTS(true);
     
-    try {
+        try {
       // Handle both relative and absolute URLs from backend
-      const backendUrl = process.env.NEXT_PUBLIC_API_URL || '';
+      const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || '';
       const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
       const audioUrl = ttsUrl.startsWith('http') ? ttsUrl : `${cleanBackendUrl}${ttsUrl}`;
       const audio = new window.Audio(audioUrl);
