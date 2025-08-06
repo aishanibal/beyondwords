@@ -1138,7 +1138,10 @@ function updateConversationPersona(conversationId: number, usesPersona: boolean,
 function createLanguageDashboard(userId: number, language: string, proficiencyLevel: string, talkTopics: string[], learningGoals: string[], practicePreference: string, feedbackLanguage: string = 'en', isPrimary: boolean = false) {
   return new Promise<LanguageDashboard>(async (resolve, reject) => {
     try {
+      console.log('🔍 DB: createLanguageDashboard called with:', { userId, language, proficiencyLevel, talkTopics, learningGoals, practicePreference, feedbackLanguage, isPrimary });
+      
       if (!supabase) {
+        console.error('❌ DB: Supabase client not initialized');
         reject(new Error('Supabase client not initialized'));
         return;
       }

@@ -95,7 +95,8 @@ app.use(express.json());
 // CORS configuration for production and development
 const allowedOrigins = [
   'http://localhost:3000',
-  'https://speakbeyondwords-sigma.vercel.app'
+  'https://speakbeyondwords-sigma.vercel.app',
+  'https://speakbeyondwords-dhg8jmlwl-aishanibals-projects.vercel.app'
 ];
 
 app.use(cors({ 
@@ -778,16 +779,19 @@ app.post('/auth/login', async (req: Request, res: Response) => {
 // Onboarding route (protected) - Creates first language dashboard
 app.post('/api/user/onboarding', authenticateJWT, async (req: Request, res: Response) => {
   try {
-    console.log('Onboarding request received:', req.body);
+    console.log('🔍 ONBOARDING: Request received');
+    console.log('🔍 ONBOARDING: Request body:', req.body);
+    console.log('🔍 ONBOARDING: User ID:', req.user?.userId);
     const { language, proficiency, talkTopics, learningGoals, practicePreference } = req.body;
     
-    console.log('Extracted fields:', { language, proficiency, talkTopics, learningGoals, practicePreference });
+    console.log('🔍 ONBOARDING: Extracted fields:', { language, proficiency, talkTopics, learningGoals, practicePreference });
     
     if (!language || !proficiency || !talkTopics || !learningGoals || !practicePreference) {
-      console.log('Missing required fields validation failed');
+      console.log('❌ ONBOARDING: Missing required fields validation failed');
       return res.status(400).json({ error: 'Missing required onboarding fields' });
     }
     
+    console.log('🔍 ONBOARDING: About to create language dashboard...');
     // Create the first language dashboard (primary)
     const dashboard = await createLanguageDashboard(
       req.user.userId,
@@ -800,13 +804,18 @@ app.post('/api/user/onboarding', authenticateJWT, async (req: Request, res: Resp
       true // isPrimary as boolean
     );
     
+    console.log('✅ ONBOARDING: Language dashboard created successfully');
+    
     // Update user to mark onboarding as complete
+    console.log('🔍 ONBOARDING: About to update user...');
     await updateUser(req.user.userId, {
       onboarding_complete: true
     });
     
+    console.log('🔍 ONBOARDING: About to fetch updated user...');
     const user = await findUserById(req.user.userId);
     
+    console.log('✅ ONBOARDING: Successfully completed onboarding');
     res.json({ 
       user: {
         ...user,
@@ -815,7 +824,7 @@ app.post('/api/user/onboarding', authenticateJWT, async (req: Request, res: Resp
       dashboard 
     });
   } catch (error: any) {
-    console.error('Onboarding error:', error);
+    console.error('❌ ONBOARDING: Error during onboarding:', error);
     res.status(500).json({ error: 'Failed to save onboarding' });
   }
 });
