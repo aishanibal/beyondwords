@@ -8,6 +8,7 @@ import shutil
 from werkzeug.utils import secure_filename
 import numpy as np
 import datetime
+import time
 from gemini_client import get_conversational_response, get_detailed_feedback, get_text_suggestions, get_translation, is_gemini_ready, get_short_feedback, get_detailed_breakdown, create_tutor, get_quick_translation
 from tts_synthesizer_admin_controlled import synthesize_speech
 
@@ -16,6 +17,32 @@ from gemini_transcription import transcribe_audio_gemini, transcribe_audio_with_
 print("🤖 Using Gemini for transcription")
 # from dotenv import load_dotenv
 # load_dotenv()
+
+# Cleanup function to delete old files
+def cleanup_old_files():
+    """Delete files older than 1 day"""
+    uploads_dir = 'uploads'
+    if not os.path.exists(uploads_dir):
+        os.makedirs(uploads_dir, exist_ok=True)
+        return
+    
+    files = os.listdir(uploads_dir)
+    now = time.time()
+    max_age = 24 * 60 * 60  # 1 day in seconds
+    
+    for file in files:
+        file_path = os.path.join(uploads_dir, file)
+        if os.path.isfile(file_path):
+            file_age = now - os.path.getmtime(file_path)
+            if file_age > max_age:
+                try:
+                    os.remove(file_path)
+                    print(f"🗑️ Cleaned up old file: {file}")
+                except Exception as e:
+                    print(f"❌ Failed to delete {file}: {e}")
+
+# Run cleanup on startup
+cleanup_old_files()
 
 # NOTE: Whisper doesn't natively support Odia ('or'). We map it to Bengali ('bn') 
 # as they are linguistically similar and Bengali is supported by Whisper.
@@ -641,7 +668,7 @@ def generate_tts():
         data = request.get_json()
         text = data.get('text', '')
         language_code = data.get('language_code', 'en')
-        output_path = data.get('output_path', 'tts_output/response.wav')
+        output_path = data.get('output_path', 'uploads/response.wav')
         
         print(f"🎤 TTS request - Language: {language_code}, Text length: {len(text)}")
         

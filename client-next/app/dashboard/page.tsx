@@ -331,7 +331,7 @@ export default function DashboardPage() {
       const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
       const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
       
-      const dashboardsRes = await axios.get(`${cleanBackendUrl}/api/user/language-dashboards`, {
+              const dashboardsRes = await axios.get(`${cleanBackendUrl}/api/user/language-dashboards`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const dashboards: DashboardType[] = dashboardsRes.data.dashboards || [];

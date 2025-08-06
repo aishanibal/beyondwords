@@ -1675,6 +1675,39 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 // Also serve files from the current directory (where Python API might create files)
 app.use('/files', express.static(path.join(__dirname, '..')));
 
+// Cleanup old audio files (older than 1 day)
+function cleanupOldFiles() {
+  const uploadsDir = path.join(__dirname, 'uploads');
+  if (!fs.existsSync(uploadsDir)) return;
+  
+  const files = fs.readdirSync(uploadsDir);
+  const now = Date.now();
+  const maxAge = 24 * 60 * 60 * 1000; // 1 day in milliseconds
+  
+  files.forEach(file => {
+    const filePath = path.join(uploadsDir, file);
+    const stats = fs.statSync(filePath);
+    const age = now - stats.mtime.getTime();
+    
+    if (age > maxAge) {
+      try {
+        fs.unlinkSync(filePath);
+        console.log(`🗑️ Cleaned up old file: ${file}`);
+      } catch (error) {
+        console.error(`❌ Failed to delete ${file}:`, error);
+      }
+    }
+  });
+}
+
+// Run cleanup every 6 hours
+setInterval(cleanupOldFiles, 6 * 60 * 60 * 1000);
+
+// Also run cleanup on startup
+cleanupOldFiles();
+
+// Simple cleanup - delete files older than 1 day
+
 // Helper function to check Python API health
 async function checkPythonAPIHealth(): Promise<boolean> {
   try {
@@ -1763,4 +1796,4 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Python API URL: ${process.env.PYTHON_API_URL || 'http://localhost:5000'}`);
   console.log('Note: Using Supabase database for storage');
-}); 
+});

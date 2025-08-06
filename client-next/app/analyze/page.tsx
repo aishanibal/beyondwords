@@ -1265,11 +1265,9 @@ function Analyze() {
       // Add JWT token to headers
       const token = localStorage.getItem('jwt');
       console.log('[DEBUG] Sending transcription request to /api/transcribe_only');
-              // Call the backend directly
-        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-        const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
-        
-        const transcriptionResponse = await axios.post(`${cleanBackendUrl}/api/transcribe_only`, formData, {
+      
+      // Make relative request to Next.js API route
+      const transcriptionResponse = await axios.post(`/api/transcribe_only`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
           ...(token ? { Authorization: `Bearer ${token}` } : {})
@@ -1352,7 +1350,9 @@ function Analyze() {
       };
       
       console.log('[DEBUG] Sending AI response request to /api/ai_response with data:', aiResponseData);
-              const aiResponseResponse = await axios.post(`${cleanBackendUrl}/api/ai_response`, aiResponseData, {
+      
+      // Make relative request to Next.js API route
+      const aiResponseResponse = await axios.post(`/api/ai_response`, aiResponseData, {
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {})
