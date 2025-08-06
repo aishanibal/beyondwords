@@ -3812,7 +3812,7 @@ Yes, the current serials don't have the same quality as the old ones, right?
               <strong>Romanized:</strong>
               <div style={{ 
                                   marginTop: '0.25rem',
-                  fontSize: '0.9rem',
+                  fontSize: '0.85rem',
                   lineHeight: '1.6',
                 wordWrap: 'break-word',
                 overflowWrap: 'break-word',
@@ -3831,10 +3831,9 @@ Yes, the current serials don't have the same quality as the old ones, right?
         return (
           <div>
             <div style={{ marginBottom: '0.5rem' }}>
-              <strong>Words:</strong>
               <div style={{ 
                                   marginTop: '0.25rem',
-                  fontSize: '0.9rem',
+                  fontSize: '0.85rem',
                   lineHeight: '1.6',
                 wordWrap: 'break-word',
                 overflowWrap: 'break-word',
@@ -4071,7 +4070,7 @@ Yes, the current serials don't have the same quality as the old ones, right?
       background: isDarkMode 
         ? 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%)'
         : 'linear-gradient(135deg, #f9f6f4 0%, #f5f1ec 50%, #e8e0d8 100%)',
-      padding: '10.5rem 0.5rem 2rem 0.5rem',
+      padding: '0arem 0.5rem 2rem 0.5rem',
       gap: '0.5rem',
       transition: 'all 0.15s ease',
       fontFamily: 'Montserrat, Arial, sans-serif',
@@ -4120,16 +4119,16 @@ Yes, the current serials don't have the same quality as the old ones, right?
                       width: `${panelWidths.left * 100}%`, 
           background: isDarkMode 
             ? 'linear-gradient(135deg, var(--card) 0%, rgba(255,255,255,0.02) 100%)' 
-            : 'linear-gradient(135deg, #ffffff 0%, rgba(195,141,148,0.02) 100%)', 
+            : 'linear-gradient(135deg, #ffffff 0%, rgba(59,83,119,0.02) 100%)', 
           borderRadius: 24,
           display: 'flex',
           flexDirection: 'column',
           boxShadow: isDarkMode 
-            ? '0 8px 40px rgba(0,0,0,0.4), 0 2px 8px rgba(0,0,0,0.2)' 
-            : '0 8px 40px rgba(60,60,60,0.12), 0 2px 8px rgba(195,141,148,0.08)',
+            ? '0 8px 32px rgba(139,163,217,0.2), 0 2px 8px rgba(139,163,217,0.1)' 
+            : '0 8px 32px rgba(59,83,119,0.25), 0 2px 8px rgba(59,83,119,0.15)',
           position: 'relative',
           transition: 'all 0.15s ease',
-          border: isDarkMode ? '1px solid var(--blue-secondary)' : '1px solid var(--blue-secondary)',
+          border: isDarkMode ? '1px solid rgba(139,163,217,0.3)' : '1px solid #3b5377',
           backdropFilter: 'blur(20px)',
           zIndex: 1,
           overflow: 'hidden',
@@ -4138,13 +4137,13 @@ Yes, the current serials don't have the same quality as the old ones, right?
           {/* AI Explanations Header */}
           <div style={{ 
             background: isDarkMode 
-              ? 'linear-gradient(135deg, var(--blue-secondary) 0%, #6b7a9a 100%)' 
-              : 'linear-gradient(135deg, var(--blue-secondary) 0%, #5a6b8a 100%)', 
-            color: '#fff', 
+              ? 'linear-gradient(135deg, #3b5377 0%, #2a3d5a 100%)' 
+              : 'linear-gradient(135deg, #3b5377 0%, #2a3d5a 100%)', 
+            color: '#ffffff', 
             padding: '0.75rem 1.25rem', 
             borderRadius: '24px 24px 0 0',
             textAlign: 'center',
-            borderBottom: isDarkMode ? '1px solid var(--border)' : '1px solid rgba(195,141,148,0.1)',
+            borderBottom: isDarkMode ? '1px solid rgba(139,163,217,0.3)' : '1px solid #3b5377',
             fontFamily: 'Gabriela, Arial, sans-serif',
             fontWeight: 700,
             fontSize: '1rem',
@@ -4152,22 +4151,24 @@ Yes, the current serials don't have the same quality as the old ones, right?
             justifyContent: 'space-between',
             alignItems: 'center',
             transition: 'all 0.3s ease',
-            boxShadow: '0 2px 8px rgba(60,76,115,0.2)'
+            boxShadow: isDarkMode 
+              ? '0 4px 16px rgba(139,163,217,0.2)' 
+              : '0 4px 16px rgba(59,83,119,0.15)'
           }}>
             <div style={{ 
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              paddingLeft: '1.5rem',
-              paddingRight: '0.75rem',
+              paddingLeft: '0.2rem',
+              paddingRight: '0.2rem',
               paddingTop: '0.25rem',
               paddingBottom: '0.25rem',
               width: '100%'
             }}>
               <div style={{ 
-                color: isDarkMode ? '#e8b3c3' : '#fff', 
+                color: '#ffffff', 
                 fontWeight: 700, 
-                fontSize: '1rem', 
+                fontSize: '1.2rem', 
                 fontFamily: 'Gabriela, Arial, sans-serif',
                 transition: 'color 0.3s ease',
                 whiteSpace: 'nowrap',
@@ -4180,7 +4181,7 @@ Yes, the current serials don't have the same quality as the old ones, right?
                 style={{
                   background: 'none',
                   border: 'none',
-                  color: '#fff',
+                  color: '#ffffff',
                   fontSize: '1.1rem',
                   cursor: 'pointer',
                   padding: '0.2rem',
@@ -4220,11 +4221,13 @@ Yes, the current serials don't have the same quality as the old ones, right?
             {/* Quick Translation Section */}
             {Object.keys(quickTranslations).length > 0 && (
               <div style={{
-                background: isDarkMode ? '#1e293b' : '#fff',
-                color: isDarkMode ? '#f8fafc' : '#000',
+                background: isDarkMode 
+                  ? 'linear-gradient(135deg, rgba(132,84,109,0.15) 0%, rgba(132,84,109,0.08) 100%)'
+                  : 'linear-gradient(135deg, rgba(132,84,109,0.12) 0%, rgba(132,84,109,0.06) 100%)',
+                color: isDarkMode ? 'var(--foreground)' : '#3e3e3e',
                 padding: '1rem',
-                borderBottom: isDarkMode ? '1px solid #334155' : '1px solid #ececec',
-                                  fontSize: '0.9rem',
+                borderBottom: isDarkMode ? '1px solid rgba(195,141,148,0.3)' : '1px solid #c38d94',
+                                                                     fontSize: '0.85rem',
                   lineHeight: 1.5,
                 fontFamily: 'AR One Sans, Arial, sans-serif',
                 fontWeight: 400,
@@ -4234,25 +4237,23 @@ Yes, the current serials don't have the same quality as the old ones, right?
                   fontWeight: 600,
                   fontSize: '1.1rem',
                   marginBottom: showQuickTranslation ? '1rem' : '0',
-                  color: isDarkMode ? '#f8fafc' : '#000',
+                  color: isDarkMode ? '#84546d' : '#84546d',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between'
                 }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    🌐 Quick Translation
-                  </span>
-                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span>Quick Translation</span>
                     {showLlmBreakdown && (
                       <button
                         onClick={() => setShowQuickTranslation(!showQuickTranslation)}
                         style={{
-                          padding: '0.25rem 0.5rem',
-                          borderRadius: 4,
+                          padding: '0.15rem 0.4rem',
+                          borderRadius: 3,
                           border: '1px solid #666',
                           background: 'rgba(102,102,102,0.1)',
                           color: '#666',
-                          fontSize: '0.7rem',
+                          fontSize: '0.6rem',
                           cursor: 'pointer',
                           transition: 'all 0.2s ease'
                         }}
@@ -4261,36 +4262,40 @@ Yes, the current serials don't have the same quality as the old ones, right?
                         {showQuickTranslation ? '▼' : '▶'}
                       </button>
                     )}
-                    <button
-                      onClick={() => {
-                        // Find the AI message that has the quick translation
-                        const messageIndex = Object.keys(quickTranslations)[0];
-                        if (messageIndex) {
-                          const message = chatHistory[parseInt(messageIndex)];
-                          if (message) {
-                            explainLLMResponse(parseInt(messageIndex), message.text);
-                          }
+                  </div>
+                  <button
+                    onClick={() => {
+                      // Find the AI message that has the quick translation
+                      const messageIndex = Object.keys(quickTranslations)[0];
+                      if (messageIndex) {
+                        const message = chatHistory[parseInt(messageIndex)];
+                        if (message) {
+                          explainLLMResponse(parseInt(messageIndex), message.text);
                         }
-                      }}
-                      disabled={isLoadingMessageFeedback[Object.keys(quickTranslations)[0] || '0']}
-                      style={{
-                        padding: '0.35rem 0.9rem',
+                      }
+                    }}
+                    disabled={isLoadingMessageFeedback[Object.keys(quickTranslations)[0] || '0']}
+                                          style={{
+                        padding: '0.35rem 0.7rem',
                         borderRadius: 6,
-                        border: '1px solid #9c27b0',
-                        background: 'rgba(156,39,176,0.08)',
-                        color: '#9c27b0',
-                        fontSize: '0.8rem',
+                        border: `1px solid ${isDarkMode ? 'rgba(139,163,217,0.6)' : '#3b5377'}`,
+                        background: isDarkMode 
+                          ? 'rgba(139,163,217,0.15)' 
+                          : 'rgba(59,83,119,0.08)',
+                        color: isDarkMode ? '#8ba3d9' : '#3b5377',
+                        fontSize: '0.7rem',
                         cursor: isLoadingMessageFeedback[Object.keys(quickTranslations)[0] || '0'] ? 'not-allowed' : 'pointer',
                         transition: 'all 0.2s ease',
                         opacity: isLoadingMessageFeedback[Object.keys(quickTranslations)[0] || '0'] ? 0.6 : 1,
                         fontWeight: 500,
-                        boxShadow: '0 1px 3px rgba(156,39,176,0.10)'
+                        boxShadow: isDarkMode 
+                          ? '0 1px 3px rgba(139,163,217,0.10)' 
+                          : '0 1px 3px rgba(59,83,119,0.10)'
                       }}
-                      title="Get detailed LLM breakdown"
-                    >
-                      {isLoadingMessageFeedback[Object.keys(quickTranslations)[0] || '0'] ? '🔄' : '📝 Explain LLM'}
-                    </button>
-                  </div>
+                    title="Get detailed LLM breakdown"
+                  >
+                    {isLoadingMessageFeedback[Object.keys(quickTranslations)[0] || '0'] ? '🔄' : '📝 Detailed Explanation'}
+                  </button>
                 </div>
                 {showQuickTranslation && (
                   <div style={{
@@ -4305,9 +4310,9 @@ Yes, the current serials don't have the same quality as the old ones, right?
                           </div>
                         ) : (
                           <div>
-                            {/* Original sentence with clickable words */}
+                            {/* Word by word breakdown with clickable words */}
                             <div style={{ marginBottom: '0.5rem' }}>
-                              <strong>Original:</strong>
+                              <strong>Word by Word Breakdown:</strong>
                               <div style={{
                                 background: isDarkMode ? '#334155' : '#f8f9fa',
                                 padding: '0.75rem',
@@ -4331,7 +4336,7 @@ Yes, the current serials don't have the same quality as the old ones, right?
                                   padding: '0.75rem',
                                   borderRadius: 8,
                                   marginTop: '0.5rem',
-                                  fontSize: '0.95rem',
+                                  fontSize: '0.85rem',
                                   lineHeight: '1.6'
                                 }}>
                                   {translation.fullTranslation}
@@ -4354,7 +4359,7 @@ Yes, the current serials don't have the same quality as the old ones, right?
                 color: isDarkMode ? '#f8fafc' : '#000',
                 padding: '1rem',
                 borderBottom: isDarkMode ? '1px solid #334155' : '1px solid #ececec',
-                fontSize: '1rem',
+                fontSize: '0.85rem',
                 lineHeight: 1.5,
                 fontFamily: 'AR One Sans, Arial, sans-serif',
                 fontWeight: 400,
@@ -4370,7 +4375,7 @@ Yes, the current serials don't have the same quality as the old ones, right?
                   justifyContent: 'space-between'
                 }}>
                   <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    📝 LLM Response Breakdown
+                    📝 Detailed Breakdown
                   </span>
                   <button
                     onClick={() => setShowLlmBreakdown(false)}
@@ -4396,7 +4401,7 @@ Yes, the current serials don't have the same quality as the old ones, right?
                   background: isDarkMode ? '#334155' : '#f8f9fa',
                   padding: '0.75rem',
                   borderRadius: 8,
-                  fontSize: '0.95rem',
+                  fontSize: '0.85rem',
                   lineHeight: '1.6',
                   whiteSpace: 'pre-wrap',
                   maxHeight: '400px',
@@ -4415,7 +4420,7 @@ Yes, the current serials don't have the same quality as the old ones, right?
                   flex: 1,
                   overflowY: 'auto',
                   overflowX: 'hidden',
-                  fontSize: '0.9rem',
+                  fontSize: '0.85rem',
                 lineHeight: 1.5,
                 whiteSpace: 'pre-wrap',
                 fontFamily: 'AR One Sans, Arial, sans-serif',
@@ -4434,12 +4439,12 @@ Yes, the current serials don't have the same quality as the old ones, right?
                         }}
                         disabled={isGeneratingTTS['detailed_breakdown_panel'] || isPlayingTTS['detailed_breakdown_panel']}
                         style={{
-                          padding: '0.4rem 0.8rem',
+                          padding: '0.3rem 0.7rem',
                           borderRadius: 6,
                           border: isPlayingTTS['detailed_breakdown_panel'] ? 'none' : '1px solid #28a745',
                           background: isPlayingTTS['detailed_breakdown_panel'] ? 'linear-gradient(135deg, #28a745 0%, #1e7e34 100%)' : 'rgba(40,167,69,0.08)',
                           color: isPlayingTTS['detailed_breakdown_panel'] ? '#fff' : '#28a745',
-                          fontSize: '0.8rem',
+                          fontSize: '0.7rem',
                           cursor: (isGeneratingTTS['detailed_breakdown_panel'] || isPlayingTTS['detailed_breakdown_panel']) ? 'not-allowed' : 'pointer',
                           transition: 'all 0.2s ease',
                           opacity: (isGeneratingTTS['detailed_breakdown_panel'] || isPlayingTTS['detailed_breakdown_panel']) ? 0.6 : 1,
@@ -4483,10 +4488,10 @@ Yes, the current serials don't have the same quality as the old ones, right?
                                     background: showDetailedBreakdown[index] ? '#4a90e2' : 'rgba(74,144,226,0.08)',
                                     border: '1px solid #4a90e2',
                                     color: showDetailedBreakdown[index] ? '#fff' : '#4a90e2',
-                                    padding: '0.4rem 0.8rem',
+                                    padding: '0.3rem 0.7rem',
                                     borderRadius: 6,
                                     cursor: 'pointer',
-                                    fontSize: '0.8rem',
+                                    fontSize: '0.7rem',
                                     fontWeight: 600,
                                     display: 'flex',
                                     alignItems: 'center',
@@ -4546,13 +4551,13 @@ Yes, the current serials don't have the same quality as the old ones, right?
                         playTTSAudio(shortFeedback, language, cacheKey);
                       }}
                       disabled={isGeneratingTTS['short_feedback_panel'] || isPlayingTTS['short_feedback_panel']}
-                      style={{
-                        padding: '0.4rem 0.8rem',
-                        borderRadius: 6,
-                        border: isPlayingTTS['short_feedback_panel'] ? 'none' : '1px solid #28a745',
-                        background: isPlayingTTS['short_feedback_panel'] ? 'linear-gradient(135deg, #28a745 0%, #1e7e34 100%)' : 'rgba(40,167,69,0.08)',
-                        color: isPlayingTTS['short_feedback_panel'] ? '#fff' : '#28a745',
-                        fontSize: '0.8rem',
+                                              style={{
+                          padding: '0.3rem 0.7rem',
+                          borderRadius: 6,
+                          border: isPlayingTTS['short_feedback_panel'] ? 'none' : '1px solid #28a745',
+                          background: isPlayingTTS['short_feedback_panel'] ? 'linear-gradient(135deg, #28a745 0%, #1e7e34 100%)' : 'rgba(40,167,69,0.08)',
+                          color: isPlayingTTS['short_feedback_panel'] ? '#fff' : '#28a745',
+                          fontSize: '0.7rem',
                         cursor: (isGeneratingTTS['short_feedback_panel'] || isPlayingTTS['short_feedback_panel']) ? 'not-allowed' : 'pointer',
                         transition: 'all 0.2s ease',
                         opacity: (isGeneratingTTS['short_feedback_panel'] || isPlayingTTS['short_feedback_panel']) ? 0.6 : 1,
@@ -4637,7 +4642,7 @@ Yes, the current serials don't have the same quality as the old ones, right?
         </div>
       )}
       {/* Chat Panel - Center */}
-              <div className="panel-hover" style={{ 
+              <div style={{ 
                       width: `${panelWidths.center * 100}%`,
           background: isDarkMode 
             ? 'linear-gradient(135deg, var(--card) 0%, rgba(255,255,255,0.02) 100%)' 
@@ -4685,7 +4690,7 @@ Yes, the current serials don't have the same quality as the old ones, right?
             <div style={{ 
               color: isDarkMode ? '#e8b3c3' : 'var(--rose-primary)', 
               fontWeight: 700, 
-              fontSize: '1rem', 
+              fontSize: '1.2rem', 
               fontFamily: 'Gabriela, Arial, sans-serif',
               transition: 'color 0.3s ease',
               whiteSpace: 'nowrap',
@@ -4715,9 +4720,9 @@ Yes, the current serials don't have the same quality as the old ones, right?
                     style={{
                       background: isDarkMode ? 'rgba(196,181,253,0.15)' : 'rgba(132,84,109,0.1)',
                       color: isDarkMode ? 'var(--light-purple)' : 'var(--rose-primary)',
-                      padding: '0.2rem 0.4rem',
+                      padding: '0.35rem 0.6rem',
                       borderRadius: '16px',
-                      fontSize: '0.7rem',
+                      fontSize: '0.85rem',
                       fontWeight: 600,
                       border: isDarkMode ? '1px solid rgba(196,181,253,0.3)' : '1px solid rgba(132,84,109,0.2)',
                       whiteSpace: 'nowrap',
@@ -4744,11 +4749,11 @@ Yes, the current serials don't have the same quality as the old ones, right?
                     }}
                     whileTap={{ scale: 0.95 }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.padding = '0.2rem 0.6rem';
+                      e.currentTarget.style.padding = '0.35rem 0.8rem';
                       e.currentTarget.innerHTML = `💬 ${topic}`;
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.padding = '0.2rem 0.4rem';
+                      e.currentTarget.style.padding = '0.35rem 0.6rem';
                       e.currentTarget.innerHTML = '💬';
                     }}
                   >
@@ -4762,9 +4767,9 @@ Yes, the current serials don't have the same quality as the old ones, right?
                     style={{
                       background: isDarkMode ? 'rgba(139,163,217,0.15)' : 'rgba(59,83,119,0.1)',
                       color: isDarkMode ? 'var(--blue-secondary)' : 'var(--blue-secondary)',
-                      padding: '0.2rem 0.4rem',
+                      padding: '0.35rem 0.6rem',
                       borderRadius: '16px',
-                      fontSize: '0.7rem',
+                      fontSize: '0.85rem',
                       fontWeight: 600,
                       border: isDarkMode ? '1px solid rgba(139,163,217,0.3)' : '1px solid rgba(59,83,119,0.2)',
                       whiteSpace: 'nowrap',
@@ -4789,11 +4794,11 @@ Yes, the current serials don't have the same quality as the old ones, right?
                     }}
                     whileTap={{ scale: 0.95 }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.padding = '0.2rem 0.6rem';
+                      e.currentTarget.style.padding = '0.35rem 0.8rem';
                       e.currentTarget.innerHTML = `🎭 ${userPreferences.formality}`;
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.padding = '0.2rem 0.4rem';
+                      e.currentTarget.style.padding = '0.35rem 0.6rem';
                       e.currentTarget.innerHTML = '🎭';
                     }}
                   >
@@ -4811,9 +4816,9 @@ Yes, the current serials don't have the same quality as the old ones, right?
                       style={{
                         background: isDarkMode ? 'rgba(240,200,208,0.15)' : 'rgba(214,182,182,0.1)',
                         color: isDarkMode ? 'var(--rose-accent)' : 'var(--rose-accent)',
-                        padding: '0.2rem 0.4rem',
+                        padding: '0.35rem 0.6rem',
                         borderRadius: '16px',
-                        fontSize: '0.7rem',
+                        fontSize: '0.85rem',
                         fontWeight: 600,
                         border: isDarkMode ? '1px solid rgba(240,200,208,0.3)' : '1px solid rgba(214,182,182,0.2)',
                         whiteSpace: 'nowrap',
@@ -4840,11 +4845,11 @@ Yes, the current serials don't have the same quality as the old ones, right?
                       }}
                       whileTap={{ scale: 0.95 }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.padding = '0.2rem 0.6rem';
+                        e.currentTarget.style.padding = '0.35rem 0.8rem';
                         e.currentTarget.innerHTML = `${goal.icon} ${goal.goal}`;
                       }}
                       onMouseLeave={(e) => {
-                        e.currentTarget.style.padding = '0.2rem 0.4rem';
+                        e.currentTarget.style.padding = '0.35rem 0.6rem';
                         e.currentTarget.innerHTML = goal.icon;
                       }}
                     >
@@ -4857,16 +4862,16 @@ Yes, the current serials don't have the same quality as the old ones, right?
                 {userPreferences?.userLevel && (
                   <motion.span 
                     style={{
-                      background: isDarkMode ? 'rgba(232,179,195,0.15)' : 'rgba(132,84,109,0.1)',
-                      color: isDarkMode ? 'var(--rose-primary)' : 'var(--rose-primary)',
-                      padding: '0.2rem 0.4rem',
+                      background: isDarkMode ? 'rgba(139,163,217,0.15)' : 'rgba(59,83,119,0.1)',
+                      color: isDarkMode ? '#8ba3d9' : '#3b5377',
+                      padding: '0.35rem 0.6rem',
                       borderRadius: '16px',
-                      fontSize: '0.7rem',
+                      fontSize: '0.85rem',
                       fontWeight: 600,
-                      border: isDarkMode ? '1px solid rgba(232,179,195,0.3)' : '1px solid rgba(132,84,109,0.2)',
+                      border: isDarkMode ? '1px solid rgba(139,163,217,0.3)' : '1px solid rgba(59,83,119,0.2)',
                       whiteSpace: 'nowrap',
                       fontFamily: 'Montserrat, Arial, sans-serif',
-                      boxShadow: isDarkMode ? '0 2px 8px rgba(232,179,195,0.1)' : '0 2px 8px rgba(132,84,109,0.08)',
+                      boxShadow: isDarkMode ? '0 2px 8px rgba(139,163,217,0.1)' : '0 2px 8px rgba(59,83,119,0.08)',
                       backdropFilter: 'blur(10px)',
                       cursor: 'pointer',
                       position: 'relative'
@@ -4878,12 +4883,12 @@ Yes, the current serials don't have the same quality as the old ones, right?
                       delay: ((userPreferences?.topics?.length || 0) + (userPreferences?.formality ? 1 : 0) + (userPreferences?.user_goals?.length || 0)) * 0.25 + 0.8,
                       ease: "easeOut"
                     }}
-                    whileHover={{ 
-                      scale: 1.05, 
-                      y: -2,
-                      boxShadow: isDarkMode ? '0 4px 15px rgba(232,179,195,0.2)' : '0 4px 15px rgba(132,84,109,0.15)',
-                      transition: { duration: 0.4 }
-                    }}
+                                          whileHover={{ 
+                        scale: 1.05, 
+                        y: -2,
+                        boxShadow: isDarkMode ? '0 4px 15px rgba(139,163,217,0.2)' : '0 4px 15px rgba(59,83,119,0.15)',
+                        transition: { duration: 0.4 }
+                      }}
                     whileTap={{ scale: 0.95 }}
                     onMouseEnter={(e) => {
                       e.currentTarget.style.padding = '0.2rem 0.6rem';
@@ -5014,7 +5019,7 @@ Yes, the current serials don't have the same quality as the old ones, right?
                     : message.sender === 'System' 
                       ? '1px solid #e67e22' 
                       : 'none',
-                  fontSize: '0.9rem',
+                  fontSize: '0.85rem',
                   cursor: message.isProcessing ? 'default' : 'pointer',
                   transition: 'all 0.3s ease',
                   opacity: isTranslating[index] ? 0.7 : 1,
@@ -5050,7 +5055,7 @@ Yes, the current serials don't have the same quality as the old ones, right?
                         </span>
                         {formatted.romanizedText && (
                           <span style={{
-                            fontSize: '0.82em',
+                            fontSize: '0.85em',
                             color: message.detailedFeedback ? (isDarkMode ? '#94a3b8' : '#555') : (isDarkMode ? '#94a3b8' : '#555'),
                             opacity: message.detailedFeedback ? 1 : 0.65,
                             marginTop: 2,
@@ -5217,12 +5222,12 @@ Yes, the current serials don't have the same quality as the old ones, right?
                     }}
                     disabled={isGeneratingTTS[`ai_message_${index}`] || isPlayingTTS[`ai_message_${index}`]}
                     style={{
-                      padding: '0.4rem 0.8rem',
+                      padding: '0.3rem 0.7rem',
                       borderRadius: 8,
                       border: isPlayingTTS[`ai_message_${index}`] ? 'none' : '1px solid var(--blue-secondary)',
                       background: isPlayingTTS[`ai_message_${index}`] ? 'linear-gradient(135deg, var(--blue-secondary) 0%, #2a4a6a 100%)' : isDarkMode ? 'rgba(139,163,217,0.15)' : 'rgba(59,83,119,0.1)',
                       color: isPlayingTTS[`ai_message_${index}`] ? '#fff' : 'var(--blue-secondary)',
-                      fontSize: '0.8rem',
+                      fontSize: '0.7rem',
                       cursor: (isGeneratingTTS[`ai_message_${index}`] || isPlayingTTS[`ai_message_${index}`]) ? 'not-allowed' : 'pointer',
                       transition: 'all 0.3s ease',
                       opacity: (isGeneratingTTS[`ai_message_${index}`] || isPlayingTTS[`ai_message_${index}`]) ? 0.6 : 1,
@@ -5243,11 +5248,11 @@ Yes, the current serials don't have the same quality as the old ones, right?
                       onClick={handleSuggestionButtonClick}
                       disabled={isLoadingSuggestions || isProcessing}
                       style={{
-                        padding: '0.4rem 0.8rem',
-                        border: '1px solid var(--rose-primary)',
-                        background: isDarkMode ? 'rgba(232,179,195,0.15)' : 'rgba(132,84,109,0.1)',
-                        color: 'var(--rose-primary)',
-                        fontSize: '0.8rem',
+                                              padding: '0.3rem 0.7rem',
+                      border: '1px solid var(--rose-primary)',
+                      background: isDarkMode ? 'rgba(232,179,195,0.15)' : 'rgba(132,84,109,0.1)',
+                      color: 'var(--rose-primary)',
+                      fontSize: '0.7rem',
                         cursor: (isLoadingSuggestions || isProcessing) ? 'not-allowed' : 'pointer',
                         transition: 'all 0.3s ease',
                         opacity: (isLoadingSuggestions || isProcessing) ? 0.6 : 1,
@@ -5260,7 +5265,7 @@ Yes, the current serials don't have the same quality as the old ones, right?
                       }}
                       title="Get conversation suggestions"
                     >
-                      {isLoadingSuggestions ? 'Loading...' : isProcessing ? 'Processing...' : 'Suggestions'}
+                      {isLoadingSuggestions ? 'Loading...' : isProcessing ? 'Processing...' : '💡 Suggestions'}
                     </button>
                   )}
                 </div>
@@ -5343,7 +5348,7 @@ Yes, the current serials don't have the same quality as the old ones, right?
                 color: isDarkMode ? 'var(--foreground)' : '#3e3e3e',
                 borderRadius: '28px 28px 8px 28px',
                 border: isDarkMode ? '2px dashed rgba(195,141,148,0.5)' : '2px dashed #c38d94',
-                fontSize: '0.9rem',
+                fontSize: '0.85rem',
                 fontWeight: 600,
                 position: 'relative',
                 boxShadow: isDarkMode 
@@ -5359,52 +5364,56 @@ Yes, the current serials don't have the same quality as the old ones, right?
                   justifyContent: 'space-between',
                   marginBottom: '0.5rem',
                   fontSize: '0.8rem',
-                  color: '#c38d94'
+                  color: isDarkMode ? '#8ba3d9' : '#3b5377'
                 }}>
                   <span>💭 Suggestion ({currentSuggestionIndex + 1}/{suggestionMessages.length})</span>
                   <div style={{ display: 'flex', gap: '0.3rem' }}>
-                    <button
+                    <motion.button
                       onClick={() => navigateSuggestion('prev')}
                       disabled={suggestionMessages.length <= 1}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
                       style={{
-                        padding: '0.4rem 0.6rem',
-                        borderRadius: 8,
-                        border: '1px solid #c38d94',
-                        background: 'rgba(195,141,148,0.08)',
-                        color: '#c38d94',
+                        padding: '0.3rem 0.5rem',
+                        borderRadius: 6,
+                        border: `1px solid ${isDarkMode ? 'rgba(139,163,217,0.6)' : '#3b5377'}`,
+                        background: isDarkMode ? 'rgba(139,163,217,0.08)' : 'rgba(59,83,119,0.08)',
+                        color: isDarkMode ? '#8ba3d9' : '#3b5377',
                         cursor: suggestionMessages.length <= 1 ? 'not-allowed' : 'pointer',
-                        fontSize: '0.8rem',
+                        fontSize: '0.7rem',
                         opacity: suggestionMessages.length <= 1 ? 0.5 : 1,
                         transition: 'all 0.3s ease',
                         fontWeight: 600
                       }}
                     >
                       ←
-                    </button>
-                    <button
+                    </motion.button>
+                    <motion.button
                       onClick={() => navigateSuggestion('next')}
                       disabled={suggestionMessages.length <= 1}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
                       style={{
-                        padding: '0.4rem 0.6rem',
-                        borderRadius: 8,
-                        border: '1px solid #c38d94',
-                        background: 'rgba(195,141,148,0.08)',
-                        color: '#c38d94',
+                        padding: '0.3rem 0.5rem',
+                        borderRadius: 6,
+                        border: `1px solid ${isDarkMode ? 'rgba(139,163,217,0.6)' : '#3b5377'}`,
+                        background: isDarkMode ? 'rgba(139,163,217,0.08)' : 'rgba(59,83,119,0.08)',
+                        color: isDarkMode ? '#8ba3d9' : '#3b5377',
                         cursor: suggestionMessages.length <= 1 ? 'not-allowed' : 'pointer',
-                        fontSize: '0.8rem',
+                        fontSize: '0.7rem',
                         opacity: suggestionMessages.length <= 1 ? 0.5 : 1,
                         transition: 'all 0.3s ease',
                         fontWeight: 600
                       }}
                     >
                       →
-                    </button>
+                    </motion.button>
                   </div>
                 </div>
                 <div style={{
                   lineHeight: '1.4',
                   wordWrap: 'break-word',
-                  marginBottom: '0.5rem'
+                  marginBottom: '0.3rem'
                 }}>
                   {(() => {
                     const suggestion = suggestionMessages[currentSuggestionIndex];
@@ -5416,7 +5425,7 @@ Yes, the current serials don't have the same quality as the old ones, right?
                         <span>{formatted.mainText}</span>
                         {formatted.romanizedText && (
                           <span style={{
-                            fontSize: '0.82em',
+                            fontSize: '0.85em',
                             color: '#555',
                             opacity: 0.65,
                             marginTop: 2,
@@ -5439,7 +5448,7 @@ Yes, the current serials don't have the same quality as the old ones, right?
                   gap: '0.3rem'
                 }}>
                   {/* TTS button for suggestions */}
-                  <button
+                  <motion.button
                     onClick={() => {
                       const suggestion = suggestionMessages[currentSuggestionIndex];
                       if (suggestion) {
@@ -5449,92 +5458,120 @@ Yes, the current serials don't have the same quality as the old ones, right?
                       }
                     }}
                     disabled={isGeneratingTTS[`suggestion_${currentSuggestionIndex}`] || isPlayingTTS[`suggestion_${currentSuggestionIndex}`]}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
                     style={{
-                      padding: '0.5rem 0.8rem',
+                      padding: '0.3rem 0.7rem',
                       borderRadius: 8,
-                      border: isPlayingTTS[`suggestion_${currentSuggestionIndex}`] ? 'none' : '1px solid #28a745',
-                      background: isPlayingTTS[`suggestion_${currentSuggestionIndex}`] ? 'linear-gradient(135deg, #28a745 0%, #1e7e34 100%)' : 'rgba(40,167,69,0.08)',
-                      color: isPlayingTTS[`suggestion_${currentSuggestionIndex}`] ? '#fff' : '#28a745',
+                      border: isPlayingTTS[`suggestion_${currentSuggestionIndex}`] ? 'none' : `1px solid ${isDarkMode ? 'rgba(232,179,195,0.6)' : '#84546d'}`,
+                      background: isPlayingTTS[`suggestion_${currentSuggestionIndex}`] 
+                        ? 'linear-gradient(135deg, #84546d 0%, #6a3d5a 100%)' 
+                        : isDarkMode 
+                          ? 'rgba(232,179,195,0.15)' 
+                          : 'rgba(132,84,109,0.08)',
+                      color: isPlayingTTS[`suggestion_${currentSuggestionIndex}`] 
+                        ? '#fff' 
+                        : isDarkMode ? '#e8b3c3' : '#84546d',
                       cursor: (isGeneratingTTS[`suggestion_${currentSuggestionIndex}`] || isPlayingTTS[`suggestion_${currentSuggestionIndex}`]) ? 'not-allowed' : 'pointer',
-                      fontSize: '0.8rem',
+                      fontSize: '0.7rem',
                       fontWeight: 600,
                       transition: 'all 0.3s ease',
-                      opacity: (isGeneratingTTS[`suggestion_${currentSuggestionIndex}`] || isPlayingTTS[`suggestion_${currentSuggestionIndex}`]) ? 0.6 : 1
+                      opacity: (isGeneratingTTS[`suggestion_${currentSuggestionIndex}`] || isPlayingTTS[`suggestion_${currentSuggestionIndex}`]) ? 0.6 : 1,
+                      fontFamily: 'AR One Sans, Arial, sans-serif'
                     }}
                     title={isPlayingTTS[`suggestion_${currentSuggestionIndex}`] ? 'Playing audio...' : 'Listen to this suggestion'}
                   >
-                    {isGeneratingTTS[`suggestion_${currentSuggestionIndex}`] ? '🔄' : isPlayingTTS[`suggestion_${currentSuggestionIndex}`] ? '🔊' : '🔊'}
-                  </button>
+                    {isGeneratingTTS[`suggestion_${currentSuggestionIndex}`] ? '🔄' : isPlayingTTS[`suggestion_${currentSuggestionIndex}`] ? '🔊 Playing' : '🔊 Listen'}
+                  </motion.button>
                   
-                  <button
+                  <motion.button
                     onClick={() => explainSuggestion(currentSuggestionIndex, suggestionMessages[currentSuggestionIndex]?.text || '')}
                     disabled={isTranslatingSuggestion[currentSuggestionIndex]}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
                     style={{
-                      padding: '0.5rem 0.8rem',
+                      padding: '0.3rem 0.7rem',
                       borderRadius: 8,
-                      border: '1px solid #4a90e2',
-                      background: 'rgba(74,144,226,0.08)',
-                      color: '#4a90e2',
+                      border: `1px solid ${isDarkMode ? 'rgba(232,179,195,0.6)' : '#84546d'}`,
+                      background: isDarkMode 
+                        ? 'rgba(232,179,195,0.08)' 
+                        : 'rgba(132,84,109,0.04)',
+                      color: isDarkMode ? '#e8b3c3' : '#84546d',
                       cursor: isTranslatingSuggestion[currentSuggestionIndex] ? 'not-allowed' : 'pointer',
-                      fontSize: '0.8rem',
+                      fontSize: '0.7rem',
                       fontWeight: 600,
                       transition: 'all 0.3s ease',
-                      opacity: isTranslatingSuggestion[currentSuggestionIndex] ? 0.6 : 1
+                      opacity: isTranslatingSuggestion[currentSuggestionIndex] ? 0.6 : 1,
+                      fontFamily: 'AR One Sans, Arial, sans-serif'
                     }}
                     title="Explain this suggestion"
                   >
                     {isTranslatingSuggestion[currentSuggestionIndex] ? '🔄' : '💡 Explain'}
-                  </button>
+                  </motion.button>
                 </div>
                 {/* Translation Display */}
                 {showSuggestionTranslations[currentSuggestionIndex] && suggestionTranslations[currentSuggestionIndex] && (
                   <div style={{
                     marginTop: '0.75rem',
                     padding: '0.75rem',
-                    background: 'linear-gradient(135deg, #f0f8ff 0%, #e6f3ff 100%)',
-                    border: '1px solid #d0e4f7',
-                    borderRadius: 8,
+                    background: isDarkMode 
+                      ? 'linear-gradient(135deg, rgba(132,84,109,0.8) 0%, rgba(106,61,90,0.8) 100%)'
+                      : 'linear-gradient(135deg, rgba(132,84,109,0.8) 0%, rgba(106,61,90,0.8) 100%)',
+                    border: isDarkMode ? '1px solid rgba(132,84,109,0.6)' : '1px solid #84546d',
+                    borderRadius: 12,
                     fontSize: '0.85rem',
-                    color: '#2c5282',
+                    color: '#ffffff',
                     position: 'relative',
-                    boxShadow: '0 2px 8px rgba(44,82,130,0.08)'
+                    boxShadow: isDarkMode 
+                      ? '0 4px 16px rgba(132,84,109,0.15)' 
+                      : '0 4px 16px rgba(132,84,109,0.12)',
+                    fontFamily: 'AR One Sans, Arial, sans-serif'
                   }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                      <span style={{ fontWeight: 700, fontSize: '0.8rem' }}>
-                        💡 Explanation
+                      <span style={{ fontWeight: 600, fontSize: '0.8rem', color: '#ffffff' }}>
+                        Translation
                       </span>
                       <button
                         onClick={() => setShowSuggestionTranslations(prev => ({ ...prev, [currentSuggestionIndex]: false }))}
                         style={{
                           background: 'none',
                           border: 'none',
-                          color: '#2c5282',
+                          color: '#ffffff',
                           fontSize: '1rem',
                           cursor: 'pointer',
                           padding: '0.1rem',
-                          borderRadius: '2px'
+                          borderRadius: '2px',
+                          transition: 'all 0.2s ease'
                         }}
                         title="Hide explanation"
                       >
                         ×
                       </button>
                     </div>
-                    <div style={{ marginBottom: '0.5rem' }}>
-                      <strong>Translation:</strong> {suggestionTranslations[currentSuggestionIndex]?.translation || ''}
+                    <div style={{ marginBottom: '0.5rem', fontWeight: 500, fontSize: '0.8rem' }}>
+                      {suggestionTranslations[currentSuggestionIndex]?.translation || ''}
                     </div>
                     {suggestionTranslations[currentSuggestionIndex]?.breakdown && (
                       <div style={{ marginTop: '0.5rem' }}>
-                        <div style={{ marginBottom: '0.5rem' }}>
-                          <strong>📖 Explanation:</strong>
+                        <div style={{ 
+                          marginBottom: '0.5rem',
+                          fontWeight: 600,
+                          fontSize: '0.8rem',
+                          color: '#ffffff'
+                        }}>
+                          📖 Explanation
                         </div>
                         <div style={{
-                          background: 'rgba(255,255,255,0.7)',
+                          background: isDarkMode 
+                            ? 'rgba(255,255,255,0.05)' 
+                            : 'rgba(255,255,255,0.7)',
                           padding: '0.75rem',
-                          borderRadius: 6,
-                          border: '1px solid #e0e0e0',
+                          borderRadius: 8,
+                          border: isDarkMode ? '1px solid rgba(139,163,217,0.2)' : '1px solid #e0e0e0',
                           fontSize: '0.8rem',
                           lineHeight: '1.5',
-                          whiteSpace: 'pre-wrap'
+                          whiteSpace: 'pre-wrap',
+                          color: isDarkMode ? 'var(--foreground)' : '#3e3e3e'
                         }}>
                           {suggestionTranslations[currentSuggestionIndex].breakdown}
                         </div>
@@ -5553,7 +5590,7 @@ Yes, the current serials don't have the same quality as the old ones, right?
             data-recording-section
             style={{ 
               position: 'relative',
-              padding: '1rem 1rem 2.5rem 1rem', 
+              padding: '1rem 1rem 2rem 1rem', 
               background: isDarkMode 
                 ? 'linear-gradient(135deg, var(--muted) 0%, rgba(255,255,255,0.02) 100%)' 
                 : 'linear-gradient(135deg, rgba(195,141,148,0.08) 0%, rgba(195,141,148,0.03) 100%)',
@@ -5580,8 +5617,10 @@ Yes, the current serials don't have the same quality as the old ones, right?
                 flex: 1
               }}>
                 {/* Autospeak Toggle Button */}
-                <button
+                <motion.button
                   onClick={() => setAutoSpeak(v => !v)}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
                   style={{
                     background: autoSpeak 
                       ? 'linear-gradient(135deg, var(--blue-secondary) 0%, #5a6b8a 100%)' 
@@ -5592,7 +5631,7 @@ Yes, the current serials don't have the same quality as the old ones, right?
                     padding: '0.6rem 1rem',
                     cursor: 'pointer',
                     fontWeight: 600,
-                    fontSize: '0.85rem',
+                    fontSize: '0.8rem',
                     transition: 'all 0.3s ease',
                     boxShadow: '0 6px 24px rgba(60,76,115,0.25), 0 2px 8px rgba(60,76,115,0.15)',
                     minWidth: '110px',
@@ -5601,11 +5640,13 @@ Yes, the current serials don't have the same quality as the old ones, right?
                   }}
                 >
                   {autoSpeak ? '✅ Autospeak ON' : 'Autospeak OFF'}
-                </button>
+                </motion.button>
 
                 {/* Short Feedback Toggle Button */}
-                <button
+                <motion.button
                   onClick={() => setEnableShortFeedback(v => !v)}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
                   style={{
                     background: enableShortFeedback 
                       ? 'linear-gradient(135deg, var(--blue-secondary) 0%, #5a6b8a 100%)' 
@@ -5616,7 +5657,7 @@ Yes, the current serials don't have the same quality as the old ones, right?
                     padding: '0.6rem 1rem',
                     cursor: 'pointer',
                     fontWeight: 600,
-                    fontSize: '0.85rem',
+                    fontSize: '0.8rem',
                     transition: 'all 0.3s ease',
                     boxShadow: '0 6px 24px rgba(60,76,115,0.25), 0 2px 8px rgba(60,76,115,0.15)',
                     minWidth: '110px',
@@ -5625,7 +5666,7 @@ Yes, the current serials don't have the same quality as the old ones, right?
                   }}
                 >
                   {enableShortFeedback ? '💡 Short Feedback ON' : 'Short Feedback OFF'}
-                </button>
+                </motion.button>
               </div>
 
               {/* Center - Microphone Button */}
@@ -5636,9 +5677,11 @@ Yes, the current serials don't have the same quality as the old ones, right?
                 gap: '0.75rem',
                 flex: 1
               }}>
-                <button
+                <motion.button
                   onClick={isRecording ? () => stopRecording(false) : startRecording}
                   disabled={isProcessing || (autoSpeak && isRecording)}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
                   style={{
                     width: 56,
                     height: 56,
@@ -5664,7 +5707,7 @@ Yes, the current serials don't have the same quality as the old ones, right?
                   title={isRecording ? 'Stop Recording' : 'Start Recording'}
                 >
                   {isRecording ? '⏹️' : '🎤'}
-                </button>
+                </motion.button>
 
                 {/* Redo Button - Only show in manual mode when recording */}
                 {isRecording && manualRecording && (
@@ -5680,7 +5723,7 @@ Yes, the current serials don't have the same quality as the old ones, right?
                       padding: '0.4rem 0.8rem',
                       cursor: 'pointer',
                       fontWeight: 500,
-                      fontSize: '0.8rem',
+                      fontSize: '0.75rem',
                       transition: 'all 0.2s ease',
                       boxShadow: '0 1px 3px rgba(195,141,148,0.10)',
                       minWidth: '80px',
@@ -5767,12 +5810,12 @@ Yes, the current serials don't have the same quality as the old ones, right?
           style={{
             position: 'fixed',
             left: '1rem',
-            top: '6rem',
+            top: '6.7rem',
             background: 'var(--blue-secondary)',
             color: '#fff',
             border: 'none',
             borderRadius: '12px 0 0 12px',
-            padding: '0.75rem 0.75rem',
+            padding: '1.1rem 0.75rem',
             fontSize: '1.2rem',
             cursor: 'pointer',
             fontWeight: 600,
