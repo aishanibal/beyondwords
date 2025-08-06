@@ -4,7 +4,7 @@ services:
     name: heirloom-express-backend
     env: node
     plan: starter
-    buildCommand: cd server && npm install && npm run build
+    buildCommand: cd server && npm run build
     startCommand: cd server && npm start
     envVars:
       - key: NODE_ENV
