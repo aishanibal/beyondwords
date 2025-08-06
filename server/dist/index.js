@@ -398,7 +398,7 @@ app.post('/api/feedback', authenticateJWT, (req, res) => __awaiter(void 0, void 
     try {
         console.log('POST /api/feedback called');
         console.log('Request body:', req.body);
-        const { user_input, context, language, user_level, user_topics } = req.body;
+        const { user_input, context, language, user_level, user_topics, romanization_display } = req.body;
         if (!user_input || !context) {
             console.log('Missing required fields:', { user_input: !!user_input, context: !!context });
             return res.status(400).json({ error: 'Missing user_input or context' });
@@ -422,7 +422,8 @@ app.post('/api/feedback', authenticateJWT, (req, res) => __awaiter(void 0, void 
                 language,
                 user_level,
                 user_topics,
-                feedback_language: 'en' // Default to English for now
+                feedback_language: 'en', // Default to English for now
+                romanization_display
             }, {
                 headers: { 'Content-Type': 'application/json' },
                 timeout: 120000
@@ -662,10 +663,13 @@ app.put('/api/user/profile', authenticateJWT, (req, res) => __awaiter(void 0, vo
     try {
         console.log('Profile update request received:', req.body);
         console.log('User ID from JWT:', req.user.userId);
+        console.log('Request headers:', req.headers);
         const { name, email, preferences } = req.body;
+        console.log('Extracted data:', { name, email, preferences });
         // Validate required fields
         if (!name || !email) {
             console.log('Validation failed: missing name or email');
+            console.log('Name value:', name, 'Email value:', email);
             return res.status(400).json({ error: 'Name and email are required' });
         }
         console.log('Updating user with data:', { name, email, preferences });
@@ -897,12 +901,13 @@ app.post('/api/admin/demote', authenticateJWT, (req, res) => __awaiter(void 0, v
 // Conversation endpoints
 app.post('/api/conversations', authenticateJWT, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { language, title, topics, formality, description, usesPersona, personaId } = req.body;
+        const { language, title, topics, formality, description, usesPersona, personaId, learningGoals } = req.body;
         console.log('🔄 SERVER: Creating conversation with formality:', formality);
         console.log('🔄 SERVER: Creating conversation with description:', description);
         console.log('🔄 SERVER: Creating conversation with persona info:', { usesPersona, personaId });
+        console.log('🔄 SERVER: Creating conversation with learning goals:', learningGoals);
         console.log('🔄 SERVER: Full request body:', req.body);
-        const conversation = yield (0, database_1.createConversation)(req.user.userId, language, title, topics, formality, description, usesPersona, personaId);
+        const conversation = yield (0, database_1.createConversation)(req.user.userId, language, title, topics, formality, description, usesPersona, personaId, learningGoals);
         console.log('🔄 SERVER: Conversation creation result:', conversation);
         if (!conversation || !conversation.id) {
             console.error('❌ SERVER: Failed to create conversation');
@@ -917,6 +922,7 @@ app.post('/api/conversations', authenticateJWT, (req, res) => __awaiter(void 0, 
         // Generate and save AI intro message
         let aiMessage = null;
         let aiIntro = 'Hello! What would you like to talk about today?';
+        let ttsUrl = null;
         try {
             const user = yield (0, database_1.findUserById)(req.user.userId);
             const userLevel = (user === null || user === void 0 ? void 0 : user.proficiency_level) || 'beginner';
@@ -943,13 +949,18 @@ app.post('/api/conversations', authenticateJWT, (req, res) => __awaiter(void 0, 
                 console.error('Python API /initial_message error:', err.message);
                 aiIntro = 'Hello! What would you like to talk about today?';
             }
+            // Generate TTS for the initial AI message
+            if (aiIntro && aiIntro.trim()) {
+                ttsUrl = yield generateTTS(aiIntro, language);
+                console.log('Generated TTS for initial message:', ttsUrl);
+            }
             aiMessage = yield (0, database_1.addMessage)(conversation.id, 'AI', aiIntro, 'text', undefined, undefined);
         }
         catch (err) {
             console.error('Error generating/saving AI intro message:', err);
         }
-        // Return the actual AI intro text for the frontend
-        res.json({ conversation, aiMessage: { text: aiIntro } });
+        // Return the actual AI intro text and TTS URL for the frontend
+        res.json({ conversation, aiMessage: { text: aiIntro, ttsUrl } });
     }
     catch (error) {
         console.error('❌ SERVER: Create conversation error:', error);
@@ -1039,46 +1050,29 @@ app.delete('/api/conversations/:id', authenticateJWT, (req, res) => __awaiter(vo
 }));
 app.patch('/api/conversations/:id', authenticateJWT, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-<<<<<<< HEAD
-        const { id } = req.params;
-        const { title, summary } = req.body;
-        yield (0, database_1.updateConversation)(parseInt(id), { title, summary });
-        res.json({ success: true });
-    }
-    catch (error) {
-        console.error('❌ SERVER: Update conversation error:', error);
-        res.status(500).json({ error: 'Failed to update conversation' });
-    }
-}));
-app.post('/api/conversations/:id/summary', authenticateJWT, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        const { id } = req.params;
-        const { title, evaluation } = req.body;
-        console.log('Saving summary for conversation:', id);
-        console.log('Title:', title);
-        console.log('Evaluation:', evaluation);
-        yield (0, database_1.updateConversation)(parseInt(id), { title, summary: evaluation });
-        console.log('Summary saved successfully');
-        res.json({ success: true, message: 'Summary saved successfully' });
-    }
-    catch (error) {
-        console.error('❌ SERVER: Save summary error:', error);
-        res.status(500).json({ error: 'Failed to save summary' });
-    }
-}));
-=======
         const conversationId = parseInt(req.params.id);
-        const { usesPersona, personaId } = req.body;
-        // Update conversation with persona information
-        yield (0, database_1.updateConversationPersona)(conversationId, usesPersona, personaId);
-        res.json({ message: 'Conversation updated successfully' });
+        const { usesPersona, personaId, synopsis, progress_data } = req.body;
+        if (synopsis !== undefined) {
+            // Update conversation with synopsis and progress data
+            console.log('Updating conversation synopsis and progress:', { conversationId, synopsis: synopsis.substring(0, 100) + '...', progress_data });
+            yield (0, database_1.updateConversationSynopsis)(conversationId, synopsis, progress_data);
+            console.log('Conversation synopsis and progress updated successfully');
+            res.json({ message: 'Conversation synopsis and progress updated successfully' });
+        }
+        else if (usesPersona !== undefined) {
+            // Update conversation with persona information
+            yield (0, database_1.updateConversationPersona)(conversationId, usesPersona, personaId);
+            res.json({ message: 'Conversation updated successfully' });
+        }
+        else {
+            res.status(400).json({ error: 'No valid update fields provided' });
+        }
     }
     catch (error) {
         console.error('Error updating conversation:', error);
         res.status(500).json({ error: 'Failed to update conversation' });
     }
 }));
->>>>>>> aishani-backup-jul31
 // Text suggestions endpoint
 app.post('/api/suggestions', authenticateJWT, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
@@ -1312,8 +1306,135 @@ app.delete('/api/personas/:id', authenticateJWT, (req, res) => __awaiter(void 0,
         res.status(500).json({ error: 'Failed to delete persona', details: error.message });
     }
 }));
+// TTS endpoint for generating audio for any text
+app.post('/api/tts', authenticateJWT, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { text, language } = req.body;
+        if (!text || !text.trim()) {
+            return res.status(400).json({ error: 'Text is required' });
+        }
+        const lang = language || 'en';
+        // Generate TTS for the text
+        const ttsUrl = yield generateTTS(text, lang);
+        if (ttsUrl) {
+            res.json({ ttsUrl });
+        }
+        else {
+            res.status(500).json({ error: 'Failed to generate TTS' });
+        }
+    }
+    catch (error) {
+        console.error('TTS endpoint error:', error);
+        res.status(500).json({ error: 'TTS generation failed', details: error.message });
+    }
+}));
+// Quick translation endpoint
+app.post('/api/quick_translation', authenticateJWT, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        console.log('POST /api/quick_translation called');
+        const { ai_message, language, user_level, user_topics, formality, feedback_language, user_goals, description } = req.body;
+        if (!ai_message) {
+            return res.status(400).json({ error: 'No AI message provided' });
+        }
+        // Call Python API for quick translation
+        try {
+            const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5000';
+            const pythonResponse = yield axios_1.default.post(`${pythonApiUrl}/quick_translation`, {
+                ai_message: ai_message,
+                language: language || 'en',
+                user_level: user_level || 'beginner',
+                user_topics: user_topics || [],
+                formality: formality || 'friendly',
+                feedback_language: feedback_language || 'en',
+                user_goals: user_goals || [],
+                description: description || null
+            }, {
+                headers: { 'Content-Type': 'application/json' },
+                timeout: 30000
+            });
+            console.log('Python quick translation received');
+            res.json(pythonResponse.data);
+        }
+        catch (pythonError) {
+            console.error('Python API not available for quick translation:', pythonError.message);
+            // Fallback response if Python API fails
+            res.json({
+                translation: "Quick translation service temporarily unavailable",
+                error: "Python API not available"
+            });
+        }
+    }
+    catch (error) {
+        console.error('Quick translation error:', error);
+        res.status(500).json({ error: 'Error getting quick translation', details: error.message });
+    }
+}));
 // Serve uploads directory statically for TTS audio
 app.use('/uploads', express_1.default.static(path_1.default.join(__dirname, 'uploads')));
+// Helper function to generate TTS for any text
+function generateTTS(text, language) {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const ttsFileName = `tts_${Date.now()}.wav`;
+            const ttsFilePath = path_1.default.join(uploadsDir, ttsFileName);
+            // Choose voice based on language with fallback
+            let ttsVoice = 'Karen'; // Default to English (Alex is more reliable than Flo)
+            if (language === 'es')
+                ttsVoice = 'Mónica'; // Spanish voice
+            else if (language === 'hi')
+                ttsVoice = 'Lekha'; // macOS Hindi voice
+            else if (language === 'ja')
+                ttsVoice = 'Otoya'; // macOS Japanese voice
+            // Check if voice is available
+            try {
+                yield new Promise((resolve, reject) => {
+                    (0, child_process_1.exec)(`say -v ${ttsVoice} "test"`, (error) => {
+                        if (error)
+                            reject(error);
+                        else
+                            resolve();
+                    });
+                });
+            }
+            catch (voiceError) {
+                console.log(`Voice ${ttsVoice} not available, using default`);
+                ttsVoice = 'Alex'; // Fallback to Alex
+            }
+            const sayCmd = `say -v ${ttsVoice} -o "${ttsFilePath}" --data-format=LEI16@22050 "${text.replace(/\"/g, '\\"')}"`;
+            console.log('TTS voice:', ttsVoice);
+            console.log('TTS command:', sayCmd);
+            console.log('TTS text length:', text.length);
+            yield new Promise((resolve, reject) => {
+                (0, child_process_1.exec)(sayCmd, (error) => {
+                    if (error) {
+                        console.error('TTS command failed:', error);
+                        reject(error);
+                    }
+                    else {
+                        console.log('TTS command completed successfully');
+                        resolve();
+                    }
+                });
+            });
+            // Check if file was created
+            if (fs_1.default.existsSync(ttsFilePath)) {
+                const stats = fs_1.default.statSync(ttsFilePath);
+                console.log('TTS file created, size:', stats.size, 'bytes');
+                const ttsUrl = `/uploads/${ttsFileName}`;
+                console.log('TTS audio generated at:', ttsUrl);
+                return ttsUrl;
+            }
+            else {
+                console.error('TTS file was not created');
+                return null;
+            }
+        }
+        catch (ttsError) {
+            console.error('TTS error:', ttsError);
+            return null;
+        }
+    });
+}
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);

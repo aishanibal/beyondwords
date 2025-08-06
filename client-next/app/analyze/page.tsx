@@ -3,7 +3,7 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable react/no-unescaped-entities */
 "use client";
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useUser } from '../ClientLayout';
 import { useDarkMode } from '../contexts/DarkModeContext';
 import axios from 'axios';
@@ -308,6 +308,14 @@ function Analyze() {
   const [isRecording, setIsRecording] = useState<boolean>(false);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
 
+  // Hide suggestions when processing starts and prevent re-showing
+  React.useEffect(() => {
+    if (isProcessing) {
+      setShowSuggestionCarousel(false);
+      setSuggestionMessages([]);
+    }
+  }, [isProcessing]);
+
 
   const recognitionRef = useRef<{ lang: string; stop: () => void } | null>(null);
   const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -338,20 +346,6 @@ function Analyze() {
   const [conversationDescription, setConversationDescription] = useState<string>('');
   const [isUsingPersona, setIsUsingPersona] = useState<boolean>(false);
   const [isNewPersona, setIsNewPersona] = useState<boolean>(false);
-
-  // Calculate actual panel widths based on visibility
-  const getPanelWidths = () => {
-    const visiblePanels = [showShortFeedbackPanel, true].filter(Boolean).length;
-    
-    if (visiblePanels === 1) {
-      // Only middle panel visible
-      return { left: 0, center: 1, right: 0 };
-    } else {
-      // Left and middle panels visible - allow resizing between them
-      const centerWidth = Math.max(0.4, 1 - leftPanelWidth); // Ensure center is at least 40%
-      return { left: 1 - centerWidth, center: centerWidth, right: 0 };
-    }
-  };
   const [showTopicModal, setShowTopicModal] = useState<boolean>(false);
   const [autoSpeak, setAutoSpeak] = useState<boolean>(false);
   const [enableShortFeedback, setEnableShortFeedback] = useState<boolean>(true);
@@ -380,6 +374,20 @@ function Analyze() {
   const [manualRecording, setManualRecording] = useState(false);
   const [showShortFeedbackPanel, setShowShortFeedbackPanel] = useState<boolean>(true);
   const [shortFeedback, setShortFeedback] = useState<string>('');
+
+  // Calculate actual panel widths based on visibility - memoized to prevent unnecessary re-renders
+  const panelWidths = useMemo(() => {
+    const visiblePanels = [showShortFeedbackPanel, true].filter(Boolean).length;
+    
+    if (visiblePanels === 1) {
+      // Only middle panel visible
+      return { left: 0, center: 1, right: 0 };
+    } else {
+      // Left and middle panels visible - allow resizing between them
+      const centerWidth = Math.max(0.4, 1 - leftPanelWidth); // Ensure center is at least 40%
+      return { left: 1 - centerWidth, center: centerWidth, right: 0 };
+    }
+  }, [showShortFeedbackPanel, leftPanelWidth]);
   const [showDetailedBreakdown, setShowDetailedBreakdown] = useState<{[key: number]: boolean}>({});
   const [showSuggestionExplanations, setShowSuggestionExplanations] = useState<{[key: number]: boolean}>({});
   const [explainButtonPressed, setExplainButtonPressed] = useState<boolean>(false);
@@ -804,6 +812,10 @@ function Analyze() {
 
   // Replace startRecording and stopRecording with MediaRecorder + SpeechRecognition logic
   const startRecording = async () => {
+    // Hide suggestion carousel as soon as recording starts
+    setShowSuggestionCarousel(false);
+    setSuggestionMessages([]);
+    
     setWasInterrupted(false);
     if (!MediaRecorderClassRef.current) {
       alert('MediaRecorder API not supported in this browser.');
@@ -1428,7 +1440,7 @@ function Analyze() {
   };
 
   const handleSuggestionButtonClick = async () => {
-    if (!user) return;
+    if (!user || isProcessing) return;
     
     setIsLoadingSuggestions(true);
     try {
@@ -1495,6 +1507,8 @@ function Analyze() {
   const clearSuggestionCarousel = () => {
     setCurrentSuggestionIndex(0);
     setSuggestions([]);
+    setSuggestionMessages([]);
+    setShowSuggestionCarousel(false);
   };
 
   const generateConversationSummary = async () => {
@@ -3841,18 +3855,19 @@ Yes, the current serials don't have the same quality as the old ones, right?
     <div className="analyze-page" style={{ 
       display: 'flex', 
       flexDirection: 'column',
-      height: '100vh', 
+      height: 'calc(100vh - 5rem)', 
       width: '100%',
       background: isDarkMode 
         ? 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%)'
         : 'linear-gradient(135deg, #f9f6f4 0%, #f5f1ec 50%, #e8e0d8 100%)',
-      padding: '6rem 0.5rem 2rem 0.5rem',
+      padding: '10.5rem 0.5rem 2rem 0.5rem',
       gap: '0.5rem',
       transition: 'all 0.15s ease',
       fontFamily: 'Montserrat, Arial, sans-serif',
       position: 'relative',
       overflow: 'hidden',
-      boxSizing: 'border-box'
+      boxSizing: 'border-box',
+      marginTop: '6rem'
     }}>
       {/* Background decorative elements */}
       <div style={{
@@ -3891,7 +3906,7 @@ Yes, the current serials don't have the same quality as the old ones, right?
       {/* Short Feedback Panel - Left */}
       {showShortFeedbackPanel && (
         <div className="panel-hover" style={{ 
-          width: `${getPanelWidths().left * 100}%`, 
+                      width: `${panelWidths.left * 100}%`, 
           background: isDarkMode 
             ? 'linear-gradient(135deg, var(--card) 0%, rgba(255,255,255,0.02) 100%)' 
             : 'linear-gradient(135deg, #ffffff 0%, rgba(195,141,148,0.02) 100%)', 
@@ -4294,7 +4309,7 @@ Yes, the current serials don't have the same quality as the old ones, right?
       )}
       {/* Chat Panel - Center */}
               <div className="panel-hover" style={{ 
-          width: `${getPanelWidths().center * 100}%`,
+                      width: `${panelWidths.center * 100}%`,
           background: isDarkMode 
             ? 'linear-gradient(135deg, var(--card) 0%, rgba(255,255,255,0.02) 100%)' 
             : 'linear-gradient(135deg, #ffffff 0%, rgba(195,141,148,0.02) 100%)', 
@@ -4331,8 +4346,8 @@ Yes, the current serials don't have the same quality as the old ones, right?
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            paddingLeft: '1.5rem',
-            paddingRight: '0.75rem',
+            paddingLeft: '2.5rem',
+            paddingRight: '2rem',
             paddingTop: '0.25rem',
             paddingBottom: '0.25rem',
             width: '100%'
@@ -4895,16 +4910,16 @@ Yes, the current serials don't have the same quality as the old ones, right?
                   {index === chatHistory.length - 1 && (
                     <button
                       onClick={handleSuggestionButtonClick}
-                      disabled={isLoadingSuggestions}
+                      disabled={isLoadingSuggestions || isProcessing}
                       style={{
                         padding: '0.4rem 0.8rem',
                         border: '1px solid var(--rose-primary)',
                         background: isDarkMode ? 'rgba(232,179,195,0.15)' : 'rgba(132,84,109,0.1)',
                         color: 'var(--rose-primary)',
                         fontSize: '0.8rem',
-                        cursor: isLoadingSuggestions ? 'not-allowed' : 'pointer',
+                        cursor: (isLoadingSuggestions || isProcessing) ? 'not-allowed' : 'pointer',
                         transition: 'all 0.3s ease',
-                        opacity: isLoadingSuggestions ? 0.6 : 1,
+                        opacity: (isLoadingSuggestions || isProcessing) ? 0.6 : 1,
                         fontWeight: 600,
                         fontFamily: 'Montserrat, Arial, sans-serif',
                         borderRadius: 8,
@@ -4914,7 +4929,7 @@ Yes, the current serials don't have the same quality as the old ones, right?
                       }}
                       title="Get conversation suggestions"
                     >
-                      {isLoadingSuggestions ? 'Loading...' : 'Suggestions'}
+                      {isLoadingSuggestions ? 'Loading...' : isProcessing ? 'Processing...' : 'Suggestions'}
                     </button>
                   )}
                 </div>
@@ -4993,7 +5008,7 @@ Yes, the current serials don't have the same quality as the old ones, right?
           )}
           
           {/* Suggestion Carousel */}
-          {showSuggestionCarousel && suggestionMessages.length > 0 && (
+          {!isProcessing && showSuggestionCarousel && suggestionMessages.length > 0 && (
             <div style={{
               width: '100%',
               display: 'flex',
@@ -5233,7 +5248,7 @@ Yes, the current serials don't have the same quality as the old ones, right?
               marginBottom: '2rem'
             }}
           >
-            {/* Centered main controls */}
+            {/* Main controls layout */}
             <div style={{ 
               display: 'flex', 
               alignItems: 'center', 
@@ -5241,11 +5256,10 @@ Yes, the current serials don't have the same quality as the old ones, right?
               height: '100%',
               minHeight: '60px'
             }}>
-              {/* Left side - Centered first 3 buttons */}
+              {/* Left side - Autospeak and Short Feedback buttons */}
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
                 gap: '0.75rem',
                 flex: 1
               }}>
@@ -5273,7 +5287,39 @@ Yes, the current serials don't have the same quality as the old ones, right?
                   {autoSpeak ? '✅ Autospeak ON' : 'Autospeak OFF'}
                 </button>
 
-                {/* Microphone Button */}
+                {/* Short Feedback Toggle Button */}
+                <button
+                  onClick={() => setEnableShortFeedback(v => !v)}
+                  style={{
+                    background: enableShortFeedback 
+                      ? 'linear-gradient(135deg, var(--blue-secondary) 0%, #5a6b8a 100%)' 
+                      : 'linear-gradient(135deg, var(--rose-primary) 0%, #8a6a7a 100%)',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: 12,
+                    padding: '0.6rem 1rem',
+                    cursor: 'pointer',
+                    fontWeight: 600,
+                    fontSize: '0.85rem',
+                    transition: 'all 0.3s ease',
+                    boxShadow: '0 6px 24px rgba(60,76,115,0.25), 0 2px 8px rgba(60,76,115,0.15)',
+                    minWidth: '110px',
+                    fontFamily: 'Montserrat, Arial, sans-serif',
+                    transform: 'translateZ(0)'
+                  }}
+                >
+                  {enableShortFeedback ? '💡 Short Feedback ON' : 'Short Feedback OFF'}
+                </button>
+              </div>
+
+              {/* Center - Microphone Button */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.75rem',
+                flex: 1
+              }}>
                 <button
                   onClick={isRecording ? () => stopRecording(false) : startRecording}
                   disabled={isProcessing || (autoSpeak && isRecording)}
@@ -5304,13 +5350,43 @@ Yes, the current serials don't have the same quality as the old ones, right?
                   {isRecording ? '⏹️' : '🎤'}
                 </button>
 
-                {/* Short Feedback Toggle Button */}
+                {/* Redo Button - Only show in manual mode when recording */}
+                {isRecording && manualRecording && (
+                  <button
+                    onClick={() => stopRecording(true)}
+                    style={{
+                      background: isDarkMode 
+                        ? 'linear-gradient(135deg, var(--rose-primary) 0%, #8a6a7a 100%)' 
+                        : 'linear-gradient(135deg, var(--rose-primary) 0%, #8a6a7a 100%)',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: 6,
+                      padding: '0.4rem 0.8rem',
+                      cursor: 'pointer',
+                      fontWeight: 500,
+                      fontSize: '0.8rem',
+                      transition: 'all 0.2s ease',
+                      boxShadow: '0 1px 3px rgba(195,141,148,0.10)',
+                      minWidth: '80px',
+                      fontFamily: 'Montserrat, Arial, sans-serif'
+                    }}
+                  >
+                    ⏹️ Redo
+                  </button>
+                )}
+              </div>
+
+              {/* Right side - End Chat Button */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'flex-end',
+                flex: 1
+              }}>
                 <button
-                  onClick={() => setEnableShortFeedback(v => !v)}
+                  onClick={handleEndChat}
                   style={{
-                    background: enableShortFeedback 
-                      ? 'linear-gradient(135deg, var(--blue-secondary) 0%, #5a6b8a 100%)' 
-                      : 'linear-gradient(135deg, var(--rose-primary) 0%, #8a6a7a 100%)',
+                    background: 'linear-gradient(135deg, var(--rose-primary) 0%, #8a6a7a 100%)',
                     color: '#fff',
                     border: 'none',
                     borderRadius: 12,
@@ -5324,66 +5400,14 @@ Yes, the current serials don't have the same quality as the old ones, right?
                     fontFamily: 'Montserrat, Arial, sans-serif',
                     transform: 'translateZ(0)'
                   }}
+                  title="End chat, generate summary, and return to dashboard"
                 >
-                  {enableShortFeedback ? '💡 Short Feedback ON' : 'Short Feedback OFF'}
+                  🏠 End Chat
                 </button>
               </div>
-
-              {/* Right side - End Chat Button */}
-              <button
-                onClick={handleEndChat}
-                style={{
-                  background: 'linear-gradient(135deg, var(--rose-primary) 0%, #8a6a7a 100%)',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: 12,
-                  padding: '0.6rem 1rem',
-                  cursor: 'pointer',
-                  fontWeight: 600,
-                  fontSize: '0.85rem',
-                  transition: 'all 0.3s ease',
-                  boxShadow: '0 6px 24px rgba(60,76,115,0.25), 0 2px 8px rgba(60,76,115,0.15)',
-                  minWidth: '110px',
-                  fontFamily: 'Montserrat, Arial, sans-serif',
-                  transform: 'translateZ(0)'
-                }}
-                title="End chat, generate summary, and return to dashboard"
-              >
-                🏠 End Chat
-              </button>
             </div>
 
-            {/* Redo Button: Only show in manual mode when recording */}
-            {isRecording && manualRecording && (
-              <div style={{
-                display: 'flex',
-                justifyContent: 'center',
-                marginTop: '1rem',
-                marginBottom: '0.5rem'
-              }}>
-                <button
-                  onClick={() => stopRecording(true)}
-                  style={{
-                    background: isDarkMode 
-                      ? 'linear-gradient(135deg, var(--rose-primary) 0%, #8a6a7a 100%)' 
-                      : 'linear-gradient(135deg, var(--rose-primary) 0%, #8a6a7a 100%)',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: 6,
-                    padding: '0.4rem 0.8rem',
-                    cursor: 'pointer',
-                    fontWeight: 500,
-                    fontSize: '0.8rem',
-                    transition: 'all 0.2s ease',
-                    boxShadow: '0 1px 3px rgba(195,141,148,0.10)',
-                    minWidth: '80px',
-                    fontFamily: 'Montserrat, Arial, sans-serif'
-                  }}
-                >
-                  ⏹️ Redo
-                </button>
-              </div>
-            )}
+
           </div>
         )}
       </div>
@@ -5432,15 +5456,18 @@ Yes, the current serials don't have the same quality as the old ones, right?
             color: '#fff',
             border: 'none',
             borderRadius: '12px 0 0 12px',
-            padding: '1.25rem 0.75rem',
-            fontSize: '1.4rem',
+            padding: '0.75rem 0.75rem',
+            fontSize: '1.2rem',
             cursor: 'pointer',
             fontWeight: 600,
             transition: 'all 0.3s ease',
             boxShadow: '0 4px 16px rgba(60,76,115,0.25)',
             zIndex: 1000,
             fontFamily: 'Montserrat, Arial, sans-serif',
-            bottom: '3rem'
+            height: '60px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
           }}
           title="Show Short Feedback Panel"
         >
