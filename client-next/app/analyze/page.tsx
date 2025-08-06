@@ -1344,7 +1344,7 @@ function Analyze() {
       const aiResponseData = {
         transcription: transcription,
         chat_history: updatedChatHistory,
-        language: language,
+        language: language || 'en', // Add fallback to 'en'
         user_level: userPreferences.userLevel,
         user_topics: userPreferences.topics,
         user_goals: user?.learning_goals ? (typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : user.learning_goals) : [],
@@ -1352,6 +1352,7 @@ function Analyze() {
         feedback_language: userPreferences.feedbackLanguage
       };
       
+      console.log('[DEBUG] Language value:', language);
       console.log('[DEBUG] Sending AI response request to /api/ai_response with data:', aiResponseData);
       
       // Make relative request to Next.js API route
@@ -1363,7 +1364,7 @@ function Analyze() {
       });
       
       console.log('[DEBUG] AI response response:', aiResponseResponse.data);
-      const aiResponse = aiResponseResponse.data.ai_response;
+      const aiResponse = aiResponseResponse.data.response;
       console.log('[DEBUG] AI response received:', aiResponse);
       
               // Add AI response if present
@@ -2239,8 +2240,11 @@ function Analyze() {
     console.log('[DEBUG] Saving message to backend:', { sender, text, messageType, audioFilePath, romanizedText, conversationId: useConversationId });
     try {
       const token = localStorage.getItem('jwt');
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
+      
       const response = await axios.post(
-        `/api/conversations/${useConversationId}/messages`,
+        `${cleanBackendUrl}/api/conversations/${useConversationId}/messages`,
         {
           sender,
           text,
