@@ -11,6 +11,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import TopicSelectionModal from './TopicSelectionModal';
 import PersonaModal from './PersonaModal';
+import LoadingScreen from '../components/LoadingScreen';
 import { LEARNING_GOALS, LearningGoal, getProgressiveSubgoalDescription, getSubgoalLevel, updateSubgoalProgress, SubgoalProgress, LevelUpEvent } from '../../lib/preferences';
 
 // TypeScript: Add type declarations for browser APIs
@@ -307,6 +308,19 @@ function Analyze() {
   const { user } = useUser() as { user: User | null };
   const [isRecording, setIsRecording] = useState<boolean>(false);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+
+  // Authentication protection
+  useEffect(() => {
+    if (user === null) {
+      router.push('/login');
+      return;
+    }
+  }, [user, router]);
+
+  // Show loading while checking authentication
+  if (user === null) {
+    return <LoadingScreen message="Checking authentication..." />;
+  }
 
   // Hide suggestions when processing starts and prevent re-showing
   React.useEffect(() => {
@@ -865,6 +879,19 @@ function Analyze() {
         recognition.lang = language || 'en-US';
         recognition.interimResults = false;
         recognition.continuous = false;
+        
+                  // Set longer timeout for autospeak mode to give users more time to speak
+          if (autoSpeakRef.current) {
+            // Extend the recognition timeout to 10 seconds for autospeak mode
+            recognition.maxAlternatives = 1;
+            // Note: SpeechRecognition timeout is browser-dependent, but we can add our own timeout
+            setTimeout(() => {
+              if (recognitionRef.current) {
+                console.log('[DEBUG] Autospeak: Speech recognition timeout reached, stopping recording');
+                recognitionRef.current.stop();
+              }
+            }, 10000); // 10 seconds timeout for autospeak mode
+          }
         recognition.onresult = (event: unknown) => {
           setIsRecording(false);
           if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
@@ -1011,8 +1038,10 @@ function Analyze() {
     }
   };
 
-  // TTS functions with caching
+  // TTS functions with caching - now integrated with admin-controlled backend
   const generateTTSForText = async (text: string, language: string, cacheKey: string): Promise<string | null> => {
+    console.log('[DEBUG] generateTTSForText called with:', { text, language, cacheKey });
+    
     // Check cache first (cache for 5 minutes)
     const cached = ttsCache.get(cacheKey);
     const now = Date.now();
@@ -1026,6 +1055,11 @@ function Analyze() {
     
     try {
       const token = localStorage.getItem('jwt');
+      
+      console.log('[DEBUG] Sending TTS request with text:', text);
+      console.log('[DEBUG] TTS request payload:', { text, language });
+      
+      // Call the Node.js server which will route to Python API with admin controls
       const response = await axios.post('http://localhost:4000/api/tts', {
         text,
         language
@@ -1062,7 +1096,8 @@ function Analyze() {
     try {
       const ttsUrl = await generateTTSForText(text, language, cacheKey);
       if (ttsUrl) {
-        const audioUrl = `http://localhost:4000${ttsUrl}`;
+        // Handle both relative and absolute URLs from backend
+        const audioUrl = ttsUrl.startsWith('http') ? ttsUrl : `http://localhost:4000${ttsUrl}`;
         const audio = new window.Audio(audioUrl);
         ttsAudioRef.current = audio;
         
@@ -1121,7 +1156,8 @@ function Analyze() {
     setIsPlayingAnyTTS(true);
     
     try {
-      const audioUrl = `http://localhost:4000${ttsUrl}`;
+      // Handle both relative and absolute URLs from backend
+      const audioUrl = ttsUrl.startsWith('http') ? ttsUrl : `http://localhost:4000${ttsUrl}`;
       const audio = new window.Audio(audioUrl);
       ttsAudioRef.current = audio;
       
@@ -1315,32 +1351,52 @@ function Analyze() {
       const aiResponse = aiResponseResponse.data.ai_response;
       console.log('[DEBUG] AI response received:', aiResponse);
       
-      // Add AI response if present
-      if (aiResponse) {
-        console.log('[DEBUG] Adding AI response:', aiResponse);
-        const formattedResponse = formatScriptLanguageText(aiResponse, language);
-        setChatHistory(prev => {
-          const updated = prev.map((msg, index) => {
-            // Find the last processing AI message and replace it
-            if (msg.isProcessing && msg.sender === 'AI') {
-              console.log('[DEBUG] Found AI processing message to replace:', msg);
-              return {
-                ...msg,
-                text: formattedResponse.mainText,
-                romanizedText: formattedResponse.romanizedText,
-                ttsUrl: null, // We'll handle TTS separately if needed
-                isProcessing: false
-              };
-            }
-            return msg;
+              // Add AI response if present
+        if (aiResponse) {
+          console.log('[DEBUG] Adding AI response:', aiResponse);
+          const formattedResponse = formatScriptLanguageText(aiResponse, language);
+          setChatHistory(prev => {
+            const updated = prev.map((msg, index) => {
+              // Find the last processing AI message and replace it
+              if (msg.isProcessing && msg.sender === 'AI') {
+                console.log('[DEBUG] Found AI processing message to replace:', msg);
+                return {
+                  ...msg,
+                  text: formattedResponse.mainText,
+                  romanizedText: formattedResponse.romanizedText,
+                  ttsUrl: null, // We'll handle TTS separately if needed
+                  isProcessing: false
+                };
+              }
+              return msg;
+            });
+            console.log('[DEBUG] Chat history after replacing AI processing message:', updated);
+            return updated;
           });
-          console.log('[DEBUG] Chat history after replacing AI processing message:', updated);
-          return updated;
-        });
-        if (conversationId) {
-          await saveMessageToBackend('AI', formattedResponse.mainText, 'text', null, null, formattedResponse.romanizedText);
+          if (conversationId) {
+            await saveMessageToBackend('AI', formattedResponse.mainText, 'text', null, null, formattedResponse.romanizedText);
+          }
+          
+          // Automatically play TTS for AI message
+          console.log('[DEBUG] Auto-playing TTS for AI message:', formattedResponse.mainText);
+          console.log('[DEBUG] Formatted response:', formattedResponse);
+          const aiMessage: ChatMessage = {
+            text: formattedResponse.mainText,
+            romanizedText: formattedResponse.romanizedText,
+            sender: 'AI',
+            timestamp: new Date(),
+            isFromOriginalConversation: false
+          };
+          const ttsText = getTTSText(aiMessage, userPreferences.romanizationDisplay, language);
+          console.log('[DEBUG] TTS text before cleaning:', ttsText);
+          console.log('[DEBUG] User preferences romanization display:', userPreferences.romanizationDisplay);
+          console.log('[DEBUG] Language:', language);
+          const cacheKey = `ai_message_auto_${Date.now()}`;
+          await playTTSAudio(ttsText, language, cacheKey);
+          
+          // Note: TTS will handle autospeak restart in its onended event
+          // No need to manually restart recording here
         }
-      }
       
       // Note: TTS is handled separately if needed
       console.log('[DEBUG] Audio processing complete');
@@ -1394,8 +1450,9 @@ function Analyze() {
         payload,
         token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
       );
-      // Add feedback to chatHistory
-      setChatHistory(prev => [...prev, { sender: 'System', text: response.data.feedback, timestamp: new Date(), isFromOriginalConversation: false }]);
+      setShortFeedback(response.data.feedback);
+      // Optionally, add to chatHistory
+              setChatHistory(prev => [...prev, { sender: 'System', text: response.data.feedback, timestamp: new Date(), isFromOriginalConversation: false }]);
       // Feedback is applied to the message, no need to add to chat
     } catch (error: unknown) {
       console.error('Error getting detailed feedback:', error);
@@ -2079,7 +2136,9 @@ function Analyze() {
       
       // Play TTS for the initial AI message if available
       if ((aiMessage as any).ttsUrl) {
-        const audioUrl = `http://localhost:4000${(aiMessage as any).ttsUrl}`;
+        // Handle both relative and absolute URLs from backend
+        const ttsUrl = (aiMessage as any).ttsUrl;
+        const audioUrl = ttsUrl.startsWith('http') ? ttsUrl : `http://localhost:4000${ttsUrl}`;
         try {
           const headResponse = await fetch(audioUrl, { method: 'HEAD' });
           if (headResponse.ok) {
@@ -2095,9 +2154,41 @@ function Analyze() {
         } catch (fetchError: unknown) {
           console.error('Error checking initial TTS audio file:', fetchError);
         }
+      } else {
+        // Auto-generate and play TTS for initial AI message
+        console.log('[DEBUG] Auto-playing TTS for initial AI message:', formattedMessage.mainText);
+        const aiMessageObj: ChatMessage = {
+          text: formattedMessage.mainText,
+          romanizedText: formattedMessage.romanizedText,
+          sender: 'AI',
+          timestamp: new Date(),
+          isFromOriginalConversation: false
+        };
+        const ttsText = getTTSText(aiMessageObj, romanizationDisplay, language);
+        const cacheKey = `ai_message_initial_${Date.now()}`;
+        await playTTSAudio(ttsText, language, cacheKey);
+        
+        // Note: TTS will handle autospeak restart in its onended event
+        // No need to manually restart recording here
       }
     } else {
-      setChatHistory([{ sender: 'AI', text: 'Hello! What would you like to talk about today?', timestamp: new Date(), isFromOriginalConversation: false }]);
+      const fallbackMessage = 'Hello! What would you like to talk about today?';
+      setChatHistory([{ sender: 'AI', text: fallbackMessage, timestamp: new Date(), isFromOriginalConversation: false }]);
+      
+      // Auto-generate and play TTS for fallback AI message
+      console.log('[DEBUG] Auto-playing TTS for fallback AI message:', fallbackMessage);
+      const aiMessageObj: ChatMessage = {
+        text: fallbackMessage,
+        sender: 'AI',
+        timestamp: new Date(),
+        isFromOriginalConversation: false
+      };
+      const ttsText = getTTSText(aiMessageObj, romanizationDisplay, language);
+      const cacheKey = `ai_message_fallback_${Date.now()}`;
+      await playTTSAudio(ttsText, language, cacheKey);
+      
+      // Note: TTS will handle autospeak restart in its onended event
+      // No need to manually restart recording here
     }
   };
 
@@ -3063,20 +3154,83 @@ function Analyze() {
 
   // Helper function to get the appropriate text for TTS based on romanization display preference
   const getTTSText = (message: ChatMessage, romanizationDisplay: string | undefined, language: string): string => {
+    console.log('[DEBUG] getTTSText called with:', { 
+      messageText: message.text, 
+      messageRomanizedText: message.romanizedText, 
+      romanizationDisplay, 
+      language 
+    });
+    
+    let textToUse: string;
+    
     // For non-script languages, always use the main text
     if (!isScriptLanguage(language)) {
-      return message.text;
+      textToUse = message.text;
+      console.log('[DEBUG] Non-script language, using main text:', textToUse);
+    } else {
+      // For script languages, ALWAYS use the script text for TTS (more accurate)
+      // Display preference doesn't affect TTS - only affects what's shown visually
+      if (message.text && message.text.trim()) {
+        // Use the script text (main text) directly
+        textToUse = message.text;
+        console.log('[DEBUG] Script language, using script text for TTS (more accurate):', textToUse);
+      } else {
+        // Fall back to romanized text only if script text is not available
+        textToUse = message.romanizedText || message.text;
+        console.log('[DEBUG] Script language, falling back to romanized text:', textToUse);
+      }
     }
     
-    // For script languages, choose based on romanization display preference
-    if (romanizationDisplay === 'romanized_only') {
-      return message.romanizedText || message.text;
-    } else {
-      // For 'script_only' or 'both', use the script text (main text)
-      // But first check if the main text already contains both script and romanized text
-      const formatted = formatScriptLanguageText(message.text, language);
-      return formatted.mainText;
+    // Safety check - if text is empty or only contains punctuation, use fallback
+    if (!textToUse || textToUse.trim().length === 0) {
+      console.log('[DEBUG] Warning: Empty text for TTS, using fallback');
+      textToUse = message.text || 'Hello';
     }
+    
+    // Clean the text for TTS - remove formatting markers and excessive punctuation
+    const cleanedText = cleanTextForTTS(textToUse);
+    
+    console.log('[DEBUG] getTTSText final result:', cleanedText);
+    
+    return cleanedText;
+  };
+  
+  const cleanTextForTTS = (text: string): string => {
+    if (!text) return text;
+    
+    console.log('[DEBUG] cleanTextForTTS input:', text);
+    
+    let cleaned = text;
+    
+    // Remove formatting markers that shouldn't be read aloud
+    cleaned = cleaned.replace(/__([^_]+)__/g, '$1'); // Remove __word__ markers
+    console.log('[DEBUG] After removing __ markers:', cleaned);
+    cleaned = cleaned.replace(/~~([^~]+)~~/g, '$1'); // Remove ~~word~~ markers  
+    console.log('[DEBUG] After removing ~~ markers:', cleaned);
+    cleaned = cleaned.replace(/==([^=]+)==/g, '$1'); // Remove ==word== markers
+    console.log('[DEBUG] After removing == markers:', cleaned);
+    cleaned = cleaned.replace(/<<([^>]+)>>/g, '$1'); // Remove <<word>> markers
+    console.log('[DEBUG] After removing << markers:', cleaned);
+    
+    // Remove excessive punctuation that might be read as "exclamation point"
+    cleaned = cleaned.replace(/[!]{2,}/g, '!'); // Multiple ! to single !
+    console.log('[DEBUG] After cleaning ! marks:', cleaned);
+    cleaned = cleaned.replace(/[?]{2,}/g, '?'); // Multiple ? to single ?
+    console.log('[DEBUG] After cleaning ? marks:', cleaned);
+    cleaned = cleaned.replace(/[.]{3,}/g, '...'); // Multiple . to ...
+    console.log('[DEBUG] After cleaning . marks:', cleaned);
+    
+    // Remove any remaining HTML-like tags
+    cleaned = cleaned.replace(/<[^>]*>/g, '');
+    console.log('[DEBUG] After removing HTML tags:', cleaned);
+    
+    // Trim whitespace
+    cleaned = cleaned.trim();
+    console.log('[DEBUG] After trimming:', cleaned);
+    
+    console.log('[DEBUG] TTS text cleaned:', { original: text, cleaned });
+    
+    return cleaned;
   };
 
   // Helper function to render formatted text with color-coded underlines and clickable popups
@@ -3551,6 +3705,68 @@ Yes, the current serials don't have the same quality as the old ones, right?
     }
   };
 
+  // State for LLM response breakdown in sidebar
+  const [llmBreakdown, setLlmBreakdown] = useState<string>('');
+  const [showLlmBreakdown, setShowLlmBreakdown] = useState<boolean>(false);
+  const [showQuickTranslation, setShowQuickTranslation] = useState<boolean>(true);
+
+  // Function to get detailed breakdown of LLM response
+  const explainLLMResponse = async (messageIndex: number, text: string) => {
+    console.log('[DEBUG] explainLLMResponse() called with messageIndex:', messageIndex, 'text:', text);
+    
+    if (isLoadingMessageFeedback[messageIndex]) {
+      console.log('[DEBUG] Already loading, returning early');
+      return;
+    }
+    
+    setIsLoadingMessageFeedback(prev => ({ ...prev, [messageIndex]: true }));
+    
+    try {
+      const token = localStorage.getItem('jwt');
+      const requestData = {
+        llm_response: text,
+        user_input: "",
+        context: "",
+        language: language,
+        user_level: userPreferences.userLevel,
+        user_topics: userPreferences.topics,
+        formality: userPreferences.formality,
+        feedback_language: userPreferences.feedbackLanguage,
+        user_goals: userPreferences.user_goals,
+        description: conversationDescription
+      };
+
+      console.log('[DEBUG] explainLLMResponse() calling /api/detailed_breakdown with:', requestData);
+      
+      const response = await axios.post(
+        '/api/detailed_breakdown',
+        requestData,
+        token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
+      );
+      
+      const result = response.data;
+      console.log('[DEBUG] explainLLMResponse() received response:', result);
+      
+      const breakdownText = result.breakdown;
+      console.log('[DEBUG] Raw breakdown text:', breakdownText);
+      
+      if (!breakdownText) {
+        console.log('[DEBUG] No breakdown received');
+        return;
+      }
+      
+      // Set the breakdown in sidebar state
+      setLlmBreakdown(breakdownText);
+      setShowLlmBreakdown(true);
+      setShowQuickTranslation(false); // Collapse quick translation when LLM breakdown is shown
+      
+    } catch (error: unknown) {
+      console.error('Explain LLM response error:', error);
+    } finally {
+      setIsLoadingMessageFeedback(prev => ({ ...prev, [messageIndex]: false }));
+    }
+  };
+
   // Render clickable message with word translations
   const renderClickableMessage = (message: ChatMessage, messageIndex: number, translation: any) => {
     if (!translation || !translation.wordTranslations) {
@@ -4016,8 +4232,8 @@ Yes, the current serials don't have the same quality as the old ones, right?
               }}>
                 <div style={{
                   fontWeight: 600,
-                  fontSize: '1rem',
-                  marginBottom: '0.75rem',
+                  fontSize: '1.1rem',
+                  marginBottom: showQuickTranslation ? '1rem' : '0',
                   color: isDarkMode ? '#f8fafc' : '#000',
                   display: 'flex',
                   alignItems: 'center',
@@ -4026,53 +4242,171 @@ Yes, the current serials don't have the same quality as the old ones, right?
                   <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     🌐 Quick Translation
                   </span>
-
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    {showLlmBreakdown && (
+                      <button
+                        onClick={() => setShowQuickTranslation(!showQuickTranslation)}
+                        style={{
+                          padding: '0.25rem 0.5rem',
+                          borderRadius: 4,
+                          border: '1px solid #666',
+                          background: 'rgba(102,102,102,0.1)',
+                          color: '#666',
+                          fontSize: '0.7rem',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease'
+                        }}
+                        title={showQuickTranslation ? 'Collapse' : 'Expand'}
+                      >
+                        {showQuickTranslation ? '▼' : '▶'}
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        // Find the AI message that has the quick translation
+                        const messageIndex = Object.keys(quickTranslations)[0];
+                        if (messageIndex) {
+                          const message = chatHistory[parseInt(messageIndex)];
+                          if (message) {
+                            explainLLMResponse(parseInt(messageIndex), message.text);
+                          }
+                        }
+                      }}
+                      disabled={isLoadingMessageFeedback[Object.keys(quickTranslations)[0] || '0']}
+                      style={{
+                        padding: '0.35rem 0.9rem',
+                        borderRadius: 6,
+                        border: '1px solid #9c27b0',
+                        background: 'rgba(156,39,176,0.08)',
+                        color: '#9c27b0',
+                        fontSize: '0.8rem',
+                        cursor: isLoadingMessageFeedback[Object.keys(quickTranslations)[0] || '0'] ? 'not-allowed' : 'pointer',
+                        transition: 'all 0.2s ease',
+                        opacity: isLoadingMessageFeedback[Object.keys(quickTranslations)[0] || '0'] ? 0.6 : 1,
+                        fontWeight: 500,
+                        boxShadow: '0 1px 3px rgba(156,39,176,0.10)'
+                      }}
+                      title="Get detailed LLM breakdown"
+                    >
+                      {isLoadingMessageFeedback[Object.keys(quickTranslations)[0] || '0'] ? '🔄' : '📝 Explain LLM'}
+                    </button>
+                  </div>
                 </div>
-                {Object.entries(quickTranslations).map(([messageIndex, translation]) => (
-                  <div key={messageIndex} style={{ marginBottom: '1rem' }}>
-                    {translation.error ? (
-                      <div style={{ color: '#dc3545', fontStyle: 'italic' }}>
-                        {translation.fullTranslation}
-                      </div>
-                    ) : (
-                      <div>
-                        {/* Original sentence with clickable words */}
-                        <div style={{ marginBottom: '0.5rem' }}>
-                          <strong>Original:</strong>
-                          <div style={{
-                            background: isDarkMode ? '#334155' : '#f8f9fa',
-                            padding: '0.75rem',
-                            borderRadius: 8,
-                            marginTop: '0.5rem',
-                            fontSize: '0.9rem',
-                            lineHeight: '1.6'
-                          }}>
-                            {renderClickableMessage(chatHistory[parseInt(messageIndex)], parseInt(messageIndex), translation)}
+                {showQuickTranslation && (
+                  <div style={{
+                    maxHeight: showLlmBreakdown ? '200px' : 'none',
+                    overflowY: showLlmBreakdown ? 'auto' : 'visible'
+                  }}>
+                    {Object.entries(quickTranslations).map(([messageIndex, translation]) => (
+                      <div key={messageIndex} style={{ marginBottom: '1rem' }}>
+                        {translation.error ? (
+                          <div style={{ color: '#dc3545', fontStyle: 'italic' }}>
+                            {translation.fullTranslation}
                           </div>
-                        </div>
-                        
-                        {/* Full translation */}
-                        {translation.fullTranslation && (
-                          <div style={{ marginBottom: '0.5rem' }}>
-                            <strong>Translation:</strong>
-                            <div style={{
-                                                          background: isDarkMode ? '#334155' : '#f8f9fa',
-                            padding: '0.75rem',
-                            borderRadius: 8,
-                            marginTop: '0.5rem',
-                            fontSize: '0.9rem',
-                            lineHeight: '1.6'
-                            }}>
-                              {translation.fullTranslation}
+                        ) : (
+                          <div>
+                            {/* Original sentence with clickable words */}
+                            <div style={{ marginBottom: '0.5rem' }}>
+                              <strong>Original:</strong>
+                              <div style={{
+                                background: isDarkMode ? '#334155' : '#f8f9fa',
+                                padding: '0.75rem',
+                                borderRadius: 8,
+                                marginTop: '0.5rem',
+                                fontSize: '0.95rem',
+                                lineHeight: '1.6',
+                                maxHeight: showLlmBreakdown ? '120px' : 'none',
+                                overflowY: showLlmBreakdown ? 'auto' : 'visible'
+                              }}>
+                                {renderClickableMessage(chatHistory[parseInt(messageIndex)], parseInt(messageIndex), translation)}
+                              </div>
                             </div>
+                            
+                            {/* Full translation */}
+                            {translation.fullTranslation && (
+                              <div style={{ marginBottom: '0.5rem' }}>
+                                <strong>Translation:</strong>
+                                <div style={{
+                                  background: isDarkMode ? '#334155' : '#f8f9fa',
+                                  padding: '0.75rem',
+                                  borderRadius: 8,
+                                  marginTop: '0.5rem',
+                                  fontSize: '0.95rem',
+                                  lineHeight: '1.6'
+                                }}>
+                                  {translation.fullTranslation}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
-                    )}
+                    ))}
                   </div>
-                ))}
+                )}
               </div>
             )}
+            
+            {/* LLM Response Breakdown Section */}
+            {showLlmBreakdown && llmBreakdown && (
+              <div style={{
+                background: isDarkMode ? '#1e293b' : '#fff',
+                color: isDarkMode ? '#f8fafc' : '#000',
+                padding: '1rem',
+                borderBottom: isDarkMode ? '1px solid #334155' : '1px solid #ececec',
+                fontSize: '1rem',
+                lineHeight: 1.5,
+                fontFamily: 'AR One Sans, Arial, sans-serif',
+                fontWeight: 400,
+                transition: 'background 0.3s ease, color 0.3s ease'
+              }}>
+                <div style={{
+                  fontWeight: 600,
+                  fontSize: '1.1rem',
+                  marginBottom: '1rem',
+                  color: isDarkMode ? '#f8fafc' : '#000',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between'
+                }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    📝 LLM Response Breakdown
+                  </span>
+                  <button
+                    onClick={() => setShowLlmBreakdown(false)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: isDarkMode ? '#94a3b8' : '#666',
+                      cursor: 'pointer',
+                      fontSize: '1.2rem',
+                      padding: '0.2rem',
+                      borderRadius: '50%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'all 0.2s ease'
+                    }}
+                    title="Close breakdown"
+                  >
+                    ×
+                  </button>
+                </div>
+                <div style={{
+                  background: isDarkMode ? '#334155' : '#f8f9fa',
+                  padding: '0.75rem',
+                  borderRadius: 8,
+                  fontSize: '0.95rem',
+                  lineHeight: '1.6',
+                  whiteSpace: 'pre-wrap',
+                  maxHeight: '400px',
+                  overflowY: 'auto'
+                }}>
+                  {llmBreakdown}
+                </div>
+              </div>
+            )}
+            
             {shortFeedback && (
               <div style={{
                 background: isDarkMode ? '#1e293b' : '#fff',
@@ -4865,6 +5199,8 @@ Yes, the current serials don't have the same quality as the old ones, right?
                   >
                     {isLoadingMessageFeedback[index] ? '🔄' : '💡 Explain'}
                   </button>
+                  
+
                   
                   {/* TTS button for AI messages */}
                   <button

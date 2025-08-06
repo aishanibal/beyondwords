@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template, redirect, url_for, session
 from flask_cors import CORS
 import os
 import json
@@ -6,13 +6,14 @@ import subprocess
 import tempfile
 import shutil
 from werkzeug.utils import secure_filename
-import whisper
-import torch
-from transformers import Wav2Vec2ForCTC, Wav2Vec2Processor
-import librosa
 import numpy as np
 import datetime
 from gemini_client import get_conversational_response, get_detailed_feedback, get_text_suggestions, get_translation, is_gemini_ready, get_short_feedback, get_detailed_breakdown, create_tutor, get_quick_translation
+from tts_synthesizer_admin_controlled import synthesize_speech
+
+# Use Gemini for transcription
+from gemini_transcription import transcribe_audio_gemini, transcribe_audio_with_analysis_gemini
+print("🤖 Using Gemini for transcription")
 # from dotenv import load_dotenv
 # load_dotenv()
 
@@ -21,6 +22,7 @@ from gemini_client import get_conversational_response, get_detailed_feedback, ge
 # This provides much better transcription accuracy than auto-detection.
 
 app = Flask(__name__)
+app.secret_key = os.urandom(24)  # For session management
 CORS(app)
 
 # Check API key at startup
@@ -34,208 +36,55 @@ else:
     print(f"✅ Google API key is configured (starts with: {api_key[:8]}...)")
 
 # Global variables for models
-whisper_model = None
-wav2vec2_processors = {}
-wav2vec2_models = {}
-
-SUPPORTED_WAV2VEC2 = {
-    'en': 'facebook/wav2vec2-base-960h',
-    'es': 'jonatasgrosman/wav2vec2-large-xlsr-53-spanish',
-}
 
 SUPPORTED_LANGUAGES = ['en', 'es', 'hi', 'ja', 'ko', 'zh', 'ar', 'ta', 'or', 'ml', 'fr', 'tl']
 
 def load_models():
-    """Load sendgnition models"""
-    global whisper_model, wav2vec2_processors, wav2vec2_models
-    print("Loading Whisper model...")
-    whisper_model = whisper.load_model("large")  # Using large model for better Tagalog accuracy
-    for lang, model_name in SUPPORTED_WAV2VEC2.items():
-        print(f"Loading Wav2Vec2 model for {lang} ({model_name})...")
-        wav2vec2_processors[lang] = Wav2Vec2Processor.from_pretrained(model_name)
-        wav2vec2_models[lang] = Wav2Vec2ForCTC.from_pretrained(model_name)
+    """Load speech recognition models"""
+    
+    # Gemini transcriber is loaded on-demand
+    print("✅ Gemini transcriber will be loaded on-demand")
+    
     print("All models loaded successfully!")
 
-def get_whisper_language_code(language):
-    """Map application language codes to Whisper-supported language codes"""
-    # Whisper language mapping
-    language_mapping = {
-        'tl': 'tl',  # Tagalog - Whisper supports 'tl' for Tagalog
-        'en': 'en',  # English
-        'es': 'es',  # Spanish
-        'hi': 'hi',  # Hindi
-        'ja': 'ja',  # Japanese
-        'ko': 'ko',  # Korean
-        'zh': 'zh',  # Chinese
-        'ar': 'ar',  # Arabic
-        'ta': 'ta',  # Tamil
-        'or': 'bn',  # Odia - use Bengali as closest supported language
-        'ml': 'ml',  # Malayalam
-        'fr': 'fr',  # French
-    }
-    return language_mapping.get(language, None)  # Return None for auto-detection
+
 
 def transcribe_audio(audio_path, language=None):
-    """Transcribe audio using Whisper with optional language specification"""
+    """Transcribe audio using Gemini"""
     try:
-        whisper_lang = get_whisper_language_code(language) if language else None
-        
-        if whisper_lang:
-            print(f"Using Whisper with language: {whisper_lang} (from app language: {language})")
-            result = whisper_model.transcribe(audio_path, language=whisper_lang)
-        else:
-            print("Using Whisper with auto-detection")
-            result = whisper_model.transcribe(audio_path)
-        
-        return result["text"]
+        print(f"Using Gemini with language: {language}")
+        result = transcribe_audio_gemini(audio_path, language or 'en')
+        return result if result else ""
     except Exception as e:
-        print(f"Whisper transcription error: {e}")
+        print(f"Transcription error: {e}")
         return ""
 
-def analyze_speech_with_wav2vec2(audio_path, reference_text, language='en'):
-    """Analyze speech using Wav2Vec2 and provide feedback"""
+def analyze_speech_with_gemini(audio_path, reference_text, language='en'):
+    """Analyze speech using Gemini and provide feedback"""
     language = language if language in SUPPORTED_LANGUAGES else 'en'
-    if language in ['hi', 'ja']:
-        return {
-            "transcription": "",
-            "reference": reference_text,
-            "analysis": f"Wav2Vec2 phoneme-level analysis is not yet supported for {language.upper()}. Only Whisper transcription is available."
-        }
-    wav2vec2_processor = wav2vec2_processors.get(language, wav2vec2_processors['en'])
-    wav2vec2_model = wav2vec2_models.get(language, wav2vec2_models['en'])
     try:
-        # Load and preprocess audio with better error handling
-        print(f"Loading audio file: {audio_path}")
+        # Get transcription using Gemini
+        print(f"Getting transcription using Gemini for language: {language}")
+        transcription = transcribe_audio_gemini(audio_path, language)
         
-        # Try multiple approaches to load audio
-        audio = None
-        sr = 16000
+        if not transcription:
+            return {
+                "transcription": "",
+                "reference": reference_text,
+                "analysis": "Error: Could not transcribe audio file."
+            }
         
-        try:
-            # First try with soundfile
-            import soundfile as sf
-            audio, sr = sf.read(audio_path)
-            print(f"Successfully loaded with soundfile: {sr}Hz")
-        except Exception as e1:
-            print(f"Soundfile failed: {e1}")
-            try:
-                # Fallback to librosa
-                audio, sr = librosa.load(audio_path, sr=16000)
-                print(f"Successfully loaded with librosa: {sr}Hz")
-            except Exception as e2:
-                print(f"Librosa failed: {e2}")
-                try:
-                    # Last resort: try with scipy
-                    from scipy.io import wavfile
-                    sr, audio = wavfile.read(audio_path)
-                    if audio.dtype != np.float32:
-                        audio = audio.astype(np.float32) / np.iinfo(audio.dtype).max
-                    print(f"Successfully loaded with scipy: {sr}Hz")
-                except Exception as e3:
-                    print(f"All audio loading methods failed: {e3}")
-                    return {
-                        "transcription": "",
-                        "reference": reference_text,
-                        "analysis": "Error: Could not load audio file. Please ensure it's a valid audio format (WAV, MP3, etc.)"
-                    }
-        
-        # Ensure audio is mono and correct sample rate
-        if len(audio.shape) > 1:
-            audio = np.mean(audio, axis=1)  # Convert stereo to mono
-        
-        if sr != 16000:
-            # Resample if necessary
-            audio = librosa.resample(audio, orig_sr=sr, target_sr=16000)
-            sr = 16000
-        
-        print(f"Audio loaded successfully: shape={audio.shape}, sr={sr}Hz")
-        
-        # Use the proper Wav2Vec2 analysis from wav2vec2.py
-        print("Getting reference text using Whisper...")
-        whisper_lang = get_whisper_language_code(language)
-        if whisper_lang:
-            reference_text_whisper = whisper_model.transcribe(audio_path, language=whisper_lang)["text"].strip().lower()
-        else:
-            reference_text_whisper = whisper_model.transcribe(audio_path)["text"].strip().lower()
-        print(f"Whisper reference text: {reference_text_whisper}")
-
-        print("Transcribing audio with Wav2Vec2...")
-        input_values = wav2vec2_processor(audio, return_tensors="pt", sampling_rate=16000).input_values
-        with torch.no_grad():
-            logits = wav2vec2_model(input_values).logits
-        predicted_ids = torch.argmax(logits, dim=-1)
-        transcription = wav2vec2_processor.decode(predicted_ids[0]).lower()
-        with open("wav2vec2_words.txt", "w") as f:f.write(transcription)
-        print(f"Wav2Vec2 recognized text: {transcription}")
-
-        # Text to phonemes conversion (simplified version of wav2vec2.py)
-        def text_to_phonemes(text):
-            try:
-                import subprocess
-                espeak_lang = {'en': 'en', 'es': 'es'}.get(language, 'en')
-                cmd = ["espeak", "-q", "--ipa=3", f"-v{espeak_lang}", text]
-                result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                phonemes = result.stdout.strip().replace(" ", "")
-                return phonemes
-            except Exception as e:
-                print(f"Phoneme conversion failed: {e}")
-                return ""
-
-        print("Converting reference text to phonemes...")
-        ref_phonemes = text_to_phonemes(reference_text_whisper)
-        print(f"Reference phonemes: {ref_phonemes}")
-
-        print("Converting recognized text to phonemes...")
-        hyp_phonemes = text_to_phonemes(transcription)
-        print(f"Hypothesis phonemes: {hyp_phonemes}")
-
-        # Phoneme alignment and feedback (from wav2vec2.py)
-        print("Aligning phonemes and generating feedback...")
-        try:
-            import Levenshtein
-            ops = Levenshtein.editops(ref_phonemes, hyp_phonemes)
-            
-            feedback_parts = []
-            feedback_parts.append("🎯 Pronunciation Analysis")
-            feedback_parts.append("=" * 30)
-            
-            if not ops:
-                feedback_parts.append("✅ Great job! No mispronunciations detected.")
-            else:
-                feedback_parts.append("⚠️ Mispronunciations detected:")
-                for op in ops:
-                    if op[0] == 'replace':
-                        feedback_parts.append(f"• Substitute '{ref_phonemes[op[1]]}' with '{hyp_phonemes[op[2]]}'")
-                    elif op[0] == 'delete':
-                        feedback_parts.append(f"• Missing '{ref_phonemes[op[1]]}'")
-                    elif op[0] == 'insert':
-                        feedback_parts.append(f"• Extra '{hyp_phonemes[op[2]]}'")
-            
-            # Overall assessment
-            similarity = 1 - (len(ops) / max(len(ref_phonemes), 1))
-            if similarity > 0.9:
-                feedback_parts.append("\n🌟 Excellent pronunciation! Keep up the great work.")
-            elif similarity > 0.7:
-                feedback_parts.append("\n👍 Good effort! With practice, you'll improve further.")
-            else:
-                feedback_parts.append("\n💡 Try speaking more slowly and clearly.")
-            
-            analysis = "\n".join(feedback_parts)
-            
-        except ImportError:
-            # Fallback if Levenshtein is not available
-            analysis = f"Transcription: {transcription}\nReference: {reference_text_whisper}\nKeep practicing!"
+        # Simple analysis using Gemini
+        analysis = f"Transcription: {transcription}\nReference: {reference_text}\nLanguage: {language}"
         
         return {
             "transcription": transcription,
-            "reference": reference_text_whisper,
+            "reference": reference_text,
             "analysis": analysis
         }
         
     except Exception as e:
-        print(f"Wav2Vec2 analysis error: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"Error in analyze_speech_with_gemini: {e}")
         return {
             "transcription": "",
             "reference": reference_text,
@@ -264,21 +113,10 @@ def transcribe():
         print(f"Full request data: {data}")
         if not audio_file or not os.path.exists(audio_file):
             return jsonify({"error": "Audio file not found"}), 400
-        # Get transcription using Whisper (with language)
-        print(f"Calling Whisper with language={language}")
-        whisper_lang = get_whisper_language_code(language)
-        print(f"Whisper language code: {whisper_lang}")
-        
-        if whisper_lang:
-            # Force language for better accuracy, especially for less common languages like Odia
-            if language == 'or':
-                print(f"Odia detected - using Bengali (bn) as closest supported language")
-            transcription = whisper_model.transcribe(audio_file, language=whisper_lang)["text"]
-            print(f"Used forced language: {whisper_lang}")
-        else:
-            transcription = whisper_model.transcribe(audio_file)["text"]
-            print(f"Used auto-detection")
-        print(f"Whisper transcription: '{transcription}'")
+        # Get transcription using Gemini (with language)
+        print(f"Calling Gemini with language={language}")
+        transcription = transcribe_audio_gemini(audio_file, language)
+        print(f"Gemini transcription: '{transcription}'")
         print(f"Calling Gemini with language={language}, level={user_level}, goals={user_topics}, formality={formality}")
         ai_response = get_conversational_response(transcription, chat_history, language, user_level, user_topics, formality, feedback_language, user_goals)
         if not ai_response or not str(ai_response).strip():
@@ -333,21 +171,10 @@ def transcribe_only():
         if not audio_file or not os.path.exists(audio_file):
             return jsonify({"error": "Audio file not found"}), 400
         
-        # Get transcription using Whisper (with language)
-        print(f"Calling Whisper with language={language}")
-        whisper_lang = get_whisper_language_code(language)
-        print(f"Whisper language code: {whisper_lang}")
-        
-        if whisper_lang:
-            # Force language for better accuracy, especially for less common languages like Odia
-            if language == 'or':
-                print(f"Odia detected - using Bengali (bn) as closest supported language")
-            transcription = whisper_model.transcribe(audio_file, language=whisper_lang)["text"]
-            print(f"Used forced language: {whisper_lang}")
-        else:
-            transcription = whisper_model.transcribe(audio_file)["text"]
-            print(f"Used auto-detection")
-        print(f"Whisper transcription: '{transcription}'")
+        # Get transcription using Gemini (with language)
+        print(f"Calling Gemini with language={language}")
+        transcription = transcribe_audio_gemini(audio_file, language)
+        print(f"Gemini transcription: '{transcription}'")
         print(f"Transcription length: {len(transcription)}")
         print(f"Transcription is empty: {not transcription.strip()}")
         
@@ -427,24 +254,15 @@ def analyze():
         if not audio_file or not os.path.exists(audio_file):
             return jsonify({"error": "Audio file not found"}), 400
         
-        # Use Whisper for reference text if not provided
+        # Use Gemini for reference text if not provided
         if not reference_text:
-            print(f"Getting reference text with Whisper (language={language})")
-            whisper_lang = get_whisper_language_code(language)
-            print(f"Whisper language code: {whisper_lang}")
-            if whisper_lang:
-                if language == 'or':
-                    print(f"Odia detected - using Bengali (bn) as closest supported language")
-                reference_text = whisper_model.transcribe(audio_file, language=whisper_lang)["text"]
-                print(f"Used forced language: {whisper_lang}")
-            else:
-                reference_text = whisper_model.transcribe(audio_file)["text"]
-                print(f"Used auto-detection")
-            print(f"Whisper reference text: '{reference_text}'")
+            print(f"Getting reference text with Gemini (language={language})")
+            reference_text = transcribe_audio_gemini(audio_file, language)
+            print(f"Gemini reference text: '{reference_text}'")
         
-        # Wav2Vec2 analysis (if supported)
-        print(f"Calling Wav2Vec2 analysis with language={language}")
-        analysis_result = analyze_speech_with_wav2vec2(audio_file, reference_text, language=language)
+        # Gemini analysis
+        print(f"Calling Gemini analysis with language={language}")
+        analysis_result = analyze_speech_with_gemini(audio_file, reference_text, language=language)
         
         # Get user data for personalized feedback
         user_level = data.get('user_level', 'beginner')
@@ -522,18 +340,22 @@ def conversation_summary():
 def health():
     """Health check endpoint"""
     try:
+        # Check transcription method
+        transcription_method = "Gemini"
+        
         models_status = {
-            "whisper_model": whisper_model is not None,
-            "wav2vec2_processors": all(wav2vec2_processors.values()),
-            "wav2vec2_models": all(wav2vec2_models.values())
+            "gemini_transcriber": True
         }
         
-        all_models_loaded = all(models_status.values())
+        # Using Gemini for transcription (no local models needed)
+        all_models_loaded = True  # No local models needed for Gemini transcription
+            
         api_key_set = bool(os.getenv("GOOGLE_API_KEY"))
         gemini_ready = is_gemini_ready() if api_key_set else False
         
         return jsonify({
             "status": "healthy" if all_models_loaded and gemini_ready else "degraded",
+            "transcription_method": transcription_method,
             "models_loaded": all_models_loaded,
             "models_status": models_status,
             "api_key_configured": api_key_set,
@@ -845,7 +667,174 @@ def quick_translation():
         print(f"Quick translation error: {e}")
         return jsonify({"error": str(e)}), 500
 
+@app.route('/generate_tts', methods=['POST'])
+def generate_tts():
+    """Generate text-to-speech using Gemini TTS API"""
+    try:
+        data = request.get_json()
+        text = data.get('text', '')
+        language_code = data.get('language_code', 'en')
+        output_path = data.get('output_path', 'tts_output/gemini_response.mp3')
+        
+        print(f"=== /generate_tts called ===")
+        print(f"Text length: {len(text)}")
+        print(f"Language code: {language_code}")
+        print(f"Output path: {output_path}")
+        
+        if not text:
+            return jsonify({"error": "No text provided"}), 400
+        
+        # Generate TTS using the new synthesizer (Gemini + fallback)
+        print(f"🔍 Calling synthesize_speech with: text='{text[:50]}...', language_code='{language_code}', output_path='{output_path}'")
+        result_path = synthesize_speech(text, language_code, output_path)
+        
+        if result_path:
+            print(f"✅ TTS generated successfully: {result_path}")
+            return jsonify({
+                "success": True,
+                "output_path": result_path,
+                "message": "TTS generated successfully"
+            })
+        else:
+            print("❌ TTS generation failed - synthesize_speech returned None")
+            return jsonify({
+                "success": False,
+                "error": "Failed to generate TTS"
+            }), 500
+            
+    except Exception as e:
+        print(f"TTS generation error: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+# Admin Dashboard Routes
+from admin_dashboard import AdminDashboard
+dashboard = AdminDashboard()
+
+@app.route('/admin')
+def admin_index():
+    """Main admin dashboard page"""
+    settings = dashboard.get_tts_settings()
+    usage_stats = dashboard.get_usage_stats()
+    
+    return render_template('admin_dashboard.html', 
+                         settings=settings,
+                         usage_stats=usage_stats)
+
+@app.route('/admin/login', methods=['GET', 'POST'])
+def admin_login():
+    """Admin login page"""
+    if request.method == 'POST':
+        password = request.form.get('password')
+        if dashboard.verify_password(password):
+            session['admin_logged_in'] = True
+            return redirect(url_for('admin_index'))
+        else:
+            return render_template('login.html', error="Invalid password")
+    
+    return render_template('login.html')
+
+@app.route('/admin/logout')
+def admin_logout():
+    """Admin logout"""
+    session.pop('admin_logged_in', None)
+    return redirect(url_for('admin_login'))
+
+@app.route('/admin/api/status')
+def admin_api_status():
+    """Get system status as JSON"""
+    if 'admin_logged_in' not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    
+    return jsonify({
+        "status": dashboard.get_system_status(),
+        "stats": dashboard.get_usage_stats(),
+        "settings": dashboard.get_tts_settings()
+    })
+
+@app.route('/admin/api/enable_gemini', methods=['POST'])
+def admin_api_enable_gemini():
+    """Enable Gemini TTS"""
+    if 'admin_logged_in' not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    
+    data = request.get_json()
+    password = data.get('password')
+    
+    if dashboard.enable_gemini_tts(password):
+        return jsonify({"success": True, "message": "Gemini TTS enabled"})
+    else:
+        return jsonify({"success": False, "message": "Invalid password"})
+
+@app.route('/admin/api/disable_gemini', methods=['POST'])
+def admin_api_disable_gemini():
+    """Disable Gemini TTS"""
+    if 'admin_logged_in' not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    
+    data = request.get_json()
+    password = data.get('password')
+    
+    if dashboard.disable_gemini_tts(password):
+        return jsonify({"success": True, "message": "Gemini TTS disabled"})
+    else:
+        return jsonify({"success": False, "message": "Invalid password"})
+
+@app.route('/admin/api/update_settings', methods=['POST'])
+def admin_api_update_settings():
+    """Update TTS settings"""
+    if 'admin_logged_in' not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    
+    data = request.get_json()
+    settings = data.get('settings', {})
+    
+    if dashboard.update_tts_settings(settings):
+        return jsonify({"success": True, "message": "Settings updated"})
+    else:
+        return jsonify({"success": False, "message": "Failed to update settings"})
+
+@app.route('/admin/api/reset_usage', methods=['POST'])
+def admin_api_reset_usage():
+    """Reset daily usage"""
+    if 'admin_logged_in' not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    
+    dashboard.reset_daily_usage()
+    return jsonify({"success": True, "message": "Usage reset"})
+
+@app.route('/admin/api/set_tts_system', methods=['POST'])
+def admin_api_set_tts_system():
+    """Set the active TTS system"""
+    data = request.get_json()
+    system = data.get('system')
+    
+    if system not in ['system', 'cloud', 'gemini']:
+        return jsonify({"success": False, "message": "Invalid TTS system"})
+    
+    dashboard.update_tts_settings({"active_tts": system})
+    return jsonify({"success": True, "message": f"TTS system changed to {system.upper()}"})
+
+@app.route('/admin/api/change_password', methods=['POST'])
+def admin_api_change_password():
+    """Change admin password"""
+    if 'admin_logged_in' not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    
+    data = request.get_json()
+    old_password = data.get('old_password')
+    new_password = data.get('new_password')
+    
+    if dashboard.change_password(old_password, new_password):
+        return jsonify({"success": True, "message": "Password changed"})
+    else:
+        return jsonify({"success": False, "message": "Invalid current password"})
+
 if __name__ == '__main__':
     print("Starting Python Speech Analysis API...")
+    print("🔐 Admin Dashboard: http://localhost:5000/admin")
+    print("🔑 Default password: admin123")
     load_models()
     app.run(host='0.0.0.0', port=5000, debug=True) 

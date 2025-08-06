@@ -5,6 +5,7 @@ import React, { useState, ChangeEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '../ClientLayout';
 import axios from 'axios';
+import LoadingScreen from '../components/LoadingScreen';
 import { LANGUAGES, PROFICIENCY_LEVELS, TALK_TOPICS, LEARNING_GOALS, PRACTICE_PREFERENCES, FEEDBACK_LANGUAGES, Language, ProficiencyLevel, Topic, LearningGoal, PracticePreference, FeedbackLanguage } from '../../lib/preferences';
 
 export default function OnboardingPage() {
@@ -37,25 +38,10 @@ export default function OnboardingPage() {
     } else {
       setUserIdError('');
     }
-  }, [user]);
+    }, [user]);
 
   if (user === null) {
-    return (
-      <div style={{ 
-        minHeight: '100vh', 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'center', 
-        background: 'var(--cream)', 
-        flexDirection: 'column', 
-        gap: '1rem',
-        fontFamily: 'Montserrat, Arial, sans-serif'
-      }}>
-        <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🗝️</div>
-        <div style={{ fontSize: '1.5rem', color: 'var(--rose-primary)', fontWeight: 600 }}>BeyondWords</div>
-        <div style={{ fontSize: '0.9rem', color: 'var(--rose-primary)', opacity: 0.7 }}>Loading your experience...</div>
-      </div>
-    );
+    return <LoadingScreen message="Loading your experience..." />;
   }
 
   const totalSteps = 4;
@@ -125,20 +111,20 @@ export default function OnboardingPage() {
   };
 
   const renderFeedbackLanguageSelector = () => (
-    <div style={{ marginBottom: '2rem' }}>
+    <div style={{ marginBottom: '1.5vh' }}>
       <h3 style={{ 
         color: 'var(--blue-secondary)', 
-        fontSize: '1.1rem', 
+        fontSize: '1.8vh', 
         fontWeight: 600, 
-        marginBottom: '0.5rem',
+        marginBottom: '0.3vh',
         fontFamily: 'Gabriela, Arial, sans-serif'
       }}>
         Feedback Language
       </h3>
       <p style={{ 
         color: 'var(--rose-primary)', 
-        fontSize: '0.9rem', 
-        marginBottom: '0.5rem',
+        fontSize: '1.2vh', 
+        marginBottom: '0.3vh',
         fontFamily: 'AR One Sans, Arial, sans-serif'
       }}>
         Choose the language in which you want to receive AI feedback and explanations.
@@ -148,13 +134,13 @@ export default function OnboardingPage() {
         onChange={e => setOnboardingData(prev => ({ ...prev, feedbackLanguage: e.target.value }))}
         style={{
           width: '100%',
-          padding: '0.75rem',
-          borderRadius: '8px',
+          padding: '0.8vh',
+          borderRadius: '0.8vh',
           border: '2px solid var(--rose-accent)',
-          fontSize: '1rem',
+          fontSize: '1.4vh',
           background: 'var(--cream)',
           color: 'var(--blue-secondary)',
-          marginBottom: '1rem',
+          marginBottom: '0.8vh',
           fontFamily: 'Montserrat, Arial, sans-serif'
         }}
       >
@@ -195,32 +181,32 @@ export default function OnboardingPage() {
   };
 
   const renderProgressBar = () => (
-    <div style={{ marginBottom: '1.5rem' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+    <div style={{ marginBottom: '2vh' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5vh' }}>
         <span style={{ 
           color: 'var(--rose-primary)', 
-          fontSize: '0.9rem', 
+          fontSize: '1.8vh', 
           fontWeight: 600,
           fontFamily: 'Montserrat, Arial, sans-serif'
         }}>Step {currentStep} of {totalSteps}</span>
         <span style={{ 
           color: 'var(--rose-primary)', 
-          fontSize: '0.9rem',
+          fontSize: '1.8vh',
           fontFamily: 'Montserrat, Arial, sans-serif'
         }}>{Math.round((currentStep / totalSteps) * 100)}% Complete</span>
       </div>
       <div style={{ 
         width: '100%', 
-        height: '6px', 
+        height: '0.8vh', 
         backgroundColor: 'rgba(126,90,117,0.2)', 
-        borderRadius: '3px',
+        borderRadius: '0.4vh',
         overflow: 'hidden'
       }}>
         <div style={{
           width: `${(currentStep / totalSteps) * 100}%`,
           height: '100%',
           backgroundColor: 'var(--rose-primary)',
-          borderRadius: '3px',
+          borderRadius: '0.4vh',
           transition: 'width 0.3s ease'
         }}></div>
       </div>
@@ -228,12 +214,12 @@ export default function OnboardingPage() {
   );
 
   const renderStep1 = () => (
-    <div>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center', overflow: 'hidden' }}>
       <h2 style={{ 
         color: 'var(--blue-secondary)', 
-        fontSize: '1.8rem', 
+        fontSize: '2.5vh', 
         fontWeight: 700, 
-        marginBottom: '1rem', 
+        marginBottom: '0.8vh', 
         textAlign: 'center',
         fontFamily: 'Gabriela, Arial, sans-serif'
       }}>
@@ -242,17 +228,17 @@ export default function OnboardingPage() {
       <p style={{ 
         color: 'var(--rose-primary)', 
         textAlign: 'center', 
-        marginBottom: '2rem', 
-        fontSize: '1rem',
+        marginBottom: '1.5vh', 
+        fontSize: '1.6vh',
         fontFamily: 'AR One Sans, Arial, sans-serif'
       }}>
         Choose the language you want to practice speaking with AI feedback
       </p>
       <div style={{ 
         display: 'grid', 
-        gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', 
-        gap: '0.75rem', 
-        marginBottom: '1.5rem',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(18vw, 1fr))', 
+        gap: '0.8vh', 
+        marginBottom: '1.5vh',
         maxWidth: '100%'
       }}>
         {LANGUAGES.map((lang: Language) => (
@@ -260,29 +246,29 @@ export default function OnboardingPage() {
             key={lang.code}
             onClick={() => updateOnboardingData('language', lang.code)}
             style={{
-              padding: '0.75rem',
-              borderRadius: '8px',
+              padding: '1.2vh',
+              borderRadius: '1.2vh',
               border: `2px solid ${onboardingData.language === lang.code ? 'var(--rose-primary)' : 'rgba(126,90,117,0.2)'}`,
               backgroundColor: onboardingData.language === lang.code ? 'rgba(126,90,117,0.1)' : 'var(--cream)',
               cursor: 'pointer',
               transition: 'all 0.3s ease',
               textAlign: 'center',
-              minHeight: '120px',
+              minHeight: '10vh',
               display: 'flex',
               flexDirection: 'column',
               justifyContent: 'center'
             }}
           >
-            <div style={{ fontSize: '1.3rem', marginBottom: '0.3rem' }}>{lang.flag}</div>
+            <div style={{ fontSize: '2.5vh', marginBottom: '0.3vh' }}>{lang.flag}</div>
             <div style={{ 
               fontWeight: 600, 
               color: 'var(--blue-secondary)', 
-              marginBottom: '0.15rem', 
-              fontSize: '0.85rem',
+              marginBottom: '0.2vh', 
+              fontSize: '1.6vh',
               fontFamily: 'Gabriela, Arial, sans-serif'
             }}>{lang.label}</div>
             <div style={{ 
-              fontSize: '0.75rem', 
+              fontSize: '1.2vh', 
               color: 'var(--rose-primary)', 
               lineHeight: '1.2',
               fontFamily: 'AR One Sans, Arial, sans-serif'
@@ -295,12 +281,12 @@ export default function OnboardingPage() {
   );
 
   const renderStep2 = () => (
-    <div>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
       <h2 style={{ 
         color: 'var(--blue-secondary)', 
-        fontSize: '1.8rem', 
+        fontSize: '3vh', 
         fontWeight: 700, 
-        marginBottom: '1rem', 
+        marginBottom: '1vh', 
         textAlign: 'center',
         fontFamily: 'Gabriela, Arial, sans-serif'
       }}>
@@ -309,39 +295,40 @@ export default function OnboardingPage() {
       <p style={{ 
         color: 'var(--rose-primary)', 
         textAlign: 'center', 
-        marginBottom: '2rem', 
-        fontSize: '1rem',
+        marginBottom: '2vh', 
+        fontSize: '2vh',
         fontFamily: 'AR One Sans, Arial, sans-serif'
       }}>
         Be honest - this helps us personalize your experience
       </p>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '2rem' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1vh', marginBottom: '2vh' }}>
         {PROFICIENCY_LEVELS.map((level: ProficiencyLevel) => (
           <div
             key={level.level}
             onClick={() => updateOnboardingData('proficiency', level.level)}
             style={{
-              padding: '1.5rem',
-              borderRadius: '12px',
+              padding: '2vh',
+              borderRadius: '2vh',
               border: `2px solid ${onboardingData.proficiency === level.level ? 'var(--rose-primary)' : 'rgba(126,90,117,0.2)'}`,
               backgroundColor: onboardingData.proficiency === level.level ? 'rgba(126,90,117,0.1)' : 'var(--cream)',
               cursor: 'pointer',
               transition: 'all 0.3s ease',
               display: 'flex',
               alignItems: 'center',
-              gap: '1rem'
+              gap: '2vh'
             }}
           >
-            <div style={{ fontSize: '2rem' }}>{level.icon}</div>
+            <div style={{ fontSize: '4vh' }}>{level.icon}</div>
             <div>
               <div style={{ 
                 fontWeight: 600, 
                 color: 'var(--blue-secondary)', 
-                marginBottom: '0.25rem',
+                marginBottom: '0.5vh',
+                fontSize: '2.2vh',
                 fontFamily: 'Gabriela, Arial, sans-serif'
               }}>{level.label}</div>
               <div style={{ 
-                fontSize: '0.9rem', 
+                fontSize: '1.8vh', 
                 color: 'var(--rose-primary)',
                 fontFamily: 'AR One Sans, Arial, sans-serif'
               }}>{level.description}</div>
@@ -353,12 +340,12 @@ export default function OnboardingPage() {
   );
 
   const renderStep3 = () => (
-    <div>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
       <h2 style={{ 
         color: 'var(--blue-secondary)', 
-        fontSize: '1.8rem', 
+        fontSize: '3vh', 
         fontWeight: 700, 
-        marginBottom: '1rem', 
+        marginBottom: '1vh', 
         textAlign: 'center',
         fontFamily: 'Gabriela, Arial, sans-serif'
       }}>
@@ -367,48 +354,48 @@ export default function OnboardingPage() {
       <p style={{ 
         color: 'var(--rose-primary)', 
         textAlign: 'center', 
-        marginBottom: '2rem', 
-        fontSize: '1rem',
+        marginBottom: '2vh', 
+        fontSize: '2vh',
         fontFamily: 'AR One Sans, Arial, sans-serif'
       }}>
         Choose topics you'd like to discuss and skills you want to develop
       </p>
       {/* Talk Topics Section */}
-      <div style={{ marginBottom: '2.5rem' }}>
+      <div style={{ marginBottom: '3vh' }}>
         <h3 style={{ 
           color: 'var(--blue-secondary)', 
-          fontSize: '1.3rem', 
+          fontSize: '2.5vh', 
           fontWeight: 600, 
-          marginBottom: '1rem', 
+          marginBottom: '1vh', 
           display: 'flex', 
           alignItems: 'center', 
-          gap: '0.5rem',
+          gap: '1vh',
           fontFamily: 'Gabriela, Arial, sans-serif'
         }}>
           💬 Topics I'd like to talk about
         </h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '0.75rem', marginBottom: '1rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(25vw, 1fr))', gap: '1vh', marginBottom: '1vh' }}>
           {TALK_TOPICS.map((topic: Topic) => (
             <div
               key={topic.id}
               onClick={() => toggleTalkTopic(topic.id)}
               style={{
-                padding: '1rem',
-                borderRadius: '8px',
+                padding: '1.5vh',
+                borderRadius: '1.5vh',
                 border: `2px solid ${onboardingData.talkTopics.includes(topic.id) ? 'var(--rose-primary)' : 'rgba(126,90,117,0.2)'}`,
                 backgroundColor: onboardingData.talkTopics.includes(topic.id) ? 'rgba(126,90,117,0.1)' : 'var(--cream)',
                 cursor: 'pointer',
                 transition: 'all 0.3s ease',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '0.75rem'
+                gap: '1vh'
               }}
             >
-              <div style={{ fontSize: '1.2rem' }}>{topic.icon}</div>
+              <div style={{ fontSize: '2.5vh' }}>{topic.icon}</div>
               <div style={{ 
                 fontWeight: 500, 
                 color: 'var(--blue-secondary)', 
-                fontSize: '0.9rem',
+                fontSize: '1.8vh',
                 fontFamily: 'Gabriela, Arial, sans-serif'
               }}>{topic.label}</div>
             </div>
@@ -419,38 +406,38 @@ export default function OnboardingPage() {
       <div>
         <h3 style={{ 
           color: 'var(--blue-secondary)', 
-          fontSize: '1.3rem', 
+          fontSize: '2.5vh', 
           fontWeight: 600, 
-          marginBottom: '1rem', 
+          marginBottom: '1vh', 
           display: 'flex', 
           alignItems: 'center', 
-          gap: '0.5rem',
+          gap: '1vh',
           fontFamily: 'Gabriela, Arial, sans-serif'
         }}>
           🎯 Skills I want to develop
         </h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '0.75rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(25vw, 1fr))', gap: '1vh' }}>
           {LEARNING_GOALS.map((goal: LearningGoal) => (
             <div
               key={goal.id}
               onClick={() => toggleLearningGoal(goal.id)}
               style={{
-                padding: '1rem',
-                borderRadius: '8px',
+                padding: '1.5vh',
+                borderRadius: '1.5vh',
                 border: `2px solid ${onboardingData.learningGoals.includes(goal.id) ? 'var(--rose-primary)' : 'rgba(126,90,117,0.2)'}`,
                 backgroundColor: onboardingData.learningGoals.includes(goal.id) ? 'rgba(126,90,117,0.1)' : 'var(--cream)',
                 cursor: 'pointer',
                 transition: 'all 0.3s ease',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '0.75rem'
+                gap: '1vh'
               }}
             >
-              <div style={{ fontSize: '1.2rem' }}>{goal.icon}</div>
+              <div style={{ fontSize: '2.5vh' }}>{goal.icon}</div>
               <div style={{ 
                 fontWeight: 500, 
                 color: 'var(--blue-secondary)', 
-                fontSize: '0.9rem',
+                fontSize: '1.8vh',
                 fontFamily: 'Gabriela, Arial, sans-serif'
               }}>{goal.goal}</div>
             </div>
@@ -461,12 +448,12 @@ export default function OnboardingPage() {
   );
 
   const renderStep4 = () => (
-    <div>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
       <h2 style={{ 
         color: 'var(--blue-secondary)', 
-        fontSize: '1.8rem', 
+        fontSize: '3vh', 
         fontWeight: 700, 
-        marginBottom: '1rem', 
+        marginBottom: '1vh', 
         textAlign: 'center',
         fontFamily: 'Gabriela, Arial, sans-serif'
       }}>
@@ -475,20 +462,20 @@ export default function OnboardingPage() {
       <p style={{ 
         color: 'var(--rose-primary)', 
         textAlign: 'center', 
-        marginBottom: '2rem', 
-        fontSize: '1rem',
+        marginBottom: '2vh', 
+        fontSize: '2vh',
         fontFamily: 'AR One Sans, Arial, sans-serif'
       }}>
         Choose what works best for your schedule
       </p>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '2rem' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1vh', marginBottom: '2vh' }}>
         {PRACTICE_PREFERENCES.map((pref: PracticePreference) => (
           <div
             key={pref.id}
             onClick={() => updateOnboardingData('practicePreference', pref.id)}
             style={{
-              padding: '1.5rem',
-              borderRadius: '12px',
+              padding: '2vh',
+              borderRadius: '2vh',
               border: `2px solid ${onboardingData.practicePreference === pref.id ? 'var(--rose-primary)' : 'rgba(126,90,117,0.2)'}`,
               backgroundColor: onboardingData.practicePreference === pref.id ? 'rgba(126,90,117,0.1)' : 'var(--cream)',
               cursor: 'pointer',
@@ -498,11 +485,12 @@ export default function OnboardingPage() {
             <div style={{ 
               fontWeight: 600, 
               color: 'var(--blue-secondary)', 
-              marginBottom: '0.25rem',
+              marginBottom: '0.5vh',
+              fontSize: '2.2vh',
               fontFamily: 'Gabriela, Arial, sans-serif'
             }}>{pref.label}</div>
             <div style={{ 
-              fontSize: '0.9rem', 
+              fontSize: '1.8vh', 
               color: 'var(--rose-primary)',
               fontFamily: 'AR One Sans, Arial, sans-serif'
             }}>{pref.description}</div>
@@ -511,20 +499,21 @@ export default function OnboardingPage() {
       </div>
       <div style={{ 
         background: 'rgba(126,90,117,0.1)', 
-        padding: '1.5rem', 
-        borderRadius: '12px',
+        padding: '2vh', 
+        borderRadius: '2vh',
         textAlign: 'center',
-        marginTop: '2rem'
+        marginTop: '2vh'
       }}>
-        <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🎉</div>
+        <div style={{ fontSize: '4vh', marginBottom: '0.5vh' }}>🎉</div>
         <h3 style={{ 
           color: 'var(--blue-secondary)', 
-          marginBottom: '0.5rem',
+          marginBottom: '0.5vh',
+          fontSize: '2.5vh',
           fontFamily: 'Gabriela, Arial, sans-serif'
         }}>You're all set!</h3>
         <p style={{ 
           color: 'var(--rose-primary)', 
-          fontSize: '0.9rem',
+          fontSize: '1.8vh',
           fontFamily: 'AR One Sans, Arial, sans-serif'
         }}>
           Click "Complete Setup" to access your personalized dashboard and start your first practice session.
@@ -535,39 +524,43 @@ export default function OnboardingPage() {
 
   return (
     <div style={{
-      minHeight: '100vh',
+      height: '100vh',
       background: 'linear-gradient(135deg, var(--cream) 0%, #e8e0d8 50%, #d4c8c0 100%)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      padding: '2rem',
-      fontFamily: 'Montserrat, Arial, sans-serif'
+      padding: '1vh',
+      fontFamily: 'Montserrat, Arial, sans-serif',
+      overflow: 'hidden'
     }}>
       <div style={{
         background: '#fff',
-        borderRadius: 20,
-        padding: '2.5rem',
-        boxShadow: '0 20px 60px rgba(60,76,115,0.15)',
-        maxWidth: 800,
+        borderRadius: '2vh',
+        padding: '3vh',
+        boxShadow: '0 2vh 6vh rgba(60,76,115,0.15)',
+        maxWidth: '90vw',
         width: '100%',
+        height: '94vh',
+        display: 'flex',
+        flexDirection: 'column',
         position: 'relative',
         overflow: 'hidden'
       }}>
         {/* Header */}
-        <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-          <div style={{ fontSize: '2rem', marginBottom: '0.4rem' }}>🗝️</div>
+        <div style={{ textAlign: 'center', marginBottom: '2vh', flexShrink: 0 }}>
+          <div style={{ fontSize: '3vh', marginBottom: '0.5vh' }}>🗝️</div>
           <h1 style={{
             color: 'var(--blue-secondary)',
-            fontSize: '1.8rem',
+            fontSize: '3vh',
             fontWeight: 700,
-            marginBottom: '0.4rem',
+            marginBottom: '0.5vh',
             fontFamily: 'Gabriela, Arial, sans-serif'
           }}>
             Welcome to BeyondWords!
           </h1>
           <p style={{ 
             color: 'var(--rose-primary)', 
-            fontSize: '0.9rem',
+            fontSize: '1.8vh',
             fontFamily: 'AR One Sans, Arial, sans-serif'
           }}>
             Let's personalize your language learning journey
@@ -581,19 +574,29 @@ export default function OnboardingPage() {
           <div style={{
             background: 'rgba(220,53,69,0.1)',
             color: '#dc3545',
-            padding: '0.75rem',
-            borderRadius: 8,
-            marginBottom: '1.5rem',
+            padding: '1vh',
+            borderRadius: '1vh',
+            marginBottom: '2vh',
             border: '1px solid rgba(220,53,69,0.2)',
             textAlign: 'center',
-            fontFamily: 'Montserrat, Arial, sans-serif'
+            fontFamily: 'Montserrat, Arial, sans-serif',
+            fontSize: '1.6vh',
+            flexShrink: 0
           }}>
             {error}
           </div>
         )}
 
-        {/* Step Content */}
-        <div style={{ marginBottom: '1.5rem' }}>
+        {/* Step Content - Dynamic sizing */}
+        <div style={{ 
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          marginBottom: '2vh',
+          minHeight: 0,
+          overflow: 'hidden'
+        }}>
           {(() => {
             try {
               switch(currentStep) {
@@ -610,18 +613,26 @@ export default function OnboardingPage() {
           })()}
         </div>
 
-        {/* Navigation */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        {/* Navigation - Fixed at bottom */}
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          flexShrink: 0,
+          paddingTop: '2vh',
+          borderTop: '1px solid rgba(126,90,117,0.1)',
+          minHeight: '8vh'
+        }}>
           <button
             onClick={prevStep}
             disabled={currentStep === 1}
             style={{
-              padding: '0.75rem 1.5rem',
-              borderRadius: 10,
+              padding: '1.5vh 3vh',
+              borderRadius: '1.5vh',
               border: '2px solid rgba(126,90,117,0.3)',
               background: 'transparent',
               color: currentStep === 1 ? '#ccc' : 'var(--rose-primary)',
-              fontSize: '1rem',
+              fontSize: '2vh',
               fontWeight: 600,
               cursor: currentStep === 1 ? 'not-allowed' : 'pointer',
               transition: 'all 0.3s ease',
@@ -636,12 +647,12 @@ export default function OnboardingPage() {
             <button
               onClick={handleNext}
               style={{
-                padding: '0.75rem 2rem',
-                borderRadius: 10,
+                padding: '1.5vh 4vh',
+                borderRadius: '1.5vh',
                 border: 'none',
                 background: 'linear-gradient(135deg, var(--rose-primary) 0%, #8a6a7a 100%)',
                 color: '#fff',
-                fontSize: '1rem',
+                fontSize: '2vh',
                 fontWeight: 600,
                 cursor: 'pointer',
                 transition: 'all 0.3s ease',
@@ -655,12 +666,12 @@ export default function OnboardingPage() {
               onClick={handleSubmit}
               disabled={isLoading || !user || !user.id}
               style={{
-                padding: '0.75rem 2rem',
-                borderRadius: 10,
+                padding: '1.5vh 4vh',
+                borderRadius: '1.5vh',
                 border: 'none',
                 background: isLoading || !user || !user.id ? '#ccc' : 'linear-gradient(135deg, var(--rose-accent) 0%, var(--rose-primary) 100%)',
                 color: '#fff',
-                fontSize: '1rem',
+                fontSize: '2vh',
                 fontWeight: 600,
                 cursor: isLoading || !user || !user.id ? 'not-allowed' : 'pointer',
                 transition: 'all 0.3s ease',

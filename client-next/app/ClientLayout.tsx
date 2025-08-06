@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { FaUserCircle } from 'react-icons/fa';
 import Navigation from "./components/Navigation";
 import SignupFloating from "./components/SignupFloating";
+import LoadingScreen from "./components/LoadingScreen";
 import { useDarkMode } from './contexts/DarkModeContext';
 
 const translucentBg = 'rgba(60,76,115,0.06)';
@@ -83,22 +84,36 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
   const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
 
+  // Handle routing after authentication
+  useEffect(() => {
+    if (!isLoading && user === null) {
+      // User is not authenticated, redirect to login
+      if (pathname !== '/login' && pathname !== '/signup' && pathname !== '/') {
+        router.push('/login');
+      }
+    } else if (!isLoading && user) {
+      // User is authenticated, check if they need onboarding
+      if (!user.onboarding_complete) {
+        // If onboarding is not complete, redirect to onboarding immediately
+        if (pathname !== '/onboarding') {
+          router.push('/onboarding');
+        }
+      } else {
+        // Onboarding is complete, handle normal routing
+        if (pathname === '/onboarding') {
+          // Prevent access to onboarding if already completed
+          router.push('/dashboard');
+        } else if (pathname === '/login' || pathname === '/signup') {
+          router.push('/dashboard');
+        } else if (pathname === '/' && user.onboarding_complete) {
+          router.push('/dashboard');
+        }
+      }
+    }
+  }, [isLoading, user, pathname, router]);
+
   if (isLoading) {
-    return (
-      <div style={{
-        minHeight: '100vh',
-        background: '#f5f1ec',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        flexDirection: 'column',
-        gap: '1rem'
-      }}>
-        <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🗝️</div>
-        <div style={{ fontSize: '1.5rem', color: '#7e5a75', fontWeight: 600 }}>BeyondWords</div>
-        <div style={{ fontSize: '0.9rem', color: '#7e5a75', opacity: 0.7 }}>Loading your experience...</div>
-      </div>
-    );
+    return <LoadingScreen message="Loading your experience..." />;
   }
 
   return (

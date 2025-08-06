@@ -1,0 +1,15 @@
+{
+  "contents": [{
+    "parts": [{"text": "Hello world"}]
+  }],
+  "config": {
+    "responseModalities": ["AUDIO"],
+    "speechConfig": {
+      "voiceConfig": {
+        "prebuiltVoiceConfig": {
+          "voiceName": "Kore"
+        }
+      }
+    }
+  }
+}

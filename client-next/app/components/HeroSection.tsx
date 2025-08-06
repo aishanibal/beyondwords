@@ -105,7 +105,7 @@ export default function HeroSection() {
               <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                 <Link href="/signup">
                   <button
-                    className="flex items-center justify-center rounded-lg font-semibold transition focus:outline-none focus:ring-2 focus:ring-offset-2 text-white hover:bg-[#84546d]/90 px-8 py-4 text-lg border border-[#84546d]/50"
+                    className="flex items-center justify-center rounded-lg font-semibold transition focus:outline-none focus:ring-2 focus:ring-offset-2 text-white hover:bg-[#84546d]/90 px-8 py-4 text-lg border-2 border-[#84546d] shadow-xl hover:shadow-2xl relative z-10"
                     style={{ backgroundColor: '#84546d' }}
                   >
                     <span className="inline-flex items-center justify-center p-2 rounded-full mr-2" style={{ backgroundColor: 'rgba(132, 84, 109, 0.2)' }}>
@@ -188,9 +188,16 @@ export default function HeroSection() {
                             "_blank"
                           )
                         }
-                        className="flex items-center justify-center w-full rounded-lg font-semibold transition focus:outline-none focus:ring-2 focus:ring-offset-2 bg-blue-secondary text-white hover:bg-blue-secondary/90 px-6 py-3 text-base border border-blue-secondary/50"
+                        className="flex items-center justify-center w-full rounded-lg font-semibold transition focus:outline-none focus:ring-2 focus:ring-offset-2 text-white px-6 py-3 text-base border-2 shadow-lg hover:shadow-xl"
+                        style={{ 
+                          backgroundColor: isDarkMode ? '#8ba3d9' : '#3b5377',
+                          borderColor: isDarkMode ? '#8ba3d9' : '#3b5377'
+                        }}
                       >
-                        <span className="inline-flex items-center justify-center bg-blue-secondary p-2 rounded-full mr-2">
+                        <span 
+                          className="inline-flex items-center justify-center p-2 rounded-full mr-2"
+                          style={{ backgroundColor: isDarkMode ? 'rgba(139, 163, 217, 0.3)' : 'rgba(59, 83, 119, 0.3)' }}
+                        >
                           <ExternalLink className="h-5 w-5 text-white" />
                         </span>
                         Take Our Survey
