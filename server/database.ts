@@ -1,10 +1,13 @@
 import { createClient } from '@supabase/supabase-js';
 import path from 'path';
 
-// Initialize Supabase client
-const supabaseUrl = process.env.SUPABASE_URL!;
-const supabaseKey = process.env.SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseKey);
+// Initialize Supabase client only if environment variables are available
+let supabase: any = null;
+if (process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY) {
+  supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+} else {
+  console.log('⚠️ Supabase environment variables not found. Database functions will be disabled.');
+}
 
 export interface User {
   id: number;
@@ -101,9 +104,9 @@ export interface Persona {
   updated_at: string;
 }
 
-// Database file path
-const dbPath = path.join(__dirname, 'users.db');
-console.log('USING DATABASE FILE:', dbPath);
+// Database file path - commented out since we're using Supabase
+// const dbPath = path.join(__dirname, 'users.db');
+// console.log('USING DATABASE FILE:', dbPath);
 
 // Create database connection
 // const db = new sqlite3.Database(dbPath, (err) => {
