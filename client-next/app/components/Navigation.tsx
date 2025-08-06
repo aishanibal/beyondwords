@@ -63,7 +63,7 @@ export default function Navigation() {
   return (
     <nav
       className={`${isDarkMode ? 'bg-gray-900/95' : 'bg-cream/95'} backdrop-blur-lg sticky top-0 z-50 border-b ${isDarkMode ? 'border-gray-700' : 'border-rose-accent/20'} transition-all duration-300 font-general ${isAtTop ? "h-24" : "h-16"}`}
-      style={{ minHeight: isAtTop ? '6rem' : '4rem' }}
+      style={{ minHeight: isAtTop ? '6rem' : '4rem', paddingBottom: '0.2rem' }}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className={`flex justify-between items-center transition-all duration-300 ${isAtTop ? "h-24" : "h-16"}`}>

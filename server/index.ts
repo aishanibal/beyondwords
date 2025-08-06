@@ -241,7 +241,13 @@ app.get('/api/user', authenticateJWT, async (req: Request, res: Response) => {
       } catch (e) { user.learning_goals = []; }
     }
 
-    res.json({ user });
+    // Ensure onboarding_complete is included in response
+    const userResponse = {
+      ...user,
+      onboarding_complete: Boolean(user.onboarding_complete)
+    };
+
+    res.json({ user: userResponse });
   } catch (error) {
     res.status(500).json({ error: 'Server error' });
   }

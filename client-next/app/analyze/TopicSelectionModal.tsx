@@ -45,11 +45,11 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
           top: modalRef.scrollHeight,
           behavior: 'smooth'
         });
-      }, 150); // Slightly longer delay to ensure content is fully rendered
+      }, 200); // Increased delay for better reliability
     }
   }, [modalRef]);
 
-  const scrollToBottomWithDelay = useCallback((delay: number = 150) => {
+  const scrollToBottomWithDelay = useCallback((delay: number = 200) => {
     if (modalRef) {
       setTimeout(() => {
         modalRef.scrollTo({
@@ -203,7 +203,7 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
     if (hasValidTopic) {
       setHasShownScenarios(true);
       // Auto-scroll when scenarios section is shown
-      scrollToBottomWithDelay(250);
+      scrollToBottomWithDelay(300);
     } else {
       setHasShownScenarios(false);
       // Clear scenario selections when topic is deselected
@@ -221,7 +221,7 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
     if (hasValidTopic && hasValidScenario) {
       setHasShownFormality(true);
       // Auto-scroll when formality section is shown
-      scrollToBottomWithDelay(250);
+      scrollToBottomWithDelay(300);
     } else {
       setHasShownFormality(false);
       // Clear formality when scenario is deselected
@@ -239,7 +239,7 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
     if (hasValidTopic && hasValidScenario && hasFormality) {
       setHasShownGoals(true);
       // Auto-scroll when goals section is shown
-      scrollToBottomWithDelay(250);
+      scrollToBottomWithDelay(300);
     } else {
       setHasShownGoals(false);
       // Clear goals when any previous step is deselected
@@ -254,21 +254,21 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
     
     if (hasValidScenario && hasValidGoal) {
       // Auto-scroll when action button is shown
-      scrollToBottomWithDelay(250);
+      scrollToBottomWithDelay(300);
     }
   }, [customSubtopic, selectedSubtopic, selectedGoal, scrollToBottomWithDelay]);
 
   // Auto-scroll when custom topic is expanded
   useEffect(() => {
     if (useCustomTopic) {
-      scrollToBottomWithDelay(350);
+      scrollToBottomWithDelay(400);
     }
   }, [useCustomTopic, scrollToBottomWithDelay]);
 
   // Auto-scroll when custom scenario is expanded
   useEffect(() => {
     if (useCustomSubtopic) {
-      scrollToBottomWithDelay(350);
+      scrollToBottomWithDelay(400);
     }
   }, [useCustomSubtopic, scrollToBottomWithDelay]);
 
@@ -873,9 +873,9 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
                 {selectedTopic && TALK_TOPICS.find(t => t.id === selectedTopic)?.subtopics && (
                   <div style={{ marginBottom: '1rem' }}>
                     <div style={{
-                      display: 'flex',
-                      flexWrap: 'wrap',
-                      gap: '0.5rem'
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                      gap: '0.75rem'
                     }}>
                       {TALK_TOPICS.find(t => t.id === selectedTopic)?.subtopics?.map((subtopic) => {
                         const isSelected = selectedSubtopic === subtopic;
@@ -886,10 +886,10 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
                             whileTap={{ scale: 0.98 }}
                             onClick={() => handleSubtopicSelect(subtopic)}
                             style={{
-                              padding: '0.6rem 0.8rem',
+                              padding: '0.75rem',
                               borderRadius: 12,
                               cursor: 'pointer',
-                              fontSize: '0.8rem',
+                              fontSize: '0.85rem',
                               fontWeight: 500,
                               color: 'var(--foreground)',
                               fontFamily: 'Montserrat, Arial, sans-serif',
@@ -897,7 +897,11 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
                               background: isSelected ? 'rgba(126, 90, 117, 0.05)' : 'var(--card)',
                               boxShadow: isSelected ? '0 4px 16px rgba(126, 90, 117, 0.15)' : '0 3px 10px rgba(0, 0, 0, 0.12)',
                               transition: 'all 0.2s ease',
-                              textAlign: 'center'
+                              textAlign: 'center',
+                              minHeight: '50px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
                             }}
                           >
                             {subtopic}
