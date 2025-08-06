@@ -515,15 +515,102 @@ function Analyze() {
 
   // On unmount: stop recording and save session if needed
   useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      console.log('[DEBUG] beforeunload event triggered, autospeak status:', autoSpeak);
+      // If autospeak is active, show a confirmation dialog
+      if (autoSpeak) {
+        console.log('[DEBUG] Autospeak active, showing confirmation dialog');
+        event.preventDefault();
+        event.returnValue = 'Autospeak is currently active. Are you sure you want to leave?';
+        return 'Autospeak is currently active. Are you sure you want to leave?';
+      }
+      
+      // Stop autospeak and recording when user leaves the page
+      if (autoSpeak) {
+        console.log('[DEBUG] Stopping autospeak due to beforeunload');
+        setAutoSpeak(false);
+      }
+      stopRecording();
+      
+      // Stop any playing TTS audio
+      if (ttsAudioRef.current) {
+        ttsAudioRef.current.pause();
+        ttsAudioRef.current.currentTime = 0;
+        ttsAudioRef.current = null;
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      // Only stop autospeak when page becomes hidden for a longer period
+      // This prevents stopping autospeak when user just switches tabs briefly
+      if (document.hidden && autoSpeak) {
+        // Add a small delay to avoid stopping autospeak for brief tab switches
+        setTimeout(() => {
+          if (document.hidden && autoSpeak) {
+            console.log('[DEBUG] Page hidden for extended period, stopping autospeak');
+            setAutoSpeak(false);
+            stopRecording();
+            
+            // Stop any playing TTS audio
+            if (ttsAudioRef.current) {
+              ttsAudioRef.current.pause();
+              ttsAudioRef.current.currentTime = 0;
+              ttsAudioRef.current = null;
+            }
+          }
+        }, 2000); // 2 second delay before stopping autospeak
+      }
+    };
+
+    const handlePopState = () => {
+      // Only stop autospeak when user navigates away from the analyze page
+      // Check if we're still on the analyze page
+      if (window.location.pathname !== '/analyze' && autoSpeak) {
+        console.log('[DEBUG] Navigating away from analyze page, stopping autospeak');
+        setAutoSpeak(false);
+        stopRecording();
+        
+        // Stop any playing TTS audio
+        if (ttsAudioRef.current) {
+          ttsAudioRef.current.pause();
+          ttsAudioRef.current.currentTime = 0;
+          ttsAudioRef.current = null;
+        }
+      }
+    };
+
+    // Add event listeners for page leave events
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('popstate', handlePopState);
+
     return () => {
+      // Remove event listeners
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('popstate', handlePopState);
+      
       // Stop any ongoing recording
       stopRecording();
+      
+      // Stop autospeak if it's still on
+      if (autoSpeak) {
+        setAutoSpeak(false);
+      }
+      
+      // Stop any playing TTS audio
+      if (ttsAudioRef.current) {
+        ttsAudioRef.current.pause();
+        ttsAudioRef.current.currentTime = 0;
+        ttsAudioRef.current = null;
+      }
+      
       // Save session if there is unsaved chat history
       if (user && chatHistory.length > 0) {
         saveSessionToBackend(false); // Don't show alert on navigation
       }
     };
-  }, []);
+  }, [autoSpeak, user, chatHistory.length]);
 
   // Show topic modal automatically when accessing analyze page without conversation ID
   useEffect(() => {
@@ -1019,7 +1106,7 @@ function Analyze() {
         token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
       );
       console.log('[DEBUG] /short_feedback response', shortFeedbackRes);
-      const shortFeedback = shortFeedbackRes.data.short_feedback;
+      const shortFeedback = shortFeedbackRes.data.feedback;
       console.log('[DEBUG] shortFeedback value:', shortFeedback);
       
       if (shortFeedback !== undefined && shortFeedback !== null && shortFeedback !== '') {
@@ -1120,10 +1207,20 @@ function Analyze() {
           setIsPlayingAnyTTS(false);
           
           // For autospeak mode, restart recording after TTS finishes
+          console.log('[DEBUG] TTS ended, checking autospeak status:', { autoSpeakRef: autoSpeakRef.current, autoSpeak });
           if (autoSpeakRef.current) {
+            console.log('[DEBUG] Autospeak still active, restarting recording in 300ms');
             setTimeout(() => {
-              if (autoSpeakRef.current) startRecording();
+              console.log('[DEBUG] Attempting to restart recording, autospeak status:', { autoSpeakRef: autoSpeakRef.current, autoSpeak });
+              if (autoSpeakRef.current) {
+                console.log('[DEBUG] Starting recording for autospeak');
+                startRecording();
+              } else {
+                console.log('[DEBUG] Autospeak was turned off, not restarting recording');
+              }
             }, 300);
+          } else {
+            console.log('[DEBUG] Autospeak not active, not restarting recording');
           }
         };
         
@@ -1134,10 +1231,20 @@ function Analyze() {
           setIsPlayingAnyTTS(false);
           
           // For autospeak mode, restart recording even if TTS fails
+          console.log('[DEBUG] TTS error, checking autospeak status:', { autoSpeakRef: autoSpeakRef.current, autoSpeak });
           if (autoSpeakRef.current) {
+            console.log('[DEBUG] Autospeak still active, restarting recording after TTS error');
             setTimeout(() => {
-              if (autoSpeakRef.current) startRecording();
+              console.log('[DEBUG] Attempting to restart recording after TTS error, autospeak status:', { autoSpeakRef: autoSpeakRef.current, autoSpeak });
+              if (autoSpeakRef.current) {
+                console.log('[DEBUG] Starting recording for autospeak after TTS error');
+                startRecording();
+              } else {
+                console.log('[DEBUG] Autospeak was turned off after TTS error, not restarting recording');
+              }
             }, 300);
+          } else {
+            console.log('[DEBUG] Autospeak not active after TTS error, not restarting recording');
           }
         };
         
@@ -1320,6 +1427,12 @@ function Analyze() {
       // Save user message to backend
       if (conversationId) {
         await saveMessageToBackend('User', transcription, 'text', null, null, userRomanizedText);
+      }
+      
+      // Step 1.5: Get short feedback for autospeak mode
+      if (autoSpeak && enableShortFeedback && transcription !== 'Speech recorded') {
+        console.log('[DEBUG] Step 1.5: Getting short feedback for autospeak...');
+        await fetchAndShowShortFeedback(transcription);
       }
       
       // Step 2: Get AI response separately
@@ -2649,7 +2762,7 @@ function Analyze() {
       console.log('[DEBUG] Response data:', response.data);
       console.log('[DEBUG] Response status:', response.status);
 
-      const shortFeedback = response.data.short_feedback;
+      const shortFeedback = response.data.feedback;
       console.log('[DEBUG] Extracted short feedback:', shortFeedback);
       
       // Store short feedback in state
@@ -3082,13 +3195,16 @@ function Analyze() {
 
 
   useEffect(() => {
+    console.log('[DEBUG] Autospeak state changed:', { autoSpeak, isRecording, isProcessing });
     autoSpeakRef.current = autoSpeak;
     // When Autospeak is turned ON, start recording if not already recording
     if (autoSpeak && !isRecording && !isProcessing) {
+      console.log('[DEBUG] Turning ON autospeak, starting recording');
       startRecording();
     }
     // When Autospeak is turned OFF, stop any ongoing recording
     if (!autoSpeak) {
+      console.log('[DEBUG] Turning OFF autospeak, stopping recording and TTS');
       stopRecording();
       // Stop any playing TTS audio
       if (ttsAudioRef.current) {
