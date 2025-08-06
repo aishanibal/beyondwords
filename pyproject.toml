@@ -1,0 +1,9 @@
+[build-system]
+requires = ["setuptools>=68.2.2", "wheel>=0.41.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "beyondwords-python-api"
+version = "1.0.0"
+description = "Python API for BeyondWords speech analysis"
+requires-python = ">=3.10" 

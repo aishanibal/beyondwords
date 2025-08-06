@@ -4,7 +4,7 @@ services:
     name: beyondwords-python
     env: python
     plan: starter
-    buildCommand: pip install --upgrade pip setuptools wheel && pip install -r requirements.txt
+    buildCommand: pip install --upgrade pip && pip install -r requirements-minimal.txt
     startCommand: gunicorn python_api:app --bind 0.0.0.0:$PORT --workers 1 --timeout 120
     envVars:
       - key: PORT
