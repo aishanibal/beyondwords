@@ -50,10 +50,11 @@ const nextConfig: NextConfig = {
         source: '/api/user/:path*',
         destination: `${apiUrl}/api/user/:path*`,
       },
-      {
-        source: '/api/auth/:path*',
-        destination: `${apiUrl}/auth/:path*`,
-      },
+      // Remove the general auth rewrite - let local API routes handle auth
+      // {
+      //   source: '/api/auth/:path*',
+      //   destination: `${apiUrl}/auth/:path*`,
+      // },
       {
         source: '/api/conversations/:path*',            
         destination: `${apiUrl}/api/conversations/:path*`,
