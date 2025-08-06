@@ -530,6 +530,10 @@ app.post('/auth/google/token', (req, res) => __awaiter(void 0, void 0, void 0, f
             target_language: user.target_language,
             proficiency_level: user.proficiency_level
         };
+        console.log('Google auth - User created/found:', user);
+        console.log('Google auth - User response:', userResponse);
+        console.log('Google auth - onboarding_complete value:', user.onboarding_complete);
+        console.log('Google auth - Boolean onboarding_complete:', Boolean(user.onboarding_complete));
         res.json({ user: userResponse, token });
     }
     catch (error) {
@@ -553,7 +557,8 @@ app.post('/auth/register', (req, res) => __awaiter(void 0, void 0, void 0, funct
             email,
             name,
             password_hash: passwordHash,
-            role: 'user'
+            role: 'user',
+            onboarding_complete: false
         });
         // Generate JWT token for immediate login
         const token = jsonwebtoken_1.default.sign({ userId: user.id, email: user.email, name: user.name }, JWT_SECRET, { expiresIn: '7d' });
@@ -1472,5 +1477,5 @@ const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
     console.log(`Python API URL: ${process.env.PYTHON_API_URL || 'http://localhost:5000'}`);
-    console.log('Note: Using SQLite database for temporary storage');
+    console.log('Note: Using Supabase database for storage');
 });

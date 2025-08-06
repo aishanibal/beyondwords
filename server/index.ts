@@ -14,7 +14,7 @@ import {
   saveSession,
   getSession,
   getAllSessions,
-  closeDatabase,
+  // closeDatabase,
   getAllUsers,
   getConversationWithMessages,
   createConversation,
@@ -1682,5 +1682,5 @@ const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Python API URL: ${process.env.PYTHON_API_URL || 'http://localhost:5000'}`);
-  console.log('Note: Using SQLite database for temporary storage');
+  console.log('Note: Using Supabase database for storage');
 }); 
