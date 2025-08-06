@@ -13,7 +13,7 @@ if (process.env.SUPABASE_URL && (process.env.SUPABASE_SERVICE_ROLE_KEY || proces
 }
 
 export interface User {
-  id: number;
+  id?: number; // Make ID optional since it might be auto-generated
   google_id?: string;
   googleId?: string;
   email: string;
@@ -272,30 +272,11 @@ function createUser(userData: Partial<User>) {
         return;
       }
 
-      // For Supabase, we need to create the user in auth.users first
-      // Then insert into our custom users table
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-        email: userData.email!,
-        password: userData.passwordHash || userData.password_hash || 'temporary_password',
-        email_confirm: true
-      });
-
-      if (authError) {
-        console.error('❌ Supabase auth createUser error:', authError);
-        reject(authError);
-        return;
-      }
-
-      if (!authData.user) {
-        reject(new Error('Failed to create auth user'));
-        return;
-      }
-
-      // Now insert into our custom users table
+      // For Supabase, we'll create the user directly in our custom users table
+      // The auth will be handled by the frontend or through other means
       const { data, error } = await supabase
         .from('users')
         .insert({
-          id: authData.user.id, // Use the UUID from auth.users
           google_id: userData.googleId || userData.google_id,
           email: userData.email,
           name: userData.name,

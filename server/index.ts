@@ -628,14 +628,14 @@ app.post('/auth/google/token', async (req: Request, res: Response) => {
     
     // Generate JWT token
     const token = jwt.sign(
-      { userId: user.id, email: user.email, name: user.name },
-      JWT_SECRET,
+      { userId: user.id!, email: user.email, name: user.name },
+      JWT_SECRET_FINAL,
       { expiresIn: '7d' }
     );
 
     // Ensure user object includes onboarding status
     const userResponse = {
-      id: user.id,
+      id: user.id!,
       email: user.email,
       name: user.name,
       role: user.role,
@@ -692,7 +692,7 @@ app.post('/auth/register', async (req: Request, res: Response) => {
     
     // Generate JWT token for immediate login
     const token = jwt.sign(
-      { userId: user.id, email: user.email, name: user.name },
+      { userId: user.id!, email: user.email, name: user.name },
       JWT_SECRET_FINAL,
       { expiresIn: '7d' }
     );
@@ -702,7 +702,7 @@ app.post('/auth/register', async (req: Request, res: Response) => {
     res.json({ 
       token,
       user: { 
-        id: user.id, 
+        id: user.id!, 
         name: user.name, 
         email: user.email, 
         role: user.role,
@@ -751,7 +751,7 @@ app.post('/auth/login', async (req: Request, res: Response) => {
     
     // Generate JWT token
     const token = jwt.sign(
-      { userId: user.id, email: user.email, name: user.name },
+      { userId: user.id!, email: user.email, name: user.name },
       JWT_SECRET_FINAL,
       { expiresIn: '7d' }
     );
@@ -762,7 +762,7 @@ app.post('/auth/login', async (req: Request, res: Response) => {
     res.json({ 
       token, 
       user: { 
-        id: user.id, 
+        id: user.id!, 
         email: user.email, 
         name: user.name,
         role: user.role,
