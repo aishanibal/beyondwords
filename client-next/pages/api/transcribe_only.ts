@@ -10,7 +10,7 @@ export const config = {
   },
 };
 
-const BACKEND_URL = `${process.env.PYTHON_API_URL || 'http://localhost:5000'}/transcribe_only`;
+const BACKEND_URL = `${process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5000'}/transcribe_only`;
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {

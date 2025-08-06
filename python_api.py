@@ -839,11 +839,9 @@ def admin_api_toggle_google_api():
             return jsonify({"success": False, "message": "Failed to disable Google API services"})
 
 if __name__ == '__main__':
-    print("Starting Python Speech Analysis API...")
-    print("🔐 Admin Dashboard: http://localhost:5000/admin")
-    print("🔑 Default password: admin123")
-    load_models()
-    
-    # Use PORT environment variable for Render
-    PORT = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=PORT, debug=False) 
+    # For local development
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=False)
+else:
+    # For production deployment (Render)
+    app = app 
