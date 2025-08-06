@@ -90,6 +90,80 @@
             background: #e0a800;
             transform: translateY(-2px);
         }
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+        .btn-success:hover, .btn-success.active {
+            background: #218838;
+            transform: translateY(-2px);
+        }
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+        .btn-danger:hover, .btn-danger.active {
+            background: #c82333;
+            transform: translateY(-2px);
+        }
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 34px;
+            margin: 0 10px;
+        }
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 34px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .slider {
+            background-color: #2196F3;
+        }
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+        .toggle-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            margin: 10px 0;
+        }
+        .toggle-label {
+            font-weight: 600;
+            color: #333;
+        }
+        .toggle-description {
+            font-size: 0.9rem;
+            color: #666;
+            margin-top: 5px;
+        }
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -166,6 +240,29 @@
             <p>Processing...</p>
         </div>
 
+        <!-- Google API Services Toggle -->
+        <div class="card">
+            <h2>🔧 Google API Services Control</h2>
+            <p style="margin-bottom: 1rem; color: #666;">
+                Master toggle to enable/disable all Google API services (Gemini, Google Cloud TTS, Google AI)
+            </p>
+            <div class="toggle-container">
+                <div>
+                    <div class="toggle-label">Google API Services</div>
+                    <div class="toggle-description">
+                        When disabled, all Google API services will be unavailable. This includes Gemini AI, Google Cloud TTS, and Google AI services.
+                    </div>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="google-api-toggle" onchange="toggleGoogleAPI()">
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <p style="margin-top: 1rem; font-size: 0.9rem; color: #666;">
+                <strong>Status:</strong> <span id="google-api-status">{{ "ENABLED" if google_api_settings.get("services_enabled", True) else "DISABLED" }}</span>
+            </p>
+        </div>
+
         <!-- TTS System Selection -->
         <div class="card">
             <h2>🎤 TTS System Selection</h2>
@@ -232,6 +329,41 @@
             document.getElementById('loading').style.display = 'none';
         }
 
+        async function toggleGoogleAPI() {
+            const toggle = document.getElementById('google-api-toggle');
+            const isEnabled = toggle.checked;
+            
+            showLoading();
+            try {
+                const response = await fetch('/admin/api/toggle_google_api', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ 
+                        enabled: isEnabled
+                    })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    const status = isEnabled ? 'ENABLED' : 'DISABLED';
+                    showAlert(`Google API services ${status.toLowerCase()}!`, 'success');
+                    document.getElementById('google-api-status').textContent = status;
+                } else {
+                    showAlert('Error: ' + result.message, 'danger');
+                    // Revert toggle if failed
+                    toggle.checked = !isEnabled;
+                }
+            } catch (error) {
+                showAlert('Error: ' + error.message, 'danger');
+                // Revert toggle if failed
+                toggle.checked = !isEnabled;
+            } finally {
+                hideLoading();
+            }
+        }
+
         async function setTTS(system) {
             showLoading();
             try {
@@ -280,6 +412,10 @@
         document.addEventListener('DOMContentLoaded', function() {
             const currentTTS = '{{ settings.get("active_tts", "system") }}';
             updateTTSToggleButtons(currentTTS);
+            
+            // Initialize Google API toggle
+            const googleApiEnabled = '{{ google_api_settings.get("services_enabled", True) }}' === 'True';
+            document.getElementById('google-api-toggle').checked = googleApiEnabled;
         });
     </script>
 </body>

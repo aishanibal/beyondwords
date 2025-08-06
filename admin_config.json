@@ -1,11 +1,17 @@
 {
-  "admin_password_hash": "a0a63a178c269cb13803a67a1f79869f048372e20c9ad6932b7c84cad0a58538",
+  "admin_password_hash": "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9",
   "tts_settings": {
     "default_tts": "google_cloud",
     "gemini_enabled": false,
     "cost_limit_per_day": 1,
     "usage_tracking": true,
     "active_tts": "cloud"
+  },
+  "google_api_settings": {
+    "services_enabled": false,
+    "gemini_enabled": false,
+    "google_cloud_tts_enabled": true,
+    "google_ai_enabled": true
   },
   "usage_stats": {
     "daily_usage": {
@@ -18,7 +24,7 @@
       "2025-08-05": {
         "google_cloud": 14,
         "gemini": 0,
-        "system": 6,
+        "system": 7,
         "total_cost": 0.0031280000000000006
       }
     },

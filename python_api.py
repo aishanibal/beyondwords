@@ -101,202 +101,160 @@ def transcribe():
         language = data.get('language', 'en')
         user_level = data.get('user_level', 'beginner')
         user_topics = data.get('user_topics', [])
-        user_goals = data.get('user_goals', [])
         formality = data.get('formality', 'friendly')
         feedback_language = data.get('feedback_language', 'en')
-        print(f"=== /transcribe called ===")
-        print(f"Language received: {language}")
-        print(f"Audio file: {audio_file}")
-        print(f"Chat history length: {len(chat_history)})")
-        print(f"Formality: {formality}")
-        print(f"User goals: {user_goals}")
-        print(f"Full request data: {data}")
-        if not audio_file or not os.path.exists(audio_file):
-            return jsonify({"error": "Audio file not found"}), 400
-        # Get transcription using Gemini (with language)
-        print(f"Calling Gemini with language={language}")
-        transcription = transcribe_audio_gemini(audio_file, language)
-        print(f"Gemini transcription: '{transcription}'")
-        print(f"Calling Gemini with language={language}, level={user_level}, goals={user_topics}, formality={formality}")
-        ai_response = get_conversational_response(transcription, chat_history, language, user_level, user_topics, formality, feedback_language, user_goals)
-        if not ai_response or not str(ai_response).strip():
-            if not os.getenv('GOOGLE_API_KEY'):
-                ai_response = "AI is not available: Gemini API key is not configured."
-            else:
-                ai_response = "Hello! What would you like to talk about today?"
-        print(f"DEBUG: Outgoing ai_response: {ai_response}")
+        user_goals = data.get('user_goals', [])
+        description = data.get('description', None)
+        
+        print(f"🎤 Transcribe request - Language: {language}, Level: {user_level}")
+        
+        # Get transcription
+        transcription = transcribe_audio(audio_file, language)
+        
+        if not transcription:
+            return jsonify({
+                "error": "Could not transcribe audio",
+                "transcription": "",
+                "response": ""
+            })
+        
+        print(f"📝 Transcription: {transcription}")
+        
+        # Get conversational response
+        response = get_conversational_response(
+            transcription, 
+            chat_history, 
+            language, 
+            user_level, 
+            user_topics, 
+            formality, 
+            feedback_language, 
+            user_goals, 
+            description
+        )
+        
         return jsonify({
             "transcription": transcription,
-            "ai_response": ai_response
+            "response": response,
+            "success": True
         })
+        
     except Exception as e:
-        print(f"Transcription error: {e}")
-        return jsonify({"error": str(e)}), 500
+        print(f"❌ Transcribe error: {e}")
+        return jsonify({
+            "error": str(e),
+            "transcription": "",
+            "response": ""
+        })
 
 @app.route('/transcribe_only', methods=['POST'])
 def transcribe_only():
-    """FAST: Transcribe audio only (no AI response)"""
+    """Transcribe audio only without AI response"""
     try:
-        # Handle both JSON and form data
-        if request.is_json:
-            data = request.get_json()
-            audio_file = data.get('audio_file')
-            language_raw = data.get('language', 'en')
-            # Handle case where language might be a list or other type
-            if isinstance(language_raw, list):
-                language = language_raw[0] if language_raw else 'en'
-            else:
-                language = str(language_raw) if language_raw else 'en'
-        else:
-            # Handle form data (like the current /transcribe endpoint)
-            audio_file = request.form.get('audio_file')
-            language_raw = request.form.get('language', 'en')
-            # Handle case where language might be a list or other type
-            if isinstance(language_raw, list):
-                language = language_raw[0] if language_raw else 'en'
-            else:
-                language = str(language_raw) if language_raw else 'en'
-            
-        print(f"=== /transcribe_only called ===")
-        print(f"Language received: {language}")
-        print(f"Language type: {type(language)}")
-        print(f"Audio file: {audio_file}")
-        print(f"Request content type: {request.content_type}")
-        print(f"Request is JSON: {request.is_json}")
-        if request.is_json:
-            print(f"JSON data: {request.get_json()}")
-        else:
-            print(f"Form data: {dict(request.form)}")
+        data = request.get_json()
+        audio_file = data.get('audio_file')
+        language = data.get('language', 'en')
         
-        if not audio_file or not os.path.exists(audio_file):
-            return jsonify({"error": "Audio file not found"}), 400
+        print(f"🎤 Transcribe only request - Language: {language}")
         
-        # Get transcription using Gemini (with language)
-        print(f"Calling Gemini with language={language}")
-        transcription = transcribe_audio_gemini(audio_file, language)
-        print(f"Gemini transcription: '{transcription}'")
-        print(f"Transcription length: {len(transcription)}")
-        print(f"Transcription is empty: {not transcription.strip()}")
+        # Get transcription
+        transcription = transcribe_audio(audio_file, language)
         
-        # If transcription is empty, try to get more info
-        if not transcription.strip():
-            print("WARNING: Transcription is empty!")
-            print(f"Audio file exists: {os.path.exists(audio_file)}")
-            if os.path.exists(audio_file):
-                file_size = os.path.getsize(audio_file)
-                print(f"Audio file size: {file_size} bytes")
+        if not transcription:
+            return jsonify({
+                "error": "Could not transcribe audio",
+                "transcription": ""
+            })
+        
+        print(f"📝 Transcription: {transcription}")
         
         return jsonify({
-            "transcription": transcription
+            "transcription": transcription,
+            "success": True
         })
+        
     except Exception as e:
-        print(f"Transcription error: {e}")
-        return jsonify({"error": str(e)}), 500
+        print(f"❌ Transcribe only error: {e}")
+        return jsonify({
+            "error": str(e),
+            "transcription": ""
+        })
 
 @app.route('/ai_response', methods=['POST'])
 def ai_response():
-    """Get AI response for given transcription"""
+    """Get AI response for text input"""
     try:
         data = request.get_json()
-        transcription = data.get('transcription')
+        user_input = data.get('user_input', '')
         chat_history = data.get('chat_history', [])
         language = data.get('language', 'en')
         user_level = data.get('user_level', 'beginner')
         user_topics = data.get('user_topics', [])
-        user_goals = data.get('user_goals', [])
         formality = data.get('formality', 'friendly')
         feedback_language = data.get('feedback_language', 'en')
+        user_goals = data.get('user_goals', [])
+        description = data.get('description', None)
         
-        print(f"=== /ai_response called ===")
-        print(f"Transcription: {transcription}")
-        print(f"Language: {language}")
-        print(f"Chat history length: {len(chat_history)}")
-        print(f"Formality: {formality}")
-        print(f"User goals: {user_goals}")
+        print(f"🤖 AI response request - Language: {language}, Level: {user_level}")
         
-        if not transcription:
-            return jsonify({"error": "No transcription provided"}), 400
-        
-        print(f"Calling Gemini with language={language}, level={user_level}, goals={user_topics}, formality={formality}")
-        ai_response = get_conversational_response(transcription, chat_history, language, user_level, user_topics, formality, feedback_language, user_goals)
-        if not ai_response or not str(ai_response).strip():
-            if not os.getenv('GOOGLE_API_KEY'):
-                ai_response = "AI is not available: Gemini API key is not configured."
-            else:
-                ai_response = "Hello! What would you like to talk about today?"
-        print(f"DEBUG: Outgoing ai_response: {ai_response}")
+        # Get conversational response
+        response = get_conversational_response(
+            user_input, 
+            chat_history, 
+            language, 
+            user_level, 
+            user_topics, 
+            formality, 
+            feedback_language, 
+            user_goals, 
+            description
+        )
         
         return jsonify({
-            "ai_response": ai_response
+            "response": response,
+            "success": True
         })
+        
     except Exception as e:
-        print(f"AI response error: {e}")
-        return jsonify({"error": str(e)}), 500
+        print(f"❌ AI response error: {e}")
+        return jsonify({
+            "error": str(e),
+            "response": ""
+        })
 
 @app.route('/analyze', methods=['POST'])
 def analyze():
-    """SLOW: Analyze audio for detailed feedback"""
+    """Analyze speech with reference text"""
     try:
         data = request.get_json()
         audio_file = data.get('audio_file')
         reference_text = data.get('reference_text', '')
-        chat_history = data.get('chat_history', [])
         language = data.get('language', 'en')
-        subgoal_instructions = data.get('subgoal_instructions', '')
         
-        print(f"=== /analyze called ===")
-        print(f"Language received: {language}")
-        print(f"Audio file: {audio_file}")
-        print(f"Reference text: {reference_text}")
-        print(f"Chat history length: {len(chat_history)}")
-        print(f"Subgoal instructions: {subgoal_instructions}")
+        print(f"🔍 Analyze request - Language: {language}")
         
-        if not audio_file or not os.path.exists(audio_file):
-            return jsonify({"error": "Audio file not found"}), 400
-        
-        # Use Gemini for reference text if not provided
-        if not reference_text:
-            print(f"Getting reference text with Gemini (language={language})")
-            reference_text = transcribe_audio_gemini(audio_file, language)
-            print(f"Gemini reference text: '{reference_text}'")
-        
-        # Gemini analysis
-        print(f"Calling Gemini analysis with language={language}")
-        analysis_result = analyze_speech_with_gemini(audio_file, reference_text, language=language)
-        
-        # Get user data for personalized feedback
-        user_level = data.get('user_level', 'beginner')
-        user_topics = data.get('user_topics', [])
-        
-        # Detailed feedback from Gemini
-        print(f"Calling Gemini detailed feedback with language={language}, level={user_level}")
-        feedback = get_detailed_feedback(
-            analysis_result.get('analysis', ''),
-            reference_text,
-            analysis_result.get('transcription', ''),
-            chat_history,
-            language,
-            user_level,
-            user_topics,
-            feedback_language='en',
-            description=None,
-            romanization_display=None
-        )
-        print(f"Gemini detailed feedback: '{feedback[:100]}...'")
+        # Analyze speech
+        result = analyze_speech_with_gemini(audio_file, reference_text, language)
         
         return jsonify({
-            "transcription": analysis_result.get('transcription', ''),
-            "reference": reference_text,
-            "analysis": analysis_result.get('analysis', ''),
-            "feedback": feedback
+            "transcription": result["transcription"],
+            "reference": result["reference"],
+            "analysis": result["analysis"],
+            "success": True
         })
+        
     except Exception as e:
-        print(f"Analysis error: {e}")
-        return jsonify({"error": str(e)}), 500
+        print(f"❌ Analyze error: {e}")
+        return jsonify({
+            "error": str(e),
+            "transcription": "",
+            "reference": "",
+            "analysis": ""
+        })
 
 @app.route('/conversation_summary', methods=['POST'])
 def conversation_summary():
-    """Generate conversation summary and progress evaluation using Gemini."""
+    """Generate conversation summary"""
     try:
         data = request.get_json()
         chat_history = data.get('chat_history', [])
@@ -306,108 +264,102 @@ def conversation_summary():
         feedback_language = data.get('feedback_language', 'en')
         is_continued_conversation = data.get('is_continued_conversation', False)
         
-        print(f"Chat history length: {len(chat_history)}")
-        print(f"Subgoal instructions: {subgoal_instructions}")
-        print(f"User topics: {user_topics}")
-        print(f"Target language: {target_language}")
-        print(f"Feedback language: {feedback_language}")
-        print(f"Is continued conversation: {is_continued_conversation}")
-        
-        # Check if there are any user messages in the chat history
-        user_messages = [msg for msg in chat_history if msg.get('sender') == 'User']
-        if not user_messages:
-            print("No user messages found in chat history, skipping evaluation")
-            return jsonify({
-                "title": "No Evaluation",
-                "synopsis": "No user messages to evaluate.",
-                "progress_percentages": None
-            })
+        print(f"📊 Conversation summary request - Language: {target_language}")
         
         from gemini_client import generate_conversation_summary
-        summary = generate_conversation_summary(chat_history, subgoal_instructions, user_topics, target_language, feedback_language, is_continued_conversation)
         
-        print(f"Generated summary: {summary}")
-        print(f"Summary keys: {list(summary.keys()) if summary else 'None'}")
-        print(f"Progress percentages in summary: {summary.get('progress_percentages', 'Not found')}")
-        return jsonify(summary)
+        # Generate summary
+        summary = generate_conversation_summary(
+            chat_history,
+            subgoal_instructions,
+            user_topics,
+            target_language,
+            feedback_language,
+            is_continued_conversation
+        )
+        
+        return jsonify({
+            "title": summary["title"],
+            "synopsis": summary["synopsis"],
+            "success": True
+        })
+        
     except Exception as e:
-        print(f"Conversation summary error: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+        print(f"❌ Conversation summary error: {e}")
+        return jsonify({
+            "error": str(e),
+            "title": "",
+            "synopsis": ""
+        })
 
 @app.route('/health', methods=['GET'])
 def health():
     """Health check endpoint"""
     try:
-        # Check transcription method
-        transcription_method = "Gemini"
-        
-        models_status = {
-            "gemini_transcriber": True
-        }
-        
-        # Using Gemini for transcription (no local models needed)
-        all_models_loaded = True  # No local models needed for Gemini transcription
-            
-        api_key_set = bool(os.getenv("GOOGLE_API_KEY"))
-        gemini_ready = is_gemini_ready() if api_key_set else False
+        # Check if Gemini is ready
+        from gemini_client import is_gemini_ready
+        gemini_ready = is_gemini_ready()
         
         return jsonify({
-            "status": "healthy" if all_models_loaded and gemini_ready else "degraded",
-            "transcription_method": transcription_method,
-            "models_loaded": all_models_loaded,
-            "models_status": models_status,
-            "api_key_configured": api_key_set,
+            "status": "healthy",
+            "timestamp": datetime.datetime.now().isoformat(),
             "gemini_ready": gemini_ready,
-            "timestamp": str(datetime.datetime.now())
+            "python_api": True
         })
     except Exception as e:
         return jsonify({
-            "status": "error",
+            "status": "unhealthy",
             "error": str(e),
-            "timestamp": str(datetime.datetime.now())
+            "timestamp": datetime.datetime.now().isoformat()
         }), 500
 
 @app.route('/feedback', methods=['POST'])
 def feedback():
-    """Generate detailed feedback using Ollama, given chat history and last transcription"""
+    """Get detailed feedback"""
     try:
         data = request.get_json()
+        phoneme_analysis = data.get('phoneme_analysis', '')
+        reference_text = data.get('reference_text', '')
+        recognized_text = data.get('recognized_text', '')
         chat_history = data.get('chat_history', [])
-        last_transcription = data.get('last_transcription', '')
         language = data.get('language', 'en')
         user_level = data.get('user_level', 'beginner')
         user_topics = data.get('user_topics', [])
         feedback_language = data.get('feedback_language', 'en')
+        description = data.get('description', None)
         romanization_display = data.get('romanization_display', None)
-
-        print(f"=== /feedback called ===")
-        print(f"Language: {language}")
-        print(f"Last transcription: {last_transcription}")
-        print(f"Chat history length: {len(chat_history)}")
-
-        # Call AI client for detailed feedback using Gemini
-        response = get_detailed_feedback(
-            phoneme_analysis="",  # Placeholder for future phoneme analysis
-            reference_text="",    # Placeholder for future reference text
-            recognized_text=last_transcription,
-            chat_history=chat_history,
-            language=language,
-            user_level=user_level,
-            user_topics=user_topics,
-            feedback_language=feedback_language,
-            description=None,
-            romanization_display=romanization_display
+        
+        print(f"💬 Feedback request - Language: {language}, Level: {user_level}")
+        
+        # Get detailed feedback
+        feedback = get_detailed_feedback(
+            phoneme_analysis,
+            reference_text,
+            recognized_text,
+            chat_history,
+            language,
+            user_level,
+            user_topics,
+            feedback_language,
+            description,
+            romanization_display
         )
-        print(f"AI feedback received: {response[:100]}...")
-        return jsonify({"feedback": response})
+        
+        return jsonify({
+            "feedback": feedback,
+            "success": True
+        })
+        
     except Exception as e:
-        print(f"Feedback error: {e}")
-        return jsonify({"feedback": "Error generating feedback.", "error": str(e)}), 500
+        print(f"❌ Feedback error: {e}")
+        return jsonify({
+            "error": str(e),
+            "feedback": ""
+        })
 
 @app.route('/short_feedback', methods=['POST'])
 def short_feedback():
+    """Get short feedback"""
     try:
         data = request.get_json()
         user_input = data.get('user_input', '')
@@ -415,142 +367,153 @@ def short_feedback():
         language = data.get('language', 'en')
         user_level = data.get('user_level', 'beginner')
         user_topics = data.get('user_topics', [])
-        user_goals = data.get('user_goals', [])
         feedback_language = data.get('feedback_language', 'en')
+        user_goals = data.get('user_goals', [])
         description = data.get('description', None)
-        feedback = get_short_feedback(user_input, context, language, user_level, user_topics, feedback_language, user_goals, description)
-        return jsonify({"short_feedback": feedback})
+        
+        print(f"💬 Short feedback request - Language: {language}")
+        
+        # Get short feedback
+        feedback = get_short_feedback(
+            user_input,
+            context,
+            language,
+            user_level,
+            user_topics,
+            feedback_language,
+            user_goals,
+            description
+        )
+        
+        return jsonify({
+            "feedback": feedback,
+            "success": True
+        })
+        
     except Exception as e:
-        print(f"Short feedback error: {e}")
-        return jsonify({"short_feedback": "Error generating feedback.", "error": str(e)}), 500
+        print(f"❌ Short feedback error: {e}")
+        return jsonify({
+            "error": str(e),
+            "feedback": ""
+        })
 
 @app.route('/initial_message', methods=['POST'])
 def initial_message():
-    """Generate an initial AI greeting message for a new conversation"""
+    """Get initial message for conversation"""
     try:
         data = request.get_json()
-        chat_history = data.get('chat_history', [])
         language = data.get('language', 'en')
         user_level = data.get('user_level', 'beginner')
         user_topics = data.get('user_topics', [])
-        user_goals = data.get('user_goals', [])
         formality = data.get('formality', 'friendly')
         feedback_language = data.get('feedback_language', 'en')
+        user_goals = data.get('user_goals', [])
         description = data.get('description', None)
         
-        print(f"=== /initial_message called ===")
-        print(f"Language: {language}")
-        print(f"User level: {user_level}")
-        print(f"User topics: {user_topics}")
-        print(f"User goals: {user_goals}")
-        print(f"Formality: {formality}")
-        print(f"Full request data: {data}")
+        print(f"👋 Initial message request - Language: {language}, Level: {user_level}")
         
-        # Generate a welcoming initial message
-        ai_response = get_conversational_response("", chat_history, language, user_level, user_topics, formality, feedback_language, user_goals, description)
+        # Get initial message
+        response = get_conversational_response(
+            "",  # Empty input for initial message
+            [],  # Empty chat history
+            language,
+            user_level,
+            user_topics,
+            formality,
+            feedback_language,
+            user_goals,
+            description
+        )
         
-        if not ai_response or not str(ai_response).strip():
-            if not os.getenv('GOOGLE_API_KEY'):
-                ai_response = "AI is not available: Gemini API key is not configured."
-            else:
-                ai_response = "Hello! What would you like to talk about today?"
+        return jsonify({
+            "message": response,
+            "success": True
+        })
         
-        print(f"Initial AI message: {ai_response}")
-        return jsonify({"ai_response": ai_response})
     except Exception as e:
-        print(f"Initial message error: {e}")
-        return jsonify({"ai_response": "Hello! What would you like to talk about today?"}), 500
+        print(f"❌ Initial message error: {e}")
+        return jsonify({
+            "error": str(e),
+            "message": ""
+        })
 
 @app.route('/suggestions', methods=['POST'])
 def suggestions():
-    """Generate 3 contextual text suggestions for what to say next"""
+    """Get text suggestions"""
     try:
         data = request.get_json()
-        print(f"=== /suggestions called ===")
-        print(f"Request data: {data}")
-        
-        # Handle both frontend format (conversationId) and direct chat_history
-        conversation_id = data.get('conversationId')
         chat_history = data.get('chat_history', [])
         language = data.get('language', 'en')
         user_level = data.get('user_level', 'beginner')
         user_topics = data.get('user_topics', [])
-        user_goals = data.get('user_goals', [])
         formality = data.get('formality', 'friendly')
         feedback_language = data.get('feedback_language', 'en')
+        user_goals = data.get('user_goals', [])
         description = data.get('description', None)
-
-        # If conversationId is provided but no chat_history, fetch from database
-        if conversation_id and not chat_history:
-            try:
-                conversation_data = getConversationWithMessages(conversation_id)
-                if conversation_data and 'messages' in conversation_data:
-                    # Convert database messages to chat_history format
-                    chat_history = []
-                    for msg in conversation_data['messages']:
-                        chat_history.append({
-                            'sender': 'User' if msg.get('sender') == 'user' else 'Tutor',
-                            'text': msg.get('content', '')
-                        })
-                print(f"Fetched {len(chat_history)} messages from conversation {conversation_id}")
-            except Exception as e:
-                print(f"Error fetching conversation {conversation_id}: {e}")
-                chat_history = []
-
-        print(f"Language: {language}")
-        print(f"User level: {user_level}")
-        print(f"User topics: {user_topics}")
-        print(f"User goals: {user_goals}")
-        print(f"Chat history length: {len(chat_history)}")
-
-        # Call AI client for suggestions using Gemini
-        print(f"Calling get_text_suggestions with: language={language}, history_len={len(chat_history)}")
-        suggestions = get_text_suggestions(chat_history, language, user_level, user_topics, formality, feedback_language, user_goals, description)
-        print(f"Generated {len(suggestions)} suggestions: {suggestions}")
         
-        # Ensure suggestions is a list and format properly for frontend
-        if not isinstance(suggestions, list):
-            suggestions = [str(suggestions)]
+        print(f"💡 Suggestions request - Language: {language}, Level: {user_level}")
         
-        response_data = {"suggestions": suggestions}
-        print(f"Returning response: {response_data}")
-        return jsonify(response_data)
+        # Get suggestions
+        suggestions = get_text_suggestions(
+            chat_history,
+            language,
+            user_level,
+            user_topics,
+            formality,
+            feedback_language,
+            user_goals,
+            description
+        )
+        
+        return jsonify({
+            "suggestions": suggestions,
+            "success": True
+        })
+        
     except Exception as e:
-        print(f"Suggestions error: {e}")
-        return jsonify({"suggestions": [], "error": str(e)}), 500
+        print(f"❌ Suggestions error: {e}")
+        return jsonify({
+            "error": str(e),
+            "suggestions": []
+        })
 
 @app.route('/translate', methods=['POST'])
 def translate():
-    """Translate text with optional detailed breakdown"""
+    """Translate text"""
     try:
         data = request.get_json()
         text = data.get('text', '')
         source_language = data.get('source_language', 'auto')
         target_language = data.get('target_language', 'en')
         breakdown = data.get('breakdown', False)
-        feedback_language = data.get('feedback_language', 'en')
-
-        print(f"=== /translate called ===")
-        print(f"Text: {text}")
-        print(f"Source language: {source_language}")
-        print(f"Target language: {target_language}")
-        print(f"Breakdown: {breakdown}")
-
-        if not text:
-            return jsonify({"error": "No text provided"}), 400
-
-        # Call AI client for translation
-        translation_result = get_translation(text, source_language, target_language, breakdown, feedback_language)
-        print(f"Translation result: {translation_result.get('translation', '')}")
+        user_topics = data.get('user_topics', [])
         
-        return jsonify(translation_result)
+        print(f"🌐 Translate request - From: {source_language}, To: {target_language}")
+        
+        # Get translation
+        translation = get_translation(
+            text,
+            source_language,
+            target_language,
+            breakdown,
+            user_topics
+        )
+        
+        return jsonify({
+            "translation": translation,
+            "success": True
+        })
+        
     except Exception as e:
-        print(f"Translation error: {e}")
-        return jsonify({"error": str(e)}), 500
+        print(f"❌ Translate error: {e}")
+        return jsonify({
+            "error": str(e),
+            "translation": {}
+        })
 
 @app.route('/detailed_breakdown', methods=['POST'])
 def detailed_breakdown():
-    """Get detailed breakdown of an AI response using explain_llm_response"""
+    """Get detailed breakdown of AI response"""
     try:
         data = request.get_json()
         llm_response = data.get('llm_response', '')
@@ -559,82 +522,81 @@ def detailed_breakdown():
         language = data.get('language', 'en')
         user_level = data.get('user_level', 'beginner')
         user_topics = data.get('user_topics', [])
-        user_goals = data.get('user_goals', [])
         formality = data.get('formality', 'friendly')
         feedback_language = data.get('feedback_language', 'en')
+        user_goals = data.get('user_goals', [])
         description = data.get('description', None)
         
-        print(f"=== /detailed_breakdown called ===")
-        print(f"Language: {language}")
-        print(f"User level: {user_level}")
-        print(f"User topics: {user_topics}")
-        print(f"User goals: {user_goals}")
-        print(f"Formality: {formality}")
-        print(f"LLM response length: {len(llm_response)}")
+        print(f"🔍 Detailed breakdown request - Language: {language}")
         
-        if not llm_response:
-            return jsonify({"error": "No LLM response provided"}), 400
+        # Get detailed breakdown
+        breakdown = get_detailed_breakdown(
+            llm_response,
+            user_input,
+            context,
+            language,
+            user_level,
+            user_topics,
+            formality,
+            feedback_language,
+            user_goals,
+            description
+        )
         
-        # Call AI client for detailed breakdown
-        breakdown = get_detailed_breakdown(llm_response, user_input, context, language, user_level, user_topics, formality, feedback_language, user_goals, description)
-        print(f"Generated detailed breakdown: {breakdown[:100]}...")
+        return jsonify({
+            "breakdown": breakdown,
+            "success": True
+        })
         
-        return jsonify({"breakdown": breakdown})
     except Exception as e:
-        print(f"Detailed breakdown error: {e}")
-        return jsonify({"error": str(e)}), 500
+        print(f"❌ Detailed breakdown error: {e}")
+        return jsonify({
+            "error": str(e),
+            "breakdown": ""
+        })
 
 @app.route('/explain_suggestion', methods=['POST'])
 def explain_suggestion():
-    """Explain a specific suggestion with translation and detailed explanation"""
+    """Explain a specific suggestion"""
     try:
         data = request.get_json()
         suggestion_text = data.get('suggestion_text', '')
-        chat_history = data.get('chatHistory', [])
+        context = data.get('context', '')
         language = data.get('language', 'en')
         user_level = data.get('user_level', 'beginner')
         user_topics = data.get('user_topics', [])
-        formality = data.get('formality', 'friendly')
         feedback_language = data.get('feedback_language', 'en')
         user_goals = data.get('user_goals', [])
         description = data.get('description', None)
         
-        print(f"=== /explain_suggestion called ===")
-        print(f"Suggestion text: {suggestion_text}")
-        print(f"Language: {language}")
-        print(f"User level: {user_level}")
-        print(f"User topics: {user_topics}")
-        print(f"User goals: {user_goals}")
-        print(f"Formality: {formality}")
-        print(f"Chat history length: {len(chat_history)}")
+        print(f"💡 Explain suggestion request - Language: {language}")
         
-        if not suggestion_text:
-            return jsonify({"error": "No suggestion text provided"}), 400
-        
-        # Create tutor instance and call explain_suggestion method directly
-        print(f"[DEBUG] Creating tutor for language: {language}, level: {user_level}")
+        # Get or create tutor instance
+        from gemini_client import create_tutor
         tutor = create_tutor(language, user_level, user_topics)
-        tutor.feedback_language = feedback_language
-        tutor.user_closeness = formality
-        tutor.user_goals = user_goals
         
-        # Build context from chat history
-        context = ""
-        if chat_history:
-            context = "\n".join([f"{msg.get('sender', 'Unknown')}: {msg.get('text', '')}" for msg in chat_history[-4:]])
+        # Explain suggestion
+        explanation = tutor.explain_suggestion(
+            suggestion_text,
+            context,
+            description
+        )
         
-        print(f"[DEBUG] Calling tutor.explain_suggestion() with text: '{suggestion_text}'")
-        explanation_result = tutor.explain_suggestion(suggestion_text, context, description)
-        print(f"[DEBUG] explain_suggestion() returned: {explanation_result}")
+        return jsonify({
+            "explanation": explanation,
+            "success": True
+        })
         
-        return jsonify(explanation_result)
     except Exception as e:
-        print(f"Explain suggestion error: {e}")
-        return jsonify({"error": str(e)}), 500
+        print(f"❌ Explain suggestion error: {e}")
+        return jsonify({
+            "error": str(e),
+            "explanation": {}
+        })
 
 @app.route('/quick_translation', methods=['POST'])
 def quick_translation():
-    """Get quick translation of AI message with word-by-word breakdown"""
+    """Get quick translation of AI message"""
     try:
         data = request.get_json()
         ai_message = data.get('ai_message', '')
@@ -646,86 +608,86 @@ def quick_translation():
         user_goals = data.get('user_goals', [])
         description = data.get('description', None)
         
-        print(f"=== /quick_translation called ===")
-        print(f"AI message: {ai_message}")
-        print(f"Language: {language}")
-        print(f"User level: {user_level}")
-        print(f"User topics: {user_topics}")
-        print(f"User goals: {user_goals}")
-        print(f"Formality: {formality}")
+        print(f"🌐 Quick translation request - Language: {language}")
         
-        if not ai_message:
-            return jsonify({"error": "No AI message provided"}), 400
+        # Get quick translation
+        translation = get_quick_translation(
+            ai_message,
+            language,
+            user_level,
+            user_topics,
+            formality,
+            feedback_language,
+            user_goals,
+            description
+        )
         
-        # Call AI client for quick translation
-        translation_result = get_quick_translation(ai_message, language, user_level, user_topics, formality, feedback_language, user_goals, description)
-        print(f"Generated quick translation length: {len(translation_result)}")
-        print(f"Generated quick translation: {translation_result}")
+        return jsonify({
+            "translation": translation,
+            "success": True
+        })
         
-        return jsonify({"translation": translation_result})
     except Exception as e:
-        print(f"Quick translation error: {e}")
-        return jsonify({"error": str(e)}), 500
+        print(f"❌ Quick translation error: {e}")
+        return jsonify({
+            "error": str(e),
+            "translation": ""
+        })
 
 @app.route('/generate_tts', methods=['POST'])
 def generate_tts():
-    """Generate text-to-speech using Gemini TTS API"""
+    """Generate TTS audio"""
     try:
         data = request.get_json()
         text = data.get('text', '')
         language_code = data.get('language_code', 'en')
-        output_path = data.get('output_path', 'tts_output/gemini_response.mp3')
+        output_path = data.get('output_path', 'tts_output/response.wav')
         
-        print(f"=== /generate_tts called ===")
-        print(f"Text length: {len(text)}")
-        print(f"Language code: {language_code}")
-        print(f"Output path: {output_path}")
+        print(f"🎤 TTS request - Language: {language_code}, Text length: {len(text)}")
         
-        if not text:
-            return jsonify({"error": "No text provided"}), 400
+        # Generate TTS
+        result = synthesize_speech(text, language_code, output_path)
         
-        # Generate TTS using the new synthesizer (Gemini + fallback)
-        print(f"🔍 Calling synthesize_speech with: text='{text[:50]}...', language_code='{language_code}', output_path='{output_path}'")
-        result_path = synthesize_speech(text, language_code, output_path)
-        
-        if result_path:
-            print(f"✅ TTS generated successfully: {result_path}")
+        if result:
             return jsonify({
                 "success": True,
-                "output_path": result_path,
+                "output_path": result,
                 "message": "TTS generated successfully"
             })
         else:
-            print("❌ TTS generation failed - synthesize_speech returned None")
             return jsonify({
                 "success": False,
-                "error": "Failed to generate TTS"
-            }), 500
-            
+                "error": "TTS generation failed"
+            })
+        
     except Exception as e:
-        print(f"TTS generation error: {e}")
+        print(f"❌ TTS error: {e}")
         return jsonify({
             "success": False,
             "error": str(e)
-        }), 500
-
-# Admin Dashboard Routes
-from admin_dashboard import AdminDashboard
-dashboard = AdminDashboard()
+        })
 
 @app.route('/admin')
 def admin_index():
     """Main admin dashboard page"""
+    from admin_dashboard import AdminDashboard
+    dashboard = AdminDashboard()
+    
     settings = dashboard.get_tts_settings()
     usage_stats = dashboard.get_usage_stats()
+    google_api_settings = dashboard.get_google_api_settings()
     
     return render_template('admin_dashboard.html', 
                          settings=settings,
-                         usage_stats=usage_stats)
+                         usage_stats=usage_stats,
+                         google_api_settings=google_api_settings)
 
 @app.route('/admin/login', methods=['GET', 'POST'])
 def admin_login():
     """Admin login page"""
+    from admin_dashboard import AdminDashboard
+    dashboard = AdminDashboard()
+    
     if request.method == 'POST':
         password = request.form.get('password')
         if dashboard.verify_password(password):
@@ -745,6 +707,9 @@ def admin_logout():
 @app.route('/admin/api/status')
 def admin_api_status():
     """Get system status as JSON"""
+    from admin_dashboard import AdminDashboard
+    dashboard = AdminDashboard()
+    
     if 'admin_logged_in' not in session:
         return jsonify({"error": "Not authenticated"}), 401
     
@@ -757,6 +722,9 @@ def admin_api_status():
 @app.route('/admin/api/enable_gemini', methods=['POST'])
 def admin_api_enable_gemini():
     """Enable Gemini TTS"""
+    from admin_dashboard import AdminDashboard
+    dashboard = AdminDashboard()
+    
     if 'admin_logged_in' not in session:
         return jsonify({"error": "Not authenticated"}), 401
     
@@ -771,6 +739,9 @@ def admin_api_enable_gemini():
 @app.route('/admin/api/disable_gemini', methods=['POST'])
 def admin_api_disable_gemini():
     """Disable Gemini TTS"""
+    from admin_dashboard import AdminDashboard
+    dashboard = AdminDashboard()
+    
     if 'admin_logged_in' not in session:
         return jsonify({"error": "Not authenticated"}), 401
     
@@ -785,6 +756,9 @@ def admin_api_disable_gemini():
 @app.route('/admin/api/update_settings', methods=['POST'])
 def admin_api_update_settings():
     """Update TTS settings"""
+    from admin_dashboard import AdminDashboard
+    dashboard = AdminDashboard()
+    
     if 'admin_logged_in' not in session:
         return jsonify({"error": "Not authenticated"}), 401
     
@@ -799,6 +773,9 @@ def admin_api_update_settings():
 @app.route('/admin/api/reset_usage', methods=['POST'])
 def admin_api_reset_usage():
     """Reset daily usage"""
+    from admin_dashboard import AdminDashboard
+    dashboard = AdminDashboard()
+    
     if 'admin_logged_in' not in session:
         return jsonify({"error": "Not authenticated"}), 401
     
@@ -808,6 +785,9 @@ def admin_api_reset_usage():
 @app.route('/admin/api/set_tts_system', methods=['POST'])
 def admin_api_set_tts_system():
     """Set the active TTS system"""
+    from admin_dashboard import AdminDashboard
+    dashboard = AdminDashboard()
+    
     data = request.get_json()
     system = data.get('system')
     
@@ -820,6 +800,9 @@ def admin_api_set_tts_system():
 @app.route('/admin/api/change_password', methods=['POST'])
 def admin_api_change_password():
     """Change admin password"""
+    from admin_dashboard import AdminDashboard
+    dashboard = AdminDashboard()
+    
     if 'admin_logged_in' not in session:
         return jsonify({"error": "Not authenticated"}), 401
     
@@ -832,9 +815,35 @@ def admin_api_change_password():
     else:
         return jsonify({"success": False, "message": "Invalid current password"})
 
+@app.route('/admin/api/toggle_google_api', methods=['POST'])
+def admin_api_toggle_google_api():
+    """Toggle Google API services"""
+    from admin_dashboard import AdminDashboard
+    dashboard = AdminDashboard()
+    
+    # Since this is called from the admin dashboard, we'll allow it without session check
+    # The admin dashboard itself requires authentication to access
+    
+    data = request.get_json()
+    enabled = data.get('enabled', False)
+    
+    if enabled:
+        if dashboard.enable_google_api_services("admin123"):  # Using default password for now
+            return jsonify({"success": True, "message": "Google API services enabled"})
+        else:
+            return jsonify({"success": False, "message": "Failed to enable Google API services"})
+    else:
+        if dashboard.disable_google_api_services("admin123"):  # Using default password for now
+            return jsonify({"success": True, "message": "Google API services disabled"})
+        else:
+            return jsonify({"success": False, "message": "Failed to disable Google API services"})
+
 if __name__ == '__main__':
     print("Starting Python Speech Analysis API...")
     print("🔐 Admin Dashboard: http://localhost:5000/admin")
     print("🔑 Default password: admin123")
     load_models()
-    app.run(host='0.0.0.0', port=5000, debug=True) 
+    
+    # Use PORT environment variable for Render
+    PORT = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=PORT, debug=False) 

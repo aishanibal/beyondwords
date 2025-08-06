@@ -25,12 +25,18 @@ class AdminDashboard:
             # Default configuration
             self.config = {
                 "admin_password_hash": self.hash_password("admin123"),  # Change this!
-                            "tts_settings": {
-                "active_tts": "system",  # system, cloud, gemini
-                "google_cloud_voice_model": "standard",  # standard, neural2, studio
-                "cost_limit_per_day": 1.00,  # $1.00 per day
-                "usage_tracking": True
-            },
+                "tts_settings": {
+                    "active_tts": "system",  # system, cloud, gemini
+                    "google_cloud_voice_model": "standard",  # standard, neural2, studio
+                    "cost_limit_per_day": 1.00,  # $1.00 per day
+                    "usage_tracking": True
+                },
+                "google_api_settings": {
+                    "services_enabled": True,  # Master toggle for all Google API services
+                    "gemini_enabled": False,
+                    "google_cloud_tts_enabled": True,
+                    "google_ai_enabled": True
+                },
                 "usage_stats": {
                     "daily_usage": {},
                     "total_cost": 0.0,
@@ -81,6 +87,47 @@ class AdminDashboard:
         print(f"🔧 New TTS settings: {self.config['tts_settings']}")
         self.save_config()
         return True
+    
+    def get_google_api_settings(self) -> Dict[str, Any]:
+        """Get current Google API settings"""
+        return self.config.get("google_api_settings", {
+            "services_enabled": True,
+            "gemini_enabled": False,
+            "google_cloud_tts_enabled": True,
+            "google_ai_enabled": True
+        })
+    
+    def update_google_api_settings(self, settings: Dict[str, Any]) -> bool:
+        """Update Google API settings"""
+        print(f"🔧 Updating Google API settings: {settings}")
+        if "google_api_settings" not in self.config:
+            self.config["google_api_settings"] = {}
+        self.config["google_api_settings"].update(settings)
+        print(f"🔧 New Google API settings: {self.config['google_api_settings']}")
+        self.save_config()
+        return True
+    
+    def enable_google_api_services(self, password: str) -> bool:
+        """Enable all Google API services"""
+        if not self.verify_password(password):
+            return False
+        
+        self.config["google_api_settings"]["services_enabled"] = True
+        self.save_config()
+        return True
+    
+    def disable_google_api_services(self, password: str) -> bool:
+        """Disable all Google API services"""
+        if not self.verify_password(password):
+            return False
+        
+        self.config["google_api_settings"]["services_enabled"] = False
+        self.save_config()
+        return True
+    
+    def is_google_api_enabled(self) -> bool:
+        """Check if Google API services are enabled"""
+        return self.config.get("google_api_settings", {}).get("services_enabled", True)
     
     def enable_gemini_tts(self, password: str) -> bool:
         """Enable expensive Gemini TTS (admin only)"""
@@ -138,6 +185,7 @@ class AdminDashboard:
         return {
             "current_tts": self.config["tts_settings"]["default_tts"],
             "gemini_enabled": self.config["tts_settings"]["gemini_enabled"],
+            "google_api_enabled": self.is_google_api_enabled(),
             "cost_tracking": self.config["tts_settings"]["usage_tracking"],
             "daily_cost_limit": self.config["tts_settings"]["cost_limit_per_day"],
             "total_cost": self.config["usage_stats"]["total_cost"],
@@ -166,12 +214,14 @@ def main():
         print("2. View Usage Statistics")
         print("3. Enable Gemini TTS")
         print("4. Disable Gemini TTS")
-        print("5. Change TTS Settings")
-        print("6. Reset Daily Usage")
-        print("7. Change Admin Password")
-        print("8. Exit")
+        print("5. Enable Google API Services")
+        print("6. Disable Google API Services")
+        print("7. Change TTS Settings")
+        print("8. Reset Daily Usage")
+        print("9. Change Admin Password")
+        print("10. Exit")
         
-        choice = input("\nEnter choice (1-8): ")
+        choice = input("\nEnter choice (1-10): ")
         
         if choice == "1":
             status = dashboard.get_system_status()
@@ -204,6 +254,20 @@ def main():
                 print("❌ Invalid password")
         
         elif choice == "5":
+            password = input("Enter admin password: ")
+            if dashboard.enable_google_api_services(password):
+                print("✅ Google API services enabled")
+            else:
+                print("❌ Invalid password")
+        
+        elif choice == "6":
+            password = input("Enter admin password: ")
+            if dashboard.disable_google_api_services(password):
+                print("✅ Google API services disabled")
+            else:
+                print("❌ Invalid password")
+        
+        elif choice == "7":
             print("\nTTS Settings:")
             settings = dashboard.get_tts_settings()
             for key, value in settings.items():
@@ -214,11 +278,11 @@ def main():
                 dashboard.update_tts_settings({"default_tts": new_default})
                 print("✅ Settings updated")
         
-        elif choice == "6":
+        elif choice == "8":
             dashboard.reset_daily_usage()
             print("✅ Daily usage reset")
         
-        elif choice == "7":
+        elif choice == "9":
             old_password = input("Enter current password: ")
             new_password = input("Enter new password: ")
             if dashboard.change_password(old_password, new_password):
@@ -226,7 +290,7 @@ def main():
             else:
                 print("❌ Invalid current password")
         
-        elif choice == "8":
+        elif choice == "10":
             print("👋 Goodbye!")
             break
         

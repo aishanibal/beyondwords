@@ -27,6 +27,27 @@ elif not api_key:
     print("Or run: source ~/.bashrc or source ~/.zshrc if you set it there")
     GOOGLE_AI_AVAILABLE = False
 
+def is_google_api_enabled() -> bool:
+    """Check if Google API services are enabled via admin dashboard"""
+    try:
+        import json
+        import os
+        
+        # Read the config file directly to avoid circular imports
+        config_file = "admin_config.json"
+        if os.path.exists(config_file):
+            with open(config_file, 'r') as f:
+                config = json.load(f)
+            
+            google_api_settings = config.get("google_api_settings", {})
+            return google_api_settings.get("services_enabled", True)
+        else:
+            print("⚠️ Admin config file not found, defaulting to enabled")
+            return True
+    except Exception as e:
+        print(f"⚠️ Error checking Google API status: {e}")
+        return True  # Default to enabled if we can't check
+
 # Base class for language tutors
 class LanguageTutor:
     SCRIPT_LANGUAGES = {
@@ -1662,6 +1683,12 @@ _tutor_instances = {}
 # Main API functions using the modular approach with separate Gemini calls
 def get_conversational_response(transcription: str, chat_history: List[Dict], language: str = 'en', user_level: str = 'beginner', user_topics: List[str] = None, formality: str = 'friendly', feedback_language: str = 'en', user_goals: List[str] = None, description: str = None) -> str:
     """Get conversational response using separate Gemini call."""
+    # Check if Google API services are enabled
+    api_enabled = is_google_api_enabled()
+    print(f"🔍 Google API enabled check: {api_enabled}")
+    if not api_enabled:
+        return "Google API services are currently disabled. Please enable them in the admin dashboard."
+    
     if user_topics is None:
         user_topics = []
     if user_goals is None:
@@ -1689,6 +1716,10 @@ def get_conversational_response(transcription: str, chat_history: List[Dict], la
 
 def get_detailed_feedback(phoneme_analysis: str, reference_text: str, recognized_text: str, chat_history: List[Dict], language: str = 'en', user_level: str = 'beginner', user_topics: List[str] = None, feedback_language: str = 'en', description: str = None, romanization_display: str = None) -> str:
     """Get detailed feedback using separate Gemini call."""
+    # Check if Google API services are enabled
+    if not is_google_api_enabled():
+        return "Google API services are currently disabled. Please enable them in the admin dashboard."
+    
     if user_topics is None:
         user_topics = []
     
@@ -1712,6 +1743,10 @@ def get_detailed_feedback(phoneme_analysis: str, reference_text: str, recognized
 
 def get_text_suggestions(chat_history: List[Dict], language: str = 'en', user_level: str = 'beginner', user_topics: List[str] = None, formality: str = 'friendly', feedback_language: str = 'en', user_goals: List[str] = None, description: str = None) -> list:
     """Get text suggestions using separate Gemini call."""
+    # Check if Google API services are enabled
+    if not is_google_api_enabled():
+        return ["Google API services are currently disabled. Please enable them in the admin dashboard."]
+    
     if user_topics is None:
         user_topics = []
     if user_goals is None:
@@ -1743,6 +1778,10 @@ def get_text_suggestions(chat_history: List[Dict], language: str = 'en', user_le
 
 def get_short_feedback(user_input: str, context: str = "", language: str = 'en', user_level: str = 'beginner', user_topics: list = None, feedback_language: str = 'en', user_goals: list = None, description: str = None) -> str:
     """Generate a short, conversational feedback about grammar/style."""
+    # Check if Google API services are enabled
+    if not is_google_api_enabled():
+        return "Google API services are currently disabled. Please enable them in the admin dashboard."
+    
     if not GOOGLE_AI_AVAILABLE:
         return "Short feedback ran (no Gemini API key configured)"
     if user_topics is None:
@@ -1784,6 +1823,10 @@ def get_short_feedback(user_input: str, context: str = "", language: str = 'en',
 
 def get_translation(text: str, source_language: str = 'auto', target_language: str = 'en', breakdown: bool = False, user_topics: List[str] = None) -> dict:
     """Translate text and optionally provide breakdown."""
+    # Check if Google API services are enabled
+    if not is_google_api_enabled():
+        return {"translation": "Google API services are currently disabled. Please enable them in the admin dashboard.", "breakdown": "", "romanized": ""}
+    
     if user_topics is None:
         user_topics = []
     
@@ -1906,6 +1949,10 @@ def is_gemini_ready() -> bool:
 
 def generate_conversation_summary(chat_history: List[Dict], subgoal_instructions: str = "", user_topics: List[str] = None, target_language: str = "en", feedback_language: str = "en", is_continued_conversation: bool = False) -> Dict[str, str]:
     """Generate a title and subgoal evaluation for the conversation using Gemini."""
+    # Check if Google API services are enabled
+    if not is_google_api_enabled():
+        return {"title": "[Google API Disabled]", "synopsis": "Google API services are currently disabled. Please enable them in the admin dashboard."}
+    
     if not GOOGLE_AI_AVAILABLE:
         return {"title": "[Unavailable]", "synopsis": "[Gemini not available]"}
     
@@ -2234,6 +2281,10 @@ ENGLISH GRAMMAR CONTEXT:
 
 def get_detailed_breakdown(llm_response: str, user_input: str = "", context: str = "", language: str = 'en', user_level: str = 'beginner', user_topics: List[str] = None, formality: str = 'friendly', feedback_language: str = 'en', user_goals: List[str] = None, description: str = None) -> str:
     """Get detailed breakdown of an AI response using the explain_llm_response method."""
+    # Check if Google API services are enabled
+    if not is_google_api_enabled():
+        return "Google API services are currently disabled. Please enable them in the admin dashboard."
+    
     if user_topics is None:
         user_topics = []
     if user_goals is None:
@@ -2258,6 +2309,10 @@ def get_detailed_breakdown(llm_response: str, user_input: str = "", context: str
 
 def get_quick_translation(ai_message: str, language: str = 'en', user_level: str = 'beginner', user_topics: list = None, formality: str = 'friendly', feedback_language: str = 'en', user_goals: list = None, description: str = None) -> str:
     """Get quick translation of AI message with word-by-word breakdown"""
+    # Check if Google API services are enabled
+    if not is_google_api_enabled():
+        return "Google API services are currently disabled. Please enable them in the admin dashboard."
+    
     if user_topics is None:
         user_topics = []
     if user_goals is None:

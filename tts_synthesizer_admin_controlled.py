@@ -140,6 +140,20 @@ class AdminControlledTTSSynthesizer:
         if output_dir:
             os.makedirs(output_dir, exist_ok=True)
         
+        # Check if Google API services are enabled
+        if not self.admin_dashboard.is_google_api_enabled():
+            print("🔒 Google API services are disabled. Using System TTS only.")
+            # Force system TTS when Google APIs are disabled
+            result = self._try_system_tts(text, language_code, output_path)
+            if result:
+                self.admin_dashboard.track_usage("system", 0.0)
+                print("✅ System TTS successful (FREE)")
+                self.tts_cache[cache_key] = result
+                return result
+            else:
+                print("❌ System TTS failed")
+                return None
+        
         # Get active TTS system from admin settings
         settings = self.admin_dashboard.get_tts_settings()
         active_tts = settings.get("active_tts", "system")
