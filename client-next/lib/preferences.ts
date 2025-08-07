@@ -301,7 +301,8 @@ export const LEARNING_GOALS: LearningGoal[] = [
       // { id: "respond_without_translating_2", description: "Response time consistency (no spike >8s more than twice per session)." },
       { id: "respond_without_translating_3", description: "Do not code switch to native language (0–5% of total words spoken)." },
       // { id: "respond_without_translating_4", description: "At least 3 consecutive turns spoken fluidly within 5s each." },
-      { id: "respond_without_translating_5", description: "Limited use of translation/help buttons (e.g., <2 times per 10 turns)." }
+      { id: "respond_without_translating_5", description: "Limited use of translation/help buttons (e.g., <2 times per 10 turns)." },
+      { id: "respond_without_translating_6", description: "No more than 10% of turns are skipped or answered with placeholders like “I don’t know.”" }
     ]
   },
   {

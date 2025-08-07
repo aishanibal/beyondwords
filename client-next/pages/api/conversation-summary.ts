@@ -38,7 +38,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       progressIsArray: Array.isArray(response.data?.progress_percentages)
     });
 
-    res.status(response.status).json(response.data);
+    // CRITICAL: Ensure progress_percentages is always included in the response
+    const responseData = {
+      ...response.data,
+      progress_percentages: response.data?.progress_percentages || []
+    };
+
+    // Double-check that progress_percentages is included
+    if (!responseData.hasOwnProperty('progress_percentages')) {
+      responseData.progress_percentages = [];
+      console.log('[DEBUG] API: Added missing progress_percentages field');
+    }
+
+    console.log('[DEBUG] API: Final response data being sent:', {
+      progress_percentages: responseData.progress_percentages,
+      hasProgressData: !!responseData.progress_percentages,
+      progressDataLength: responseData.progress_percentages?.length,
+      responseKeys: Object.keys(responseData)
+    });
+
+    res.status(response.status).json(responseData);
   } catch (error: any) {
     console.error('Conversation summary error:', error);
     if (error.response) {

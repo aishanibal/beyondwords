@@ -2121,6 +2121,20 @@ User topics: {user_topics}
             if progress_percentages:
                 result["progress_percentages"] = progress_percentages
                 print(f"DEBUG: Added progress percentages to result: {progress_percentages}")
+            else:
+                print(f"DEBUG: No progress percentages found in response")
+                # Try to extract from synopsis if not found in separate field
+                synopsis_lower = synopsis.lower()
+                if "progress:" in synopsis_lower:
+                    print(f"DEBUG: Found 'progress:' in synopsis, attempting extraction")
+                    progress_match = re.search(r'progress:\s*(\d+(?:\s+\d+)*)', synopsis_lower)
+                    if progress_match:
+                        progress_text = progress_match.group(1)
+                        print(f"DEBUG: Extracted progress from synopsis: '{progress_text}'")
+                        percentages = [int(p.strip()) for p in progress_text.split() if p.strip().isdigit()]
+                        if percentages:
+                            result["progress_percentages"] = percentages
+                            print(f"DEBUG: Added progress percentages from synopsis: {percentages}")
             
             print(f"DEBUG: Final result: {result}")
             
@@ -2132,12 +2146,17 @@ User topics: {user_topics}
                 if progress_percentages:
                     result["progress_percentages"] = progress_percentages
             
+            # Ensure progress_percentages is always included in the result
+            if "progress_percentages" not in result:
+                result["progress_percentages"] = []
+                print(f"DEBUG: Added empty progress_percentages to result")
+            
             return result
         else:
-            return {"title": "[No response]", "synopsis": "[No response from Gemini]"}
+            return {"title": "[No response]", "synopsis": "[No response from Gemini]", "progress_percentages": []}
     except Exception as e:
         print(f"Error generating conversation summary: {e}")
-        return {"title": "[Error]", "synopsis": str(e)}
+        return {"title": "[Error]", "synopsis": str(e), "progress_percentages": []}
 
 
 def get_language_context(language: str) -> str:

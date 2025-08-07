@@ -1721,7 +1721,7 @@ function Analyze() {
         }
       });
 
-      console.log('Summary response:', response.data);
+                      console.log('Summary response:', response.data);
       
       // Update the existing conversation with the Gemini-generated title and synopsis
       if (conversationId) {
@@ -1806,16 +1806,15 @@ function Analyze() {
           // console.log('Title handling:', isContinuedConversation ? 'Preserved original title' : `Updated to: ${response.data.title}`);
           // console.log('Synopsis:', response.data.synopsis.substring(0, 100) + '...');
           
-          // Show progress popup if we have progress percentages
-          console.log('[DEBUG] Progress data received:', response.data.progress_percentages);
-          // console.log('Progress data check:', response.data.progress_percentages);
-          // console.log('Full response data:', response.data);
-          // console.log('Response data type:', typeof response.data.progress_percentages);
-          // console.log('Response data length:', response.data.progress_percentages?.length);
+          // CRITICAL: Ensure progress_percentages is always available
+          const progressPercentages = response.data.progress_percentages || [];
+          console.log('[DEBUG] Progress data received:', progressPercentages);
+          console.log('[DEBUG] Progress data type:', typeof progressPercentages);
+          console.log('[DEBUG] Progress data length:', progressPercentages?.length);
           
           // Always show progress modal if we have progress data, regardless of whether percentages changed
           // Also show if it's a continued conversation with new messages
-          if ((response.data.progress_percentages && response.data.progress_percentages.length > 0) || 
+          if ((progressPercentages && progressPercentages.length > 0) || 
               (hasContinuedConversation && hasNewMessages)) {
             // console.log('Setting progress modal with data:', response.data.progress_percentages);
             // console.log('userPreferences:', userPreferences);
@@ -1854,8 +1853,8 @@ function Analyze() {
             // console.log('[DEBUG] Subgoal IDs in order:', subgoalIds);
             
             // Check if progress_percentages exists and is an array
-            if (response.data.progress_percentages && Array.isArray(response.data.progress_percentages)) {
-              response.data.progress_percentages.forEach((percentage: number, index: number) => {
+            if (progressPercentages && Array.isArray(progressPercentages)) {
+              progressPercentages.forEach((percentage: number, index: number) => {
               if (index < subgoalIds.length) {
                 const subgoalId = subgoalIds[index];
                 // console.log(`[DEBUG] Processing index ${index}: subgoalId=${subgoalId}, percentage=${percentage}`);

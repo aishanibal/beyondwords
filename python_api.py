@@ -278,18 +278,28 @@ def conversation_summary():
             is_continued_conversation
         )
         
-        return jsonify({
+        # Ensure progress_percentages is always included
+        progress_percentages = summary.get("progress_percentages", [])
+        print(f"DEBUG: Final progress_percentages being sent: {progress_percentages}")
+        
+        # CRITICAL: Always include progress_percentages in response
+        response_data = {
             "title": summary["title"],
             "synopsis": summary["synopsis"],
+            "progress_percentages": progress_percentages,
             "success": True
-        })
+        }
+        
+        print(f"DEBUG: Complete response data: {response_data}")
+        return jsonify(response_data)
         
     except Exception as e:
         print(f"❌ Conversation summary error: {e}")
         return jsonify({
             "error": str(e),
             "title": "",
-            "synopsis": ""
+            "synopsis": "",
+            "progress_percentages": []
         })
 
 @app.route('/health', methods=['GET'])
