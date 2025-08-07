@@ -140,28 +140,37 @@ def transcribe():
         import base64
         import tempfile
         
-        if audio_file_data:
-            # Decode base64 audio data
-            audio_bytes = base64.b64decode(audio_file_data)
-            
-            # Create a temporary file
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_file:
-                temp_file.write(audio_bytes)
-                temp_audio_path = temp_file.name
-            
-            print(f"📁 Saved audio to temporary file: {temp_audio_path}")
-            
-            # Get transcription
-            transcription = transcribe_audio(temp_audio_path, language)
-            
-            # Clean up temporary file
+        if audio_file_data and audio_file_data.strip():
             try:
-                os.unlink(temp_audio_path)
-                print(f"🗑️ Cleaned up temporary file: {temp_audio_path}")
+                # Decode base64 audio data
+                audio_bytes = base64.b64decode(audio_file_data)
+                
+                # Create a temporary file
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_file:
+                    temp_file.write(audio_bytes)
+                    temp_audio_path = temp_file.name
+                
+                print(f"📁 Saved audio to temporary file: {temp_audio_path}")
+                
+                # Check if file was created and has content
+                if os.path.exists(temp_audio_path) and os.path.getsize(temp_audio_path) > 0:
+                    # Get transcription
+                    transcription = transcribe_audio(temp_audio_path, language)
+                else:
+                    print("❌ Temporary audio file is empty or was not created")
+                    transcription = ""
+                
+                # Clean up temporary file
+                try:
+                    os.unlink(temp_audio_path)
+                    print(f"🗑️ Cleaned up temporary file: {temp_audio_path}")
+                except Exception as e:
+                    print(f"⚠️ Failed to clean up temporary file: {e}")
             except Exception as e:
-                print(f"⚠️ Failed to clean up temporary file: {e}")
+                print(f"❌ Error processing audio data: {e}")
+                transcription = ""
         else:
-            print("❌ No audio file data provided")
+            print("❌ No audio file data provided or data is empty")
             return jsonify({
                 "error": "No audio file data provided",
                 "transcription": "",
@@ -219,28 +228,37 @@ def transcribe_only():
         import base64
         import tempfile
         
-        if audio_file_data:
-            # Decode base64 audio data
-            audio_bytes = base64.b64decode(audio_file_data)
-            
-            # Create a temporary file
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_file:
-                temp_file.write(audio_bytes)
-                temp_audio_path = temp_file.name
-            
-            print(f"📁 Saved audio to temporary file: {temp_audio_path}")
-            
-            # Get transcription
-            transcription = transcribe_audio(temp_audio_path, language)
-            
-            # Clean up temporary file
+        if audio_file_data and audio_file_data.strip():
             try:
-                os.unlink(temp_audio_path)
-                print(f"🗑️ Cleaned up temporary file: {temp_audio_path}")
+                # Decode base64 audio data
+                audio_bytes = base64.b64decode(audio_file_data)
+                
+                # Create a temporary file
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_file:
+                    temp_file.write(audio_bytes)
+                    temp_audio_path = temp_file.name
+                
+                print(f"📁 Saved audio to temporary file: {temp_audio_path}")
+                
+                # Check if file was created and has content
+                if os.path.exists(temp_audio_path) and os.path.getsize(temp_audio_path) > 0:
+                    # Get transcription
+                    transcription = transcribe_audio(temp_audio_path, language)
+                else:
+                    print("❌ Temporary audio file is empty or was not created")
+                    transcription = ""
+                
+                # Clean up temporary file
+                try:
+                    os.unlink(temp_audio_path)
+                    print(f"🗑️ Cleaned up temporary file: {temp_audio_path}")
+                except Exception as e:
+                    print(f"⚠️ Failed to clean up temporary file: {e}")
             except Exception as e:
-                print(f"⚠️ Failed to clean up temporary file: {e}")
+                print(f"❌ Error processing audio data: {e}")
+                transcription = ""
         else:
-            print("❌ No audio file data provided")
+            print("❌ No audio file data provided or data is empty")
             return jsonify({
                 "error": "No audio file data provided",
                 "transcription": ""

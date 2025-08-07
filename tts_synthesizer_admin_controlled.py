@@ -348,11 +348,17 @@ class AdminControlledTTSSynthesizer:
                     return output_path
                     
             elif self.system == 'linux':
-                voice = self.voice_map.get(language_code, {}).get('linux', 'english_rp')
-                cmd = ['espeak', '-v', voice, '-w', output_path, text]
-                result = subprocess.run(cmd, capture_output=True, text=True)
-                if result.returncode == 0:
-                    return output_path
+                # Check if espeak is available
+                try:
+                    subprocess.run(['espeak', '--version'], capture_output=True, check=True)
+                    voice = self.voice_map.get(language_code, {}).get('linux', 'english_rp')
+                    cmd = ['espeak', '-v', voice, '-w', output_path, text]
+                    result = subprocess.run(cmd, capture_output=True, text=True)
+                    if result.returncode == 0:
+                        return output_path
+                except (subprocess.CalledProcessError, FileNotFoundError):
+                    print("⚠️ espeak not available on Linux, skipping system TTS")
+                    return None
                     
         except Exception as e:
             print(f"System TTS error: {e}")
