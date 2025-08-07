@@ -80,8 +80,32 @@ def transcribe_audio(audio_path, language=None):
     """Transcribe audio using Gemini"""
     try:
         print(f"Using Gemini with language: {language}")
-        result = transcribe_audio_gemini(audio_path, language or 'en')
-        return result if result else ""
+        print(f"Audio file path: {audio_path}")
+        print(f"Audio file exists: {os.path.exists(audio_path)}")
+        if os.path.exists(audio_path):
+            print(f"Audio file size: {os.path.getsize(audio_path)} bytes")
+        
+        # Add timeout to transcription
+        import signal
+        
+        def timeout_handler(signum, frame):
+            raise TimeoutError("Transcription timed out")
+        
+        # Set timeout to 30 seconds
+        signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(30)
+        
+        try:
+            result = transcribe_audio_gemini(audio_path, language or 'en')
+            signal.alarm(0)  # Cancel the alarm
+            print(f"Gemini transcription result: '{result}'")
+            return result if result else ""
+        except TimeoutError:
+            print("❌ Transcription timed out after 30 seconds")
+            return ""
+        except Exception as e:
+            signal.alarm(0)  # Cancel the alarm
+            raise e
     except Exception as e:
         print(f"Transcription error: {e}")
         return ""
@@ -139,6 +163,9 @@ def transcribe():
         # Save the base64 audio data to a temporary file
         import base64
         import tempfile
+        
+        print(f"📊 Received audio data length: {len(audio_file_data) if audio_file_data else 0} characters")
+        print(f"📊 Audio data starts with: {audio_file_data[:50] if audio_file_data else 'None'}...")
         
         if audio_file_data and audio_file_data.strip():
             try:
@@ -199,9 +226,23 @@ def transcribe():
             description
         )
         
+        # Generate TTS if requested
+        tts_url = None
+        if data.get('generate_tts', False):
+            try:
+                tts_language = data.get('tts_language', language)
+                tts_result = synthesize_speech(response, tts_language, "temp_tts.wav")
+                if tts_result:
+                    # Return the TTS file path relative to the Node.js server
+                    tts_url = f"/uploads/tts_{int(time.time())}.wav"
+                    print(f"🎤 TTS generated: {tts_url}")
+            except Exception as tts_error:
+                print(f"❌ TTS generation failed: {tts_error}")
+        
         return jsonify({
             "transcription": transcription,
             "response": response,
+            "tts_url": tts_url,
             "success": True
         })
         

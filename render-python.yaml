@@ -6,8 +6,8 @@ services:
     plan: starter
     buildCommand: |
       apt-get update && apt-get install -y espeak-ng
-      pip install -r requirements-simple.txt
-    startCommand: gunicorn python_api:app --bind 0.0.0.0:$PORT --workers 1 --timeout 120
+      pip install -r requirements-simple.txt --no-cache-dir
+    startCommand: gunicorn python_api:app --bind 0.0.0.0:$PORT --workers 1 --timeout 120 --keep-alive 5 --preload
     envVars:
       - key: PORT
         value: 5000
