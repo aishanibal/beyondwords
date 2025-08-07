@@ -1195,7 +1195,7 @@ function Analyze() {
       const ttsUrl = await generateTTSForText(text, language, cacheKey);
       if (ttsUrl) {
         // Handle both relative and absolute URLs from backend
-        const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || '';
+        const backendUrl = process.env.NEXT_PUBLIC_API_URL || '';
         const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
         const audioUrl = ttsUrl.startsWith('http') ? ttsUrl : `${cleanBackendUrl}${ttsUrl}`;
         const audio = new window.Audio(audioUrl);
@@ -1277,7 +1277,7 @@ function Analyze() {
     
         try {
       // Handle both relative and absolute URLs from backend
-      const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || '';
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || '';
       const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
       const audioUrl = ttsUrl.startsWith('http') ? ttsUrl : `${cleanBackendUrl}${ttsUrl}`;
       const audio = new window.Audio(audioUrl);

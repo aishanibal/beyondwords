@@ -24,4 +24,6 @@ services:
       - key: GOOGLE_API_KEY
         sync: false
       - key: GOOGLE_CLOUD_PROJECT
-        sync: false 
+        sync: false
+      - key: PYTHON_API_URL
+        value: https://beyondwords.onrender.com 

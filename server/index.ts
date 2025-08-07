@@ -371,8 +371,13 @@ app.post('/api/analyze', authenticateJWT, upload.single('audio'), async (req: Re
       const fileStats = fs.statSync(audioFilePath);
       console.log('Audio file size:', fileStats.size, 'bytes');
       
+      // Read the audio file and send it as base64
+      const audioFileBuffer = fs.readFileSync(audioFilePath);
+      const audioFileBase64 = audioFileBuffer.toString('base64');
+      
       const transcriptionResponse = await axios.post(`${pythonApiUrl}/transcribe`, {
-        audio_file: audioFilePath, // Use multer's saved file path
+        audio_file_data: audioFileBase64,
+        audio_file_name: path.basename(audioFilePath),
         chat_history: chatHistory,
         language: req.body.language || 'en',
         user_level: userLevel,
@@ -564,12 +569,11 @@ app.post('/api/messages/:messageId/feedback', authenticateJWT, async (req: Reque
 });
 
 // Save session endpoint
-app.post('/api/save-session', async (req: Request, res: Response) => {
+app.post('/api/save-session', authenticateJWT, async (req: Request, res: Response) => {
   try {
-    const { userId, chatHistory, language = 'en' } = req.body;
-    if (!userId) {
-      return res.status(401).json({ error: 'User ID required' });
-    }
+    const { chatHistory, language = 'en' } = req.body;
+    const userId = req.user.userId;
+    
     if (!chatHistory || !Array.isArray(chatHistory) || chatHistory.length === 0) {
       return res.status(400).json({ error: 'No chat history provided' });
     }

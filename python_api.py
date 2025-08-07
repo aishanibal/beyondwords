@@ -123,7 +123,8 @@ def transcribe():
     """FAST: Transcribe audio and get quick Gemini response"""
     try:
         data = request.get_json()
-        audio_file = data.get('audio_file')
+        audio_file_data = data.get('audio_file_data')
+        audio_file_name = data.get('audio_file_name', 'audio.wav')
         chat_history = data.get('chat_history', [])
         language = data.get('language', 'en')
         user_level = data.get('user_level', 'beginner')
@@ -135,8 +136,37 @@ def transcribe():
         
         print(f"🎤 Transcribe request - Language: {language}, Level: {user_level}")
         
-        # Get transcription
-        transcription = transcribe_audio(audio_file, language)
+        # Save the base64 audio data to a temporary file
+        import base64
+        import tempfile
+        
+        if audio_file_data:
+            # Decode base64 audio data
+            audio_bytes = base64.b64decode(audio_file_data)
+            
+            # Create a temporary file
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_file:
+                temp_file.write(audio_bytes)
+                temp_audio_path = temp_file.name
+            
+            print(f"📁 Saved audio to temporary file: {temp_audio_path}")
+            
+            # Get transcription
+            transcription = transcribe_audio(temp_audio_path, language)
+            
+            # Clean up temporary file
+            try:
+                os.unlink(temp_audio_path)
+                print(f"🗑️ Cleaned up temporary file: {temp_audio_path}")
+            except Exception as e:
+                print(f"⚠️ Failed to clean up temporary file: {e}")
+        else:
+            print("❌ No audio file data provided")
+            return jsonify({
+                "error": "No audio file data provided",
+                "transcription": "",
+                "response": ""
+            })
         
         if not transcription:
             return jsonify({
@@ -179,13 +209,42 @@ def transcribe_only():
     """Transcribe audio only without AI response"""
     try:
         data = request.get_json()
-        audio_file = data.get('audio_file')
+        audio_file_data = data.get('audio_file_data')
+        audio_file_name = data.get('audio_file_name', 'audio.wav')
         language = data.get('language', 'en')
         
         print(f"🎤 Transcribe only request - Language: {language}")
         
-        # Get transcription
-        transcription = transcribe_audio(audio_file, language)
+        # Save the base64 audio data to a temporary file
+        import base64
+        import tempfile
+        
+        if audio_file_data:
+            # Decode base64 audio data
+            audio_bytes = base64.b64decode(audio_file_data)
+            
+            # Create a temporary file
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_file:
+                temp_file.write(audio_bytes)
+                temp_audio_path = temp_file.name
+            
+            print(f"📁 Saved audio to temporary file: {temp_audio_path}")
+            
+            # Get transcription
+            transcription = transcribe_audio(temp_audio_path, language)
+            
+            # Clean up temporary file
+            try:
+                os.unlink(temp_audio_path)
+                print(f"🗑️ Cleaned up temporary file: {temp_audio_path}")
+            except Exception as e:
+                print(f"⚠️ Failed to clean up temporary file: {e}")
+        else:
+            print("❌ No audio file data provided")
+            return jsonify({
+                "error": "No audio file data provided",
+                "transcription": ""
+            })
         
         if not transcription:
             return jsonify({
