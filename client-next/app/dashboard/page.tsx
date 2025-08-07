@@ -630,13 +630,90 @@ export default function DashboardPage() {
     return firstSentence + (synopsis.includes('.') ? '.' : '');
   };
 
-  const processSynopsisWithSubgoals = (synopsis: string, conversation: ConversationType, userSubgoalProgress: SubgoalProgress[], useCurrentLevels: boolean = false) => {
+  // Level Management Service - Centralized level calculations
+  class LevelManager {
+    static getCurrentLevel(subgoalId: string, userSubgoalProgress: SubgoalProgress[]): number {
+      const progress = userSubgoalProgress.find(p => p.subgoalId === subgoalId);
+      return progress ? progress.level : 0;
+    }
+
+    static getHistoricalLevel(subgoalId: string, conversation: ConversationType, userSubgoalProgress: SubgoalProgress[]): { level: number; percentage: number } {
+      const currentLevel = this.getCurrentLevel(subgoalId, userSubgoalProgress);
+      
+      // Get historical percentage from conversation data
+      let historicalPercentage = 0;
+      if (conversation.progress_data) {
+        try {
+          const progressData = typeof conversation.progress_data === 'string' 
+            ? JSON.parse(conversation.progress_data) 
+            : conversation.progress_data;
+          
+          if (progressData.percentages && Array.isArray(progressData.percentages)) {
+            // Find the correct percentage for this subgoal
+            const subgoalIndex = this.getSubgoalIndex(subgoalId, conversation);
+            if (subgoalIndex < progressData.percentages.length) {
+              historicalPercentage = progressData.percentages[subgoalIndex];
+            }
+          }
+        } catch (error) {
+          console.error('Error parsing conversation progress data:', error);
+        }
+      }
+
+      // If user achieved 100% in this conversation, show the level they were at during the conversation
+      const historicalLevel = historicalPercentage === 100 ? Math.max(0, currentLevel - 1) : currentLevel;
+      
+      return { level: historicalLevel, percentage: historicalPercentage };
+    }
+
+    static getSubgoalIndex(subgoalId: string, conversation: ConversationType): number {
+      if (!conversation.learning_goals) return 0;
+      
+      const learningGoals = typeof conversation.learning_goals === 'string' 
+        ? JSON.parse(conversation.learning_goals) 
+        : conversation.learning_goals;
+
+      let globalIndex = 0;
+      for (const goalId of learningGoals) {
+        const goal = LEARNING_GOALS.find((g: LearningGoal) => g.id === goalId);
+        if (goal?.subgoals) {
+          for (const subgoal of goal.subgoals) {
+            if (subgoal.description) {
+              if (subgoal.id === subgoalId) {
+                return globalIndex;
+              }
+              globalIndex++;
+            }
+          }
+        }
+      }
+      return 0;
+    }
+
+    static formatLevelDisplay(level: number, context: 'learning-goals' | 'recent-conversations', percentage?: number): string {
+      const displayLevel = level + 1; // Convert 0-indexed to 1-indexed
+      
+      if (context === 'learning-goals') {
+        return `Level ${displayLevel}`;
+      } else {
+        // recent-conversations context
+        if (percentage === 100) {
+          // Show level progression: previous level → new level
+          return `Level ${displayLevel} → Level ${displayLevel + 1}`;
+        } else {
+          return `Level ${displayLevel}`;
+        }
+      }
+    }
+  }
+
+  // Separate function for Learning Goals (current state)
+  const processLearningGoals = (synopsis: string, conversation: ConversationType, userSubgoalProgress: SubgoalProgress[]) => {
     if (!synopsis || !conversation.learning_goals) {
       return { type: 'plain', content: synopsis };
     }
 
     try {
-      // Parse learning goals from conversation
       const learningGoals = typeof conversation.learning_goals === 'string' 
         ? JSON.parse(conversation.learning_goals) 
         : conversation.learning_goals;
@@ -645,63 +722,24 @@ export default function DashboardPage() {
         return { type: 'plain', content: synopsis };
       }
 
-      // Extract subgoal descriptions from LEARNING_GOALS with percentage info
+      // Extract subgoal descriptions for LEARNING GOALS context
       const subgoalDescriptions: { description: string; subgoalId: string; percentage: number; level: number }[] = [];
-      let globalSubgoalIndex = 0; // Track the global index across all subgoals
       
       learningGoals.forEach((goalId: string) => {
         const goal = LEARNING_GOALS.find((g: LearningGoal) => g.id === goalId);
         if (goal?.subgoals) {
           goal.subgoals.forEach(subgoal => {
             if (subgoal.description) {
-              // Determine level and percentage based on context
-              let levelToUse: number;
-              let percentageToUse: number;
-              
-              if (useCurrentLevels) {
-                // For Learning Goals section: use current level and set percentage to 0
-                levelToUse = getSubgoalLevel(subgoal.id, userSubgoalProgress);
-                percentageToUse = 0;
-              } else {
-                // For Recent Conversations section: use historical data
-                levelToUse = getSubgoalLevel(subgoal.id, userSubgoalProgress);
-                
-                // Get the percentage from conversation's progress data (historical)
-                let historicalPercentage = 0;
-                if (conversation.progress_data) {
-                  try {
-                    const progressData = typeof conversation.progress_data === 'string' 
-                      ? JSON.parse(conversation.progress_data) 
-                      : conversation.progress_data;
-                    if (progressData.percentages && Array.isArray(progressData.percentages)) {
-                      // Use the global index to get the correct percentage
-                      if (globalSubgoalIndex < progressData.percentages.length) {
-                        historicalPercentage = progressData.percentages[globalSubgoalIndex];
-                      }
-                    }
-                  } catch (error) {
-                    console.error('Error parsing conversation progress data:', error);
-                  }
-                }
-                
-                // If user achieved 100% in this conversation, show the previous level
-                if (historicalPercentage === 100) {
-                  levelToUse = Math.max(0, levelToUse - 1); // Show the level they were at during the conversation
-                }
-                
-                percentageToUse = historicalPercentage;
-              }
-              
-              const levelAdjustedDescription = getProgressiveSubgoalDescription(subgoal.id, levelToUse);
+              // For Learning Goals: always use current level and set percentage to 0
+              const currentLevel = LevelManager.getCurrentLevel(subgoal.id, userSubgoalProgress);
+              const levelAdjustedDescription = getProgressiveSubgoalDescription(subgoal.id, currentLevel);
               
               subgoalDescriptions.push({ 
                 description: levelAdjustedDescription, 
                 subgoalId: subgoal.id,
-                percentage: percentageToUse,
-                level: levelToUse
+                percentage: 0, // Always 0 for learning goals
+                level: currentLevel
               });
-              
-              globalSubgoalIndex++; // Increment the global index
             }
           });
         }
@@ -720,15 +758,12 @@ export default function DashboardPage() {
         const trimmedLine = line.trim();
         if (!trimmedLine) continue;
         
-        // Check if this line starts with a numbered subgoal (1:, 2:, 3:)
         const numberMatch = trimmedLine.match(/^(\d+):\s*(.*)/);
         if (numberMatch) {
-          // Save previous evaluation if exists
           if (currentTitle && currentEvaluation) {
             evaluations.push({ title: currentTitle, content: currentEvaluation.trim(), percentage: currentPercentage, level: currentLevel });
           }
           
-          // Start new evaluation
           const subgoalIndex = parseInt(numberMatch[1]) - 1;
           if (subgoalIndex < subgoalDescriptions.length) {
             currentTitle = subgoalDescriptions[subgoalIndex].description;
@@ -741,22 +776,115 @@ export default function DashboardPage() {
           }
           currentEvaluation = numberMatch[2] || '';
         } else {
-          // Continue current evaluation
           currentEvaluation += (currentEvaluation ? '\n' : '') + trimmedLine;
         }
       }
       
-      // Add the last evaluation
       if (currentTitle && currentEvaluation) {
         evaluations.push({ title: currentTitle, content: currentEvaluation.trim(), percentage: currentPercentage, level: currentLevel });
       }
 
       return { type: 'structured', evaluations };
     } catch (error) {
-      console.error('Error processing synopsis with subgoals:', error);
+      console.error('Error processing learning goals:', error);
       return { type: 'plain', content: synopsis };
     }
   };
+
+  // Separate function for Recent Conversations (historical state)
+  const processRecentConversations = (synopsis: string, conversation: ConversationType, userSubgoalProgress: SubgoalProgress[]) => {
+    if (!synopsis || !conversation.learning_goals) {
+      return { type: 'plain', content: synopsis };
+    }
+
+    try {
+      const learningGoals = typeof conversation.learning_goals === 'string' 
+        ? JSON.parse(conversation.learning_goals) 
+        : conversation.learning_goals;
+
+      if (!Array.isArray(learningGoals) || learningGoals.length === 0) {
+        return { type: 'plain', content: synopsis };
+      }
+
+      // Extract subgoal descriptions for RECENT CONVERSATIONS context
+      const subgoalDescriptions: { description: string; subgoalId: string; percentage: number; level: number }[] = [];
+      
+      learningGoals.forEach((goalId: string) => {
+        const goal = LEARNING_GOALS.find((g: LearningGoal) => g.id === goalId);
+        if (goal?.subgoals) {
+          goal.subgoals.forEach(subgoal => {
+            if (subgoal.description) {
+              // For Recent Conversations: use historical data
+              const { level: historicalLevel, percentage: historicalPercentage } = LevelManager.getHistoricalLevel(subgoal.id, conversation, userSubgoalProgress);
+              const levelAdjustedDescription = getProgressiveSubgoalDescription(subgoal.id, historicalLevel);
+              
+              subgoalDescriptions.push({ 
+                description: levelAdjustedDescription, 
+                subgoalId: subgoal.id,
+                percentage: historicalPercentage,
+                level: historicalLevel
+              });
+            }
+          });
+        }
+      });
+
+      // Parse the synopsis to extract individual evaluations
+      const lines = synopsis.split('\n');
+      const evaluations: { title: string; content: string; percentage: number; level: number }[] = [];
+      
+      let currentEvaluation = '';
+      let currentTitle = '';
+      let currentPercentage = 0;
+      let currentLevel = 0;
+      
+      for (const line of lines) {
+        const trimmedLine = line.trim();
+        if (!trimmedLine) continue;
+        
+        const numberMatch = trimmedLine.match(/^(\d+):\s*(.*)/);
+        if (numberMatch) {
+          if (currentTitle && currentEvaluation) {
+            evaluations.push({ title: currentTitle, content: currentEvaluation.trim(), percentage: currentPercentage, level: currentLevel });
+          }
+          
+          const subgoalIndex = parseInt(numberMatch[1]) - 1;
+          if (subgoalIndex < subgoalDescriptions.length) {
+            currentTitle = subgoalDescriptions[subgoalIndex].description;
+            currentPercentage = subgoalDescriptions[subgoalIndex].percentage;
+            currentLevel = subgoalDescriptions[subgoalIndex].level;
+          } else {
+            currentTitle = `Subgoal ${numberMatch[1]}`;
+            currentPercentage = 0;
+            currentLevel = 0;
+          }
+          currentEvaluation = numberMatch[2] || '';
+        } else {
+          currentEvaluation += (currentEvaluation ? '\n' : '') + trimmedLine;
+        }
+      }
+      
+      if (currentTitle && currentEvaluation) {
+        evaluations.push({ title: currentTitle, content: currentEvaluation.trim(), percentage: currentPercentage, level: currentLevel });
+      }
+
+      return { type: 'structured', evaluations };
+    } catch (error) {
+      console.error('Error processing recent conversations:', error);
+      return { type: 'plain', content: synopsis };
+    }
+  };
+
+  // Legacy function for backward compatibility (deprecated)
+  const processSynopsisWithSubgoals = (synopsis: string, conversation: ConversationType, userSubgoalProgress: SubgoalProgress[], useCurrentLevels: boolean = false) => {
+    console.warn('processSynopsisWithSubgoals is deprecated. Use processLearningGoals or processRecentConversations instead.');
+    return useCurrentLevels 
+      ? processLearningGoals(synopsis, conversation, userSubgoalProgress)
+      : processRecentConversations(synopsis, conversation, userSubgoalProgress);
+  };
+
+  // Centralized State Management Hook
+
 
   if (showLanguageOnboarding) {
     return (
@@ -1586,7 +1714,7 @@ export default function DashboardPage() {
                                                           }} className="font-body">
                                 {expandedConversations.has(conversation.id) 
                                                     ? (() => {
-                      const processed = processSynopsisWithSubgoals(conversation.synopsis || '', conversation, userSubgoalProgress || [], true);
+                      const processed = processRecentConversations(conversation.synopsis || '', conversation, userSubgoalProgress || []);
                                                                              if (processed.type === 'structured' && processed.evaluations) {
                                          return (
                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -1595,8 +1723,7 @@ export default function DashboardPage() {
                                                 background: 'rgba(126,90,117,0.03)',
                                                 border: '1px solid rgba(126,90,117,0.1)',
                                                 borderRadius: '8px',
-                                                padding: '0.75rem',
-                                                marginBottom: '0.5rem'
+                                                padding: '0.75rem'
                                               }}>
                                                                               <div style={{
                                 fontWeight: 600,
@@ -1614,47 +1741,14 @@ export default function DashboardPage() {
                                   alignItems: 'center',
                                   gap: '0.5rem'
                                 }}>
-                                  {evaluation.percentage === 100 ? (
-                                    <div style={{
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      gap: '0.25rem'
-                                    }}>
-                                      <span style={{
-                                        color: 'var(--rose-accent)',
-                                        fontSize: '0.7rem',
-                                        fontWeight: 500,
-                                        fontFamily: 'Montserrat, Arial, sans-serif'
-                                      }}>
-                                        Level {evaluation.level + 1}
-                                      </span>
-                                      <span style={{
-                                        color: 'var(--rose-primary)',
-                                        fontSize: '0.7rem',
-                                        fontWeight: 600,
-                                        fontFamily: 'Montserrat, Arial, sans-serif'
-                                      }}>
-                                        →
-                                      </span>
-                                      <span style={{
-                                        color: 'var(--rose-primary)',
-                                        fontSize: '0.7rem',
-                                        fontWeight: 600,
-                                        fontFamily: 'Montserrat, Arial, sans-serif'
-                                      }}>
-                                        Level {evaluation.level + 2}
-                                      </span>
-                                    </div>
-                                  ) : (
-                                    <span style={{
-                                      color: 'var(--rose-accent)',
-                                      fontSize: '0.7rem',
-                                      fontWeight: 500,
-                                      fontFamily: 'Montserrat, Arial, sans-serif'
-                                    }}>
-                                      Level {evaluation.level + 1}
-                                    </span>
-                                  )}
+                                  <span style={{
+                                    color: 'var(--rose-accent)',
+                                    fontSize: '0.7rem',
+                                    fontWeight: 500,
+                                    fontFamily: 'Montserrat, Arial, sans-serif'
+                                  }}>
+                                    {LevelManager.formatLevelDisplay(evaluation.level, 'recent-conversations', evaluation.percentage)}
+                                  </span>
                                   <span style={{
                                     color: 'var(--rose-primary)',
                                     fontSize: '0.75rem',
@@ -1682,7 +1776,7 @@ export default function DashboardPage() {
                                       }
                                     })()
                                                                                                                             : (() => {
-                      const processed = processSynopsisWithSubgoals(conversation.synopsis || '', conversation, userSubgoalProgress || [], false);
+                      const processed = processRecentConversations(conversation.synopsis || '', conversation, userSubgoalProgress || []);
                                        if (processed.type === 'structured' && processed.evaluations) {
                                          // For preview, show structured preview with first evaluation
                                          const firstEvaluation = processed.evaluations[0];
@@ -1717,7 +1811,7 @@ export default function DashboardPage() {
                                                        fontWeight: 500,
                                                        fontFamily: 'Montserrat, Arial, sans-serif'
                                                      }}>
-                                                       Level {firstEvaluation.level + 1}
+                                                       {LevelManager.formatLevelDisplay(firstEvaluation.level, 'recent-conversations', firstEvaluation.percentage)}
                                                      </span>
                                                      <span style={{
                                                        color: 'var(--rose-primary)',

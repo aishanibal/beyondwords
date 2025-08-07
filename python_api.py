@@ -593,7 +593,8 @@ def explain_suggestion():
         )
         
         return jsonify({
-            "explanation": explanation,
+            "translation": explanation.get("translation", ""),
+            "explanation": explanation.get("explanation", ""),
             "success": True
         })
         
@@ -601,7 +602,8 @@ def explain_suggestion():
         print(f"❌ Explain suggestion error: {e}")
         return jsonify({
             "error": str(e),
-            "explanation": {}
+            "translation": "",
+            "explanation": ""
         })
 
 @app.route('/quick_translation', methods=['POST'])

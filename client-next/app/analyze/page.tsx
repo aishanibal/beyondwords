@@ -2325,14 +2325,21 @@ function Analyze() {
       
       const result = response.data;
       console.log('[DEBUG] explainSuggestion() received response:', result);
+
+      
+      // Clean the explanation text to remove HTML-like markup
+      const explanationText = typeof result.explanation === 'string' ? result.explanation : '';
+      const cleanExplanation = explanationText.replace(/<[^>]*>/g, '').replace(/data-[^=]*="[^"]*"/g, '').replace(/onclick="[^"]*"/g, '').trim();
+      
+      const newTranslation = {
+        translation: result.translation || '',
+        breakdown: cleanExplanation,
+        has_breakdown: true
+      };
       
       setSuggestionTranslations(prev => ({ 
         ...prev, 
-        [suggestionIndex]: { 
-          translation: result.translation || '',
-          breakdown: result.explanation || '',
-          has_breakdown: true
-        } 
+        [suggestionIndex]: newTranslation
       }));
       
       setShowSuggestionTranslations(prev => ({ 
@@ -5483,7 +5490,11 @@ Yes, the current serials don't have the same quality as the old ones, right?
                   </motion.button>
                   
                   <motion.button
-                    onClick={() => explainSuggestion(currentSuggestionIndex, suggestionMessages[currentSuggestionIndex]?.text || '')}
+                    onClick={() => {
+  const suggestionText = suggestionMessages[currentSuggestionIndex]?.text;
+  const textToExplain = typeof suggestionText === 'string' ? suggestionText : '';
+  explainSuggestion(currentSuggestionIndex, textToExplain);
+}}
                     disabled={isTranslatingSuggestion[currentSuggestionIndex]}
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
@@ -5547,7 +5558,9 @@ Yes, the current serials don't have the same quality as the old ones, right?
                       </button>
                     </div>
                     <div style={{ marginBottom: '0.5rem', fontWeight: 500, fontSize: '0.8rem' }}>
-                      {suggestionTranslations[currentSuggestionIndex]?.translation || ''}
+                      {typeof suggestionTranslations[currentSuggestionIndex]?.translation === 'string' 
+                        ? suggestionTranslations[currentSuggestionIndex]?.translation 
+                        : ''}
                     </div>
                     {suggestionTranslations[currentSuggestionIndex]?.breakdown && (
                       <div style={{ marginTop: '0.5rem' }}>
@@ -5571,7 +5584,9 @@ Yes, the current serials don't have the same quality as the old ones, right?
                           whiteSpace: 'pre-wrap',
                           color: isDarkMode ? 'var(--foreground)' : '#3e3e3e'
                         }}>
-                          {suggestionTranslations[currentSuggestionIndex].breakdown}
+                          {typeof suggestionTranslations[currentSuggestionIndex].breakdown === 'string' 
+                            ? suggestionTranslations[currentSuggestionIndex].breakdown 
+                            : ''}
                         </div>
                       </div>
                     )}
