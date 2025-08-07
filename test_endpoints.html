@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Endpoints Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 10px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        .status {
+            margin: 20px 0;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+        .result {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 10px;
+            margin: 10px 0;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>API Endpoints Test</h1>
+    
+    <div id="status" class="status info">Ready to test API endpoints...</div>
+    
+    <button onclick="testHealth()">Test Health Endpoints</button>
+    <button onclick="testSuggestions()">Test Suggestions</button>
+    <button onclick="testExplainSuggestion()">Test Explain Suggestion</button>
+    <button onclick="testTranslate()">Test Translate</button>
+    <button onclick="testDetailedBreakdown()">Test Detailed Breakdown</button>
+    
+    <div id="results"></div>
+
+    <script>
+        function updateStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+        }
+
+        function addResult(title, data) {
+            const resultsDiv = document.getElementById('results');
+            const resultDiv = document.createElement('div');
+            resultDiv.innerHTML = `
+                <h3>${title}</h3>
+                <div class="result">${JSON.stringify(data, null, 2)}</div>
+            `;
+            resultsDiv.appendChild(resultDiv);
+        }
+
+        async function testHealth() {
+            try {
+                updateStatus('Testing health endpoints...', 'info');
+                
+                // Test Express server health
+                const expressResponse = await fetch('http://localhost:4000/health');
+                const expressData = await expressResponse.json();
+                addResult('Express Server Health', expressData);
+                
+                // Test Python API health
+                const pythonResponse = await fetch('http://localhost:5000/health');
+                const pythonData = await pythonResponse.json();
+                addResult('Python API Health', pythonData);
+                
+                updateStatus('✅ Health tests completed!', 'success');
+            } catch (error) {
+                updateStatus(`❌ Health test failed: ${error.message}`, 'error');
+                addResult('Health Test Error', { error: error.message });
+            }
+        }
+
+        async function testSuggestions() {
+            try {
+                updateStatus('Testing suggestions endpoint...', 'info');
+                
+                const response = await fetch('/api/suggestions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        language: 'en',
+                        conversationId: null
+                    })
+                });
+                
+                const data = await response.json();
+                addResult('Suggestions Response', data);
+                
+                if (response.ok) {
+                    updateStatus('✅ Suggestions test completed!', 'success');
+                } else {
+                    updateStatus(`❌ Suggestions test failed: ${data.error}`, 'error');
+                }
+            } catch (error) {
+                updateStatus(`❌ Suggestions test failed: ${error.message}`, 'error');
+                addResult('Suggestions Test Error', { error: error.message });
+            }
+        }
+
+        async function testExplainSuggestion() {
+            try {
+                updateStatus('Testing explain suggestion endpoint...', 'info');
+                
+                const response = await fetch('/api/explain_suggestion', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        suggestion_text: 'Hello',
+                        language: 'en',
+                        user_level: 'beginner',
+                        user_topics: [],
+                        formality: 'friendly',
+                        feedback_language: 'en',
+                        user_goals: []
+                    })
+                });
+                
+                const data = await response.json();
+                addResult('Explain Suggestion Response', data);
+                
+                if (response.ok) {
+                    updateStatus('✅ Explain suggestion test completed!', 'success');
+                } else {
+                    updateStatus(`❌ Explain suggestion test failed: ${data.error}`, 'error');
+                }
+            } catch (error) {
+                updateStatus(`❌ Explain suggestion test failed: ${error.message}`, 'error');
+                addResult('Explain Suggestion Test Error', { error: error.message });
+            }
+        }
+
+        async function testTranslate() {
+            try {
+                updateStatus('Testing translate endpoint...', 'info');
+                
+                const response = await fetch('/api/translate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        text: 'Hello',
+                        source_language: 'en',
+                        target_language: 'es'
+                    })
+                });
+                
+                const data = await response.json();
+                addResult('Translate Response', data);
+                
+                if (response.ok) {
+                    updateStatus('✅ Translate test completed!', 'success');
+                } else {
+                    updateStatus(`❌ Translate test failed: ${data.error}`, 'error');
+                }
+            } catch (error) {
+                updateStatus(`❌ Translate test failed: ${error.message}`, 'error');
+                addResult('Translate Test Error', { error: error.message });
+            }
+        }
+
+        async function testDetailedBreakdown() {
+            try {
+                updateStatus('Testing detailed breakdown endpoint...', 'info');
+                
+                const response = await fetch('/api/detailed_breakdown', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        llm_response: 'Hello, how are you today?',
+                        user_input: '',
+                        context: '',
+                        language: 'en',
+                        user_level: 'beginner',
+                        user_topics: [],
+                        formality: 'friendly',
+                        feedback_language: 'en',
+                        user_goals: []
+                    })
+                });
+                
+                const data = await response.json();
+                addResult('Detailed Breakdown Response', data);
+                
+                if (response.ok) {
+                    updateStatus('✅ Detailed breakdown test completed!', 'success');
+                } else {
+                    updateStatus(`❌ Detailed breakdown test failed: ${data.error}`, 'error');
+                }
+            } catch (error) {
+                updateStatus(`❌ Detailed breakdown test failed: ${error.message}`, 'error');
+                addResult('Detailed Breakdown Test Error', { error: error.message });
+            }
+        }
+    </script>
+</body>
+</html> 

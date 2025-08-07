@@ -10,7 +10,7 @@ export const config = {
   },
 };
 
-const BACKEND_URL = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'}/api/analyze`;
+const PYTHON_API_URL = `${process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5000'}/transcribe_only`;
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -62,9 +62,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
       formData.append('language', language);
       
-      console.log('--- [api/transcribe_only] SENDING TO EXPRESS:', { language, audioFile: audioFile.originalFilename });
+      console.log('--- [api/transcribe_only] SENDING TO PYTHON API:', { language, audioFile: audioFile.originalFilename });
       
-      const response = await axios.post(BACKEND_URL, formData, {
+      const response = await axios.post(PYTHON_API_URL, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
           Authorization: authHeader,
@@ -73,10 +73,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         timeout: 120000, // 2 minutes
       });
       
-      console.log('--- [api/transcribe_only] EXPRESS RESPONSE STATUS:', response.status);
-      console.log('--- [api/transcribe_only] EXPRESS RESPONSE DATA:', response.data);
+      console.log('--- [api/transcribe_only] PYTHON API RESPONSE STATUS:', response.status);
+      console.log('--- [api/transcribe_only] PYTHON API RESPONSE DATA:', response.data);
       
-      // Extract just the transcription from the Express response
+      // Extract just the transcription from the Python API response
       const transcription = response.data.transcription || '';
       
       res.status(200).json({

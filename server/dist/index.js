@@ -24,6 +24,27 @@ const child_process_1 = require("child_process");
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const axios_1 = __importDefault(require("axios"));
+// Create axios instance with connection pooling
+const pythonApiClient = axios_1.default.create({
+    timeout: 60000,
+    maxRedirects: 5,
+    headers: {
+        'Content-Type': 'application/json',
+    },
+    // Connection pooling for better performance
+    httpAgent: new (require('http').Agent)({
+        keepAlive: true,
+        maxSockets: 10,
+        maxFreeSockets: 5,
+        timeout: 60000
+    }),
+    httpsAgent: new (require('https').Agent)({
+        keepAlive: true,
+        maxSockets: 10,
+        maxFreeSockets: 5,
+        timeout: 60000
+    })
+});
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
     console.error('JWT_SECRET environment variable is required');
@@ -279,6 +300,10 @@ app.post('/api/analyze', authenticateJWT, upload.single('audio'), (req, res) => 
             }
         }
         globalAny.lastChatHistory = chatHistory; // Optionally store for session continuity
+        // Initialize variables
+        let ttsUrl = null;
+        const language = req.body.language || 'en';
+        const startTime = Date.now();
         // Get user preferences from form data (preferred) or fall back to database
         const user = yield (0, database_1.findUserById)(req.user.userId);
         const userLevel = req.body.user_level || (user === null || user === void 0 ? void 0 : user.proficiency_level) || 'beginner';
@@ -295,87 +320,101 @@ app.post('/api/analyze', authenticateJWT, upload.single('audio'), (req, res) => 
         let transcription = 'Speech recorded';
         let aiResponse = 'Thank you for your speech!';
         let pythonApiAvailable = false;
+        // Note: Python API processing will happen here
         try {
             console.log('=== ATTEMPTING PYTHON API CALL ===');
             console.log('Python API URL:', `${pythonApiUrl}/transcribe`);
             console.log('Audio file path:', audioFilePath);
             console.log('Chat history length:', chatHistory.length);
             console.log('Language:', req.body.language || 'en');
+            // Quick health check before making the API call
+            try {
+                const healthResponse = yield pythonApiClient.get(`${pythonApiUrl}/health`, { timeout: 5000 });
+                console.log('✅ Python API health check passed');
+            }
+            catch (healthError) {
+                console.error('❌ Python API health check failed:', healthError.message);
+                throw new Error('Python API is not responding');
+            }
             // Check if audio file exists before sending to Python API
             if (!fs_1.default.existsSync(audioFilePath)) {
                 throw new Error(`Audio file does not exist: ${audioFilePath}`);
             }
             const fileStats = fs_1.default.statSync(audioFilePath);
             console.log('Audio file size:', fileStats.size, 'bytes');
-            const transcriptionResponse = yield axios_1.default.post(`${pythonApiUrl}/transcribe`, {
-                audio_file: audioFilePath, // Use multer's saved file path
+            // Read the audio file and send it as base64
+            const audioFileBuffer = fs_1.default.readFileSync(audioFilePath);
+            const audioFileBase64 = audioFileBuffer.toString('base64');
+            console.log('Audio file size:', audioFileBuffer.length, 'bytes');
+            console.log('Base64 data length:', audioFileBase64.length, 'characters');
+            console.log('Base64 data starts with:', audioFileBase64.substring(0, 50) + '...');
+            const transcriptionResponse = yield pythonApiClient.post(`${pythonApiUrl}/transcribe`, {
+                audio_file_data: audioFileBase64,
+                audio_file_name: path_1.default.basename(audioFilePath),
                 chat_history: chatHistory,
                 language: req.body.language || 'en',
                 user_level: userLevel,
                 user_topics: userTopics,
                 user_goals: userGoals,
                 formality: formality,
-                feedback_language: feedbackLanguage
+                feedback_language: feedbackLanguage,
+                generate_tts: false, // Disable TTS for now to make it faster
+                tts_language: req.body.language || 'en'
             }, {
                 headers: { 'Content-Type': 'application/json' },
-                timeout: 30000
+                timeout: 120000 // Increased timeout to 2 minutes
             });
             console.log('=== PYTHON API SUCCESS ===');
             console.log('Python API response received:', transcriptionResponse.data);
-            transcription = transcriptionResponse.data.transcription || 'Speech recorded';
+            // Check if the Python API returned an error
+            if (transcriptionResponse.data.error) {
+                throw new Error(`Python API error: ${transcriptionResponse.data.error}`);
+            }
+            // Check if transcription is empty or failed
+            if (!transcriptionResponse.data.transcription || transcriptionResponse.data.transcription.trim() === '') {
+                throw new Error('Python API returned empty transcription');
+            }
+            transcription = transcriptionResponse.data.transcription;
             aiResponse = transcriptionResponse.data.response || 'Thank you for your speech!';
+            ttsUrl = transcriptionResponse.data.tts_url || null; // Get TTS URL from same response
             pythonApiAvailable = true;
             console.log('Using transcription from Python API:', transcription);
             console.log('Using AI response from Python API:', aiResponse);
+            console.log('Using TTS URL from Python API:', ttsUrl);
         }
         catch (transcriptionError) {
             console.error('=== PYTHON API FAILED ===');
             console.error('Python API call failed:', transcriptionError.message);
             console.error('Error details:', ((_a = transcriptionError.response) === null || _a === void 0 ? void 0 : _a.data) || transcriptionError.code || 'No additional details');
+            // Check if it's a timeout
+            if (transcriptionError.code === 'ECONNABORTED' || transcriptionError.message.includes('timeout')) {
+                console.error('❌ TIMEOUT: Python API took too long to respond');
+                console.error('💡 This is likely due to cold start on Render free tier');
+            }
             console.log('Falling back to basic transcription and response');
             pythonApiAvailable = false;
-            // Keep the default values
-        }
-        // Generate text-to-speech for the response using Gemini TTS API
-        let ttsUrl = null;
-        const language = req.body.language || 'en';
-        try {
-            const ttsFileName = `tts_${Date.now()}.aiff`;
-            const ttsFilePath = path_1.default.join(uploadsDir, ttsFileName);
-            console.log('Generating TTS using Gemini API for language:', language);
-            console.log('TTS text length:', aiResponse.length);
-            // Call Python API for Gemini TTS
-            const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5000';
-            const ttsResponse = yield axios_1.default.post(`${pythonApiUrl}/generate_tts`, {
-                text: aiResponse,
-                language_code: language,
-                output_path: ttsFilePath
-            }, {
-                headers: { 'Content-Type': 'application/json' },
-                timeout: 30000
-            });
-            if (ttsResponse.data.success && ttsResponse.data.output_path) {
-                // Check if file was created
-                if (fs_1.default.existsSync(ttsFilePath)) {
-                    const stats = fs_1.default.statSync(ttsFilePath);
-                    console.log('TTS file created, size:', stats.size, 'bytes');
-                    ttsUrl = `/uploads/${ttsFileName}`;
-                    console.log('TTS audio generated at:', ttsUrl);
-                }
-                else {
-                    console.error('TTS file was not created');
-                    ttsUrl = null;
-                }
-            }
-            else {
-                console.error('TTS generation failed:', ttsResponse.data.error);
-                ttsUrl = null;
-            }
-        }
-        catch (ttsError) {
-            console.error('TTS error:', ttsError);
+            // Provide a more helpful fallback response based on the language
+            const language = req.body.language || 'en';
+            const fallbackResponses = {
+                'en': 'Hello! What would you like to talk about today?',
+                'es': '¡Hola! ¿De qué te gustaría hablar hoy?',
+                'fr': 'Bonjour ! De quoi aimeriez-vous parler aujourd\'hui ?',
+                'de': 'Hallo! Worüber möchten Sie heute sprechen?',
+                'ja': 'こんにちは！今日は何について話したいですか？',
+                'ko': '안녕하세요! 오늘 무엇에 대해 이야기하고 싶으신가요?',
+                'zh': '你好！今天你想聊什么？',
+                'hi': 'नमस्ते! आज आप किस बारे में बात करना चाहते हैं?',
+                'ta': 'வணக்கம்! இன்று நீங்கள் எதைப் பற்றி பேச விரும்புகிறீர்கள்?',
+                'ml': 'നമസ്കാരം! ഇന്ന് നിങ്ങൾ എന്തിനെക്കുറിച്ച് സംസാരിക്കാൻ ആഗ്രഹിക്കുന്നു?',
+                'or': 'ନମସ୍କାର! ଆଜି ଆପଣ କ\'ଣ ବିଷୟରେ କଥା ହେବାକୁ ଚାହୁଁଛନ୍ତି?',
+                'tl': 'Kumusta! Ano ang gusto mong pag-usapan ngayon?'
+            };
+            transcription = 'Speech recorded';
+            aiResponse = fallbackResponses[language] || fallbackResponses['en'];
             ttsUrl = null;
         }
+        // TTS is now handled in the Python API response
+        // No additional TTS generation needed here
         // Store the audio file path and chat history globally for detailed feedback later
         globalAny.lastAudioFile = audioFilePath;
         globalAny.lastTranscription = transcription;
@@ -385,7 +424,8 @@ app.post('/api/analyze', authenticateJWT, upload.single('audio'), (req, res) => 
             transcription: transcription,
             aiResponse: aiResponse,
             ttsUrl: ttsUrl,
-            sessionId: null
+            sessionId: null,
+            processingTime: Date.now() - startTime
         });
     }
     catch (error) {
@@ -488,12 +528,10 @@ app.post('/api/messages/:messageId/feedback', authenticateJWT, (req, res) => __a
     }
 }));
 // Save session endpoint
-app.post('/api/save-session', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+app.post('/api/save-session', authenticateJWT, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { userId, chatHistory, language = 'en' } = req.body;
-        if (!userId) {
-            return res.status(401).json({ error: 'User ID required' });
-        }
+        const { chatHistory, language = 'en' } = req.body;
+        const userId = req.user.userId;
         if (!chatHistory || !Array.isArray(chatHistory) || chatHistory.length === 0) {
             return res.status(400).json({ error: 'No chat history provided' });
         }
@@ -1487,6 +1525,21 @@ function cleanupOldFiles() {
 setInterval(cleanupOldFiles, 6 * 60 * 60 * 1000);
 // Also run cleanup on startup
 cleanupOldFiles();
+// Keep Python API warm with periodic health checks
+function keepPythonAPIWarm() {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5000';
+            yield pythonApiClient.get(`${pythonApiUrl}/health`, { timeout: 10000 });
+            console.log('✅ Python API keep-alive ping successful');
+        }
+        catch (error) {
+            console.log('⚠️ Python API keep-alive ping failed:', error.message);
+        }
+    });
+}
+// Ping Python API every 10 minutes to keep it warm
+setInterval(keepPythonAPIWarm, 10 * 60 * 1000);
 // Simple cleanup - delete files older than 1 day
 // Helper function to check Python API health
 function checkPythonAPIHealth() {

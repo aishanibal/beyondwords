@@ -50,7 +50,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
       const cleanBackendUrl = backendUrl.endsWith('/') ? backendUrl.slice(0, -1) : backendUrl;
       
-              axios.get(`${cleanBackendUrl}/api/user/profile`, {
+              axios.get(`${cleanBackendUrl}/api/user`, {
         headers: { Authorization: `Bearer ${token}` }
       })
         .then((res: any) => {

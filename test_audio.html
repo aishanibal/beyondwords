@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Recording Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 10px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        .recording {
+            background-color: red;
+            color: white;
+        }
+        .status {
+            margin: 20px 0;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+    </style>
+</head>
+<body>
+    <h1>Audio Recording Test</h1>
+    
+    <div id="status" class="status info">Ready to test audio recording...</div>
+    
+    <button id="startBtn">Start Recording</button>
+    <button id="stopBtn" disabled>Stop Recording</button>
+    <button id="testBtn">Test Microphone Access</button>
+    
+    <div id="audioOutput"></div>
+
+    <script>
+        let mediaRecorder;
+        let audioChunks = [];
+        let mediaStream;
+
+        function updateStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+        }
+
+        async function testMicrophoneAccess() {
+            try {
+                updateStatus('Testing microphone access...', 'info');
+                
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    throw new Error('MediaDevices API not supported');
+                }
+
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                updateStatus('✅ Microphone access granted!', 'success');
+                
+                // Stop the test stream
+                stream.getTracks().forEach(track => track.stop());
+                
+            } catch (error) {
+                updateStatus(`❌ Microphone access failed: ${error.message}`, 'error');
+                console.error('Microphone test error:', error);
+            }
+        }
+
+        async function startRecording() {
+            try {
+                updateStatus('Starting recording...', 'info');
+                
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    throw new Error('MediaDevices API not supported');
+                }
+
+                mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                audioChunks = [];
+                
+                mediaRecorder = new MediaRecorder(mediaStream);
+                
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        audioChunks.push(event.data);
+                    }
+                };
+                
+                mediaRecorder.onstop = () => {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    
+                    const audio = document.createElement('audio');
+                    audio.controls = true;
+                    audio.src = audioUrl;
+                    
+                    document.getElementById('audioOutput').innerHTML = '';
+                    document.getElementById('audioOutput').appendChild(audio);
+                    
+                    updateStatus(`✅ Recording completed! File size: ${audioBlob.size} bytes`, 'success');
+                };
+                
+                mediaRecorder.start();
+                document.getElementById('startBtn').disabled = true;
+                document.getElementById('stopBtn').disabled = false;
+                document.getElementById('startBtn').classList.add('recording');
+                
+                updateStatus('🔴 Recording... Click "Stop Recording" when done', 'info');
+                
+            } catch (error) {
+                updateStatus(`❌ Recording failed: ${error.message}`, 'error');
+                console.error('Recording error:', error);
+            }
+        }
+
+        function stopRecording() {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+            }
+            
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(track => track.stop());
+            }
+            
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = true;
+            document.getElementById('startBtn').classList.remove('recording');
+        }
+
+        // Event listeners
+        document.getElementById('testBtn').addEventListener('click', testMicrophoneAccess);
+        document.getElementById('startBtn').addEventListener('click', startRecording);
+        document.getElementById('stopBtn').addEventListener('click', stopRecording);
+
+        // Check browser compatibility on load
+        window.addEventListener('load', () => {
+            const checks = [];
+            
+            if (!navigator.mediaDevices) {
+                checks.push('MediaDevices API not supported');
+            }
+            
+            if (!navigator.mediaDevices?.getUserMedia) {
+                checks.push('getUserMedia not supported');
+            }
+            
+            if (!window.MediaRecorder) {
+                checks.push('MediaRecorder API not supported');
+            }
+            
+            if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
+                checks.push('getUserMedia requires HTTPS in production');
+            }
+            
+            if (checks.length > 0) {
+                updateStatus(`⚠️ Browser compatibility issues: ${checks.join(', ')}`, 'error');
+            } else {
+                updateStatus('✅ Browser compatibility check passed', 'success');
+            }
+        });
+    </script>
+</body>
+</html> 
