@@ -1715,7 +1715,27 @@ def get_conversational_response(transcription: str, chat_history: List[Dict], la
     context = "\n".join([f"{msg['sender']}: {msg['text']}" for msg in chat_history[-4:]]) if chat_history else ""
     
     # Make separate Gemini call for conversation
-    return tutor.get_conversational_response(transcription, context, description)
+    try:
+        print(f"🔍 Making Gemini API call for conversational response...")
+        result = tutor.get_conversational_response(transcription, context, description)
+        print(f"✅ Gemini API call successful")
+        return result
+    except Exception as e:
+        print(f"❌ Gemini API error in get_conversational_response: {e}")
+        print(f"❌ Error type: {type(e).__name__}")
+        
+        # Check if it's a Gemini API error
+        error_str = str(e).lower()
+        if '500' in error_str or 'internal error' in error_str:
+            print("🔍 This is a Gemini API server error (500)")
+        elif 'quota' in error_str or 'limit' in error_str:
+            print("🔍 This is a Gemini API quota/limit error")
+        elif 'key' in error_str or 'auth' in error_str:
+            print("🔍 This is a Gemini API authentication error")
+        elif 'timeout' in error_str:
+            print("🔍 This is a Gemini API timeout error")
+        
+        raise e
 
 def get_detailed_feedback(phoneme_analysis: str, reference_text: str, recognized_text: str, chat_history: List[Dict], language: str = 'en', user_level: str = 'beginner', user_topics: List[str] = None, feedback_language: str = 'en', description: str = None, romanization_display: str = None) -> str:
     """Get detailed feedback using separate Gemini call."""
