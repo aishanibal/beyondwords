@@ -5,7 +5,7 @@
     "gemini_enabled": true,
     "cost_limit_per_day": 1,
     "usage_tracking": true,
-    "active_tts": "gemini"
+    "active_tts": "system"
   },
   "google_api_settings": {
     "services_enabled": true,
@@ -50,9 +50,15 @@
         "gemini": 8,
         "system": 6,
         "total_cost": 0.010365
+      },
+      "2025-08-14": {
+        "google_cloud": 0,
+        "gemini": 1,
+        "system": 0,
+        "total_cost": 0.001215
       }
     },
-    "total_cost": 0.127958,
+    "total_cost": 0.12917299999999998,
     "last_reset": "2025-08-04T18:51:13.952106"
   },
   "admin_features": {

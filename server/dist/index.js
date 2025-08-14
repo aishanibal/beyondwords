@@ -399,7 +399,7 @@ app.post('/api/feedback', authenticateJWT, (req, res) => __awaiter(void 0, void 
             const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5000';
             const pythonResponse = yield axios_1.default.post(`${pythonApiUrl}/feedback`, {
                 chat_history,
-                last_transcription: user_input,
+                recognized_text: user_input,
                 language,
                 user_level,
                 user_topics,
