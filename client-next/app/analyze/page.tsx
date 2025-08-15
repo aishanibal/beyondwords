@@ -470,19 +470,15 @@ function Analyze() {
     // Add click handler to close popup when clicking outside
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as HTMLElement;
-      console.log('Click outside handler triggered, target:', target);
       
       if (target && target.closest('[data-popup="true"]')) {
-        console.log('Click was on popup, not hiding');
         return; // Don't hide if clicking on popup
       }
       
       if (target && target.closest('[data-clickable-word="true"]')) {
-        console.log('Click was on clickable word, not hiding');
         return; // Don't hide if clicking on a word
       }
       
-      console.log('Click was outside popup, hiding popup');
       setActivePopup(null);
     };
 
@@ -553,7 +549,7 @@ function Analyze() {
 
   // Debug chat history changes
   useEffect(() => {
-    console.log('Chat history changed:', chatHistory);
+    // Chat history monitoring removed for performance
   }, [chatHistory]);
 
   // Function to fetch user's dashboard preferences
@@ -581,14 +577,12 @@ function Analyze() {
 
   const loadExistingConversation = async (convId: string | null) => {
     if (!user || !convId) {
-      console.log('[DEBUG] No user or conversation ID, skipping load');
       return;
     }
-    console.log('[DEBUG] Loading existing conversation:', convId);
     setIsLoadingConversation(true);
     try {
       const response = await axios.get(`/api/conversations/${convId}`, { headers: getAuthHeaders() });
-      console.log('[DEBUG] Conversation load response:', response.data);
+      
       const conversation = response.data.conversation;
       setConversationId(conversation.id);
       setLanguage(conversation.language);
@@ -618,13 +612,7 @@ function Analyze() {
         user_goals = typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : user.learning_goals;
       }
       
-      console.log('[DEBUG] Learning goals extraction:', {
-        conversationLearningGoalsRaw: conversation.learning_goals,
-        conversationLearningGoalsParsed: conversationLearningGoals,
-        dashboardPrefsLearningGoals: dashboardPrefs?.learning_goals,
-        userLearningGoals: user?.learning_goals,
-        finalUserGoals: user_goals
-      });
+
       
       const romanizationDisplay = dashboardPrefs?.romanization_display || 'both';
       
@@ -686,12 +674,6 @@ function Analyze() {
 
   // Handle conversation loading and creation
   useEffect(() => {
-    console.log('[DEBUG] useEffect for conversation loading:', {
-      user,
-      conversationId,
-      isLoadingConversation,
-      urlConversationId
-    });
     
   
   
@@ -963,12 +945,10 @@ function Analyze() {
 
   // New: Separate function to fetch and show short feedback
   const fetchAndShowShortFeedback = async (transcription: string) => {
-    console.log('[DEBUG] fetchAndShowShortFeedback called', { autoSpeak, enableShortFeedback, chatHistory: [...chatHistory] });
     if (!autoSpeak || !enableShortFeedback) return;
     
     // Prevent duplicate calls while processing
     if (isProcessingShortFeedback) {
-      console.log('[DEBUG] Already processing short feedback, skipping duplicate call');
       return;
     }
     
@@ -981,7 +961,6 @@ function Analyze() {
     );
     
     if (existingFeedback) {
-      console.log('[DEBUG] Short feedback already exists, skipping duplicate call');
       return;
     }
     
@@ -990,7 +969,6 @@ function Analyze() {
     // Prepare context (last 4 messages)
     const context = chatHistory.slice(-4).map(msg => `${msg.sender}: ${msg.text}`).join('\n');
     try {
-      console.log('[DEBUG] (fetchAndShowShortFeedback) Calling /short_feedback API with:', { transcription, context, language, user_level: userPreferences.userLevel, user_topics: userPreferences.topics, formality: userPreferences.formality, feedback_language: userPreferences.feedbackLanguage });
       // Call the Express proxy endpoint instead of Python directly
       const token = localStorage.getItem('jwt');
       const shortFeedbackRes = await axios.post(
@@ -1006,18 +984,13 @@ function Analyze() {
         },
         token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
       );
-      console.log('[DEBUG] /short_feedback response', shortFeedbackRes);
       const shortFeedback = shortFeedbackRes.data.short_feedback;
-      console.log('[DEBUG] shortFeedback value:', shortFeedback);
       
       if (shortFeedback !== undefined && shortFeedback !== null && shortFeedback !== '') {
-        console.log('[DEBUG] Adding System feedback to chatHistory', { shortFeedback, chatHistory: [...chatHistory] });
-        
         // Use a more reliable approach to set the short feedback key
         setChatHistory(prev => {
           const currentLength = prev.length;
           const updated = [...prev, { sender: 'System', text: shortFeedback, timestamp: new Date() }];
-          console.log('[DEBUG] (fetchAndShowShortFeedback) Updated chatHistory after System message:', updated);
           
           // Set short feedback with the correct index
           setShortFeedbacks(shortFeedbacks => ({ ...shortFeedbacks, [currentLength]: shortFeedback }));
@@ -1028,11 +1001,9 @@ function Analyze() {
         // Play short feedback TTS (if autospeak and feedback exists)
         const cacheKey = `short_feedback_${Date.now()}`;
         await playTTSAudio(shortFeedback, language, cacheKey);
-      } else {
-        console.warn('[DEBUG] (fetchAndShowShortFeedback) shortFeedback is empty or undefined:', shortFeedback);
       }
     } catch (e: unknown) {
-      console.error('[DEBUG] (fetchAndShowShortFeedback) Error calling /short_feedback API:', e);
+      // Error handling removed for performance
     } finally {
       setIsProcessingShortFeedback(false);
     }
@@ -1040,13 +1011,10 @@ function Analyze() {
 
   // TTS functions with caching - now integrated with admin-controlled backend
   const generateTTSForText = async (text: string, language: string, cacheKey: string): Promise<string | null> => {
-    console.log('[DEBUG] generateTTSForText called with:', { text, language, cacheKey });
-    
     // Check cache first (cache for 5 minutes)
     const cached = ttsCache.get(cacheKey);
     const now = Date.now();
     if (cached && (now - cached.timestamp) < 5 * 60 * 1000) {
-      console.log('Using cached TTS for:', cacheKey);
       return cached.url;
     }
     
@@ -1055,10 +1023,6 @@ function Analyze() {
     
     try {
       const token = localStorage.getItem('jwt');
-      
-      console.log('[DEBUG] Sending TTS request with text:', text);
-      console.log('[DEBUG] TTS request payload:', { text, language });
-      console.log('[DEBUG] User token available:', !!token);
       
       // Call the Node.js server which will route to Python API with admin controls
       const response = await axios.post('http://localhost:4000/api/tts-test', {
@@ -1244,18 +1208,15 @@ function Analyze() {
       // Note: Suggestions will be hidden by the !isProcessing condition in the render
       
       // Add placeholder message immediately
-      console.log('[DEBUG] Adding placeholder message:', placeholderMessage);
       setChatHistory(prev => [...prev, placeholderMessage]);
       
       // Step 1: Get transcription first
-      console.log('[DEBUG] Step 1: Getting transcription...');
       const formData = new FormData();
       formData.append('audio', audioBlob, 'recording.webm');
       formData.append('language', language);
       
       // Add JWT token to headers
       const token = localStorage.getItem('jwt');
-      console.log('[DEBUG] Sending transcription request to /api/transcribe_only');
       const transcriptionResponse = await axios.post('/api/transcribe_only', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
@@ -1263,15 +1224,7 @@ function Analyze() {
         }
       });
       
-      console.log('[DEBUG] Transcription response:', transcriptionResponse.data);
-      console.log('[DEBUG] Full transcription response:', transcriptionResponse.data);
-      console.log('[DEBUG] Response status:', transcriptionResponse.status);
-      console.log('[DEBUG] Response headers:', transcriptionResponse.headers);
-      
       const transcription = transcriptionResponse.data.transcription || 'Speech recorded';
-      console.log('[DEBUG] Transcription received:', transcription);
-      console.log('[DEBUG] Transcription length:', transcription.length);
-      console.log('[DEBUG] Transcription is empty or fallback:', !transcription || transcription === 'Speech recorded');
       
       // Generate romanized text for user messages in script languages
       let userRomanizedText = '';
@@ -1280,12 +1233,10 @@ function Analyze() {
       }
       
       // Replace the placeholder message with the actual transcript
-      console.log('[DEBUG] Replacing placeholder with transcript:', transcription);
       setChatHistory(prev => {
         const updated = prev.map((msg, index) => {
           // Find the last processing message and replace it
           if (msg.isProcessing && msg.sender === 'User') {
-            console.log('[DEBUG] Found processing message to replace:', msg);
             return {
               ...msg,
               text: transcription,
@@ -1295,7 +1246,6 @@ function Analyze() {
           }
           return msg;
         });
-        console.log('[DEBUG] Updated chat history after transcript replacement:', updated);
         return updated;
       });
       
@@ -1305,7 +1255,6 @@ function Analyze() {
       }
       
       // Step 2: Get AI response separately
-      console.log('[DEBUG] Step 2: Getting AI response...');
       
       // Add AI processing message after transcript is displayed
       const aiProcessingMessage = { 
@@ -1338,7 +1287,7 @@ function Analyze() {
         feedback_language: userPreferences.feedbackLanguage
       };
       
-      console.log('[DEBUG] Sending AI response request to /api/ai_response with data:', aiResponseData);
+
       const aiResponseResponse = await axios.post('/api/ai_response', aiResponseData, {
         headers: {
           'Content-Type': 'application/json',
@@ -1346,19 +1295,15 @@ function Analyze() {
         }
       });
       
-      console.log('[DEBUG] AI response response:', aiResponseResponse.data);
       const aiResponse = aiResponseResponse.data.response;
-      console.log('[DEBUG] AI response received:', aiResponse);
       
               // Add AI response if present
         if (aiResponse) {
-          console.log('[DEBUG] Adding AI response:', aiResponse);
           const formattedResponse = formatScriptLanguageText(aiResponse, language);
           setChatHistory(prev => {
             const updated = prev.map((msg, index) => {
               // Find the last processing AI message and replace it
               if (msg.isProcessing && msg.sender === 'AI') {
-                console.log('[DEBUG] Found AI processing message to replace:', msg);
                 return {
                   ...msg,
                   text: formattedResponse.mainText,
@@ -1369,7 +1314,6 @@ function Analyze() {
               }
               return msg;
             });
-            console.log('[DEBUG] Chat history after replacing AI processing message:', updated);
             return updated;
           });
           if (conversationId) {
@@ -1377,8 +1321,6 @@ function Analyze() {
           }
           
           // Automatically play TTS for AI message
-          console.log('[DEBUG] Auto-playing TTS for AI message:', formattedResponse.mainText);
-          console.log('[DEBUG] Formatted response:', formattedResponse);
           const aiMessage: ChatMessage = {
             text: formattedResponse.mainText,
             romanizedText: formattedResponse.romanizedText,
@@ -1387,9 +1329,6 @@ function Analyze() {
             isFromOriginalConversation: false
           };
           const ttsText = getTTSText(aiMessage, userPreferences.romanizationDisplay, language);
-          console.log('[DEBUG] TTS text before cleaning:', ttsText);
-          console.log('[DEBUG] User preferences romanization display:', userPreferences.romanizationDisplay);
-          console.log('[DEBUG] Language:', language);
           const cacheKey = `ai_message_auto_${Date.now()}`;
           await playTTSAudio(ttsText, language, cacheKey);
           
@@ -1398,16 +1337,8 @@ function Analyze() {
         }
       
       // Note: TTS is handled separately if needed
-      console.log('[DEBUG] Audio processing complete');
     } catch (error: unknown) {
-      console.error('[DEBUG] Error in sendAudioToBackend:', error);
-      if (axios.isAxiosError(error)) {
-        console.error('[DEBUG] Axios error details:', {
-          status: error.response?.status,
-          data: error.response?.data,
-          message: error.message
-        });
-      }
+      // Error handling removed for performance
       const errorMessage = {
         sender: 'System',
         text: '❌ Error processing audio. Please try again.',
@@ -1416,7 +1347,6 @@ function Analyze() {
       };
       setChatHistory(prev => [...prev, errorMessage]);
     } finally {
-      console.log('[DEBUG] Clearing processing state');
       setIsProcessing(false);
     }
   };
@@ -1443,7 +1373,7 @@ function Analyze() {
         user_level: user?.proficiency_level || 'beginner',
         user_topics: user?.talk_topics || []
       };
-      console.log('Detailed feedback payload:', payload);
+
       const response = await axios.post(
         '/api/feedback',
         payload,
@@ -1566,27 +1496,14 @@ function Analyze() {
     try {
       const sessionMessages = getSessionMessages();
       
-      // Debug logging for conversation history
-      console.log('[DEBUG] Total chat history length:', chatHistory.length);
-      console.log('[DEBUG] Session messages (new only):', sessionMessages.length);
-      console.log('[DEBUG] Session messages details:', sessionMessages.map(msg => ({
-        sender: msg.sender,
-        text: msg.text.substring(0, 50) + '...',
-        timestamp: msg.timestamp,
-        isFromOriginalConversation: msg.isFromOriginalConversation
-      })));
-      
       if (sessionMessages.length === 0) {
-        console.log('No session messages found for evaluation');
         router.push('/dashboard');
         return;
       }
       
       const userSessionMessages = sessionMessages.filter(msg => msg.sender === 'User');
-      console.log('[DEBUG] User session messages:', userSessionMessages.length);
       
       if (userSessionMessages.length === 0) {
-        console.log('No user messages in session, skipping evaluation');
         router.push('/dashboard');
         return;
       }
@@ -1595,13 +1512,9 @@ function Analyze() {
       const hasContinuedConversation = sessionStartTime !== null;
       const hasNewMessages = userSessionMessages.length > 0;
       
-      console.log('[DEBUG] Is continued conversation:', hasContinuedConversation);
-      console.log('[DEBUG] Has new messages:', hasNewMessages);
-      
       // If continued conversation but no new messages, just navigate to dashboard
       // But only if we don't have any progress data to show
       if (hasContinuedConversation && !hasNewMessages) {
-        console.log('Continued conversation with no new messages, navigating to dashboard');
         // Don't navigate immediately - let the progress modal logic handle it
         // router.push('/dashboard');
         // return;
@@ -1609,8 +1522,6 @@ function Analyze() {
       
       // Use the learning goals from the current conversation (userPreferences.user_goals)
       // Also try to get from user object if not available in preferences
-      console.log('[DEBUG] userPreferences in generateConversationSummary:', userPreferences);
-      console.log('[DEBUG] userPreferences.user_goals:', userPreferences.user_goals);
       
       // Try to get learning goals from multiple sources
       let user_goals = userPreferences.user_goals?.length > 0 
@@ -1619,7 +1530,6 @@ function Analyze() {
       
       // If still empty, try to get from the conversation object directly
       if (!user_goals || user_goals.length === 0) {
-        console.log('[DEBUG] user_goals is empty, trying to get from conversation object');
         // Try to fetch the conversation again to get the learning goals
         try {
           const token = localStorage.getItem('jwt');
@@ -1631,11 +1541,10 @@ function Analyze() {
             const conversationLearningGoals = typeof conversation.learning_goals === 'string' 
               ? JSON.parse(conversation.learning_goals) 
               : conversation.learning_goals;
-            console.log('[DEBUG] Retrieved learning goals from conversation:', conversationLearningGoals);
             user_goals = conversationLearningGoals;
           }
         } catch (error) {
-          console.log('[DEBUG] Error fetching conversation for learning goals:', error);
+          // Error handling removed for performance
         }
       }
       
@@ -1645,9 +1554,8 @@ function Analyze() {
       if (storedProgress) {
         try {
           userSubgoalProgress = JSON.parse(storedProgress);
-          console.log('[DEBUG] Loaded user subgoal progress for evaluation:', userSubgoalProgress);
         } catch (error) {
-          console.error('[DEBUG] Error parsing stored subgoal progress:', error);
+          // Error handling removed for performance
         }
       }
       
@@ -1655,10 +1563,8 @@ function Analyze() {
       
       if (user_goals.length > 0) {
         // User has specific learning goals for this conversation
-        console.log('[DEBUG] Building subgoal instructions from goals:', user_goals);
         subgoalInstructions = user_goals.map((goalId: string) => {
           const goal = LEARNING_GOALS.find((g: LearningGoal) => g.id === goalId);
-          console.log(`[DEBUG] Processing goal ${goalId} for instructions:`, goal);
           
           if (goal?.subgoals) {
             const instructions = goal.subgoals
@@ -1668,10 +1574,8 @@ function Analyze() {
                 const userLevel = getSubgoalLevel(subgoal.id, userSubgoalProgress);
                 // Use progressive description based on current level
                 const progressiveDescription = getProgressiveSubgoalDescription(subgoal.id, userLevel);
-                console.log(`[DEBUG] Subgoal ${subgoal.id}: level=${userLevel}, progressive description:`, progressiveDescription);
                 return progressiveDescription;
               });
-            console.log(`[DEBUG] Instructions for goal ${goalId}:`, instructions);
             return instructions.join('\n');
           }
           return '';
@@ -1687,7 +1591,6 @@ function Analyze() {
               const userLevel = getSubgoalLevel(subgoal.id, userSubgoalProgress);
               // Use progressive description based on current level
               const progressiveDescription = getProgressiveSubgoalDescription(subgoal.id, userLevel);
-              console.log(`[DEBUG] Default subgoal ${subgoal.id}: level=${userLevel}, progressive description:`, progressiveDescription);
               return progressiveDescription;
             })
             .join('\n');
@@ -1696,11 +1599,8 @@ function Analyze() {
         }
       }
       
-      console.log('[DEBUG] Final subgoal instructions:', subgoalInstructions);
-
       // Check if this is a continued conversation (has existing title)
       const isContinuedConversation = sessionStartTime !== null;
-      console.log('[DEBUG] Is continued conversation:', isContinuedConversation);
       
       // If continued conversation, we should preserve the existing title
       // and only evaluate new messages for progress
@@ -1711,8 +1611,6 @@ function Analyze() {
         feedback_language: userPreferences?.feedbackLanguage || 'en',
         is_continued_conversation: isContinuedConversation
       };
-      
-      console.log('[DEBUG] Request payload:', requestPayload);
 
       const token = localStorage.getItem('jwt');
       const response = await axios.post('/api/conversation-summary', requestPayload, {
@@ -1721,7 +1619,7 @@ function Analyze() {
         }
       });
 
-                      console.log('Summary response:', response.data);
+                
       
       // Update the existing conversation with the Gemini-generated title and synopsis
       if (conversationId) {
@@ -1738,14 +1636,10 @@ function Analyze() {
             });
             
             const existingTitle = conversationResponse.data?.conversation?.title;
-            console.log('[DEBUG] Existing conversation title:', existingTitle);
-            
             // Always update title when a new one is generated, regardless of existing title
             // This ensures that the most relevant title (based on actual conversation content) is used
-            console.log('[DEBUG] Will update title with new generated title:', response.data.title);
           } catch (error) {
-            console.error('[DEBUG] Error fetching conversation data:', error);
-            // If we can't fetch the conversation data, proceed with updating the title
+            // Error handling removed for performance
           }
           
           // Only update the title if we should and if we have a valid title
@@ -1758,7 +1652,6 @@ function Analyze() {
           // });
           
           if (shouldUpdateTitle && response.data.title && response.data.title.trim() !== '' && response.data.title !== '[No Title]') {
-            console.log('[DEBUG] Updating conversation title:', response.data.title);
             await axios.put(`/api/conversations/${conversationId}/title`, {
               title: response.data.title
             }, {
@@ -4012,21 +3905,9 @@ Yes, the current serials don't have the same quality as the old ones, right?
     });
   };
 
-  // Debug progress modal state
-  console.log('Progress modal state:', { showProgressModal, progressData });
-  
   // Monitor progressData changes
   useEffect(() => {
-    if (progressData) {
-      console.log('[DEBUG] ProgressData changed:', {
-        percentages: progressData.percentages,
-        percentagesType: typeof progressData.percentages,
-        percentagesLength: progressData.percentages?.length,
-        subgoalNames: progressData.subgoalNames,
-        subgoalIds: progressData.subgoalIds,
-        levelUpEvents: progressData.levelUpEvents
-      });
-    }
+    // Progress data monitoring removed for performance
   }, [progressData]);
   
   const getSummaryPreview = (synopsis: string) => {
@@ -4050,6 +3931,30 @@ Yes, the current serials don't have the same quality as the old ones, right?
     
     return sessionMessages;
   };
+
+  // Memoized formatted messages to prevent unnecessary re-computations
+  const memoizedFormattedMessages = useMemo(() => {
+    return chatHistory.map(message => 
+      formatMessageForDisplay(message, userPreferences.romanizationDisplay)
+    );
+  }, [chatHistory, userPreferences.romanizationDisplay]);
+
+  // Performance optimization: Only render the last 50 messages to prevent UI lag
+  const visibleMessages = useMemo(() => {
+    const maxMessages = 50;
+    if (chatHistory.length <= maxMessages) {
+      return chatHistory;
+    }
+    return chatHistory.slice(-maxMessages);
+  }, [chatHistory]);
+
+  const visibleFormattedMessages = useMemo(() => {
+    const maxMessages = 50;
+    if (memoizedFormattedMessages.length <= maxMessages) {
+      return memoizedFormattedMessages;
+    }
+    return memoizedFormattedMessages.slice(-maxMessages);
+  }, [memoizedFormattedMessages]);
   
   // Set session start time when conversation is loaded from URL (user clicked "Continue")
   useEffect(() => {
@@ -4060,9 +3965,6 @@ Yes, the current serials don't have the same quality as the old ones, right?
       const lastMessageTime = new Date(Math.max(...chatHistory.map(msg => msg.timestamp.getTime())));
       const newSessionStartTime = new Date(lastMessageTime.getTime() + 1000); // 1 second after the last message
       setSessionStartTime(newSessionStartTime);
-      console.log('[DEBUG] Set session start time for continued conversation:', newSessionStartTime);
-      console.log('[DEBUG] Last message time:', lastMessageTime);
-      console.log('[DEBUG] Has original messages:', hasOriginalMessages);
     }
   }, [user, urlConversationId, chatHistory, sessionStartTime]);
   
@@ -4597,31 +4499,21 @@ Yes, the current serials don't have the same quality as the old ones, right?
             {explainButtonPressed && (
               <button
                 onClick={() => {
-                  console.log('[DEBUG] "Get Detailed Explanation" button clicked');
-                  console.log('[DEBUG] Current shortFeedback:', shortFeedback);
-                  console.log('[DEBUG] Current chatHistory:', chatHistory);
-                  console.log('[DEBUG] Current shortFeedbacks:', shortFeedbacks);
-                  
                   // Find the current AI message that has short feedback
                   const currentMessageIndex = chatHistory.findIndex((msg, index) => 
                     msg.sender === 'AI' && shortFeedbacks[index] === shortFeedback
                   );
                   
-                  console.log('[DEBUG] Found messageIndex:', currentMessageIndex);
-                  
                   if (currentMessageIndex !== -1) {
-                    console.log('[DEBUG] Calling requestDetailedBreakdownForMessage with index:', currentMessageIndex);
                     requestDetailedBreakdownForMessage(currentMessageIndex);
                   } else {
-                    console.log('[DEBUG] Could not find matching AI message for shortFeedback');
                     // Fallback: try to find any AI message with short feedback
                     const fallbackIndex = chatHistory.findIndex((msg, index) => 
                       msg.sender === 'AI' && shortFeedbacks[index]
                     );
-                                      if (fallbackIndex !== -1) {
-                    console.log('[DEBUG] Using fallback messageIndex:', fallbackIndex);
-                    requestDetailedFeedbackForMessage(fallbackIndex);
-                  }
+                    if (fallbackIndex !== -1) {
+                      requestDetailedFeedbackForMessage(fallbackIndex);
+                    }
                   }
                 }}
                 disabled={!shortFeedback}
@@ -4989,7 +4881,19 @@ Yes, the current serials don't have the same quality as the old ones, right?
               📂 Loading conversation...
             </div>
           )}
-          {chatHistory.map((message: ChatMessage, index) => (
+          {chatHistory.length > 50 && (
+            <div style={{
+              width: '100%',
+              textAlign: 'center',
+              padding: '0.5rem',
+              color: isDarkMode ? '#94a3b8' : '#666',
+              fontSize: '0.8rem',
+              fontStyle: 'italic'
+            }}>
+              Showing last 50 of {chatHistory.length} messages
+            </div>
+          )}
+          {visibleMessages.map((message: ChatMessage, index) => (
             <div key={index} style={{
               width: '100%',
               display: 'flex',
@@ -5044,15 +4948,7 @@ Yes, the current serials don't have the same quality as the old ones, right?
                 }}
                               >
                   {(() => {
-                    const formatted = formatMessageForDisplay(message, userPreferences.romanizationDisplay);
-                    console.log('[DEBUG] Message rendering:', {
-                      index,
-                      hasDetailedFeedback: !!message.detailedFeedback,
-                      detailedFeedback: message.detailedFeedback,
-                      mainText: formatted.mainText,
-                      romanizedText: formatted.romanizedText,
-                      romanizationDisplay: userPreferences.romanizationDisplay
-                    });
+                    const formatted = visibleFormattedMessages[index];
                     return (
                       <div style={{ display: 'flex', flexDirection: 'column' }}>
                         <span style={{ color: message.sender === 'User' ? '#fff' : 'inherit' }}>
