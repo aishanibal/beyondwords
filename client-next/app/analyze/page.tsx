@@ -156,7 +156,7 @@ function usePersistentChatHistory(user: User | null): [ChatMessage[], React.Disp
   return [chatHistory, setChatHistory];
 }
 
-const Analyze = React.memo(function Analyze() {
+const Analyze = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isDarkMode } = useDarkMode();
@@ -4871,7 +4871,10 @@ Yes, the current serials don't have the same quality as the old ones, right?
                     isProcessing={isProcessing}
                     playExistingTTS={playExistingTTS}
                     showCorrectedVersions={showCorrectedVersions}
-                    extractCorrectedVersion={extractCorrectedVersion}
+                    extractCorrectedVersion={(feedback) => {
+                      const result = extractCorrectedVersion(feedback);
+                      return result ? { ...result, romanizedText: result.romanizedText || '' } : null;
+                    }}
                     renderFormattedText={renderFormattedText}
                   />
                 </div>
@@ -5634,7 +5637,8 @@ Yes, the current serials don't have the same quality as the old ones, right?
       )}
       </div>
 
+    </div>
   );
-});
+};
 
 export default Analyze;
