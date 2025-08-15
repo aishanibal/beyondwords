@@ -3,7 +3,7 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable react/no-unescaped-entities */
 "use client";
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useUser } from '../ClientLayout';
 import { useDarkMode } from '../contexts/DarkModeContext';
 import axios from 'axios';
