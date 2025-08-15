@@ -509,6 +509,27 @@ function Analyze() {
     return () => clearInterval(interval);
   }, [ttsCache]);
 
+  // Auto-close progress modal after 10 seconds to prevent stuck overlays
+  useEffect(() => {
+    if (showProgressModal) {
+      const timer = setTimeout(() => {
+        setShowProgressModal(false);
+        setProgressData(null);
+      }, 10000); // 10 seconds
+      
+      return () => clearTimeout(timer);
+    }
+  }, [showProgressModal]);
+
+  // Prevent progress modal from showing with too many messages
+  useEffect(() => {
+    if (showProgressModal && chatHistory.length >= 30) {
+      setShowProgressModal(false);
+      setProgressData(null);
+      router.push('/dashboard');
+    }
+  }, [showProgressModal, chatHistory.length, router]);
+
   // On unmount: stop recording and save session if needed
   useEffect(() => {
     return () => {
@@ -1664,13 +1685,7 @@ function Analyze() {
           }
           
           // Update the conversation with the synopsis and progress data
-          console.log('Saving synopsis and progress data:', {
-            synopsis: response.data.synopsis,
-            progress_data: response.data.progress_percentages ? JSON.stringify({
-              goals: user_goals,
-              percentages: response.data.progress_percentages
-            }) : null
-          });
+          // Progress data saved successfully
           
           // Only save progress data if it's valid and not empty
           const progressDataToSave = response.data.progress_percentages && 
@@ -1778,7 +1793,7 @@ function Analyze() {
             
             const subgoalNames = user_goals?.map((goalId: string) => {
               const goal = LEARNING_GOALS.find((g: LearningGoal) => g.id === goalId);
-              console.log('Found goal for ID', goalId, ':', goal);
+              // Goal found
               return goal?.subgoals?.map(subgoal => {
                 const userLevel = getSubgoalLevel(subgoal.id, updatedSubgoalProgress);
                 
@@ -1849,8 +1864,13 @@ function Analyze() {
             //   percentagesMap: finalProgressData.percentages?.map((p, i) => ({ index: i, value: p, type: typeof p }))
             // });
             
-            setProgressData(finalProgressData);
-            setShowProgressModal(true);
+            // If too many messages, skip progress modal and go to dashboard
+            if (chatHistory.length >= 30) {
+              router.push('/dashboard');
+            } else {
+              setProgressData(finalProgressData);
+              setShowProgressModal(true);
+            }
             // console.log('Progress modal should be visible now');
             // console.log('showProgressModal state:', true);
                       } else {
@@ -2623,7 +2643,7 @@ function Analyze() {
 
   // Persona-related functions
   const handleEndChat = async () => {
-    console.log('handleEndChat called, isNewPersona:', isNewPersona);
+            // End chat initiated
     
     // Check if there are any session messages before proceeding
     const sessionMessages = getSessionMessages();
@@ -5679,7 +5699,7 @@ Yes, the current serials don't have the same quality as the old ones, right?
       )}
 
       {/* Progress Modal */}
-      {showProgressModal && progressData && (
+      {showProgressModal && progressData && chatHistory.length < 30 && (
         <div style={{
           position: 'fixed',
           top: 0,
@@ -5775,25 +5795,13 @@ Yes, the current serials don't have the same quality as the old ones, right?
               
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                 {progressData.subgoalNames.map((subgoalName, index) => {
-                  console.log(`[DEBUG] Progress modal - index ${index}:`, {
-                    subgoalName,
-                    percentage: progressData.percentages ? progressData.percentages[index] : 'undefined',
-                    allPercentages: progressData.percentages,
-                    progressDataKeys: Object.keys(progressData),
-                    percentagesLength: progressData.percentages?.length,
-                    index: index,
-                    progressDataType: typeof progressData,
-                    percentagesType: typeof progressData.percentages,
-                    isArray: Array.isArray(progressData.percentages)
-                  });
-                  
                   // Check if this subgoal has a level up event
                   const levelUpEvent = progressData.levelUpEvents?.find(event => 
                     event.subgoalId === progressData.subgoalIds[index]
                   );
                   
                   return (
-                    <div key={index} style={{
+                    <div key={`progress-${progressData.subgoalIds[index]}-${index}`} style={{
                       background: 'var(--card)',
                       borderRadius: '8px',
                       padding: '0.5rem',
