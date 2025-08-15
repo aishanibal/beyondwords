@@ -142,7 +142,7 @@ const ChatMessageItem: React.FC<ChatMessageItemProps> = React.memo(({
     }}>
       <div style={messageBubbleStyle}>
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <span>{formatted.mainText}</span>
+          <span style={{ fontSize: '0.9rem' }}>{formatted.mainText}</span>
           {formatted.romanizedText && (
             <span style={{
               fontSize: '0.85em',
