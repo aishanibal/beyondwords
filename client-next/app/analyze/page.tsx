@@ -2929,19 +2929,20 @@ const Analyze = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usePersona, user]);
 
-  const formatMessageForDisplay = (message: ChatMessage, romanizationDisplay: string | undefined): { mainText: string; romanizedText?: string } => {
-  // For non-script languages or undefined preference, just show the text
-  if (!romanizationDisplay || romanizationDisplay === 'both') {
-    return { mainText: message.text, romanizedText: message.romanizedText };
-  } else if (romanizationDisplay === 'script_only') {
-    return { mainText: message.text };
-  } else if (romanizationDisplay === 'romanized_only') {
-    return { mainText: message.romanizedText || message.text };
-  } else {
-    // Default to showing both
-    return { mainText: message.text, romanizedText: message.romanizedText };
-  }
-};
+  const formatMessageForDisplay = (message: ChatMessage, romanizationDisplay: string | undefined): { mainText: string; romanizedText: string } => {
+    const romanizedText = message.romanizedText || '';
+    // For non-script languages or undefined preference, just show the text
+    if (!romanizationDisplay || romanizationDisplay === 'both') {
+      return { mainText: message.text, romanizedText: romanizedText };
+    } else if (romanizationDisplay === 'script_only') {
+      return { mainText: message.text, romanizedText: '' };
+    } else if (romanizationDisplay === 'romanized_only') {
+      return { mainText: romanizedText || message.text, romanizedText: '' };
+    } else {
+      // Default to showing both
+      return { mainText: message.text, romanizedText: romanizedText };
+    }
+  };
 
   // Helper function to get the appropriate text for TTS based on romanization display preference
   const getTTSText = (message: ChatMessage, romanizationDisplay: string | undefined, language: string): string => {
@@ -4816,21 +4817,25 @@ Yes, the current serials don't have the same quality as the old ones, right?
           display: 'flex',
           flexDirection: 'column',
           position: 'relative',
-          minHeight: 0, /* Important for flex child to respect parent's size */
-          height: '100%'
+          background: isDarkMode ? 'var(--background)' : '#fcfcfc',
+          boxShadow: isDarkMode
+            ? 'inset 8px 0 16px -8px rgba(0,0,0,0.4)'
+            : 'inset 8px 0 16px -8px rgba(0,0,0,0.06)',
+          height: 'calc(100vh - 80px)' // Fixed height to account for header
         }}>
           {/* Chat Messages - Scrollable area */}
           <div 
             ref={chatContainerRef}
-            style={{ 
-              flex: 1, 
-              padding: '0.75rem', 
+            className="chat-messages-container"
+            style={{
+              padding: '1.5rem',
               overflowY: 'auto',
-              overflowX: 'hidden',
-              position: 'relative',
+              flex: 1, // Take up remaining space
               display: 'flex',
               flexDirection: 'column',
-              minHeight: 0 /* Important for flex child to respect parent's size */
+              gap: '1rem',
+              minHeight: 0, // Allow flex item to shrink
+              maxHeight: 'calc(100vh - 280px)' // Give more space for bottom controls
             }}
           >
           <div style={{ height: `${totalHeight}px`, position: 'relative' }}>
@@ -5003,198 +5008,192 @@ Yes, the current serials don't have the same quality as the old ones, right?
           </div>
         </div>
 
-
-
-          {/* Recording Controls - Fixed at bottom */}
-          {chatHistory.length > 0 && (
+          {/* Recording Controls - Fixed bottom bar */}
           <div
             ref={recordingControlsRef}
-            style={{ 
-              position: 'absolute',
-              bottom: 0,
-              left: '50%',
-              transform: 'translateX(-50%)',
-              width: '90%', /* Take up 90% of the panel width */
-              maxWidth: '800px',
-              padding: '1rem 1rem 1rem 1rem', 
-              background: isDarkMode 
-                ? 'linear-gradient(135deg, var(--muted) 0%, rgba(255,255,255,0.02) 100%)' 
+            style={{
+              width: '100%', // Take up full width of the panel
+              padding: '1rem',
+              background: isDarkMode
+                ? 'linear-gradient(135deg, var(--muted) 0%, rgba(255,255,255,0.02) 100%)'
                 : 'linear-gradient(135deg, rgba(195,141,148,0.08) 0%, rgba(195,141,148,0.03) 100%)',
-              borderRadius: '16px',
+              borderTop: isDarkMode ? '1px solid var(--border)' : '1px solid #e0e0e0',
               textAlign: 'center',
               transition: 'all 0.3s ease',
-              boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
-              zIndex: 10
+              boxShadow: '0 -4px 12px rgba(0,0,0,0.05)',
+              zIndex: 10,
+              flexShrink: 0, // Prevent shrinking
+              height: '120px', // Increased height for bottom controls
+              position: 'sticky',
+              bottom: 0
             }}
           >
-            {/* Main controls layout */}
-            <div style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'space-between',
-              height: '100%',
-              minHeight: '60px'
-            }}>
-              {/* Left side - Autospeak and Short Feedback buttons */}
+              {/* Main controls layout */}
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '0.75rem',
-                flex: 1
+                justifyContent: 'space-between',
+                height: '100%',
+                minHeight: '60px'
               }}>
-                {/* Autospeak Toggle Button */}
-                <motion.button
-                  onClick={() => setAutoSpeak(v => !v)}
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  style={{
-                    background: autoSpeak 
-                      ? 'linear-gradient(135deg, var(--blue-secondary) 0%, #5a6b8a 100%)' 
-                      : 'linear-gradient(135deg, var(--blue-secondary) 0%, #5a6b8a 100%)',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: 12,
-                    padding: '0.6rem 1rem',
-                    cursor: 'pointer',
-                    fontWeight: 600,
-                    fontSize: '0.8rem',
-                    transition: 'all 0.3s ease',
-                    boxShadow: '0 6px 24px rgba(60,76,115,0.25), 0 2px 8px rgba(60,76,115,0.15)',
-                    minWidth: '110px',
-                    fontFamily: 'Montserrat, Arial, sans-serif',
-                    transform: 'translateZ(0)'
-                  }}
-                >
-                  {autoSpeak ? '✅ Autospeak ON' : 'Autospeak OFF'}
-                </motion.button>
-
-                {/* Short Feedback Toggle Button */}
-                <motion.button
-                  onClick={() => setEnableShortFeedback(v => !v)}
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  style={{
-                    background: enableShortFeedback 
-                      ? 'linear-gradient(135deg, var(--blue-secondary) 0%, #5a6b8a 100%)' 
-                      : 'linear-gradient(135deg, var(--rose-primary) 0%, #8a6a7a 100%)',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: 12,
-                    padding: '0.6rem 1rem',
-                    cursor: 'pointer',
-                    fontWeight: 600,
-                    fontSize: '0.8rem',
-                    transition: 'all 0.3s ease',
-                    boxShadow: '0 6px 24px rgba(60,76,115,0.25), 0 2px 8px rgba(60,76,115,0.15)',
-                    minWidth: '110px',
-                    fontFamily: 'Montserrat, Arial, sans-serif',
-                    transform: 'translateZ(0)'
-                  }}
-                >
-                  {enableShortFeedback ? '💡 Short Feedback ON' : 'Short Feedback OFF'}
-                </motion.button>
-              </div>
-
-              {/* Center - Microphone Button */}
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '0.75rem',
-                flex: 1
-              }}>
-                <motion.button
-                  onClick={isRecording ? () => stopRecording(false) : startRecording}
-                  disabled={isProcessing || (autoSpeak && isRecording)}
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  style={{
-                    width: 56,
-                    height: 56,
-                    borderRadius: '50%',
-                    border: 'none',
-                    background: isRecording 
-                      ? 'linear-gradient(135deg, var(--blue-secondary) 0%, #5a6b8a 100%)' 
-                      : 'linear-gradient(135deg, var(--rose-primary) 0%, #8a6a7a 100%)',
-                    color: '#fff',
-                    fontSize: '24px',
-                    cursor: isProcessing || (autoSpeak && isRecording) ? 'not-allowed' : 'pointer',
-                    transition: 'all 0.3s ease',
-                    boxShadow: isRecording 
-                      ? '0 0 0 10px rgba(195,141,148,0.4), 0 10px 40px rgba(60,76,115,0.4)' 
-                      : '0 10px 40px rgba(60,76,115,0.3)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    transform: isRecording ? 'scale(1.1)' : 'scale(1)',
-                    animation: isRecording ? 'pulse 2s infinite' : 'none',
-                    backdropFilter: 'blur(20px)'
-                  }}
-                  title={isRecording ? 'Stop Recording' : 'Start Recording'}
-                >
-                  {isRecording ? '⏹️' : '🎤'}
-                </motion.button>
-
-                {/* Redo Button - Only show in manual mode when recording */}
-                {isRecording && manualRecording && (
-                  <button
-                    onClick={() => stopRecording(true)}
+                {/* Left side - Autospeak and Short Feedback buttons */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.75rem',
+                  flex: 1
+                }}>
+                  {/* Autospeak Toggle Button */}
+                  <motion.button
+                    onClick={() => setAutoSpeak(v => !v)}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
                     style={{
-                      background: isDarkMode 
-                        ? 'linear-gradient(135deg, var(--rose-primary) 0%, #8a6a7a 100%)' 
+                      background: autoSpeak 
+                        ? 'linear-gradient(135deg, var(--blue-secondary) 0%, #5a6b8a 100%)' 
+                        : 'linear-gradient(135deg, var(--blue-secondary) 0%, #5a6b8a 100%)',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: 12,
+                      padding: '0.6rem 1rem',
+                      cursor: 'pointer',
+                      fontWeight: 600,
+                      fontSize: '0.8rem',
+                      transition: 'all 0.3s ease',
+                      boxShadow: '0 6px 24px rgba(60,76,115,0.25), 0 2px 8px rgba(60,76,115,0.15)',
+                      minWidth: '110px',
+                      fontFamily: 'Montserrat, Arial, sans-serif',
+                      transform: 'translateZ(0)'
+                    }}
+                  >
+                    {autoSpeak ? '✅ Autospeak ON' : 'Autospeak OFF'}
+                  </motion.button>
+
+                  {/* Short Feedback Toggle Button */}
+                  <motion.button
+                    onClick={() => setEnableShortFeedback(v => !v)}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    style={{
+                      background: enableShortFeedback 
+                        ? 'linear-gradient(135deg, var(--blue-secondary) 0%, #5a6b8a 100%)' 
                         : 'linear-gradient(135deg, var(--rose-primary) 0%, #8a6a7a 100%)',
                       color: '#fff',
                       border: 'none',
-                      borderRadius: 6,
-                      padding: '0.4rem 0.8rem',
+                      borderRadius: 12,
+                      padding: '0.6rem 1rem',
                       cursor: 'pointer',
-                      fontWeight: 500,
-                      fontSize: '0.75rem',
-                      transition: 'all 0.2s ease',
-                      boxShadow: '0 1px 3px rgba(195,141,148,0.10)',
-                      minWidth: '80px',
-                      fontFamily: 'Montserrat, Arial, sans-serif'
+                      fontWeight: 600,
+                      fontSize: '0.8rem',
+                      transition: 'all 0.3s ease',
+                      boxShadow: '0 6px 24px rgba(60,76,115,0.25), 0 2px 8px rgba(60,76,115,0.15)',
+                      minWidth: '110px',
+                      fontFamily: 'Montserrat, Arial, sans-serif',
+                      transform: 'translateZ(0)'
                     }}
                   >
-                    ⏹️ Redo
-                  </button>
-                )}
-              </div>
+                    {enableShortFeedback ? '💡 Short Feedback ON' : 'Short Feedback OFF'}
+                  </motion.button>
+                </div>
 
-              {/* Right side - End Chat Button */}
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'flex-end',
-                flex: 1
-              }}>
-                <button
-                  onClick={handleEndChat}
-                  style={{
-                    background: 'linear-gradient(135deg, var(--rose-primary) 0%, #8a6a7a 100%)',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: 12,
-                    padding: '0.6rem 1rem',
-                    cursor: 'pointer',
-                    fontWeight: 600,
-                    fontSize: '0.85rem',
-                    transition: 'all 0.3s ease',
-                    boxShadow: '0 6px 24px rgba(60,76,115,0.25), 0 2px 8px rgba(60,76,115,0.15)',
-                    minWidth: '110px',
-                    fontFamily: 'Montserrat, Arial, sans-serif',
-                    transform: 'translateZ(0)'
-                  }}
-                  title="End chat, generate summary, and return to dashboard"
-                >
-                  🏠 End Chat
-                </button>
+                {/* Center - Microphone Button */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.75rem',
+                  flex: 1
+                }}>
+                  <motion.button
+                    onClick={isRecording ? () => stopRecording(false) : startRecording}
+                    disabled={isProcessing || (autoSpeak && isRecording)}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    style={{
+                      width: 56,
+                      height: 56,
+                      borderRadius: '50%',
+                      border: 'none',
+                      background: isRecording 
+                        ? 'linear-gradient(135deg, var(--blue-secondary) 0%, #5a6b8a 100%)' 
+                        : 'linear-gradient(135deg, var(--rose-primary) 0%, #8a6a7a 100%)',
+                      color: '#fff',
+                      fontSize: '24px',
+                      cursor: isProcessing || (autoSpeak && isRecording) ? 'not-allowed' : 'pointer',
+                      transition: 'all 0.3s ease',
+                      boxShadow: isRecording 
+                        ? '0 0 0 10px rgba(195,141,148,0.4), 0 10px 40px rgba(60,76,115,0.4)' 
+                        : '0 10px 40px rgba(60,76,115,0.3)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transform: isRecording ? 'scale(1.1)' : 'scale(1)',
+                      animation: isRecording ? 'pulse 2s infinite' : 'none',
+                      backdropFilter: 'blur(20px)'
+                    }}
+                    title={isRecording ? 'Stop Recording' : 'Start Recording'}
+                  >
+                    {isRecording ? '⏹️' : '🎤'}
+                  </motion.button>
+
+                  {/* Redo Button - Only show in manual mode when recording */}
+                  {isRecording && manualRecording && (
+                    <button
+                      onClick={() => stopRecording(true)}
+                      style={{
+                        background: isDarkMode 
+                          ? 'linear-gradient(135deg, var(--rose-primary) 0%, #8a6a7a 100%)' 
+                          : 'linear-gradient(135deg, var(--rose-primary) 0%, #8a6a7a 100%)',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: 6,
+                        padding: '0.4rem 0.8rem',
+                        cursor: 'pointer',
+                        fontWeight: 500,
+                        fontSize: '0.75rem',
+                        transition: 'all 0.2s ease',
+                        boxShadow: '0 1px 3px rgba(195,141,148,0.10)',
+                        minWidth: '80px',
+                        fontFamily: 'Montserrat, Arial, sans-serif'
+                      }}
+                    >
+                      ⏹️ Redo
+                    </button>
+                  )}
+                </div>
+
+                {/* Right side - End Chat Button */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'flex-end',
+                  flex: 1
+                }}>
+                  <button
+                    onClick={handleEndChat}
+                    style={{
+                      background: 'linear-gradient(135deg, var(--rose-primary) 0%, #8a6a7a 100%)',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: 12,
+                      padding: '0.6rem 1rem',
+                      cursor: 'pointer',
+                      fontWeight: 600,
+                      fontSize: '0.85rem',
+                      transition: 'all 0.3s ease',
+                      boxShadow: '0 6px 24px rgba(60,76,115,0.25), 0 2px 8px rgba(60,76,115,0.15)',
+                      minWidth: '110px',
+                      fontFamily: 'Montserrat, Arial, sans-serif',
+                      transform: 'translateZ(0)'
+                    }}
+                    title="End chat, generate summary, and return to dashboard"
+                  >
+                    🏠 End Chat
+                  </button>
+                </div>
               </div>
             </div>
-
-
-          </div>
-        )}
+        </div>
       </div>
       {/* Interrupt message - prominent UI position */}
       {wasInterrupted && !isRecording && (
@@ -5636,8 +5635,6 @@ Yes, the current serials don't have the same quality as the old ones, right?
         </div>
       )}
       </div>
-
-    </div>
   );
 };
 
