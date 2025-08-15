@@ -155,7 +155,7 @@ function usePersistentChatHistory(user: User | null): [ChatMessage[], React.Disp
   return [chatHistory, setChatHistory];
 }
 
-function Analyze() {
+const Analyze = React.memo(function Analyze() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isDarkMode } = useDarkMode();
@@ -520,6 +520,19 @@ function Analyze() {
       return () => clearTimeout(timer);
     }
   }, [showProgressModal]);
+
+  // Cleanup effect to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      // Clear any pending timeouts
+      if (typeof window !== 'undefined') {
+        const highestTimeoutId = setTimeout(() => {}, 0);
+        for (let i = 0; i < Number(highestTimeoutId); i++) {
+          clearTimeout(i);
+        }
+      }
+    };
+  }, []);
 
   // Prevent progress modal from showing with too many messages
   useEffect(() => {
@@ -3818,9 +3831,9 @@ Yes, the current serials don't have the same quality as the old ones, right?
     );
   }, [chatHistory, userPreferences.romanizationDisplay]);
 
-  // Performance optimization: Only render the last 50 messages to prevent UI lag
+  // Performance optimization: Only render the last 25 messages to prevent UI lag
   const visibleMessages = useMemo(() => {
-    const maxMessages = 50;
+    const maxMessages = 25;
     if (chatHistory.length <= maxMessages) {
       return chatHistory;
     }
@@ -3828,7 +3841,7 @@ Yes, the current serials don't have the same quality as the old ones, right?
   }, [chatHistory]);
 
   const visibleFormattedMessages = useMemo(() => {
-    const maxMessages = 50;
+    const maxMessages = 25;
     if (memoizedFormattedMessages.length <= maxMessages) {
       return memoizedFormattedMessages;
     }
@@ -4760,20 +4773,20 @@ Yes, the current serials don't have the same quality as the old ones, right?
               📂 Loading conversation...
             </div>
           )}
-          {chatHistory.length > 50 && (
-            <div style={{
-              width: '100%',
-              textAlign: 'center',
-              padding: '0.5rem',
-              color: isDarkMode ? '#94a3b8' : '#666',
-              fontSize: '0.8rem',
-              fontStyle: 'italic'
-            }}>
-              Showing last 50 of {chatHistory.length} messages
-            </div>
-          )}
-          {visibleMessages.map((message: ChatMessage, index) => (
-            <div key={index} style={{
+                          {chatHistory.length > 25 && (
+                  <div style={{
+                    width: '100%',
+                    textAlign: 'center',
+                    padding: '0.5rem',
+                    color: isDarkMode ? '#94a3b8' : '#666',
+                    fontSize: '0.8rem',
+                    fontStyle: 'italic'
+                  }}>
+                    Showing last 25 of {chatHistory.length} messages
+                  </div>
+                )}
+                      {visibleMessages.map((message: ChatMessage, index) => (
+              <div key={`message-${message.id || index}-${message.timestamp?.getTime() || Date.now()}`} style={{
               width: '100%',
               display: 'flex',
               flexDirection: 'column',
@@ -6000,6 +6013,6 @@ Yes, the current serials don't have the same quality as the old ones, right?
       </div>
     </div>
   );
-}
+});
 
 export default Analyze;
