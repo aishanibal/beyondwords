@@ -3913,28 +3913,38 @@ Yes, the current serials don't have the same quality as the old ones, right?
   const [totalHeight, setTotalHeight] = useState(0);
   const ESTIMATED_MESSAGE_HEIGHT = 120; // Adjust as needed for average message height
 
-  // Auto-scroll to bottom when new messages are added or suggestions are shown
+  // Auto-scroll when new content appears (messages, suggestions, etc.)
   React.useEffect(() => {
     if (chatContainerRef.current) {
       const container = chatContainerRef.current;
-      // Use a longer timeout to ensure virtualized list has rendered
+      
+      // Auto-scroll to show new content
       setTimeout(() => {
-        // Check if this is a continued conversation
-        const hasOriginalMessages = chatHistory.some(msg => msg.isFromOriginalConversation);
-        const isContinuedConversation = hasOriginalMessages && chatHistory.length > 0;
-        
-        if (isContinuedConversation && !isLoadingConversation) {
-          // For continued conversations, scroll to the very last message
+        container.scrollTop = container.scrollHeight;
+      }, 100);
+    }
+  }, [chatHistory.length, showSuggestionCarousel, suggestionMessages.length, showSuggestionTranslations]); // Trigger when new content appears
+
+  // Auto-scroll only when a conversation is first loaded from Continue button
+  React.useEffect(() => {
+    if (chatContainerRef.current && isLoadingConversation === false) {
+      const container = chatContainerRef.current;
+      
+      // Check if this is a continued conversation (has messages from original conversation)
+      const hasOriginalMessages = chatHistory.some(msg => msg.isFromOriginalConversation);
+      const isContinuedConversation = hasOriginalMessages && chatHistory.length > 0;
+      
+      // Only auto-scroll for continued conversations when they first finish loading
+      if (isContinuedConversation) {
+        // Use a longer timeout to ensure virtualized list has rendered
+        setTimeout(() => {
           const lastMessageIndex = chatHistory.length - 1;
           const lastMessagePosition = lastMessageIndex * ESTIMATED_MESSAGE_HEIGHT;
           container.scrollTop = lastMessagePosition;
-        } else {
-          // For new conversations or when loading, scroll to bottom
-          container.scrollTop = container.scrollHeight;
-        }
-      }, 300);
+        }, 300);
+      }
     }
-  }, [chatHistory.length, showSuggestionCarousel, suggestionMessages.length, isLoadingConversation, totalHeight]);
+  }, [isLoadingConversation]); // Only trigger when loading state changes
 
   // Effect to calculate virtual items based on scroll
   useEffect(() => {
@@ -3944,6 +3954,9 @@ Yes, the current serials don't have the same quality as the old ones, right?
     const handleScroll = () => {
       const scrollTop = container.scrollTop;
       const containerHeight = container.clientHeight;
+      
+
+      
       const newVirtualItems: { index: number; start: number }[] = [];
       let currentHeight = 0;
       
@@ -3955,31 +3968,29 @@ Yes, the current serials don't have the same quality as the old ones, right?
       if (isContinuedConversation && !isLoadingConversation) {
         // Calculate the position where we want to start rendering (last 15 messages)
         const lastMessagesStart = Math.max(0, chatHistory.length - 15);
-        const targetScrollTop = lastMessagesStart * ESTIMATED_MESSAGE_HEIGHT;
         
-        // Set the scroll position immediately to prevent flash
-        if (container.scrollTop === 0) {
-          container.scrollTop = targetScrollTop;
-        }
-        
-        // Render the last 15 messages and any messages around the target area
+        // Render messages based on current scroll position with larger buffer
         for (let i = 0; i < chatHistory.length; i++) {
           const itemHeight = ESTIMATED_MESSAGE_HEIGHT;
           const messageTop = currentHeight;
           const messageBottom = currentHeight + itemHeight;
           
-          // Render if it's in the last 15 messages or near the target scroll position
+          // Render if it's in the last 15 messages OR in the current viewport with large buffer
           if (i >= lastMessagesStart || 
-              (messageBottom > targetScrollTop - containerHeight && messageTop < targetScrollTop + containerHeight * 2)) {
+              (messageBottom > scrollTop - containerHeight * 2 && messageTop < scrollTop + containerHeight * 3)) {
             newVirtualItems.push({ index: i, start: currentHeight });
           }
           currentHeight += itemHeight;
         }
       } else {
-        // Normal virtualization for new conversations
+        // Normal virtualization for new conversations with larger buffer
         for (let i = 0; i < chatHistory.length; i++) {
           const itemHeight = ESTIMATED_MESSAGE_HEIGHT;
-          if (currentHeight + itemHeight > scrollTop && currentHeight < scrollTop + containerHeight + 200) {
+          const messageTop = currentHeight;
+          const messageBottom = currentHeight + itemHeight;
+          
+          // Render messages in viewport with larger buffer to prevent disappearing
+          if (messageBottom > scrollTop - containerHeight && messageTop < scrollTop + containerHeight * 2) {
             newVirtualItems.push({ index: i, start: currentHeight });
           }
           currentHeight += itemHeight;
