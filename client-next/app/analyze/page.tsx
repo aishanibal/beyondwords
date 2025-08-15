@@ -1701,9 +1701,7 @@ function Analyze() {
           
           // CRITICAL: Ensure progress_percentages is always available
           const progressPercentages = response.data.progress_percentages || [];
-          console.log('[DEBUG] Progress data received:', progressPercentages);
-          console.log('[DEBUG] Progress data type:', typeof progressPercentages);
-          console.log('[DEBUG] Progress data length:', progressPercentages?.length);
+          
           
           // Always show progress modal if we have progress data, regardless of whether percentages changed
           // Also show if it's a continued conversation with new messages
@@ -1759,12 +1757,8 @@ function Analyze() {
                 );
                 
                 if (levelUpEvent) {
-                  console.log(`[DEBUG] Level up detected for ${subgoalId} with ${percentage}%`);
-                  console.log(`[DEBUG] Level up event:`, levelUpEvent);
-                  levelUpEvents.push(levelUpEvent);
-                } else {
-                  console.log(`[DEBUG] No level up for ${subgoalId} with ${percentage}%`);
-                }
+                              levelUpEvents.push(levelUpEvent);
+          }
                 
                 // Update the progress array
                 updatedSubgoalProgress.splice(0, updatedSubgoalProgress.length, ...updatedProgress);
@@ -1795,28 +1789,13 @@ function Analyze() {
                 // Otherwise, use the current level
                 const descriptionLevel = levelUpEvent ? levelUpEvent.oldLevel : userLevel;
                 
-                console.log(`[DEBUG] Subgoal ${subgoal.id}:`, {
-                  userLevel,
-                  levelUpEvent: levelUpEvent ? { oldLevel: levelUpEvent.oldLevel, newLevel: levelUpEvent.newLevel } : null,
-                  descriptionLevel,
-                  description: getProgressiveSubgoalDescription(subgoal.id, descriptionLevel)
-                });
+
                 
                 return getProgressiveSubgoalDescription(subgoal.id, descriptionLevel);
               }) || [];
             }).flat().slice(0, 3) || []; // Take first 3 subgoals
             
-            console.log('Subgoal names:', subgoalNames);
-            console.log('Level up events:', levelUpEvents);
-            console.log('[DEBUG] Response data:', response.data);
-            console.log('[DEBUG] Progress percentages from response:', response.data.progress_percentages);
-            console.log('[DEBUG] Progress percentages type:', typeof response.data.progress_percentages);
-            console.log('[DEBUG] Progress percentages is array:', Array.isArray(response.data.progress_percentages));
-            console.log('Setting progress data:', {
-              percentages: response.data.progress_percentages,
-              subgoalNames: subgoalNames,
-              levelUpEvents: levelUpEvents
-            });
+
             
             // Create progress transition data
                         const progressTransitions = response.data.progress_percentages && Array.isArray(response.data.progress_percentages) 
@@ -1860,16 +1839,7 @@ function Analyze() {
               progressTransitions: progressTransitions
             };
             
-            console.log('[DEBUG] Final progress data percentages:', finalProgressData.percentages);
-            console.log('[DEBUG] Final progress data being set:', {
-              percentages: finalProgressData.percentages,
-              percentagesType: typeof finalProgressData.percentages,
-              percentagesLength: finalProgressData.percentages?.length,
-              percentagesValues: finalProgressData.percentages,
-              subgoalNames: finalProgressData.subgoalNames,
-              subgoalIds: finalProgressData.subgoalIds,
-              levelUpEvents: finalProgressData.levelUpEvents
-            });
+
             
             // console.log('[DEBUG] Final progress data being set:', {
             //   ...finalProgressData,
@@ -1879,10 +1849,8 @@ function Analyze() {
             //   percentagesMap: finalProgressData.percentages?.map((p, i) => ({ index: i, value: p, type: typeof p }))
             // });
             
-            console.log('[DEBUG] About to set progress data:', finalProgressData);
             setProgressData(finalProgressData);
             setShowProgressModal(true);
-            console.log('[DEBUG] Progress modal state after setting:', { showProgressModal: true, progressData: finalProgressData });
             // console.log('Progress modal should be visible now');
             // console.log('showProgressModal state:', true);
                       } else {
@@ -1923,10 +1891,8 @@ function Analyze() {
         },
         token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
       );
-      console.log('[DEBUG] POST /api/conversations/:id/messages response:', response.data);
       // Use the AI message from the POST response if present
       if (response.data && response.data.aiMessage) {
-        console.log('[DEBUG] AI message from POST response:', response.data.aiMessage);
         const formattedMessage = formatScriptLanguageText((response.data.aiMessage as any).text, language);
         setChatHistory([{ 
           sender: 'AI', 
@@ -1936,7 +1902,6 @@ function Analyze() {
           isFromOriginalConversation: false // New conversation message
         }]);
       } else {
-        console.log('[DEBUG] No aiMessage in POST response, falling back to GET');
         // Fallback: fetch the updated conversation to get the AI's reply
         const token = localStorage.getItem('jwt');
         const convRes = await axios.get(
@@ -1947,7 +1912,6 @@ function Analyze() {
         // Find the first AI message
         const aiMsg = messages.find((m: unknown) => (m as any).sender === 'AI');
         if (aiMsg) {
-          console.log('[DEBUG] AI message from GET:', aiMsg);
           const formattedMessage = formatScriptLanguageText((aiMsg as any).text, language);
           setChatHistory([{ 
             sender: 'AI', 
@@ -1956,12 +1920,9 @@ function Analyze() {
             timestamp: new Date((aiMsg as any).created_at),
             isFromOriginalConversation: false // New conversation message
           }]);
-        } else {
-          console.log('[DEBUG] No AI message found in conversation after GET');
         }
       }
     } catch (err: unknown) {
-      console.error('[DEBUG] Error in fetchInitialAIMessage:', err);
       // Fallback: just add a generic AI greeting
       setChatHistory([{ sender: 'AI', text: 'Hello! What would you like to talk about today?', timestamp: new Date(), isFromOriginalConversation: false }]);
     } finally {
@@ -1978,7 +1939,6 @@ function Analyze() {
     
     // For new conversations, sessionStartTime should be null initially
     setSessionStartTime(null);
-    console.log('[DEBUG] Set session start time for new conversation: null');
     
     // Set the conversation description
     setConversationDescription(description || '');
@@ -1989,13 +1949,6 @@ function Analyze() {
     
     // Mark this as a new persona only if it's not using an existing persona
     setIsNewPersona(!isUsingExistingPersona);
-    
-    console.log('[DEBUG] Starting conversation with persona:', { 
-      description, 
-      isPersonaConversation, 
-      formality, 
-      topics 
-    });
     
     // Fetch user's dashboard preferences for this language
     const dashboardPrefs = await fetchUserDashboardPreferences(language);
@@ -2047,7 +2000,6 @@ function Analyze() {
         }
       } else {
         // Auto-generate and play TTS for initial AI message
-        console.log('[DEBUG] Auto-playing TTS for initial AI message:', formattedMessage.mainText);
         const aiMessageObj: ChatMessage = {
           text: formattedMessage.mainText,
           romanizedText: formattedMessage.romanizedText,
@@ -2067,7 +2019,6 @@ function Analyze() {
       setChatHistory([{ sender: 'AI', text: fallbackMessage, timestamp: new Date(), isFromOriginalConversation: false }]);
       
       // Auto-generate and play TTS for fallback AI message
-      console.log('[DEBUG] Auto-playing TTS for fallback AI message:', fallbackMessage);
       const aiMessageObj: ChatMessage = {
         text: fallbackMessage,
         sender: 'AI',
@@ -2094,10 +2045,8 @@ function Analyze() {
   const saveMessageToBackend = async (sender: string, text: string, messageType = 'text', audioFilePath = null, targetConversationId = null, romanizedText: string | null = null) => {
     const useConversationId = targetConversationId || conversationId;
     if (!useConversationId) {
-      console.error('[DEBUG] No conversation ID available');
       return;
     }
-    console.log('[DEBUG] Saving message to backend:', { sender, text, messageType, audioFilePath, romanizedText, conversationId: useConversationId });
     try {
       const token = localStorage.getItem('jwt');
       const response = await axios.post(
@@ -2111,10 +2060,8 @@ function Analyze() {
         },
         token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
       );
-      console.log('[DEBUG] Message saved to backend successfully:', response.data);
     } catch (error: unknown) {
-      console.error('[DEBUG] Error saving message to backend:', error);
-      console.error('[DEBUG] Error details:', (error as any).response?.data || (error as any).message);
+      // Error handling removed for performance
     }
   };
 
@@ -2208,8 +2155,6 @@ function Analyze() {
         user_goals: userPreferences.user_goals
       };
       
-      console.log('[DEBUG] explainSuggestion() calling /api/explain_suggestion with:', requestData);
-      
       const response = await axios.post(
         '/api/explain_suggestion',
         requestData,
@@ -2217,7 +2162,6 @@ function Analyze() {
       );
       
       const result = response.data;
-      console.log('[DEBUG] explainSuggestion() received response:', result);
 
       
       // Clean the explanation text to remove HTML-like markup
@@ -2268,15 +2212,10 @@ function Analyze() {
   };
 
   const requestDetailedFeedbackForMessage = async (messageIndex: number) => {
-    console.log('[DEBUG] requestDetailedFeedbackForMessage called with index:', messageIndex);
-    console.log('[DEBUG] conversationId:', conversationId);
-    
     if (!conversationId) {
-      console.log('[DEBUG] No conversationId, returning early');
       return;
     }
     
-    console.log('[DEBUG] Setting loading state for message:', messageIndex);
     setIsLoadingMessageFeedback(prev => ({ ...prev, [messageIndex]: true }));
     
     try {
@@ -2289,14 +2228,12 @@ function Analyze() {
       
       // Ensure user preferences are loaded for the current language
       if (!userPreferences.romanizationDisplay || userPreferences.romanizationDisplay === 'both') {
-        console.log('[DEBUG] Loading user dashboard preferences for language:', language);
         const dashboardPrefs = await fetchUserDashboardPreferences(language || 'en');
         if (dashboardPrefs) {
           setUserPreferences(prev => ({
             ...prev,
             romanizationDisplay: dashboardPrefs.romanization_display || 'both'
           }));
-          console.log('[DEBUG] Updated user preferences with dashboard settings:', dashboardPrefs);
         }
       }
       
@@ -2309,65 +2246,25 @@ function Analyze() {
         romanization_display: userPreferences.romanizationDisplay
       };
       
-      console.log('[DEBUG] Request data for feedback:', requestData);
-      console.log('[DEBUG] Current language:', language);
-      console.log('[DEBUG] User preferences:', userPreferences);
+
       
-      console.log('[DEBUG] Sending to /api/feedback:', requestData);
-      console.log('[DEBUG] Request data details:', {
-        user_input: user_input,
-        context_length: context.length,
-        language: language,
-        user_level: userPreferences.userLevel,
-        user_topics: userPreferences.topics
-      });
-      
-      // Test server connectivity first
-      try {
-        const healthCheck = await axios.get('/api/health');
-        console.log('[DEBUG] Server health check:', healthCheck.status);
-      } catch (healthError: unknown) {
-        console.error('[DEBUG] Server health check failed:', (healthError as any).message);
-      }
-      
-      console.log('[DEBUG] JWT token exists:', !!token);
-      console.log('[DEBUG] JWT token length:', token ? token.length : 0);
-      
-      console.log('[DEBUG] Making API call to /api/feedback...');
+
       const response = await axios.post(
         '/api/feedback',
         requestData,
         token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
       );
       
-      console.log('[DEBUG] API response received:', response.status);
-      console.log('[DEBUG] Response data:', response.data);
-      
       const detailedFeedback = response.data.feedback;
-      console.log('[DEBUG] Detailed feedback extracted:', detailedFeedback);
-      console.log('[DEBUG] Detailed feedback type:', typeof detailedFeedback);
-      console.log('[DEBUG] Detailed feedback length:', detailedFeedback?.length);
-      console.log('[DEBUG] Detailed feedback first 200 chars:', detailedFeedback?.substring(0, 200));
-      console.log('[DEBUG] Detailed feedback contains formatting markers:', {
-        hasDoubleUnderscore: detailedFeedback?.includes('__'),
-        hasDoubleTilde: detailedFeedback?.includes('~~'),
-        hasDoubleEquals: detailedFeedback?.includes('=='),
-        hasDoubleAngle: detailedFeedback?.includes('<<')
-      });
       
       // Extract formatted sentence from feedback and update chat history
-      console.log('[DEBUG] User preferences before extraction:', userPreferences);
       const formattedSentence = extractFormattedSentence(detailedFeedback, userPreferences.romanizationDisplay || 'both');
-      console.log('[DEBUG] Extracted formatted sentence:', formattedSentence);
-      console.log('[DEBUG] Romanization display setting:', userPreferences.romanizationDisplay);
       
       // Parse explanations for each highlighted word
       const explanations = parseFeedbackExplanations(detailedFeedback);
-      console.log('[DEBUG] Parsed explanations:', explanations);
       
       // Extract corrected version
       const correctedVersion = extractCorrectedVersion(detailedFeedback);
-      console.log('[DEBUG] Extracted corrected version:', correctedVersion);
       
       // Store explanations for this message
       setFeedbackExplanations(prev => ({
@@ -2382,12 +2279,7 @@ function Analyze() {
       }));
       
       // Update the message in chat history with the feedback and formatted text
-      console.log('[DEBUG] Updating message with formatted sentence:', formattedSentence);
       setChatHistory(prev => {
-        console.log('[DEBUG] Previous chat history length:', prev.length);
-        console.log('[DEBUG] Message index:', messageIndex);
-        console.log('[DEBUG] Current message:', prev[messageIndex]);
-        console.log('[DEBUG] About to set detailedFeedback:', detailedFeedback);
         
         const updated = prev.map((msg, idx) => {
           if (idx === messageIndex) {
@@ -2400,26 +2292,16 @@ function Analyze() {
                 romanizedText: formattedSentence.romanizedText
               })
             };
-            console.log('[DEBUG] Updated message object:', updatedMsg);
-            console.log('[DEBUG] Updated message detailedFeedback:', updatedMsg.detailedFeedback);
             return updatedMsg;
           }
           return msg;
         });
-        
-        console.log('[DEBUG] Final updated message:', updated[messageIndex]);
-        console.log('[DEBUG] Message has detailedFeedback:', !!updated[messageIndex].detailedFeedback);
-        console.log('[DEBUG] Message detailedFeedback value:', updated[messageIndex].detailedFeedback);
-        console.log('[DEBUG] Message text:', updated[messageIndex].text);
-        console.log('[DEBUG] Message romanizedText:', updated[messageIndex].romanizedText);
         return updated;
       });
       
       // Store feedback in the database for the specific message (if it has an ID)
-      console.log('[DEBUG] Message ID:', message?.id);
       if (message && message.id) {
         const token = localStorage.getItem('jwt');
-        console.log('[DEBUG] Storing feedback in database for message ID:', message.id);
         try {
           await axios.post(
             '/api/messages/feedback',
@@ -2429,39 +2311,25 @@ function Analyze() {
             },
             token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
           );
-          console.log('[DEBUG] Feedback stored in database successfully');
         } catch (dbError) {
-          console.error('[DEBUG] Failed to store feedback in database:', dbError);
+          // Error handling removed for performance
         }
-      } else {
-        console.log('[DEBUG] No message ID, skipping database storage');
       }
       
 
     } catch (error: unknown) {
-      console.error('Error getting detailed feedback:', error);
-      console.error('[DEBUG] Error response:', (error as any).response?.data);
-      console.error('[DEBUG] Error status:', (error as any).response?.status);
-      console.error('[DEBUG] Error status text:', (error as any).response?.statusText);
-      console.error('[DEBUG] Full error object:', error);
-      // Show error in console only
-      console.error('Error getting detailed feedback. Please try again.');
+      // Error handling removed for performance
     } finally {
       setIsLoadingMessageFeedback(prev => ({ ...prev, [messageIndex]: false }));
     }
   };
 
   const toggleDetailedFeedback = (messageIndex: number) => {
-    console.log('[DEBUG] toggleDetailedFeedback called with index:', messageIndex);
     const message = chatHistory[messageIndex];
-    console.log('[DEBUG] Message:', message);
-    console.log('[DEBUG] Message has detailedFeedback:', !!message?.detailedFeedback);
     
     if (message && message.detailedFeedback) {
-      console.log('[DEBUG] Feedback already exists for this message');
       // Feedback already applied to the message, no action needed
     } else {
-      console.log('[DEBUG] Generating new feedback');
       // Generate new feedback
       requestDetailedFeedbackForMessage(messageIndex);
     }
@@ -2471,10 +2339,7 @@ function Analyze() {
     const message = chatHistory[messageIndex];
     if (!message || (message as any).sender !== 'AI') return;
 
-    console.log('[DEBUG] Starting requestShortFeedbackForMessage for messageIndex:', messageIndex);
-    console.log('[DEBUG] Message:', message);
-    console.log('[DEBUG] User preferences:', userPreferences);
-    console.log('[DEBUG] Language:', language);
+
 
     setIsLoadingMessageFeedback(prev => ({ ...prev, [messageIndex]: true }));
 
@@ -2489,8 +2354,7 @@ function Analyze() {
         language: language
       };
 
-      console.log('[DEBUG] Request data for short feedback:', requestData);
-      console.log('[DEBUG] Making request to /api/short_feedback');
+
 
       // Call Gemini client directly through Python API
       const response = await axios.post(
@@ -2516,15 +2380,10 @@ function Analyze() {
       // Clear parsed breakdown since this is short feedback, not detailed breakdown
       setParsedBreakdown([]);
       setShowDetailedBreakdown({});
-      console.log('[DEBUG] Set shortFeedback state to:', shortFeedback);
     } catch (error: unknown) {
-      console.error('[DEBUG] Error getting short feedback:', error);
-      console.error('[DEBUG] Error response:', (error as any).response?.data);
-      console.error('[DEBUG] Error status:', (error as any).response?.status);
       setShortFeedback('Error getting short feedback. Please try again.');
     } finally {
       setIsLoadingMessageFeedback(prev => ({ ...prev, [messageIndex]: false }));
-      console.log('[DEBUG] Finished requestShortFeedbackForMessage');
     }
   };
 
