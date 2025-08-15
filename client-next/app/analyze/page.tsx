@@ -332,6 +332,8 @@ const Analyze = () => {
   }, [isProcessing]);
 
 
+
+
   const recognitionRef = useRef<{ lang: string; stop: () => void } | null>(null);
   const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
   const autoSpeakRef = useRef<boolean>(false);
@@ -417,6 +419,17 @@ const Analyze = () => {
   const [quickTranslations, setQuickTranslations] = useState<Record<number, { fullTranslation: string; wordTranslations: Record<string, string>; romanized: string; error: boolean; generatedWords?: string[]; generatedScriptWords?: string[] }>>({});
   const [showQuickTranslations, setShowQuickTranslations] = useState<Record<number, boolean>>({});
   const [sessionStartTime, setSessionStartTime] = useState<Date | null>(null);
+
+  // Auto-scroll to bottom when new messages are added or suggestions are shown
+  React.useEffect(() => {
+    if (chatContainerRef.current) {
+      const container = chatContainerRef.current;
+      // Use setTimeout to ensure DOM is updated
+      setTimeout(() => {
+        container.scrollTop = container.scrollHeight;
+      }, 100);
+    }
+  }, [chatHistory.length, showSuggestionCarousel, suggestionMessages.length, isLoadingConversation]);
   
   // TTS caching state
   const [ttsCache, setTtsCache] = useState<Map<string, { url: string; timestamp: number }>>(new Map());
