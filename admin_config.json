@@ -60,7 +60,7 @@
       "2025-08-15": {
         "google_cloud": 0,
         "gemini": 0,
-        "system": 5,
+        "system": 15,
         "total_cost": 0.0
       }
     },

@@ -146,13 +146,14 @@ const ChatMessageItem: React.FC<ChatMessageItemProps> = React.memo(({
           {formatted.romanizedText && (
             <span style={{
               fontSize: '0.85em',
-              color: isDarkMode ? '#94a3b8' : '#555',
+              color: isUserMessage ? '#ffffff' : (isDarkMode ? '#94a3b8' : '#555'),
               opacity: 0.8,
               marginTop: 4,
             }}>
               {formatted.romanizedText}
             </span>
           )}
+
         </div>
       </div>
       

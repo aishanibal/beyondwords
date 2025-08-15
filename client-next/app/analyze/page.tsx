@@ -14,6 +14,12 @@ import PersonaModal from './PersonaModal';
 import LoadingScreen from '../components/LoadingScreen';
 import { LEARNING_GOALS, LearningGoal, getProgressiveSubgoalDescription, getSubgoalLevel, updateSubgoalProgress, SubgoalProgress, LevelUpEvent } from '../../lib/preferences';
 import ChatMessageItem from './ChatMessageItem';
+import unidecode from 'unidecode';
+import Kuroshiro from 'kuroshiro';
+import KuromojiAnalyzer from 'kuroshiro-analyzer-kuromoji';
+import pinyin from 'pinyin';
+import { transliterate } from 'transliteration';
+
 
 // TypeScript: Add type declarations for browser APIs
 declare global {
@@ -1205,23 +1211,49 @@ const Analyze = () => {
     if (!isScriptLanguage(languageCode)) {
       return '';
     }
-    
+
     try {
-      const token = localStorage.getItem('jwt');
-      const response = await axios.post(
-        '/api/translate',
-        {
-          text: text,
-          source_language: languageCode,
-          target_language: 'en',
-          breakdown: false
-        },
-        token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
-      );
+      let romanizedText = '';
+
+      switch (languageCode) {
+        case 'ja': // Japanese - using Kuroshiro for complete romanization (kanji + kana)
+          try {
+            const kuroshiro = new Kuroshiro();
+            await kuroshiro.init(new KuromojiAnalyzer());
+            romanizedText = await kuroshiro.convert(text, { to: 'romaji', mode: 'spaced' });
+          } catch (kuroshiroError) {
+            console.warn('Kuroshiro failed, falling back to transliteration:', kuroshiroError);
+            romanizedText = transliterate(text);
+          }
+          break;
+
+        case 'zh': // Chinese - using pinyin library
+          romanizedText = pinyin(text, {
+            style: pinyin.STYLE_NORMAL,
+          }).map(arr => arr[0]).join(' ');
+          break;
+
+        case 'ko': // Korean - using transliteration library (excellent Korean support)
+          romanizedText = transliterate(text);
+          break;
+
+        case 'hi': // Hindi - using transliteration library (good for Devanagari)
+        case 'ar': // Arabic - using transliteration library (good for Arabic script)
+        case 'ta': // Tamil - using transliteration library (good for Tamil script)
+        case 'ml': // Malayalam - using transliteration library (good for Malayalam script)
+        case 'or': // Odia - using transliteration library (good for Odia script)
+          // Using the comprehensive 'transliteration' library for Indic and Arabic scripts
+          romanizedText = transliterate(text);
+          break;
+          
+        default:
+          // Fallback for any other script languages
+          romanizedText = unidecode(text);
+          break;
+      }
       
-      // For romanization, we want the transliteration, not translation
-      // This is a simplified approach - in a real implementation, you'd want a dedicated romanization service
-      return response.data.romanized || '';
+      console.log('[DEBUG] Generated romanized text:', { original: text, romanized: romanizedText, language: languageCode });
+      return romanizedText;
     } catch (error) {
       console.error('Error generating romanized text:', error);
       return '';
