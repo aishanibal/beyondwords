@@ -3886,8 +3886,13 @@ Yes, the current serials don't have the same quality as the old ones, right?
         }
         currentHeight += itemHeight;
       }
+      
+      // Calculate total height - ensure it doesn't create excess scroll space
+      // If total content is less than container, use container height
+      const finalHeight = Math.max(currentHeight, containerHeight);
+      
       setVirtualItems(newVirtualItems);
-      setTotalHeight(currentHeight);
+      setTotalHeight(finalHeight);
     };
 
     handleScroll();
@@ -3901,11 +3906,25 @@ Yes, the current serials don't have the same quality as the old ones, right?
     const controlsContainer = recordingControlsRef.current;
     if (chatContainer && controlsContainer) {
       const controlsHeight = controlsContainer.offsetHeight;
-      chatContainer.style.paddingBottom = `${controlsHeight + 16}px`;
+      // Add padding to prevent last message from being hidden under controls
+      chatContainer.style.paddingBottom = `${controlsHeight + 24}px`;
+      
+      // Ensure the spacer div doesn't create extra scroll space
+      const spacerDiv = chatContainer.querySelector('div[style*="height"]') as HTMLElement;
+      if (spacerDiv && chatHistory.length > 0) {
+        // If we have messages, make sure the spacer doesn't exceed what's needed
+        const lastMessageBottom = spacerDiv.offsetHeight;
+        const containerHeight = chatContainer.clientHeight;
+        
+        // If content is less than container, adjust spacer to prevent extra scroll
+        if (lastMessageBottom < containerHeight) {
+          spacerDiv.style.height = `${containerHeight}px`;
+        }
+      }
     } else if (chatContainer) {
       chatContainer.style.paddingBottom = '92px'; // Fallback
     }
-  }, [chatHistory.length]);
+  }, [chatHistory.length, chatHistory]);
   // --- END VIRTUALIZATION LOGIC ---
 
   return (
@@ -4496,7 +4515,8 @@ Yes, the current serials don't have the same quality as the old ones, right?
           backdropFilter: 'blur(20px)',
           zIndex: 1,
           minHeight: 0,
-          height: '100%'
+          height: '100%',
+          overflow: 'hidden' // Prevent content from overflowing
         }}>
         {/* Header Bar */}
         <div style={{ 
@@ -4790,17 +4810,29 @@ Yes, the current serials don't have the same quality as the old ones, right?
 
         </div>
 
-        {/* Chat Messages */}
-        <div 
-          ref={chatContainerRef}
-          style={{ 
-            flex: 1, 
-            padding: '0.75rem', 
-            overflowY: 'auto',
-            overflowX: 'hidden',
-            position: 'relative'
-          }}
-        >
+        {/* Main Content Container - Flex container for chat and controls */}
+        <div style={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          position: 'relative',
+          minHeight: 0, /* Important for flex child to respect parent's size */
+          height: '100%'
+        }}>
+          {/* Chat Messages - Scrollable area */}
+          <div 
+            ref={chatContainerRef}
+            style={{ 
+              flex: 1, 
+              padding: '0.75rem', 
+              overflowY: 'auto',
+              overflowX: 'hidden',
+              position: 'relative',
+              display: 'flex',
+              flexDirection: 'column',
+              minHeight: 0 /* Important for flex child to respect parent's size */
+            }}
+          >
           <div style={{ height: `${totalHeight}px`, position: 'relative' }}>
             {virtualItems.map(({ index, start }) => {
               const message = chatHistory[index];
@@ -4970,21 +5002,26 @@ Yes, the current serials don't have the same quality as the old ones, right?
 
 
 
-        {/* Recording Controls */}
-        {chatHistory.length > 0 && (
+          {/* Recording Controls - Fixed at bottom */}
+          {chatHistory.length > 0 && (
           <div
             ref={recordingControlsRef}
             style={{ 
-              position: 'relative',
-              padding: '1rem 1rem 2rem 1rem', 
+              position: 'absolute',
+              bottom: 0,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              width: '90%', /* Take up 90% of the panel width */
+              maxWidth: '800px',
+              padding: '1rem 1rem 1rem 1rem', 
               background: isDarkMode 
                 ? 'linear-gradient(135deg, var(--muted) 0%, rgba(255,255,255,0.02) 100%)' 
                 : 'linear-gradient(135deg, rgba(195,141,148,0.08) 0%, rgba(195,141,148,0.03) 100%)',
-              borderRadius: '0 0 24px 24px',
+              borderRadius: '16px',
               textAlign: 'center',
               transition: 'all 0.3s ease',
-              boxShadow: '0 -2px 8px rgba(195,141,148,0.1)',
-              flexShrink: 0
+              boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+              zIndex: 10
             }}
           >
             {/* Main controls layout */}
