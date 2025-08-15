@@ -13,6 +13,7 @@ import TopicSelectionModal from './TopicSelectionModal';
 import PersonaModal from './PersonaModal';
 import LoadingScreen from '../components/LoadingScreen';
 import { LEARNING_GOALS, LearningGoal, getProgressiveSubgoalDescription, getSubgoalLevel, updateSubgoalProgress, SubgoalProgress, LevelUpEvent } from '../../lib/preferences';
+import ChatMessageItem from './ChatMessageItem';
 
 // TypeScript: Add type declarations for browser APIs
 declare global {
@@ -359,7 +360,7 @@ const Analyze = React.memo(function Analyze() {
   const [isSavingPersona, setIsSavingPersona] = useState(false);
   const [conversationDescription, setConversationDescription] = useState<string>('');
   const [isUsingPersona, setIsUsingPersona] = useState<boolean>(false);
-  const [isNewPersona, setIsNewPersona] = useState<boolean>(false);
+  const [isNewPersona, setIsNewPersona] = useState(false);
   const [showTopicModal, setShowTopicModal] = useState<boolean>(false);
   const [autoSpeak, setAutoSpeak] = useState<boolean>(false);
   const [enableShortFeedback, setEnableShortFeedback] = useState<boolean>(true);
@@ -3125,7 +3126,7 @@ const Analyze = React.memo(function Analyze() {
     const lines = explanationText.split('\n').filter(line => line.trim());
     
     lines.forEach(line => {
-      // Look for patterns like: ==word== / ==word== - explanation
+      // Look for patterns like: ==word== \/ ==word== - explanation
       const match = line.match(/(__[^_]+__|~~[^~]+~~|==[^=]+==|<<[^>]+>>)\s*\/?\s*(__[^_]+__|~~[^~]+~~|==[^=]+==|<<[^>]+>>)?\s*-\s*(.+)/);
       if (match) {
         const word1 = match[1];
@@ -3233,7 +3234,7 @@ const Analyze = React.memo(function Analyze() {
           continue;
         }
         
-        // Simple parsing: look for "script / romanized -- translation" format
+        // Simple parsing: look for "script \/ romanized -- translation" format
         if (trimmedLine.includes(' / ') && trimmedLine.includes(' -- ')) {
           console.log('Found script/romanized format:', trimmedLine);
           const parts = trimmedLine.split(' -- ');
@@ -3241,7 +3242,7 @@ const Analyze = React.memo(function Analyze() {
             const leftSide = parts[0].trim();
             const translation = parts[1].trim();
             
-            // Split left side on " / " to get script and romanized
+            // Split left side on " \/ " to get script and romanized
             const scriptRomanized = leftSide.split(' / ');
             if (scriptRomanized.length === 2) {
               const script = scriptRomanized[0].trim();
@@ -3860,6 +3861,53 @@ Yes, the current serials don't have the same quality as the old ones, right?
     }
   }, [user, urlConversationId, chatHistory, sessionStartTime]);
   
+  // --- START VIRTUALIZATION LOGIC ---
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const recordingControlsRef = useRef<HTMLDivElement>(null);
+  const [virtualItems, setVirtualItems] = useState<{ index: number; start: number }[]>([]);
+  const [totalHeight, setTotalHeight] = useState(0);
+  const ESTIMATED_MESSAGE_HEIGHT = 120; // Adjust as needed for average message height
+
+  // Effect to calculate virtual items based on scroll
+  useEffect(() => {
+    const container = chatContainerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      const scrollTop = container.scrollTop;
+      const containerHeight = container.clientHeight;
+      const newVirtualItems: { index: number; start: number }[] = [];
+      let currentHeight = 0;
+      
+      for (let i = 0; i < chatHistory.length; i++) {
+        const itemHeight = ESTIMATED_MESSAGE_HEIGHT;
+        if (currentHeight + itemHeight > scrollTop && currentHeight < scrollTop + containerHeight + 200) { // Render items in viewport + buffer
+          newVirtualItems.push({ index: i, start: currentHeight });
+        }
+        currentHeight += itemHeight;
+      }
+      setVirtualItems(newVirtualItems);
+      setTotalHeight(currentHeight);
+    };
+
+    handleScroll();
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [chatHistory]);
+
+  // Effect to dynamically add padding to avoid overlap with controls
+  useEffect(() => {
+    const chatContainer = chatContainerRef.current;
+    const controlsContainer = recordingControlsRef.current;
+    if (chatContainer && controlsContainer) {
+      const controlsHeight = controlsContainer.offsetHeight;
+      chatContainer.style.paddingBottom = `${controlsHeight + 16}px`;
+    } else if (chatContainer) {
+      chatContainer.style.paddingBottom = '92px'; // Fallback
+    }
+  }, [chatHistory.length]);
+  // --- END VIRTUALIZATION LOGIC ---
+
   return (
     <div className="analyze-page" style={{ 
       display: 'flex', 
@@ -4743,652 +4791,189 @@ Yes, the current serials don't have the same quality as the old ones, right?
         </div>
 
         {/* Chat Messages */}
-        <div style={{ 
-          flex: 1, 
-          padding: '0.75rem', 
-          overflowY: 'auto',
-          overflowX: 'hidden',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '0.5rem',
-          background: isDarkMode 
-            ? 'linear-gradient(135deg, var(--background) 0%, rgba(255,255,255,0.01) 100%)' 
-            : 'linear-gradient(135deg, #f9f6f4 0%, rgba(195,141,148,0.02) 100%)',
-          borderRadius: '0 0 24px 24px',
-          transition: 'all 0.3s ease',
-          position: 'relative',
-          minHeight: 0,
-          maxHeight: 'calc(100vh - 6rem - 100px)'
-        }}>
-          {isLoadingConversation && (
-            <div style={{
-              alignSelf: 'center',
-              padding: '0.5rem 1rem',
-              background: '#f5f1ec',
-              borderRadius: 8,
-              color: 'var(--rose-primary)',
-              fontSize: '0.95rem',
-              fontWeight: 500
-            }}>
-              📂 Loading conversation...
-            </div>
-          )}
-                          {chatHistory.length > 25 && (
-                  <div style={{
-                    width: '100%',
-                    textAlign: 'center',
-                    padding: '0.5rem',
-                    color: isDarkMode ? '#94a3b8' : '#666',
-                    fontSize: '0.8rem',
-                    fontStyle: 'italic'
-                  }}>
-                    Showing last 25 of {chatHistory.length} messages
-                  </div>
-                )}
-                      {visibleMessages.map((message: ChatMessage, index) => (
-              <div key={`message-${message.id || index}-${message.timestamp?.getTime() || Date.now()}`} style={{
-              width: '100%',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: message.sender === 'User' ? 'flex-end' : 'flex-start',
-              marginBottom: '0.5rem'
-            }}>
-              <div 
-                onClick={message.isProcessing ? undefined : () => handleMessageClick(index, message.text)}
-                style={{
-                  flex: 1,
-                  padding: '1rem 1.25rem',
-                  borderRadius: message.sender === 'User' ? '24px 24px 8px 24px' : message.sender === 'AI' ? '24px 24px 24px 8px' : '16px',
-                  background: message.isProcessing 
-                    ? isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'
-                    : message.sender === 'User' 
-                      ? 'linear-gradient(135deg, var(--rose-primary) 0%, #8a6a7a 100%)' 
-                      : message.sender === 'AI' 
-                        ? isDarkMode 
-                          ? 'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%)' 
-                          : 'linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.7) 100%)' 
-                        : isDarkMode ? 'var(--muted)' : 'rgba(230,126,34,0.1)',
-                  color: message.isProcessing
-                    ? isDarkMode ? 'var(--muted-foreground)' : 'var(--muted-foreground)'
-                    : message.sender === 'User' 
-                      ? '#fff'
-                      : message.sender === 'System' 
-                        ? '#e67e22' 
-                        : 'var(--foreground)',
-                  border: message.sender === 'AI' 
-                    ? isDarkMode ? '1px solid var(--border)' : '1px solid rgba(195,141,148,0.2)' 
-                    : message.sender === 'System' 
-                      ? '1px solid #e67e22' 
-                      : 'none',
-                  fontSize: '0.85rem',
-                  cursor: message.isProcessing ? 'default' : 'pointer',
-                  transition: 'all 0.3s ease',
-                  opacity: isTranslating[index] ? 0.7 : 1,
-                  position: 'relative',
-                  boxShadow: message.sender === 'User' 
-                    ? '0 8px 32px rgba(195,141,148,0.3), 0 2px 8px rgba(195,141,148,0.2)' 
-                    : message.sender === 'AI' 
-                      ? '0 8px 32px rgba(60,76,115,0.12), 0 2px 8px rgba(60,76,115,0.08)' 
-                      : '0 4px 16px rgba(230,126,34,0.15)',
-                  maxWidth: '70%',
-                  wordWrap: 'break-word',
-                  fontWeight: message.sender === 'User' ? 600 : message.sender === 'System' ? 600 : 400,
-                  animation: 'messageAppear 0.3s ease-out',
-                  fontFamily: 'AR One Sans, Arial, sans-serif',
-                  backdropFilter: 'blur(20px)',
-                  transform: 'translateZ(0)'
-                }}
-                              >
-                  {(() => {
-                    const formatted = visibleFormattedMessages[index];
-                    return (
-                      <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <span style={{ color: message.sender === 'User' ? '#fff' : 'inherit' }}>
-                          {message.detailedFeedback ? renderFormattedText(formatted.mainText, index) : formatted.mainText}
-                        </span>
-                        {formatted.romanizedText && (
-                          <span style={{
-                            fontSize: '0.85em',
-                            color: message.detailedFeedback ? (isDarkMode ? '#94a3b8' : '#555') : (isDarkMode ? '#94a3b8' : '#555'),
-                            opacity: message.detailedFeedback ? 1 : 0.65,
-                            marginTop: 2,
-                            fontWeight: 400,
-                            lineHeight: 1.2,
-                            letterSpacing: '0.01em',
-                          }}>
-                            {message.detailedFeedback ? renderFormattedText(formatted.romanizedText, index) : formatted.romanizedText}
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })()}
-                  {isTranslating[index] && (
-                  <span style={{ marginLeft: '0.5rem', fontSize: '0.85rem' }}>
-                    🔄 Translating...
-                  </span>
-                )}
-              </div>
-              
-              {/* Corrected Version - Slides down from under the message */}
-              {message.detailedFeedback && showCorrectedVersions[index] && (
-                <div
-                  style={{
-                    width: '100%',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: message.sender === 'User' ? 'flex-end' : 'flex-start',
-                    marginTop: '0.5rem',
-                    animation: 'slideDown 0.5s ease-out forwards',
-                    overflow: 'hidden'
-                  }}
-                >
-                  <div
-                    style={{
-                      padding: '0.5rem 0.8rem',
-                      borderRadius: message.sender === 'User' ? '8px 8px 2px 8px' : '8px 8px 8px 2px',
-                      background: isDarkMode 
-                        ? 'rgba(16, 185, 129, 0.25)' 
-                        : 'rgba(16, 185, 129, 0.2)',
-                      color: isDarkMode ? '#10b981' : '#047857',
-                      fontSize: '0.85rem',
-                      fontWeight: 400,
-                      maxWidth: '70%',
-                      wordWrap: 'break-word',
-                      border: `1px solid ${isDarkMode ? 'rgba(16, 185, 129, 0.4)' : 'rgba(16, 185, 129, 0.3)'}`,
-                      position: 'relative'
-                    }}
-                  >
-                    <div style={{ 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      gap: '0.3rem', 
-                      marginBottom: '0.2rem',
-                      fontSize: '0.75rem',
-                      opacity: 0.7,
-                      fontWeight: 500
-                    }}>
-                      <span>✓</span>
-                      <span>Corrected</span>
-                    </div>
-                    {(() => {
-                      const correctedVersion = extractCorrectedVersion(message.detailedFeedback);
-                      
-                      if (!correctedVersion) {
-                        // Message is correct - show "Correct!"
-                        return (
-                          <div style={{ display: 'flex', flexDirection: 'column' }}>
-                            <span style={{ fontWeight: 500, lineHeight: 1.3 }}>
-                              Correct!
-                            </span>
-                          </div>
-                        );
-                      }
-                      
-                      return (
-                        <div style={{ display: 'flex', flexDirection: 'column' }}>
-                          <span style={{ fontWeight: 500, lineHeight: 1.3 }}>
-                            {correctedVersion.mainText}
-                          </span>
-                          {correctedVersion.romanizedText && (
-                            <span style={{
-                              fontSize: '0.8em',
-                              opacity: 0.8,
-                              marginTop: '0.15rem',
-                              fontWeight: 400,
-                              lineHeight: 1.2,
-                            }}>
-                              {correctedVersion.romanizedText}
-                            </span>
-                          )}
-                        </div>
-                      );
-                    })()}
-                  </div>
-                </div>
-              )}
-              
-              {/* Feedback Buttons */}
-              {message.sender === 'User' && !message.detailedFeedback && (
-                <button
-                  onClick={() => toggleDetailedFeedback(index)}
-                  disabled={isLoadingMessageFeedback[index]}
-                  style={{
-                    padding: '0.3rem 0.8rem',
-                    borderRadius: 6,
-                    border: '1px solid var(--rose-primary)',
-                    background: isDarkMode ? 'rgba(232,179,195,0.15)' : 'rgba(132,84,109,0.1)',
-                    color: 'var(--rose-primary)',
-                    fontSize: '0.8rem',
-                    cursor: isLoadingMessageFeedback[index] ? 'not-allowed' : 'pointer',
-                    transition: 'all 0.3s ease',
-                    opacity: isLoadingMessageFeedback[index] ? 0.6 : 1,
-                    minWidth: '80px',
-                    fontWeight: 600,
-                    fontFamily: 'Montserrat, Arial, sans-serif',
-                    marginTop: 4,
-                    boxShadow: isDarkMode ? '0 2px 8px rgba(232,179,195,0.1)' : '0 2px 8px rgba(132,84,109,0.08)',
-                    backdropFilter: 'blur(10px)'
-                  }}
-                  title="Check for errors"
-                >
-                  {isLoadingMessageFeedback[index] ? '🔄' : '🎯 Check'}
-                </button>
-              )}
-              {message.sender === 'AI' && (
-                <div style={{ display: 'flex', gap: '0.5rem', marginTop: 4 }}>
-                  <button
-                    onClick={() => quickTranslation(index, message.text)}
-                    disabled={isLoadingMessageFeedback[index]}
-                    style={{
-                      padding: '0.35rem 0.9rem',
-                      borderRadius: 6,
-                      border: '1px solid #4a90e2',
-                      background: 'rgba(74,144,226,0.08)',
-                      color: '#4a90e2',
-                      fontSize: '0.8rem',
-                      cursor: isLoadingMessageFeedback[index] ? 'not-allowed' : 'pointer',
-                      transition: 'all 0.2s ease',
-                      opacity: isLoadingMessageFeedback[index] ? 0.6 : 1,
-                      minWidth: '70px',
-                      fontWeight: 500,
-                      boxShadow: '0 1px 3px rgba(74,144,226,0.10)'
-                    }}
-                    title="Get translation"
-                  >
-                    {isLoadingMessageFeedback[index] ? '🔄' : '💡 Explain'}
-                  </button>
-                  
+        <div 
+          ref={chatContainerRef}
+          style={{ 
+            flex: 1, 
+            padding: '0.75rem', 
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            position: 'relative'
+          }}
+        >
+          <div style={{ height: `${totalHeight}px`, position: 'relative' }}>
+            {virtualItems.map(({ index, start }) => {
+              const message = chatHistory[index];
+              if (!message) return null;
 
-                  
-                  {/* TTS button for AI messages */}
-                  <button
-                    onClick={() => {
-                      const cacheKey = `ai_message_${index}`;
-                      if (message.ttsUrl) {
-                        // Use existing TTS URL if available
-                        playExistingTTS(message.ttsUrl, cacheKey);
-                      } else {
-                        // Generate new TTS using appropriate text based on romanization preference
-                        const ttsText = getTTSText(message, userPreferences.romanizationDisplay, language);
-                        playTTSAudio(ttsText, language, cacheKey);
-                      }
-                    }}
-                    disabled={isGeneratingTTS[`ai_message_${index}`] || isPlayingTTS[`ai_message_${index}`]}
-                    style={{
-                      padding: '0.3rem 0.7rem',
-                      borderRadius: 8,
-                      border: isPlayingTTS[`ai_message_${index}`] ? 'none' : '1px solid var(--blue-secondary)',
-                      background: isPlayingTTS[`ai_message_${index}`] ? 'linear-gradient(135deg, var(--blue-secondary) 0%, #2a4a6a 100%)' : isDarkMode ? 'rgba(139,163,217,0.15)' : 'rgba(59,83,119,0.1)',
-                      color: isPlayingTTS[`ai_message_${index}`] ? '#fff' : 'var(--blue-secondary)',
-                      fontSize: '0.7rem',
-                      cursor: (isGeneratingTTS[`ai_message_${index}`] || isPlayingTTS[`ai_message_${index}`]) ? 'not-allowed' : 'pointer',
-                      transition: 'all 0.3s ease',
-                      opacity: (isGeneratingTTS[`ai_message_${index}`] || isPlayingTTS[`ai_message_${index}`]) ? 0.6 : 1,
-                      minWidth: '80px',
-                      fontWeight: 600,
-                      fontFamily: 'Montserrat, Arial, sans-serif',
-                      boxShadow: isPlayingTTS[`ai_message_${index}`] ? '0 2px 6px rgba(59,83,119,0.18)' : isDarkMode ? '0 2px 8px rgba(139,163,217,0.1)' : '0 2px 8px rgba(59,83,119,0.08)',
-                      backdropFilter: 'blur(10px)'
-                    }}
-                    title={isPlayingTTS[`ai_message_${index}`] ? 'Playing audio...' : 'Listen to this message'}
-                  >
-                    {isGeneratingTTS[`ai_message_${index}`] ? '🔄' : isPlayingTTS[`ai_message_${index}`] ? '🔊 Playing' : '🔊 Listen'}
-                  </button>
-                  
-                  {/* Show suggestions button only for the most recent AI message */}
-                  {index === chatHistory.length - 1 && (
-                    <button
-                      onClick={handleSuggestionButtonClick}
-                      disabled={isLoadingSuggestions || isProcessing}
-                      style={{
-                                              padding: '0.3rem 0.7rem',
-                      border: '1px solid var(--rose-primary)',
-                      background: isDarkMode ? 'rgba(232,179,195,0.15)' : 'rgba(132,84,109,0.1)',
-                      color: 'var(--rose-primary)',
-                      fontSize: '0.7rem',
-                        cursor: (isLoadingSuggestions || isProcessing) ? 'not-allowed' : 'pointer',
-                        transition: 'all 0.3s ease',
-                        opacity: (isLoadingSuggestions || isProcessing) ? 0.6 : 1,
-                        fontWeight: 600,
-                        fontFamily: 'Montserrat, Arial, sans-serif',
-                        borderRadius: 8,
-                        minWidth: '80px',
-                        boxShadow: isDarkMode ? '0 2px 8px rgba(232,179,195,0.1)' : '0 2px 8px rgba(132,84,109,0.08)',
-                        backdropFilter: 'blur(10px)'
-                      }}
-                      title="Get conversation suggestions"
-                    >
-                      {isLoadingSuggestions ? 'Loading...' : isProcessing ? 'Processing...' : '💡 Suggestions'}
-                    </button>
-                  )}
-                </div>
-              )}
-              {showTranslations[index] && translations[index] && (
-                <div style={{
-                  padding: '0.75rem 1rem',
-                  background: 'linear-gradient(135deg, #f0f8ff 0%, #e6f3ff 100%)',
-                  border: '1px solid #d0e4f7',
-                  borderRadius: 10,
-                  fontSize: '0.93rem',
-                  color: '#2c5282',
-                  position: 'relative',
-                  marginTop: '0.5rem',
-                  boxShadow: '0 2px 8px rgba(44,82,130,0.08)',
-                  maxWidth: '85%'
+              const formatted = formatMessageForDisplay(message, userPreferences.romanizationDisplay);
+              
+              return (
+                <div key={message.id || index} style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  transform: `translateY(${start}px)`
                 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                    <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>
-                      🌐 Translation
-                    </span>
-                    <button
-                      onClick={() => translateMessage(index, message.text, true)}
-                      style={{
-                        background: 'rgba(44,82,130,0.08)',
-                        border: '1px solid #d0e4f7',
-                        color: '#2c5282',
-                        padding: '0.25rem 0.7rem',
-                        borderRadius: 7,
-                        cursor: 'pointer',
-                        fontSize: '0.8rem',
-                        fontWeight: 600,
-                        transition: 'all 0.2s ease'
-                      }}
-                    >
-                      📝 Detailed Breakdown
-                    </button>
-                  </div>
-                  <div style={{ marginBottom: '0.5rem' }}>
-                    <strong>Translation:</strong> {translations[index]?.translation || ''}
-                  </div>
-                  {translations[index]?.has_breakdown && translations[index]?.breakdown && (
-                    <div style={{ marginTop: '0.5rem' }}>
-                      <div style={{ marginBottom: '0.5rem' }}>
-                        <strong>📖 Detailed Analysis:</strong>
-                      </div>
-                      <div style={{
-                        background: 'rgba(255,255,255,0.7)',
-                        padding: '0.75rem',
-                        borderRadius: 8,
-                        border: '1px solid #e0e0e0',
-                        fontSize: '0.9rem',
-                        lineHeight: '1.5',
-                        whiteSpace: 'pre-wrap'
-                      }}>
-                        {translations[index].breakdown}
-                      </div>
-                    </div>
-                  )}
+                  <ChatMessageItem
+                    message={message}
+                    formatted={formatted}
+                    isDarkMode={isDarkMode}
+                    index={index}
+                    isLastMessage={index === chatHistory.length - 1}
+                    toggleShortFeedback={toggleShortFeedback}
+                    toggleDetailedFeedback={toggleDetailedFeedback}
+                    generateTTSForText={generateTTSForText}
+                    language={language}
+                    userPreferences={userPreferences}
+                    playTTS={playTTSAudio}
+                    getTTSText={(msg, display) => getTTSText(msg, display, language)}
+                    isLoadingMessageFeedback={isLoadingMessageFeedback}
+                    isTranslating={isTranslating}
+                    isGeneratingTTS={isGeneratingTTS}
+                    isPlayingTTS={isPlayingTTS}
+                    quickTranslation={quickTranslation}
+                    handleSuggestionButtonClick={handleSuggestionButtonClick}
+                    isLoadingSuggestions={isLoadingSuggestions}
+                    isProcessing={isProcessing}
+                    playExistingTTS={playExistingTTS}
+                    showCorrectedVersions={showCorrectedVersions}
+                    extractCorrectedVersion={extractCorrectedVersion}
+                    renderFormattedText={renderFormattedText}
+                  />
                 </div>
-              )}
+              );
+                          })}
             </div>
-          ))}
-          
-          {/* Suggestion Carousel */}
-          {!isProcessing && showSuggestionCarousel && suggestionMessages.length > 0 && (
-            <div style={{
-              width: '100%',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'flex-end',
-              marginBottom: '0.7rem'
-            }}>
-              <div className="hover-lift" style={{
-                maxWidth: '70%',
-                padding: '1rem 1.25rem',
-                background: isDarkMode 
-                  ? 'linear-gradient(135deg, rgba(195,141,148,0.15) 0%, rgba(195,141,148,0.08) 100%)'
-                  : 'linear-gradient(135deg, rgba(195,141,148,0.12) 0%, rgba(195,141,148,0.06) 100%)',
-                color: isDarkMode ? 'var(--foreground)' : '#3e3e3e',
-                borderRadius: '28px 28px 8px 28px',
-                border: isDarkMode ? '2px dashed rgba(195,141,148,0.5)' : '2px dashed #c38d94',
-                fontSize: '0.85rem',
-                fontWeight: 600,
-                position: 'relative',
-                boxShadow: isDarkMode 
-                  ? '0 8px 32px rgba(195,141,148,0.2), 0 2px 8px rgba(195,141,148,0.1)' 
-                  : '0 8px 32px rgba(195,141,148,0.25), 0 2px 8px rgba(195,141,148,0.15)',
-                fontFamily: 'AR One Sans, Arial, sans-serif',
-                transition: 'all 0.3s ease',
-                backdropFilter: 'blur(20px)'
+            
+            {/* Suggestion Carousel */}
+            {!isProcessing && showSuggestionCarousel && suggestionMessages.length > 0 && (
+              <div style={{
+                width: '100%',
+                padding: '0 0.75rem 0.75rem 0.75rem',
               }}>
                 <div style={{
+                  width: '100%',
                   display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  marginBottom: '0.5rem',
-                  fontSize: '0.8rem',
-                  color: isDarkMode ? '#8ba3d9' : '#3b5377'
+                  flexDirection: 'column',
+                  alignItems: 'flex-end',
                 }}>
-                  <span>💭 Suggestion ({currentSuggestionIndex + 1}/{suggestionMessages.length})</span>
-                  <div style={{ display: 'flex', gap: '0.3rem' }}>
-                    <motion.button
-                      onClick={() => navigateSuggestion('prev')}
-                      disabled={suggestionMessages.length <= 1}
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      style={{
-                        padding: '0.3rem 0.5rem',
-                        borderRadius: 6,
-                        border: `1px solid ${isDarkMode ? 'rgba(139,163,217,0.6)' : '#3b5377'}`,
-                        background: isDarkMode ? 'rgba(139,163,217,0.08)' : 'rgba(59,83,119,0.08)',
-                        color: isDarkMode ? '#8ba3d9' : '#3b5377',
-                        cursor: suggestionMessages.length <= 1 ? 'not-allowed' : 'pointer',
-                        fontSize: '0.7rem',
-                        opacity: suggestionMessages.length <= 1 ? 0.5 : 1,
-                        transition: 'all 0.3s ease',
-                        fontWeight: 600
-                      }}
-                    >
-                      ←
-                    </motion.button>
-                    <motion.button
-                      onClick={() => navigateSuggestion('next')}
-                      disabled={suggestionMessages.length <= 1}
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      style={{
-                        padding: '0.3rem 0.5rem',
-                        borderRadius: 6,
-                        border: `1px solid ${isDarkMode ? 'rgba(139,163,217,0.6)' : '#3b5377'}`,
-                        background: isDarkMode ? 'rgba(139,163,217,0.08)' : 'rgba(59,83,119,0.08)',
-                        color: isDarkMode ? '#8ba3d9' : '#3b5377',
-                        cursor: suggestionMessages.length <= 1 ? 'not-allowed' : 'pointer',
-                        fontSize: '0.7rem',
-                        opacity: suggestionMessages.length <= 1 ? 0.5 : 1,
-                        transition: 'all 0.3s ease',
-                        fontWeight: 600
-                      }}
-                    >
-                      →
-                    </motion.button>
-                  </div>
-                </div>
-                <div style={{
-                  lineHeight: '1.4',
-                  wordWrap: 'break-word',
-                  marginBottom: '0.3rem'
-                }}>
-                  {(() => {
-                    const suggestion = suggestionMessages[currentSuggestionIndex];
-                    if (!suggestion) return null;
-                    
-                    const formatted = formatMessageForDisplay(suggestion, userPreferences.romanizationDisplay);
-                    return (
-                      <>
-                        <span>{formatted.mainText}</span>
-                        {formatted.romanizedText && (
-                          <span style={{
-                            fontSize: '0.85em',
-                            color: '#555',
-                            opacity: 0.65,
-                            marginTop: 2,
-                            fontWeight: 400,
-                            lineHeight: 1.2,
-                            letterSpacing: '0.01em',
-                            display: 'block'
-                          }}>
-                            {formatted.romanizedText}
-                          </span>
-                        )}
-                      </>
-                    );
-                  })()}
-                </div>
-                {/* Suggestion Action Buttons */}
-                <div style={{
-                  display: 'flex',
-                  justifyContent: 'flex-end',
-                  gap: '0.3rem'
-                }}>
-                  {/* TTS button for suggestions */}
-                  <motion.button
-                    onClick={() => {
-                      const suggestion = suggestionMessages[currentSuggestionIndex];
-                      if (suggestion) {
-                        const cacheKey = `suggestion_${currentSuggestionIndex}`;
-                        const ttsText = getTTSText(suggestion, userPreferences.romanizationDisplay, language);
-                        playTTSAudio(ttsText, language, cacheKey);
-                      }
-                    }}
-                    disabled={isGeneratingTTS[`suggestion_${currentSuggestionIndex}`] || isPlayingTTS[`suggestion_${currentSuggestionIndex}`]}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    style={{
-                      padding: '0.3rem 0.7rem',
-                      borderRadius: 8,
-                      border: isPlayingTTS[`suggestion_${currentSuggestionIndex}`] ? 'none' : `1px solid ${isDarkMode ? 'rgba(232,179,195,0.6)' : '#84546d'}`,
-                      background: isPlayingTTS[`suggestion_${currentSuggestionIndex}`] 
-                        ? 'linear-gradient(135deg, #84546d 0%, #6a3d5a 100%)' 
-                        : isDarkMode 
-                          ? 'rgba(232,179,195,0.15)' 
-                          : 'rgba(132,84,109,0.08)',
-                      color: isPlayingTTS[`suggestion_${currentSuggestionIndex}`] 
-                        ? '#fff' 
-                        : isDarkMode ? '#e8b3c3' : '#84546d',
-                      cursor: (isGeneratingTTS[`suggestion_${currentSuggestionIndex}`] || isPlayingTTS[`suggestion_${currentSuggestionIndex}`]) ? 'not-allowed' : 'pointer',
-                      fontSize: '0.7rem',
-                      fontWeight: 600,
-                      transition: 'all 0.3s ease',
-                      opacity: (isGeneratingTTS[`suggestion_${currentSuggestionIndex}`] || isPlayingTTS[`suggestion_${currentSuggestionIndex}`]) ? 0.6 : 1,
-                      fontFamily: 'AR One Sans, Arial, sans-serif'
-                    }}
-                    title={isPlayingTTS[`suggestion_${currentSuggestionIndex}`] ? 'Playing audio...' : 'Listen to this suggestion'}
-                  >
-                    {isGeneratingTTS[`suggestion_${currentSuggestionIndex}`] ? '🔄' : isPlayingTTS[`suggestion_${currentSuggestionIndex}`] ? '🔊 Playing' : '🔊 Listen'}
-                  </motion.button>
-                  
-                  <motion.button
-                    onClick={() => {
-  const suggestionText = suggestionMessages[currentSuggestionIndex]?.text;
-  const textToExplain = typeof suggestionText === 'string' ? suggestionText : '';
-  explainSuggestion(currentSuggestionIndex, textToExplain);
-}}
-                    disabled={isTranslatingSuggestion[currentSuggestionIndex]}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    style={{
-                      padding: '0.3rem 0.7rem',
-                      borderRadius: 8,
-                      border: `1px solid ${isDarkMode ? 'rgba(232,179,195,0.6)' : '#84546d'}`,
-                      background: isDarkMode 
-                        ? 'rgba(232,179,195,0.08)' 
-                        : 'rgba(132,84,109,0.04)',
-                      color: isDarkMode ? '#e8b3c3' : '#84546d',
-                      cursor: isTranslatingSuggestion[currentSuggestionIndex] ? 'not-allowed' : 'pointer',
-                      fontSize: '0.7rem',
-                      fontWeight: 600,
-                      transition: 'all 0.3s ease',
-                      opacity: isTranslatingSuggestion[currentSuggestionIndex] ? 0.6 : 1,
-                      fontFamily: 'AR One Sans, Arial, sans-serif'
-                    }}
-                    title="Explain this suggestion"
-                  >
-                    {isTranslatingSuggestion[currentSuggestionIndex] ? '🔄' : '💡 Explain'}
-                  </motion.button>
-                </div>
-                {/* Translation Display */}
-                {showSuggestionTranslations[currentSuggestionIndex] && suggestionTranslations[currentSuggestionIndex] && (
-                  <div style={{
-                    marginTop: '0.75rem',
-                    padding: '0.75rem',
+                  <div className="hover-lift" style={{
+                    maxWidth: '70%',
+                    padding: '1rem 1.25rem',
                     background: isDarkMode 
-                      ? 'linear-gradient(135deg, rgba(132,84,109,0.8) 0%, rgba(106,61,90,0.8) 100%)'
-                      : 'linear-gradient(135deg, rgba(132,84,109,0.8) 0%, rgba(106,61,90,0.8) 100%)',
-                    border: isDarkMode ? '1px solid rgba(132,84,109,0.6)' : '1px solid #84546d',
-                    borderRadius: 12,
+                      ? 'linear-gradient(135deg, rgba(195,141,148,0.15) 0%, rgba(195,141,148,0.08) 100%)'
+                      : 'linear-gradient(135deg, rgba(195,141,148,0.12) 0%, rgba(195,141,148,0.06) 100%)',
+                    color: isDarkMode ? 'var(--foreground)' : '#3e3e3e',
+                    borderRadius: '28px 28px 8px 28px',
+                    border: isDarkMode ? '2px dashed rgba(195,141,148,0.5)' : '2px dashed #c38d94',
                     fontSize: '0.85rem',
-                    color: '#ffffff',
+                    fontWeight: 600,
                     position: 'relative',
                     boxShadow: isDarkMode 
-                      ? '0 4px 16px rgba(132,84,109,0.15)' 
-                      : '0 4px 16px rgba(132,84,109,0.12)',
-                    fontFamily: 'AR One Sans, Arial, sans-serif'
+                      ? '0 8px 32px rgba(195,141,148,0.2), 0 2px 8px rgba(195,141,148,0.1)' 
+                      : '0 8px 32px rgba(195,141,148,0.25), 0 2px 8px rgba(195,141,148,0.15)',
+                    fontFamily: 'AR One Sans, Arial, sans-serif',
+                    transition: 'all 0.3s ease',
+                    backdropFilter: 'blur(20px)'
                   }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                      <span style={{ fontWeight: 600, fontSize: '0.8rem', color: '#ffffff' }}>
-                        Translation
-                      </span>
-                      <button
-                        onClick={() => setShowSuggestionTranslations(prev => ({ ...prev, [currentSuggestionIndex]: false }))}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          color: '#ffffff',
-                          fontSize: '1rem',
-                          cursor: 'pointer',
-                          padding: '0.1rem',
-                          borderRadius: '2px',
-                          transition: 'all 0.2s ease'
-                        }}
-                        title="Hide explanation"
-                      >
-                        ×
-                      </button>
-                    </div>
-                    <div style={{ marginBottom: '0.5rem', fontWeight: 500, fontSize: '0.8rem' }}>
-                      {typeof suggestionTranslations[currentSuggestionIndex]?.translation === 'string' 
-                        ? suggestionTranslations[currentSuggestionIndex]?.translation 
-                        : ''}
-                    </div>
-                    {suggestionTranslations[currentSuggestionIndex]?.breakdown && (
-                      <div style={{ marginTop: '0.5rem' }}>
-                        <div style={{ 
-                          marginBottom: '0.5rem',
-                          fontWeight: 600,
-                          fontSize: '0.8rem',
-                          color: '#ffffff'
-                        }}>
-                          📖 Explanation
-                        </div>
-                        <div style={{
-                          background: isDarkMode 
-                            ? 'rgba(255,255,255,0.05)' 
-                            : 'rgba(255,255,255,0.7)',
-                          padding: '0.75rem',
-                          borderRadius: 8,
-                          border: isDarkMode ? '1px solid rgba(139,163,217,0.2)' : '1px solid #e0e0e0',
-                          fontSize: '0.8rem',
-                          lineHeight: '1.5',
-                          whiteSpace: 'pre-wrap',
-                          color: isDarkMode ? 'var(--foreground)' : '#3e3e3e'
-                        }}>
-                          {typeof suggestionTranslations[currentSuggestionIndex].breakdown === 'string' 
-                            ? suggestionTranslations[currentSuggestionIndex].breakdown 
-                            : ''}
-                        </div>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      marginBottom: '0.5rem',
+                      fontSize: '0.8rem',
+                      color: isDarkMode ? '#8ba3d9' : '#3b5377'
+                    }}>
+                      <span>💭 Suggestion ({currentSuggestionIndex + 1}/{suggestionMessages.length})</span>
+                      <div style={{ display: 'flex', gap: '0.3rem' }}>
+                        <motion.button
+                          onClick={() => navigateSuggestion('prev')}
+                          disabled={suggestionMessages.length <= 1}
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                          style={{
+                            padding: '0.3rem 0.5rem',
+                            borderRadius: 6,
+                            border: `1px solid ${isDarkMode ? 'rgba(139,163,217,0.6)' : '#3b5377'}`,
+                            background: isDarkMode ? 'rgba(139,163,217,0.08)' : 'rgba(59,83,119,0.08)',
+                            color: isDarkMode ? '#8ba3d9' : '#3b5377',
+                            cursor: suggestionMessages.length <= 1 ? 'not-allowed' : 'pointer',
+                            fontSize: '0.7rem',
+                            opacity: suggestionMessages.length <= 1 ? 0.5 : 1,
+                            transition: 'all 0.3s ease',
+                            fontWeight: 600
+                          }}
+                        >
+                          ←
+                        </motion.button>
+                        <motion.button
+                          onClick={() => navigateSuggestion('next')}
+                          disabled={suggestionMessages.length <= 1}
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                          style={{
+                            padding: '0.3rem 0.5rem',
+                            borderRadius: 6,
+                            border: `1px solid ${isDarkMode ? 'rgba(139,163,217,0.6)' : '#3b5377'}`,
+                            background: isDarkMode ? 'rgba(139,163,217,0.08)' : 'rgba(59,83,119,0.08)',
+                            color: isDarkMode ? '#8ba3d9' : '#3b5377',
+                            cursor: suggestionMessages.length <= 1 ? 'not-allowed' : 'pointer',
+                            fontSize: '0.7rem',
+                            opacity: suggestionMessages.length <= 1 ? 0.5 : 1,
+                            transition: 'all 0.3s ease',
+                            fontWeight: 600
+                          }}
+                        >
+                          →
+                        </motion.button>
                       </div>
-                    )}
+                    </div>
+                    <div style={{
+                      lineHeight: '1.4',
+                      wordWrap: 'break-word',
+                      marginBottom: '0.3rem'
+                    }}>
+                      {(() => {
+                        const suggestion = suggestionMessages[currentSuggestionIndex];
+                        if (!suggestion) return null;
+                        
+                        const formatted = formatMessageForDisplay(suggestion, userPreferences.romanizationDisplay);
+                        return (
+                          <>
+                            <span>{formatted.mainText}</span>
+                            {formatted.romanizedText && (
+                              <span style={{
+                                fontSize: '0.85em',
+                                color: '#555',
+                                opacity: 0.65,
+                                marginTop: 2,
+                                fontWeight: 400,
+                                lineHeight: '1.2',
+                                letterSpacing: '0.01em',
+                                display: 'block'
+                              }}>
+                                {formatted.romanizedText}
+                              </span>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </div>
                   </div>
-                )}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
+
+
 
         {/* Recording Controls */}
         {chatHistory.length > 0 && (
           <div
-            data-recording-section
+            ref={recordingControlsRef}
             style={{ 
               position: 'relative',
               padding: '1rem 1rem 2rem 1rem', 
@@ -6011,7 +5596,7 @@ Yes, the current serials don't have the same quality as the old ones, right?
         </div>
       )}
       </div>
-    </div>
+
   );
 });
 
