@@ -1528,26 +1528,69 @@ app.post('/api/tts', authenticateJWT, async (req: Request, res: Response) => {
       
       const lang = language || 'en';
       
+      console.log(`🎯 [TTS DEBUG] TTS request received:`, {
+        textLength: text.length,
+        textPreview: text.substring(0, 50) + '...',
+        language: lang,
+        timestamp: new Date().toISOString()
+      });
+      
       // Check Python API health first
       const isHealthy = await checkPythonAPIHealth();
       if (!isHealthy) {
+        console.log(`🎯 [TTS DEBUG] Python API health check failed`);
         return res.status(503).json({ 
           error: 'Python API is not available',
-          details: 'The TTS service is temporarily unavailable. Please try again later.'
+          details: 'The TTS service is temporarily unavailable. Please try again later.',
+          debug: {
+            service_used: 'none',
+            fallback_reason: 'Python API unavailable',
+            admin_settings: {},
+            cost_estimate: 'unknown'
+          }
         });
       }
       
-      // Generate TTS for the text
-      const ttsUrl = await generateTTS(text, lang);
+      console.log(`🎯 [TTS DEBUG] Python API health check passed`);
       
-      if (ttsUrl) {
-        res.json({ ttsUrl });
+      // Generate TTS for the text with debug info
+      const ttsResult = await generateTTSWithDebug(text, lang);
+      
+      if (ttsResult.ttsUrl) {
+        console.log(`🎯 [TTS DEBUG] TTS generation successful:`, {
+          url: ttsResult.ttsUrl,
+          serviceUsed: ttsResult.debug?.service_used,
+          costEstimate: ttsResult.debug?.cost_estimate
+        });
+        res.json({ 
+          ttsUrl: ttsResult.ttsUrl,
+          debug: ttsResult.debug
+        });
       } else {
-        res.status(500).json({ error: 'Failed to generate TTS' });
+        console.log(`🎯 [TTS DEBUG] TTS generation failed`);
+        res.status(500).json({ 
+          error: 'Failed to generate TTS',
+          debug: ttsResult.debug || {
+            service_used: 'none',
+            fallback_reason: 'All TTS services failed',
+            admin_settings: {},
+            cost_estimate: 'unknown'
+          }
+        });
       }
     } catch (error: any) {
-      console.error('TTS test endpoint error:', error);
-      res.status(500).json({ error: 'TTS generation failed', details: error.message });
+      console.error('🎯 [TTS DEBUG] TTS test endpoint error:', error);
+      res.status(500).json({ 
+        error: 'TTS generation failed', 
+        details: error.message,
+        debug: {
+          service_used: 'none',
+          fallback_reason: 'Exception occurred',
+          admin_settings: {},
+          cost_estimate: 'unknown',
+          error: error.message
+        }
+      });
     }
   });
 
@@ -1621,18 +1664,24 @@ async function checkPythonAPIHealth(): Promise<boolean> {
 
 // Helper function to generate TTS for any text using Gemini TTS API
 async function generateTTS(text: string, language: string): Promise<string | null> {
+  const result = await generateTTSWithDebug(text, language);
+  return result.ttsUrl;
+}
+
+// Helper function to generate TTS with debug information
+async function generateTTSWithDebug(text: string, language: string): Promise<{ ttsUrl: string | null; debug: any }> {
   try {
     // Use .aiff extension for macOS compatibility
     const ttsFileName = `tts_${Date.now()}.aiff`;
     const ttsFilePath = path.join(uploadsDir, ttsFileName);
     
-    console.log('Generating TTS using Gemini API for language:', language);
-    console.log('TTS text length:', text.length);
+    console.log('🎯 [TTS DEBUG] Generating TTS using admin-controlled system for language:', language);
+    console.log('🎯 [TTS DEBUG] TTS text length:', text.length);
     
-    // Call Python API for Gemini TTS
+    // Call Python API for TTS with debug info
     const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5000';
-    console.log(`🔗 Calling Python API at: ${pythonApiUrl}/generate_tts`);
-    console.log(`📝 Request payload: text='${text.substring(0, 50)}...', language='${language}', output_path='${ttsFilePath}'`);
+    console.log(`🎯 [TTS DEBUG] Calling Python API at: ${pythonApiUrl}/generate_tts`);
+    console.log(`🎯 [TTS DEBUG] Request payload: text='${text.substring(0, 50)}...', language='${language}', output_path='${ttsFilePath}'`);
     
     const ttsResponse = await axios.post(`${pythonApiUrl}/generate_tts`, {
       text: text,
@@ -1643,18 +1692,30 @@ async function generateTTS(text: string, language: string): Promise<string | nul
       timeout: 30000
     });
     
-    console.log(`📊 Python API response status: ${ttsResponse.status}`);
-    console.log(`📊 Python API response data:`, ttsResponse.data);
+    console.log(`🎯 [TTS DEBUG] Python API response status: ${ttsResponse.status}`);
+    console.log(`🎯 [TTS DEBUG] Python API response data:`, ttsResponse.data);
+    
+    // Extract debug information from Python API response
+    const debugInfo = {
+      service_used: ttsResponse.data.service_used || 'unknown',
+      fallback_reason: ttsResponse.data.fallback_reason || 'none',
+      admin_settings: ttsResponse.data.admin_settings || {},
+      cost_estimate: ttsResponse.data.cost_estimate || 'unknown',
+      request_id: ttsResponse.data.request_id || 'unknown',
+      python_debug: ttsResponse.data.debug || {}
+    };
+    
+    console.log(`🎯 [TTS DEBUG] Extracted debug info:`, debugInfo);
     
     if (ttsResponse.data.success && ttsResponse.data.output_path) {
       // Use the actual file path returned by Python API
       const actualFilePath = ttsResponse.data.output_path;
-      console.log('📁 Python API returned file path:', actualFilePath);
+      console.log(`🎯 [TTS DEBUG] Actual file path from Python API: ${actualFilePath}`);
       
       // Check if file was created
       if (fs.existsSync(actualFilePath)) {
         const stats = fs.statSync(actualFilePath);
-        console.log('✅ TTS file created, size:', stats.size, 'bytes');
+        console.log('🎯 [TTS DEBUG] TTS file created, size:', stats.size, 'bytes');
         
         // Get the filename from the path
         const fileName = path.basename(actualFilePath);
@@ -1663,24 +1724,52 @@ async function generateTTS(text: string, language: string): Promise<string | nul
         const isInUploads = actualFilePath.includes('uploads');
         const ttsUrl = isInUploads ? `/uploads/${fileName}` : `/files/${fileName}`;
         
-        console.log('✅ TTS audio generated at:', ttsUrl);
-        console.log('📁 File location:', isInUploads ? 'uploads directory' : 'root directory');
-        console.log('📄 File extension:', path.extname(actualFilePath));
-        return ttsUrl;
+        console.log('🎯 [TTS DEBUG] TTS audio generated at:', ttsUrl);
+        console.log('🎯 [TTS DEBUG] File location:', isInUploads ? 'uploads directory' : 'root directory');
+        console.log('🎯 [TTS DEBUG] File extension:', path.extname(actualFilePath));
+        
+        return {
+          ttsUrl: ttsUrl,
+          debug: debugInfo
+        };
       } else {
-        console.error('❌ TTS file was not created at:', actualFilePath);
-        return null;
+        console.error('🎯 [TTS DEBUG] TTS file was not created at expected path');
+        return {
+          ttsUrl: null,
+          debug: {
+            ...debugInfo,
+            fallback_reason: 'File not created',
+            error: 'TTS file was not created at expected path'
+          }
+        };
       }
     } else {
-      console.error('❌ TTS generation failed:', ttsResponse.data.error);
-      return null;
+      console.error('🎯 [TTS DEBUG] TTS generation failed:', ttsResponse.data.error);
+      return {
+        ttsUrl: null,
+        debug: {
+          ...debugInfo,
+          fallback_reason: 'Python API returned failure',
+          error: ttsResponse.data.error || 'Unknown error'
+        }
+      };
     }
   } catch (ttsError: any) {
-    console.error('❌ TTS error:', ttsError.message);
+    console.error('🎯 [TTS DEBUG] TTS error:', ttsError.message);
     if (ttsError.response) {
-      console.error('❌ Python API error response:', ttsError.response.status, ttsError.response.data);
+      console.error('🎯 [TTS DEBUG] Python API error response:', ttsError.response.status, ttsError.response.data);
     }
-    return null;
+    return {
+      ttsUrl: null,
+      debug: {
+        service_used: 'none',
+        fallback_reason: 'Exception occurred',
+        admin_settings: {},
+        cost_estimate: 'unknown',
+        error: ttsError.message,
+        error_type: ttsError.name
+      }
+    };
   }
 }
 

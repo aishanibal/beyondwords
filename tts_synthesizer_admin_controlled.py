@@ -110,9 +110,9 @@ class AdminControlledTTSSynthesizer:
             'ar': 'ar-SA'
         }
 
-    def synthesize_speech(self, text: str, language_code: str = 'en', output_path: str = "response.wav") -> Optional[str]:
+    def synthesize_speech(self, text: str, language_code: str = 'en', output_path: str = "response.wav") -> dict:
         """
-        Synthesize speech with admin-controlled priority:
+        Synthesize speech with admin-controlled priority and return debug info:
         1. System TTS (FREE)
         2. Google Cloud TTS (CHEAP) 
         3. Gemini TTS (EXPENSIVE) - Admin only
@@ -121,13 +121,35 @@ class AdminControlledTTSSynthesizer:
         import time
         request_id = f"{int(time.time() * 1000)}_{hash(text)}_{hash(language_code)}"
         
+        # Initialize debug info
+        debug_info = {
+            "request_id": request_id,
+            "service_used": "none",
+            "fallback_reason": "none",
+            "admin_settings": {},
+            "cost_estimate": "unknown",
+            "success": False,
+            "output_path": None,
+            "debug": {}
+        }
+        
         # Check cache for duplicate requests
         cache_key = f"{text}_{language_code}_{output_path}"
         if cache_key in self.tts_cache:
             cached_result = self.tts_cache[cache_key]
             print(f"🎯 TTS Request ID: {request_id} - CACHED (duplicate detected)")
             print(f"🎯 Returning cached result: {cached_result}")
-            return cached_result
+            debug_info.update({
+                "service_used": "cached",
+                "success": True,
+                "output_path": cached_result,
+                "fallback_reason": "Using cached result"
+            })
+            return {
+                "success": True,
+                "output_path": cached_result,
+                **debug_info
+            }
         
         print(f"🎯 TTS Request ID: {request_id}")
         print(f"🎯 AdminControlledTTSSynthesizer.synthesize_speech called with:")
@@ -140,27 +162,39 @@ class AdminControlledTTSSynthesizer:
         if output_dir:
             os.makedirs(output_dir, exist_ok=True)
         
+        # Get admin settings for debug info
+        settings = self.admin_dashboard.get_tts_settings()
+        active_tts = settings.get("active_tts", "system")
+        debug_info["admin_settings"] = settings
+        
+        print(f"🎯 Admin settings: {settings}")
+        print(f"🎯 Active TTS system: {active_tts}")
+        print(f"🎯 Using TTS system: {active_tts.upper()}")
+        
         # Check if Google API services are enabled
         if not self.admin_dashboard.is_google_api_enabled():
             print("🔒 Google API services are disabled. Using System TTS only.")
+            debug_info["fallback_reason"] = "Google API services disabled"
             # Force system TTS when Google APIs are disabled
             result = self._try_system_tts(text, language_code, output_path)
             if result:
                 self.admin_dashboard.track_usage("system", 0.0)
                 print("✅ System TTS successful (FREE)")
                 self.tts_cache[cache_key] = result
-                return result
+                debug_info.update({
+                    "service_used": "system",
+                    "success": True,
+                    "output_path": result,
+                    "cost_estimate": "0.00"
+                })
+                return {
+                    "success": True,
+                    "output_path": result,
+                    **debug_info
+                }
             else:
                 print("❌ System TTS failed")
-                return None
-        
-        # Get active TTS system from admin settings
-        settings = self.admin_dashboard.get_tts_settings()
-        active_tts = settings.get("active_tts", "system")
-        
-        print(f"🎯 Admin settings: {settings}")
-        print(f"🎯 Active TTS system: {active_tts}")
-        print(f"🎯 Using TTS system: {active_tts.upper()}")
+                debug_info["fallback_reason"] = "System TTS failed"
         
         # Try System TTS (FREE)
         if active_tts == "system":
@@ -171,9 +205,20 @@ class AdminControlledTTSSynthesizer:
                 print("✅ System TTS successful (FREE)")
                 # Cache the result
                 self.tts_cache[cache_key] = result
-                return result
+                debug_info.update({
+                    "service_used": "system",
+                    "success": True,
+                    "output_path": result,
+                    "cost_estimate": "0.00"
+                })
+                return {
+                    "success": True,
+                    "output_path": result,
+                    **debug_info
+                }
             else:
                 print("❌ System TTS failed")
+                debug_info["fallback_reason"] = "System TTS failed"
         
         # Try Google Cloud TTS (CHEAP)
         elif active_tts == "cloud":
@@ -188,11 +233,23 @@ class AdminControlledTTSSynthesizer:
                     print(f"✅ Google Cloud TTS successful (CHEAP - ~${estimated_cost:.4f})")
                     # Cache the result
                     self.tts_cache[cache_key] = result
-                    return result
+                    debug_info.update({
+                        "service_used": "google_cloud",
+                        "success": True,
+                        "output_path": result,
+                        "cost_estimate": f"{estimated_cost:.4f}"
+                    })
+                    return {
+                        "success": True,
+                        "output_path": result,
+                        **debug_info
+                    }
                 else:
                     print("❌ Google Cloud TTS failed")
+                    debug_info["fallback_reason"] = "Google Cloud TTS failed"
             else:
                 print("❌ Google Cloud TTS not available")
+                debug_info["fallback_reason"] = "Google Cloud TTS not available"
         
         # Try Gemini TTS (EXPENSIVE)
         elif active_tts == "gemini":
@@ -207,13 +264,26 @@ class AdminControlledTTSSynthesizer:
                     print(f"✅ Gemini TTS successful (EXPENSIVE - ~${estimated_cost:.4f})")
                     # Cache the result
                     self.tts_cache[cache_key] = result
-                    return result
+                    debug_info.update({
+                        "service_used": "gemini",
+                        "success": True,
+                        "output_path": result,
+                        "cost_estimate": f"{estimated_cost:.4f}"
+                    })
+                    return {
+                        "success": True,
+                        "output_path": result,
+                        **debug_info
+                    }
                 else:
                     print("❌ Gemini TTS failed")
+                    debug_info["fallback_reason"] = "Gemini TTS failed"
             else:
                 print("❌ Gemini TTS not available")
+                debug_info["fallback_reason"] = "Gemini TTS not available"
         
         print("❌ All TTS methods failed")
+        debug_info["fallback_reason"] = "All TTS methods failed"
         
         # Create a simple fallback audio file (silence) so the frontend doesn't crash
         try:
@@ -240,10 +310,29 @@ class AdminControlledTTSSynthesizer:
             
             # Cache the result
             self.tts_cache[cache_key] = output_path
-            return output_path
+            debug_info.update({
+                "service_used": "fallback",
+                "success": True,
+                "output_path": output_path,
+                "cost_estimate": "0.00",
+                "fallback_reason": "Created silence fallback"
+            })
+            return {
+                "success": True,
+                "output_path": output_path,
+                **debug_info
+            }
         except Exception as e:
             print(f"❌ Failed to create fallback audio: {e}")
-            return None
+            debug_info.update({
+                "fallback_reason": f"Failed to create fallback audio: {e}",
+                "error": str(e)
+            })
+            return {
+                "success": False,
+                "error": f"Failed to create fallback audio: {e}",
+                **debug_info
+            }
 
     def _try_system_tts(self, text: str, language_code: str, output_path: str) -> Optional[str]:
         """Try system TTS (FREE)"""

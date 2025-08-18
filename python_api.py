@@ -648,7 +648,7 @@ def quick_translation():
 
 @app.route('/generate_tts', methods=['POST'])
 def generate_tts():
-    """Generate TTS audio"""
+    """Generate TTS audio with debug information"""
     try:
         data = request.get_json()
         text = data.get('text', '')
@@ -657,26 +657,70 @@ def generate_tts():
         
         print(f"🎤 TTS request - Language: {language_code}, Text length: {len(text)}")
         
-        # Generate TTS
+        # Generate TTS with debug info
         result = synthesize_speech(text, language_code, output_path)
         
-        if result:
-            return jsonify({
-                "success": True,
-                "output_path": result,
-                "message": "TTS generated successfully"
-            })
+        # Handle new dict return format from TTS synthesizer
+        if isinstance(result, dict):
+            # New format with debug info
+            if result.get('success'):
+                return jsonify({
+                    "success": True,
+                    "output_path": result.get('output_path'),
+                    "message": "TTS generated successfully",
+                    # Include debug information
+                    "service_used": result.get('service_used', 'unknown'),
+                    "fallback_reason": result.get('fallback_reason', 'none'),
+                    "admin_settings": result.get('admin_settings', {}),
+                    "cost_estimate": result.get('cost_estimate', 'unknown'),
+                    "request_id": result.get('request_id', 'unknown'),
+                    "debug": result
+                })
+            else:
+                return jsonify({
+                    "success": False,
+                    "error": result.get('error', 'TTS generation failed'),
+                    "service_used": result.get('service_used', 'unknown'),
+                    "fallback_reason": result.get('fallback_reason', 'none'),
+                    "admin_settings": result.get('admin_settings', {}),
+                    "cost_estimate": result.get('cost_estimate', 'unknown'),
+                    "request_id": result.get('request_id', 'unknown'),
+                    "debug": result
+                })
         else:
-            return jsonify({
-                "success": False,
-                "error": "TTS generation failed"
-            })
+            # Legacy string return format (fallback)
+            if result:
+                return jsonify({
+                    "success": True,
+                    "output_path": result,
+                    "message": "TTS generated successfully (legacy format)",
+                    "service_used": "unknown",
+                    "fallback_reason": "legacy_format",
+                    "admin_settings": {},
+                    "cost_estimate": "unknown",
+                    "debug": {"legacy_format": True}
+                })
+            else:
+                return jsonify({
+                    "success": False,
+                    "error": "TTS generation failed",
+                    "service_used": "unknown",
+                    "fallback_reason": "legacy_format_failed",
+                    "admin_settings": {},
+                    "cost_estimate": "unknown",
+                    "debug": {"legacy_format": True, "failed": True}
+                })
         
     except Exception as e:
         print(f"❌ TTS error: {e}")
         return jsonify({
             "success": False,
-            "error": str(e)
+            "error": str(e),
+            "service_used": "none",
+            "fallback_reason": "exception",
+            "admin_settings": {},
+            "cost_estimate": "unknown",
+            "debug": {"exception": str(e)}
         })
 
 @app.route('/admin')

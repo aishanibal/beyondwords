@@ -1,9 +1,8 @@
 import React, { useMemo, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { ChatMessage, UserPreferences } from '../../lib/preferences'; // Adjust path as needed
 
 // Helper function to format message for display
-const formatMessageForDisplay = (message: ChatMessage, romanizationDisplay: 'always' | 'never' | 'if_different') => {
+const formatMessageForDisplay = (message: any, romanizationDisplay: 'always' | 'never' | 'if_different') => {
   const mainText = message.text || '';
   const romanizedText = message.romanized_text || '';
   const showRomanized =
@@ -18,7 +17,7 @@ const formatMessageForDisplay = (message: ChatMessage, romanizationDisplay: 'alw
 };
 
 // Helper function to get text for TTS
-const getTTSText = (message: ChatMessage, romanizationDisplay: 'always' | 'never' | 'if_different', language: string) => {
+const getTTSText = (message: any, romanizationDisplay: 'always' | 'never' | 'if_different', language: string) => {
     // For languages that use roman characters primarily, always use the main text.
     const romanCharLanguages = ['en', 'es', 'fr', 'de', 'it', 'pt', 'nl', 'sv', 'da', 'no', 'fi'];
     if (romanCharLanguages.includes(language.split('-')[0])) {
@@ -39,7 +38,7 @@ const getTTSText = (message: ChatMessage, romanizationDisplay: 'always' | 'never
   
 
 interface ChatMessageItemProps {
-  message: ChatMessage;
+  message: any;
   formatted: { mainText: string; romanizedText: string };
   isDarkMode: boolean;
   index: number;
@@ -48,9 +47,9 @@ interface ChatMessageItemProps {
   toggleDetailedFeedback: (index: number) => void;
   generateTTSForText: (text: string, language: string, cacheKey: string) => void;
   language: string;
-  userPreferences: UserPreferences;
+  userPreferences: any;
   playTTS: (text: string, language: string, cacheKey: string) => void;
-  getTTSText: (message: ChatMessage, romanizationDisplay: 'always' | 'never' | 'if_different') => string;
+  getTTSText: (message: any, romanizationDisplay: 'always' | 'never' | 'if_different') => string;
   isLoadingMessageFeedback: { [key: number]: boolean };
   isTranslating: { [key: number]: boolean };
   isGeneratingTTS: { [key: string]: boolean };
@@ -142,7 +141,16 @@ const ChatMessageItem: React.FC<ChatMessageItemProps> = React.memo(({
     }}>
       <div style={messageBubbleStyle}>
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <span style={{ fontSize: '0.9rem' }}>{formatted.mainText}</span>
+          <span style={{ fontSize: '0.9rem' }}>
+            {(message.detailedFeedback || (
+              typeof formatted.mainText === 'string' && (
+                formatted.mainText.includes('__') ||
+                formatted.mainText.includes('~~') ||
+                formatted.mainText.includes('==') ||
+                formatted.mainText.includes('<<')
+              )
+            )) ? renderFormattedText(formatted.mainText, index) : formatted.mainText}
+          </span>
           {formatted.romanizedText && (
             <span style={{
               fontSize: '0.85em',
@@ -150,7 +158,14 @@ const ChatMessageItem: React.FC<ChatMessageItemProps> = React.memo(({
               opacity: 0.8,
               marginTop: 4,
             }}>
-              {formatted.romanizedText}
+              {(message.detailedFeedback || (
+                typeof formatted.romanizedText === 'string' && (
+                  formatted.romanizedText.includes('__') ||
+                  formatted.romanizedText.includes('~~') ||
+                  formatted.romanizedText.includes('==') ||
+                  formatted.romanizedText.includes('<<')
+                )
+              )) ? renderFormattedText(formatted.romanizedText, index) : formatted.romanizedText}
             </span>
           )}
 

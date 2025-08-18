@@ -18,7 +18,52 @@ import unidecode from 'unidecode';
 import Kuroshiro from 'kuroshiro';
 import KuromojiAnalyzer from 'kuroshiro-analyzer-kuromoji';
 import pinyin from 'pinyin';
+// pinyin-pro types don't include 'mark' in some versions; cast options as any to allow tone marks
+import { pinyin as pinyinPro } from 'pinyin-pro';
 import { transliterate } from 'transliteration';
+import * as wanakana from 'wanakana';
+import { convert as romanizeHangul } from 'hangul-romanization';
+import Sanscript from '@sanskrit-coders/sanscript';
+
+
+// Kuroshiro singleton with explicit Kuromoji dict path served from /public
+let kuroshiroSingleton: Kuroshiro | null = null;
+let kuroshiroInitPromise: Promise<Kuroshiro> | null = null;
+
+const getKuroshiroInstance = async (): Promise<Kuroshiro> => {
+  if (kuroshiroSingleton) return kuroshiroSingleton;
+  if (!kuroshiroInitPromise) {
+    kuroshiroInitPromise = (async () => {
+      const instance = new Kuroshiro();
+      // Ensure the Kuromoji dictionary is fetched from the public path
+      await instance.init(new KuromojiAnalyzer({ dictPath: '/kuromoji/dict' } as any));
+      kuroshiroSingleton = instance;
+      return instance;
+    })();
+  }
+  return kuroshiroInitPromise;
+};
+
+// Normalize spacing around punctuation in romanized output
+// Example: "kimi no na wa daisuki ." -> "kimi no na wa daisuki."
+// Also covers full-width punctuation (，。、「」) and Arabic/Indic punctuation (، ؟ ؛ । ॥)
+const fixRomanizationPunctuation = (input: string): string => {
+  if (!input) return input;
+  let output = input;
+  // Remove spaces before common ASCII punctuation
+  output = output.replace(/\s+([.,!?;:)\]\}])/g, '$1');
+  // Also handle spaces before Japanese full-width punctuation if present
+  output = output.replace(/\s+([。、「」『』（）！？：；，])/g, '$1');
+  // Handle spaces before Arabic and Indic punctuation
+  output = output.replace(/\s+([،؟؛।॥])/g, '$1');
+  // Collapse multiple spaces
+  output = output.replace(/\s{2,}/g, ' ');
+  // Trim leading/trailing spaces
+  output = output.trim();
+  // Normalize Unicode to NFC to combine diacritics properly (e.g., IAST macrons)
+  try { output = output.normalize('NFC'); } catch {}
+  return output;
+};
 
 
 // TypeScript: Add type declarations for browser APIs
@@ -334,6 +379,12 @@ const Analyze = () => {
     if (isProcessing) {
       setShowSuggestionCarousel(false);
       setSuggestionMessages([]);
+      // Reset suggestion explanation state when processing starts
+      setSuggestionTranslations({});
+      setShowSuggestionTranslations({});
+      setIsTranslatingSuggestion({});
+      setShowSuggestionExplanations({});
+      setExplainButtonPressed(false);
     }
   }, [isProcessing]);
 
@@ -432,6 +483,33 @@ const Analyze = () => {
   const [ttsCache, setTtsCache] = useState<Map<string, { url: string; timestamp: number }>>(new Map());
   const [isGeneratingTTS, setIsGeneratingTTS] = useState<{[key: string]: boolean}>({});
   const [isPlayingTTS, setIsPlayingTTS] = useState<{[key: string]: boolean}>({});
+  
+  // Debug information states
+  const [ttsDebugInfo, setTtsDebugInfo] = useState<{
+    serviceUsed: string;
+    fallbackReason: string;
+    costEstimate: string;
+    adminSettings: any;
+    lastUpdate: Date | null;
+  } | null>(null);
+  
+  const [romanizationDebugInfo, setRomanizationDebugInfo] = useState<{
+    method: string;
+    language: string;
+    originalText: string;
+    romanizedText: string;
+    fallbackUsed: boolean;
+    fallbackReason: string;
+    textAnalysis: {
+      hasKanji: boolean;
+      hasHiragana: boolean;
+      hasKatakana: boolean;
+      isPureKana: boolean;
+    };
+    processingTime: number;
+    lastUpdate: Date | null;
+  } | null>(null);
+  
   const [userPreferences, setUserPreferences] = useState<{
     formality: string;
     topics: string[];
@@ -729,7 +807,6 @@ const Analyze = () => {
       setShowSavePrompt(true);
     }
   }, [user, conversationId, isLoadingConversation, urlConversationId, loadExistingConversation]);
-
   // Move validateConversationId outside useEffect
   const validateConversationId = async (
     user: User | null,
@@ -1206,60 +1283,366 @@ const Analyze = () => {
 
   const getTTSUrl = async (text: string, language: string) => null;
   const playTTS = async (url: string) => {};
-
+  // Enhanced Japanese romanization with comprehensive debug information
   const generateRomanizedText = async (text: string, languageCode: string): Promise<string> => {
     if (!isScriptLanguage(languageCode)) {
       return '';
     }
 
+    // Initialize debug information
+    const debugInfo = {
+      language: languageCode,
+      originalText: text,
+      textLength: text.length,
+      timestamp: new Date().toISOString(),
+      method: 'unknown',
+      success: false,
+      fallbackUsed: false,
+      fallbackReason: 'none',
+      error: null,
+      processingTime: 0
+    };
+
+    const startTime = performance.now();
+
     try {
       let romanizedText = '';
 
       switch (languageCode) {
-        case 'ja': // Japanese - using Kuroshiro for complete romanization (kanji + kana)
-          try {
-            const kuroshiro = new Kuroshiro();
-            await kuroshiro.init(new KuromojiAnalyzer());
-            romanizedText = await kuroshiro.convert(text, { to: 'romaji', mode: 'spaced' });
-          } catch (kuroshiroError) {
-            console.warn('Kuroshiro failed, falling back to transliteration:', kuroshiroError);
-            romanizedText = transliterate(text);
+        case 'ja': // Japanese - Enhanced romanization with intelligent method selection
+          console.log('🎯 [ROMANIZATION DEBUG] Processing Japanese text:', text);
+          
+          // Helper function to detect text composition
+          const hasKanji = /[\u4e00-\u9faf]/.test(text);
+          const hasHiragana = /[\u3040-\u309f]/.test(text);
+          const hasKatakana = /[\u30a0-\u30ff]/.test(text);
+          const isPureKana = (hasHiragana || hasKatakana) && !hasKanji;
+          
+          console.log('🎯 [ROMANIZATION DEBUG] Text analysis:', {
+            hasKanji,
+            hasHiragana,
+            hasKatakana,
+            isPureKana,
+            textLength: text.length
+          });
+          
+          // Intelligent method selection based on text composition
+          if (hasKanji) {
+            // Text contains Kanji - use Kuroshiro (best for Kanji)
+            console.log('🎯 [ROMANIZATION DEBUG] Text contains Kanji, using Kuroshiro...');
+            try {
+              const kuroshiro = await getKuroshiroInstance();
+              romanizedText = await kuroshiro.convert(text, { to: 'romaji', mode: 'spaced' });
+              
+              if (romanizedText && romanizedText.trim()) {
+                debugInfo.method = 'kuroshiro';
+                debugInfo.success = true;
+                console.log('🎯 [ROMANIZATION DEBUG] ✅ Kuroshiro successful:', romanizedText);
+              } else {
+                throw new Error('Kuroshiro returned empty result');
+              }
+                         } catch (kuroshiroError) {
+               console.warn('🎯 [ROMANIZATION DEBUG] ⚠️ Kuroshiro failed for Kanji text, trying transliteration...', kuroshiroError);
+               debugInfo.fallbackReason = 'Kuroshiro failed for Kanji text';
+               
+               // For Kanji text, skip Wanakana and go directly to transliteration
+               try {
+                 romanizedText = transliterate(text);
+                 if (romanizedText && romanizedText.trim()) {
+                   debugInfo.method = 'transliteration';
+                   debugInfo.success = true;
+                   debugInfo.fallbackUsed = true;
+                   console.log('🎯 [ROMANIZATION DEBUG] ✅ Transliteration fallback successful:', romanizedText);
+                 } else {
+                   throw new Error('Transliteration returned empty result');
+                 }
+               } catch (transliterationError) {
+                 console.warn('🎯 [ROMANIZATION DEBUG] ⚠️ Transliteration failed, using unidecode...', transliterationError);
+                 debugInfo.fallbackReason = 'Both Kuroshiro and transliteration failed';
+                 romanizedText = unidecode(text);
+                 debugInfo.method = 'unidecode';
+                 debugInfo.success = true;
+                 debugInfo.fallbackUsed = true;
+                 console.log('🎯 [ROMANIZATION DEBUG] ✅ Unidecode fallback successful:', romanizedText);
+               }
+             }
+          } else if (isPureKana) {
+            // Pure Hiragana/Katakana - use Wanakana (fastest and most accurate)
+            console.log('🎯 [ROMANIZATION DEBUG] Pure Kana text, using Wanakana...');
+            try {
+              romanizedText = wanakana.toRomaji(text, { 
+                IMEMode: true,
+                convertLongVowelMark: true,
+                upcaseKatakana: false
+              });
+              
+              if (romanizedText && romanizedText.trim()) {
+                debugInfo.method = 'wanakana';
+                debugInfo.success = true;
+                console.log('🎯 [ROMANIZATION DEBUG] ✅ Wanakana successful:', romanizedText);
+              } else {
+                throw new Error('Wanakana returned empty result');
+              }
+                         } catch (wanakanaError) {
+               console.warn('🎯 [ROMANIZATION DEBUG] ⚠️ Wanakana failed, trying transliteration...', wanakanaError);
+               debugInfo.fallbackReason = 'Wanakana failed for Kana text';
+               
+               try {
+                 romanizedText = transliterate(text);
+                 if (romanizedText && romanizedText.trim()) {
+                   debugInfo.method = 'transliteration';
+                   debugInfo.success = true;
+                   debugInfo.fallbackUsed = true;
+                   console.log('🎯 [ROMANIZATION DEBUG] ✅ Transliteration fallback successful:', romanizedText);
+                 } else {
+                   throw new Error('Transliteration returned empty result');
+                 }
+               } catch (transliterationError) {
+                 console.warn('🎯 [ROMANIZATION DEBUG] ⚠️ Transliteration failed, using unidecode...', transliterationError);
+                 debugInfo.fallbackReason = 'Both Wanakana and transliteration failed';
+                 romanizedText = unidecode(text);
+                 debugInfo.method = 'unidecode';
+                 debugInfo.success = true;
+                 debugInfo.fallbackUsed = true;
+                 console.log('🎯 [ROMANIZATION DEBUG] ✅ Unidecode fallback successful:', romanizedText);
+               }
+             }
+          } else {
+            // Mixed or unknown text - try Kuroshiro first, then fallbacks
+            console.log('🎯 [ROMANIZATION DEBUG] Mixed/unknown text, trying Kuroshiro first...');
+            try {
+              const kuroshiro = await getKuroshiroInstance();
+              romanizedText = await kuroshiro.convert(text, { to: 'romaji', mode: 'spaced' });
+              
+              if (romanizedText && romanizedText.trim()) {
+                debugInfo.method = 'kuroshiro';
+                debugInfo.success = true;
+                console.log('🎯 [ROMANIZATION DEBUG] ✅ Kuroshiro successful:', romanizedText);
+              } else {
+                throw new Error('Kuroshiro returned empty result');
+              }
+                         } catch (kuroshiroError) {
+               console.warn('🎯 [ROMANIZATION DEBUG] ⚠️ Kuroshiro failed, trying Wanakana...', kuroshiroError);
+               debugInfo.fallbackReason = 'Kuroshiro failed for mixed text';
+               
+               try {
+                 romanizedText = wanakana.toRomaji(text, { 
+                   IMEMode: true,
+                   convertLongVowelMark: true,
+                   upcaseKatakana: false
+                 });
+                 
+                 if (romanizedText && romanizedText.trim()) {
+                   debugInfo.method = 'wanakana';
+                   debugInfo.success = true;
+                   debugInfo.fallbackUsed = true;
+                   console.log('🎯 [ROMANIZATION DEBUG] ✅ Wanakana successful:', romanizedText);
+                 } else {
+                   throw new Error('Wanakana returned empty result');
+                 }
+               } catch (wanakanaError) {
+                 console.warn('🎯 [ROMANIZATION DEBUG] ⚠️ Wanakana failed, trying transliteration...', wanakanaError);
+                 debugInfo.fallbackReason = 'Both Kuroshiro and Wanakana failed';
+                 
+                 try {
+                   romanizedText = transliterate(text);
+                   if (romanizedText && romanizedText.trim()) {
+                     debugInfo.method = 'transliteration';
+                     debugInfo.success = true;
+                     debugInfo.fallbackUsed = true;
+                     console.log('🎯 [ROMANIZATION DEBUG] ✅ Transliteration successful:', romanizedText);
+                   } else {
+                     throw new Error('Transliteration returned empty result');
+                   }
+                 } catch (transliterationError) {
+                   console.warn('🎯 [ROMANIZATION DEBUG] ⚠️ Transliteration failed, using unidecode...', transliterationError);
+                   debugInfo.fallbackReason = 'All methods failed, using unidecode';
+                   romanizedText = unidecode(text);
+                   debugInfo.method = 'unidecode';
+                   debugInfo.success = true;
+                   debugInfo.fallbackUsed = true;
+                   console.log('🎯 [ROMANIZATION DEBUG] ✅ Unidecode fallback successful:', romanizedText);
+                 }
+               }
+             }
           }
           break;
 
-        case 'zh': // Chinese - using pinyin library
-          romanizedText = pinyin(text, {
-            style: pinyin.STYLE_NORMAL,
-          }).map(arr => arr[0]).join(' ');
+        case 'zh': // Chinese - use pinyin-pro with tone marks and segmentation
+          console.log('🎯 [ROMANIZATION DEBUG] Processing Chinese text:', text);
+          try {
+            // pinyin-pro with tone marks and word segmentation
+            const tokens = pinyinPro(text, { toneType: 'mark', type: 'array', segment: true } as any);
+            romanizedText = Array.isArray(tokens) ? tokens.join(' ') : String(tokens || '');
+            if (!romanizedText || !romanizedText.trim()) {
+              throw new Error('pinyin-pro returned empty');
+            }
+            debugInfo.method = 'pinyin';
+            debugInfo.success = true;
+            console.log('🎯 [ROMANIZATION DEBUG] ✅ Pinyin successful:', romanizedText);
+          } catch (pinyinError) {
+            console.warn('🎯 [ROMANIZATION DEBUG] ⚠️ Pinyin failed, using transliteration:', pinyinError);
+            try {
+              // Fallback to node pinyin without tones
+              romanizedText = pinyin(text, { style: pinyin.STYLE_TONE }).map(arr => arr[0]).join(' ');
+              debugInfo.method = 'pinyin';
+              debugInfo.success = true;
+              debugInfo.fallbackUsed = true;
+            } catch {
+              romanizedText = transliterate(text);
+              debugInfo.method = 'transliteration';
+              debugInfo.success = true;
+              debugInfo.fallbackUsed = true;
+            }
+          }
           break;
 
-        case 'ko': // Korean - using transliteration library (excellent Korean support)
-          romanizedText = transliterate(text);
+        case 'ko': // Korean - use hangul-romanization, fallback to transliteration
+          console.log('🎯 [ROMANIZATION DEBUG] Processing Korean text:', text);
+          try {
+            romanizedText = romanizeHangul(text);
+            debugInfo.method = 'hangul-romanization';
+            debugInfo.success = true;
+            console.log('🎯 [ROMANIZATION DEBUG] ✅ Korean romanization successful:', romanizedText);
+          } catch (transliterationError) {
+            console.warn('🎯 [ROMANIZATION DEBUG] ⚠️ Korean transliteration failed, using unidecode:', transliterationError);
+            romanizedText = unidecode(text);
+            debugInfo.method = 'unidecode';
+            debugInfo.success = true;
+            debugInfo.fallbackUsed = true;
+          }
+          // Fix spacing around apostrophes from romanization (e.g., o' vs o ’)
+          romanizedText = romanizedText.replace(/\s+([’'])/g, '$1');
           break;
 
-        case 'hi': // Hindi - using transliteration library (good for Devanagari)
-        case 'ar': // Arabic - using transliteration library (good for Arabic script)
-        case 'ta': // Tamil - using transliteration library (good for Tamil script)
-        case 'ml': // Malayalam - using transliteration library (good for Malayalam script)
-        case 'or': // Odia - using transliteration library (good for Odia script)
-          // Using the comprehensive 'transliteration' library for Indic and Arabic scripts
-          romanizedText = transliterate(text);
+        case 'hi': // Hindi/Devanagari
+          console.log(`🎯 [ROMANIZATION DEBUG] Processing ${languageCode} text:`, text);
+          try {
+            romanizedText = Sanscript.t(text, 'devanagari', 'iast');
+            debugInfo.method = 'sanscript-iast';
+            debugInfo.success = true;
+          } catch (e) {
+            romanizedText = transliterate(text);
+            debugInfo.method = 'transliteration';
+            debugInfo.success = true;
+            debugInfo.fallbackUsed = true;
+          }
+          // Remove spaces before danda marks if present after conversion (rare)
+          romanizedText = romanizedText.replace(/\s+(।|॥)/g, '$1');
+          break;
+
+        case 'ta': // Tamil
+          console.log(`🎯 [ROMANIZATION DEBUG] Processing ${languageCode} text:`, text);
+          try {
+            romanizedText = Sanscript.t(text, 'tamil', 'iast');
+            debugInfo.method = 'sanscript-iast';
+            debugInfo.success = true;
+          } catch (e) {
+            romanizedText = transliterate(text);
+            debugInfo.method = 'transliteration';
+            debugInfo.success = true;
+            debugInfo.fallbackUsed = true;
+          }
+          break;
+
+        case 'ml': // Malayalam
+          console.log(`🎯 [ROMANIZATION DEBUG] Processing ${languageCode} text:`, text);
+          try {
+            romanizedText = Sanscript.t(text, 'malayalam', 'iast');
+            debugInfo.method = 'sanscript-iast';
+            debugInfo.success = true;
+          } catch (e) {
+            romanizedText = transliterate(text);
+            debugInfo.method = 'transliteration';
+            debugInfo.success = true;
+            debugInfo.fallbackUsed = true;
+          }
+          break;
+
+        case 'or': // Odia
+          console.log(`🎯 [ROMANIZATION DEBUG] Processing ${languageCode} text:`, text);
+          try {
+            romanizedText = Sanscript.t(text, 'oriya', 'iast');
+            debugInfo.method = 'sanscript-iast';
+            debugInfo.success = true;
+          } catch (e) {
+            romanizedText = transliterate(text);
+            debugInfo.method = 'transliteration';
+            debugInfo.success = true;
+            debugInfo.fallbackUsed = true;
+          }
+          break;
+
+        case 'ar': // Arabic
+          console.log(`🎯 [ROMANIZATION DEBUG] Processing ${languageCode} text:`, text);
+          try {
+            // transliteration library works reasonably well for Arabic; keep as primary
+            romanizedText = transliterate(text);
+            debugInfo.method = 'transliteration';
+            debugInfo.success = true;
+            console.log(`🎯 [ROMANIZATION DEBUG] ✅ ${languageCode} transliteration successful:`, romanizedText);
+          } catch (transliterationError) {
+            console.warn(`🎯 [ROMANIZATION DEBUG] ⚠️ ${languageCode} transliteration failed, using unidecode:`, transliterationError);
+            romanizedText = unidecode(text);
+            debugInfo.method = 'unidecode';
+            debugInfo.success = true;
+            debugInfo.fallbackUsed = true;
+          }
+          // Remove spaces before Arabic punctuation just in case
+          romanizedText = romanizedText.replace(/\s+([،؟؛])/g, '$1');
           break;
           
         default:
-          // Fallback for any other script languages
+          console.log(`🎯 [ROMANIZATION DEBUG] Processing ${languageCode} text with unidecode:`, text);
           romanizedText = unidecode(text);
+          debugInfo.method = 'unidecode';
+          debugInfo.success = true;
           break;
       }
       
-      console.log('[DEBUG] Generated romanized text:', { original: text, romanized: romanizedText, language: languageCode });
+      // Calculate processing time
+      debugInfo.processingTime = performance.now() - startTime;
+      
+      // Normalize punctuation spacing in the final output
+      romanizedText = fixRomanizationPunctuation(romanizedText);
+
+      // Log comprehensive debug information
+      console.log('🎯 [ROMANIZATION DEBUG] Final result:', {
+        ...debugInfo,
+        romanizedText: romanizedText,
+        romanizedLength: romanizedText.length,
+        efficiency: `${debugInfo.processingTime.toFixed(2)}ms`
+      });
+      
+      // Store debug info for UI display
+      setRomanizationDebugInfo({
+        method: debugInfo.method,
+        language: debugInfo.language,
+        originalText: debugInfo.originalText,
+        romanizedText: romanizedText,
+        fallbackUsed: debugInfo.fallbackUsed,
+        fallbackReason: debugInfo.fallbackReason || 'none',
+        textAnalysis: {
+          hasKanji: /[\u4e00-\u9faf]/.test(debugInfo.originalText),
+          hasHiragana: /[\u3040-\u309f]/.test(debugInfo.originalText),
+          hasKatakana: /[\u30a0-\u30ff]/.test(debugInfo.originalText),
+          isPureKana: (/[\u3040-\u309f]/.test(debugInfo.originalText) || /[\u30a0-\u30ff]/.test(debugInfo.originalText)) && !/[\u4e00-\u9faf]/.test(debugInfo.originalText)
+        },
+        processingTime: debugInfo.processingTime,
+        lastUpdate: new Date()
+      });
+      
       return romanizedText;
     } catch (error) {
-      console.error('Error generating romanized text:', error);
+      debugInfo.error = error.message;
+      debugInfo.processingTime = performance.now() - startTime;
+      console.error('🎯 [ROMANIZATION DEBUG] ❌ Error generating romanized text:', {
+        ...debugInfo,
+        error: error.message
+      });
       return '';
     }
   };
-
   // Update sendAudioToBackend to handle short feedback in autospeak mode
   const sendAudioToBackend = async (audioBlob: Blob) => {
     if (!(audioBlob instanceof Blob)) return;
@@ -1488,6 +1871,12 @@ const Analyze = () => {
       
       // Also set suggestionMessages for the carousel
       if (suggestions.length > 0) {
+        // Reset explanation state for a fresh set
+        setSuggestionTranslations({});
+        setShowSuggestionTranslations({});
+        setIsTranslatingSuggestion({});
+        setShowSuggestionExplanations({});
+        setExplainButtonPressed(false);
         console.log('Setting suggestions:', suggestions);
         const tempMessages = suggestions.map((suggestion: any, index: number) => {
           const formattedText = formatScriptLanguageText(suggestion.text?.replace(/\*\*/g, '') || '', language);
@@ -1542,6 +1931,12 @@ const Analyze = () => {
       const suggestions = response.data.suggestions || [];
       if (suggestions.length > 0) {
         // Create temporary suggestion messages with all data from the API
+        // Reset explanation-related state so previous clicks don't persist
+        setSuggestionTranslations({});
+        setShowSuggestionTranslations({});
+        setIsTranslatingSuggestion({});
+        setShowSuggestionExplanations({});
+        setExplainButtonPressed(false);
         const tempMessages = suggestions.map((suggestion: any, index: number) => {
           const formattedText = formatScriptLanguageText(suggestion.text?.replace(/\*\*/g, '') || '', language);
           return {
@@ -1590,8 +1985,13 @@ const Analyze = () => {
     setSuggestions([]);
     setSuggestionMessages([]);
     setShowSuggestionCarousel(false);
+    // Fully clear explanation state when suggestions are cleared
+    setSuggestionTranslations({});
+    setShowSuggestionTranslations({});
+    setIsTranslatingSuggestion({});
+    setShowSuggestionExplanations({});
+    setExplainButtonPressed(false);
   };
-
   const generateConversationSummary = async () => {
     try {
       const sessionMessages = getSessionMessages();
@@ -2028,7 +2428,6 @@ const Analyze = () => {
       setIsLoadingInitialAI(false);
     }
   };
-
   const handleModalConversationStart = async (newConversationId: string, topics: string[], aiMessage: unknown, formality: string, learningGoals: string[], description?: string, isUsingExistingPersona?: boolean) => {
     setConversationId(newConversationId);
     setChatHistory([]);
@@ -2309,7 +2708,6 @@ const Analyze = () => {
       // Removed the automatic translation call to avoid interfering with detailed breakdown
     }
   };
-
   const requestDetailedFeedbackForMessage = async (messageIndex: number) => {
     if (!conversationId) {
       return;
@@ -2756,9 +3154,6 @@ const Analyze = () => {
       }
     }
   };
-
-
-
   const savePersona = async (personaName: string) => {
     setIsSavingPersona(true);
     try {
@@ -3089,7 +3484,6 @@ const Analyze = () => {
     
     return cleaned;
   };
-
   // Helper function to render formatted text with color-coded underlines and clickable popups
   const renderFormattedText = (text: string, messageIndex: number) => {
     console.log('[DEBUG] renderFormattedText called with:', text);
@@ -3373,6 +3767,8 @@ const Analyze = () => {
     return result;
   };
 
+  // Note: Quick Translation uses AI-provided romanization; no normalization applied
+
   // Helper function to render feedback text with formatting and headers
   const renderFeedbackText = (text: string) => {
     if (!text) return null;
@@ -3530,7 +3926,6 @@ const Analyze = () => {
         console.log('[DEBUG] No translation received, using test data');
         const testResponse = `**Full Translation:**
 Yes, the current serials don't have the same quality as the old ones, right?
-
 **Word-by-Word Breakdown:**
 जी / ji -- Sir/Yes (respectful term)
 बिल्कुल / bilkul -- Absolutely/Exactly
@@ -3634,7 +4029,7 @@ Yes, the current serials don't have the same quality as the old ones, right?
   };
 
   // Render clickable message with word translations
-  const renderClickableMessage = (message: ChatMessage | string, messageIndex: number, translation: any) => {
+  const renderClickableMessage = (message: any, messageIndex: number, translation: any) => {
     const messageText = typeof message === 'string' ? message : message.text;
 
     if (!translation || !translation.wordTranslations) {
@@ -4068,7 +4463,6 @@ Yes, the current serials don't have the same quality as the old ones, right?
     }
   }, [chatHistory.length, chatHistory]);
   // --- END VIRTUALIZATION LOGIC ---
-
   return (
     <div className="analyze-page" style={{ 
       display: 'flex', 
@@ -4086,7 +4480,387 @@ Yes, the current serials don't have the same quality as the old ones, right?
       overflow: 'hidden',
       boxSizing: 'border-box',
       marginTop: '6rem'
-    }}>
+          }}>
+      
+      {/* TTS Debug Panel */}
+      {ttsDebugInfo && (
+        <div style={{
+          position: 'fixed',
+          top: '7rem',
+          right: '1rem',
+          zIndex: 1000,
+          maxWidth: '300px',
+          background: isDarkMode 
+            ? 'linear-gradient(135deg, rgba(30,41,59,0.95) 0%, rgba(51,65,85,0.95) 100%)'
+            : 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(249,246,244,0.95) 100%)',
+          border: isDarkMode ? '1px solid rgba(139,163,217,0.3)' : '1px solid rgba(59,83,119,0.2)',
+          borderRadius: '12px',
+          boxShadow: isDarkMode 
+            ? '0 8px 32px rgba(139,163,217,0.2), 0 2px 8px rgba(139,163,217,0.1)'
+            : '0 8px 32px rgba(59,83,119,0.15), 0 2px 8px rgba(59,83,119,0.1)',
+          padding: '1rem',
+          backdropFilter: 'blur(20px)',
+          transition: 'all 0.3s ease',
+          fontFamily: 'Montserrat, Arial, sans-serif'
+        }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: '0.75rem'
+          }}>
+            <h3 style={{
+              fontSize: '0.9rem',
+              fontWeight: 600,
+              color: isDarkMode ? '#e2e8f0' : '#374151',
+              margin: 0
+            }}>
+              🎤 TTS Service Status
+            </h3>
+            <button
+              onClick={() => setTtsDebugInfo(null)}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: isDarkMode ? '#94a3b8' : '#6b7280',
+                cursor: 'pointer',
+                fontSize: '1rem',
+                padding: '0.25rem',
+                borderRadius: '4px',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = isDarkMode ? '#e2e8f0' : '#374151';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = isDarkMode ? '#94a3b8' : '#6b7280';
+              }}
+            >
+              ✕
+            </button>
+          </div>
+          
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span style={{
+                fontSize: '0.75rem',
+                fontWeight: 500,
+                color: isDarkMode ? '#cbd5e1' : '#6b7280',
+                minWidth: '60px'
+              }}>
+                Service:
+              </span>
+              <span style={{
+                padding: '0.25rem 0.5rem',
+                borderRadius: '6px',
+                fontSize: '0.7rem',
+                fontWeight: 600,
+                ...(ttsDebugInfo.serviceUsed === 'system' ? {
+                  background: 'rgba(34,197,94,0.1)',
+                  color: '#16a34a'
+                } : ttsDebugInfo.serviceUsed === 'google_cloud' ? {
+                  background: 'rgba(59,130,246,0.1)',
+                  color: '#2563eb'
+                } : ttsDebugInfo.serviceUsed === 'gemini' ? {
+                  background: 'rgba(245,158,11,0.1)',
+                  color: '#d97706'
+                } : ttsDebugInfo.serviceUsed === 'fallback' ? {
+                  background: 'rgba(239,68,68,0.1)',
+                  color: '#dc2626'
+                } : ttsDebugInfo.serviceUsed === 'cached' ? {
+                  background: 'rgba(147,51,234,0.1)',
+                  color: '#9333ea'
+                } : {
+                  background: 'rgba(107,114,128,0.1)',
+                  color: '#6b7280'
+                })
+              }}>
+                {ttsDebugInfo.serviceUsed === 'system' ? '🖥️ System (FREE)' :
+                 ttsDebugInfo.serviceUsed === 'google_cloud' ? '☁️ Google Cloud (CHEAP)' :
+                 ttsDebugInfo.serviceUsed === 'gemini' ? '🤖 Gemini (EXPENSIVE)' :
+                 ttsDebugInfo.serviceUsed === 'fallback' ? '🔇 Fallback' :
+                 ttsDebugInfo.serviceUsed === 'cached' ? '💾 Cached' :
+                 ttsDebugInfo.serviceUsed}
+              </span>
+            </div>
+            
+            {ttsDebugInfo.costEstimate !== 'unknown' && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span style={{
+                  fontSize: '0.75rem',
+                  fontWeight: 500,
+                  color: isDarkMode ? '#cbd5e1' : '#6b7280',
+                  minWidth: '60px'
+                }}>
+                  Cost:
+                </span>
+                <span style={{
+                  padding: '0.25rem 0.5rem',
+                  borderRadius: '6px',
+                  fontSize: '0.7rem',
+                  fontWeight: 600,
+                  ...(ttsDebugInfo.costEstimate === '0.00' ? {
+                    background: 'rgba(34,197,94,0.1)',
+                    color: '#16a34a'
+                  } : {
+                    background: 'rgba(245,158,11,0.1)',
+                    color: '#d97706'
+                  })
+                }}>
+                  ${ttsDebugInfo.costEstimate}
+                </span>
+              </div>
+            )}
+            
+            {ttsDebugInfo.fallbackReason !== 'none' && (
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
+                <span style={{
+                  fontSize: '0.75rem',
+                  fontWeight: 500,
+                  color: isDarkMode ? '#cbd5e1' : '#6b7280',
+                  minWidth: '60px'
+                }}>
+                  Reason:
+                </span>
+                <span style={{
+                  fontSize: '0.7rem',
+                  color: isDarkMode ? '#94a3b8' : '#6b7280',
+                  lineHeight: '1.3'
+                }}>
+                  {ttsDebugInfo.fallbackReason}
+                </span>
+              </div>
+            )}
+            
+            {ttsDebugInfo.lastUpdate && (
+              <div style={{
+                fontSize: '0.65rem',
+                color: isDarkMode ? '#64748b' : '#9ca3af',
+                marginTop: '0.25rem',
+                textAlign: 'center'
+              }}>
+                Updated: {ttsDebugInfo.lastUpdate.toLocaleTimeString()}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      
+      {/* Romanization Debug Panel */}
+      {romanizationDebugInfo && (
+        <div style={{
+          position: 'fixed',
+          top: romanizationDebugInfo.fallbackUsed ? '12rem' : '7rem',
+          right: '1rem',
+          zIndex: 1000,
+          maxWidth: '350px',
+          background: isDarkMode 
+            ? 'linear-gradient(135deg, rgba(30,41,59,0.95) 0%, rgba(51,65,85,0.95) 100%)'
+            : 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(249,246,244,0.95) 100%)',
+          border: isDarkMode ? '1px solid rgba(139,163,217,0.3)' : '1px solid rgba(59,83,119,0.2)',
+          borderRadius: '12px',
+          boxShadow: isDarkMode 
+            ? '0 8px 32px rgba(139,163,217,0.2), 0 2px 8px rgba(139,163,217,0.1)'
+            : '0 8px 32px rgba(59,83,119,0.15), 0 2px 8px rgba(59,83,119,0.1)',
+          padding: '1rem',
+          backdropFilter: 'blur(20px)',
+          transition: 'all 0.3s ease',
+          fontFamily: 'Montserrat, Arial, sans-serif'
+        }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: '0.75rem'
+          }}>
+            <h3 style={{
+              fontSize: '0.9rem',
+              fontWeight: 600,
+              color: isDarkMode ? '#e2e8f0' : '#374151',
+              margin: 0
+            }}>
+              🔤 Romanization Status
+            </h3>
+            <button
+              onClick={() => setRomanizationDebugInfo(null)}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: isDarkMode ? '#94a3b8' : '#6b7280',
+                cursor: 'pointer',
+                fontSize: '1rem',
+                padding: '0.25rem',
+                borderRadius: '4px',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = isDarkMode ? '#e2e8f0' : '#374151';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = isDarkMode ? '#94a3b8' : '#6b7280';
+              }}
+            >
+              ✕
+            </button>
+          </div>
+          
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span style={{
+                fontSize: '0.75rem',
+                fontWeight: 500,
+                color: isDarkMode ? '#cbd5e1' : '#6b7280',
+                minWidth: '60px'
+              }}>
+                Method:
+              </span>
+              <span style={{
+                padding: '0.25rem 0.5rem',
+                borderRadius: '6px',
+                fontSize: '0.7rem',
+                fontWeight: 600,
+                ...(romanizationDebugInfo.method === 'kuroshiro' ? {
+                  background: 'rgba(34,197,94,0.1)',
+                  color: '#16a34a'
+                } : romanizationDebugInfo.method === 'wanakana' ? {
+                  background: 'rgba(59,130,246,0.1)',
+                  color: '#2563eb'
+                } : romanizationDebugInfo.method === 'pinyin' ? {
+                  background: 'rgba(245,158,11,0.1)',
+                  color: '#d97706'
+                } : romanizationDebugInfo.method === 'transliteration' ? {
+                  background: 'rgba(147,51,234,0.1)',
+                  color: '#9333ea'
+                } : {
+                  background: 'rgba(107,114,128,0.1)',
+                  color: '#6b7280'
+                })
+              }}>
+                {romanizationDebugInfo.method === 'kuroshiro' ? '🎯 Kuroshiro (Best)' :
+                 romanizationDebugInfo.method === 'wanakana' ? '⚡ Wanakana (Fast)' :
+                 romanizationDebugInfo.method === 'pinyin' ? '📝 Pinyin (Chinese)' :
+                 romanizationDebugInfo.method === 'transliteration' ? '🔄 Transliteration' :
+                 romanizationDebugInfo.method === 'unidecode' ? '🔧 Unidecode' :
+                 romanizationDebugInfo.method}
+              </span>
+            </div>
+            
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span style={{
+                fontSize: '0.75rem',
+                fontWeight: 500,
+                color: isDarkMode ? '#cbd5e1' : '#6b7280',
+                minWidth: '60px'
+              }}>
+                Language:
+              </span>
+              <span style={{
+                padding: '0.25rem 0.5rem',
+                borderRadius: '6px',
+                fontSize: '0.7rem',
+                fontWeight: 600,
+                background: 'rgba(59,130,246,0.1)',
+                color: '#2563eb'
+              }}>
+                {romanizationDebugInfo.language.toUpperCase()}
+              </span>
+            </div>
+            
+            {romanizationDebugInfo.fallbackUsed && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span style={{
+                    fontSize: '0.75rem',
+                    fontWeight: 500,
+                    color: isDarkMode ? '#cbd5e1' : '#6b7280',
+                    minWidth: '60px'
+                  }}>
+                    Status:
+                  </span>
+                  <span style={{
+                    padding: '0.25rem 0.5rem',
+                    borderRadius: '6px',
+                    fontSize: '0.7rem',
+                    fontWeight: 600,
+                    background: 'rgba(245,158,11,0.1)',
+                    color: '#d97706'
+                  }}>
+                    ⚠️ Fallback Used
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span style={{
+                    fontSize: '0.7rem',
+                    fontWeight: 500,
+                    color: isDarkMode ? '#cbd5e1' : '#6b7280',
+                    minWidth: '60px'
+                  }}>
+                    Reason:
+                  </span>
+                  <span style={{
+                    fontSize: '0.65rem',
+                    color: isDarkMode ? '#94a3b8' : '#6b7280',
+                    lineHeight: '1.3'
+                  }}>
+                    {romanizationDebugInfo.fallbackReason}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span style={{
+                    fontSize: '0.7rem',
+                    fontWeight: 500,
+                    color: isDarkMode ? '#cbd5e1' : '#6b7280',
+                    minWidth: '60px'
+                  }}>
+                    Text:
+                  </span>
+                  <span style={{
+                    fontSize: '0.65rem',
+                    color: isDarkMode ? '#94a3b8' : '#6b7280',
+                    lineHeight: '1.3'
+                  }}>
+                    {romanizationDebugInfo.textAnalysis.hasKanji ? '漢字' : ''}
+                    {romanizationDebugInfo.textAnalysis.hasHiragana ? ' ひらがな' : ''}
+                    {romanizationDebugInfo.textAnalysis.hasKatakana ? ' カタカナ' : ''}
+                    {romanizationDebugInfo.textAnalysis.isPureKana ? ' (Pure Kana)' : ''}
+                  </span>
+                </div>
+              </div>
+            )}
+            
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span style={{
+                fontSize: '0.75rem',
+                fontWeight: 500,
+                color: isDarkMode ? '#cbd5e1' : '#6b7280',
+                minWidth: '60px'
+              }}>
+                Speed:
+              </span>
+              <span style={{
+                padding: '0.25rem 0.5rem',
+                borderRadius: '6px',
+                fontSize: '0.7rem',
+                fontWeight: 600,
+                background: 'rgba(34,197,94,0.1)',
+                color: '#16a34a'
+              }}>
+                {romanizationDebugInfo.processingTime.toFixed(1)}ms
+              </span>
+            </div>
+            
+            <div style={{
+              fontSize: '0.65rem',
+              color: isDarkMode ? '#64748b' : '#9ca3af',
+              marginTop: '0.25rem',
+              textAlign: 'center'
+            }}>
+              Updated: {romanizationDebugInfo.lastUpdate?.toLocaleTimeString()}
+            </div>
+          </div>
+        </div>
+      )}
+      
       {/* Background decorative elements */}
       <div style={{
         position: 'absolute',
@@ -4651,7 +5425,7 @@ Yes, the current serials don't have the same quality as the old ones, right?
           boxShadow: isDarkMode 
             ? '0 8px 40px rgba(0,0,0,0.4), 0 2px 8px rgba(0,0,0,0.2)' 
             : '0 8px 40px rgba(60,60,60,0.12), 0 2px 8px rgba(195,141,148,0.08)',
-          position: 'relative',
+          position: 'relative', 
           transition: 'all 0.3s ease',
           border: isDarkMode ? '1px solid var(--rose-primary)' : '1px solid var(--rose-primary)',
           backdropFilter: 'blur(20px)',
