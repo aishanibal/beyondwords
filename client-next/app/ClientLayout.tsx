@@ -83,6 +83,9 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   };
 
   const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+  if (!googleClientId) {
+    throw new Error('NEXT_PUBLIC_GOOGLE_CLIENT_ID is missing');
+  }
 
   // Handle routing after authentication
   useEffect(() => {
@@ -117,7 +120,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   }
 
   return (
-    <GoogleOAuthProvider clientId={googleClientId || 'dummy-client-id'}>
+    <GoogleOAuthProvider clientId={googleClientId || 'client-id-fake'}>
       <UserContext.Provider value={{ user, setUser, logout }}>
         <Navigation />
         {children}

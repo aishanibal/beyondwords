@@ -450,17 +450,30 @@ class AdminControlledTTSSynthesizer:
 
     def _try_google_cloud_tts(self, text: str, language_code: str, output_path: str) -> Optional[str]:
         """Try Google Cloud TTS (CHEAP)"""
+        print(f"☁️ _try_google_cloud_tts called with:")
+        print(f"   text: '{text[:50]}...' (length: {len(text)})")
+        print(f"   language_code: '{language_code}'")
+        print(f"   output_path: '{output_path}'")
+        print(f"   google_synthesize available: {google_synthesize is not None}")
+        
         if not google_synthesize:
+            print("❌ Google Cloud TTS not available (google_synthesize is None)")
             return None
             
         try:
             # Change extension to .mp3 for Google Cloud TTS
             mp3_path = output_path.replace('.wav', '.mp3')
+            print(f"☁️ Calling google_synthesize with mp3_path: {mp3_path}")
             result = google_synthesize(text, language_code, mp3_path)
+            print(f"☁️ google_synthesize result: {result}")
             if result:
                 return mp3_path
+            else:
+                print("❌ google_synthesize returned None")
         except Exception as e:
-            print(f"Google Cloud TTS error: {e}")
+            print(f"❌ Google Cloud TTS error: {e}")
+            import traceback
+            traceback.print_exc()
         
         return None
 

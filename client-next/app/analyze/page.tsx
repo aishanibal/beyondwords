@@ -510,6 +510,18 @@ const Analyze = () => {
     lastUpdate: Date | null;
   } | null>(null);
   
+  // TTS Queue for autospeak mode
+  const [ttsQueue, setTtsQueue] = useState<Array<{ text: string; language: string; cacheKey: string }>>([]);
+  const [isProcessingTtsQueue, setIsProcessingTtsQueue] = useState(false);
+  
+  // New autospeak pipeline state
+  const [isPlayingShortFeedbackTTS, setIsPlayingShortFeedbackTTS] = useState(false);
+  const [isPlayingAITTS, setIsPlayingAITTS] = useState(false);
+  const [aiTTSQueued, setAiTTSQueued] = useState<{ text: string; language: string; cacheKey: string } | null>(null);
+  
+  // Track when any TTS is playing to disable recording
+  const isAnyTTSPlaying = isPlayingShortFeedbackTTS || isPlayingAITTS || isPlayingAnyTTS;
+  
   const [userPreferences, setUserPreferences] = useState<{
     formality: string;
     topics: string[];
@@ -931,6 +943,13 @@ const Analyze = () => {
   // Replace startRecording and stopRecording with MediaRecorder + SpeechRecognition logic
   const startRecording = async () => {
     setWasInterrupted(false);
+    
+    // Prevent recording when TTS is playing
+    if (isAnyTTSPlaying) {
+      console.log('[DEBUG] Cannot start recording - TTS is playing:', { isAnyTTSPlaying });
+      return;
+    }
+    
     if (!MediaRecorderClassRef.current) {
       alert('MediaRecorder API not supported in this browser.');
       return;
@@ -1106,7 +1125,9 @@ const Analyze = () => {
         },
         token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
       );
-      const shortFeedback = shortFeedbackRes.data.short_feedback;
+      console.log('[DEBUG] /short_feedback response', shortFeedbackRes);
+      const shortFeedback = shortFeedbackRes.data.feedback;
+      console.log('[DEBUG] shortFeedback value:', shortFeedback);
       
       if (shortFeedback !== undefined && shortFeedback !== null && shortFeedback !== '') {
         // Use a more reliable approach to set the short feedback key
@@ -1120,14 +1141,62 @@ const Analyze = () => {
           return updated;
         });
         
-        // Play short feedback TTS (if autospeak and feedback exists)
+        // Play short feedback TTS immediately for all modes
         const cacheKey = `short_feedback_${Date.now()}`;
-        await playTTSAudio(shortFeedback, language, cacheKey);
+        console.log('[DEBUG] Playing short feedback TTS immediately');
+        setIsPlayingShortFeedbackTTS(true);
+        try {
+          await playTTSAudio(shortFeedback, language, cacheKey);
+          console.log('[DEBUG] Short feedback TTS finished');
+        } catch (error) {
+          console.error('[DEBUG] Error playing short feedback TTS:', error);
+        } finally {
+          setIsPlayingShortFeedbackTTS(false);
+        }
+      } else {
+        console.warn('[DEBUG] (fetchAndShowShortFeedback) shortFeedback is empty or undefined:', shortFeedback);
       }
     } catch (e: unknown) {
       // Error handling removed for performance
     } finally {
       setIsProcessingShortFeedback(false);
+    }
+  };
+
+  // TTS Queue processing function (legacy - kept for non-autospeak TTS)
+  const processTtsQueue = async () => {
+    if (isProcessingTtsQueue || ttsQueue.length === 0) return;
+    
+    console.log('[DEBUG] Starting legacy TTS queue processing, queue length:', ttsQueue.length);
+    setIsProcessingTtsQueue(true);
+    
+    while (ttsQueue.length > 0 && autoSpeakRef.current) {
+      const nextTts = ttsQueue[0];
+      console.log('[DEBUG] Processing TTS queue item:', nextTts.cacheKey);
+      setTtsQueue(prev => prev.slice(1)); // Remove the first item
+      
+      try {
+        await playTTSAudio(nextTts.text, nextTts.language, nextTts.cacheKey);
+        
+        // Wait for the TTS to finish playing
+        while (isPlayingAnyTTS && autoSpeakRef.current) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        console.log('[DEBUG] Finished playing TTS queue item:', nextTts.cacheKey);
+      } catch (error) {
+        console.error('Error processing TTS queue item:', error);
+      }
+    }
+    
+    setIsProcessingTtsQueue(false);
+    console.log('[DEBUG] Finished legacy TTS queue processing');
+    
+    // If autospeak is still enabled and queue is empty, restart recording
+    if (autoSpeakRef.current && ttsQueue.length === 0) {
+      console.log('[DEBUG] Restarting recording after legacy TTS queue completion');
+      setTimeout(() => {
+        if (autoSpeakRef.current) startRecording();
+      }, 300);
     }
   };
 
@@ -1147,9 +1216,14 @@ const Analyze = () => {
       const token = localStorage.getItem('jwt');
       
       // Call the Node.js server which will route to Python API with admin controls
-      const response = await axios.post('http://localhost:4000/api/tts-test', {
+      const response = await axios.post('http://localhost:4000/api/tts', {
         text,
         language
+      }, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        }
       });
       
       const ttsUrl = response.data.ttsUrl;
@@ -1186,46 +1260,31 @@ const Analyze = () => {
         const audio = new window.Audio(audioUrl);
         ttsAudioRef.current = audio;
         
-        audio.onended = () => {
-          ttsAudioRef.current = null;
-          setIsPlayingTTS(prev => ({ ...prev, [cacheKey]: false }));
-          setIsPlayingAnyTTS(false);
+        // Return a promise that resolves when audio finishes
+        return new Promise<void>((resolve, reject) => {
+          audio.onended = () => {
+            ttsAudioRef.current = null;
+            setIsPlayingTTS(prev => ({ ...prev, [cacheKey]: false }));
+            setIsPlayingAnyTTS(false);
+            resolve();
+          };
           
-          // For autospeak mode, restart recording after TTS finishes
-          if (autoSpeakRef.current) {
-            setTimeout(() => {
-              if (autoSpeakRef.current) startRecording();
-            }, 300);
-          }
-        };
-        
-        audio.onerror = () => {
-          console.error('Error playing TTS audio');
-          ttsAudioRef.current = null;
-          setIsPlayingTTS(prev => ({ ...prev, [cacheKey]: false }));
-          setIsPlayingAnyTTS(false);
+          audio.onerror = () => {
+            console.error('Error playing TTS audio');
+            ttsAudioRef.current = null;
+            setIsPlayingTTS(prev => ({ ...prev, [cacheKey]: false }));
+            setIsPlayingAnyTTS(false);
+            reject(new Error('TTS audio playback failed'));
+          };
           
-          // For autospeak mode, restart recording even if TTS fails
-          if (autoSpeakRef.current) {
-            setTimeout(() => {
-              if (autoSpeakRef.current) startRecording();
-            }, 300);
-          }
-        };
-        
-        await audio.play();
+          audio.play().catch(reject);
+        });
       }
     } catch (error) {
       console.error('Error playing TTS:', error);
       setIsPlayingTTS(prev => ({ ...prev, [cacheKey]: false }));
       setIsPlayingAnyTTS(false);
-      
-      // For autospeak mode, restart recording even if TTS fails
-      if (autoSpeakRef.current) {
-        setTimeout(() => {
-          if (autoSpeakRef.current) startRecording();
-        }, 300);
-      }
+      throw error;
     }
   };
 
@@ -1708,9 +1767,19 @@ const Analyze = () => {
         await saveMessageToBackend('User', transcription, 'text', null, null, userRomanizedText);
       }
       
-      // Step 2: Get AI response separately
+      // Note: User messages don't need TTS playback - only AI responses get TTS
       
-      // Add AI processing message after transcript is displayed
+      // Step 1.5: Get short feedback first for autospeak mode
+      if (autoSpeak && enableShortFeedback && transcription !== 'Speech recorded') {
+        console.log('[DEBUG] Step 1.5: Getting short feedback for autospeak mode...');
+        await fetchAndShowShortFeedback(transcription);
+        console.log('[DEBUG] Short feedback completed, now starting AI processing...');
+      }
+      
+      // Step 2: Get AI response after short feedback is done
+      console.log('[DEBUG] Step 2: Getting AI response after short feedback...');
+      
+      // Add AI processing message after short feedback is complete
       const aiProcessingMessage = { 
         sender: 'AI', 
         text: '🤖 Processing AI response...', 
@@ -1774,7 +1843,8 @@ const Analyze = () => {
             await saveMessageToBackend('AI', formattedResponse.mainText, 'text', null, null, formattedResponse.romanizedText);
           }
           
-          // Automatically play TTS for AI message
+          // Play TTS for AI response immediately
+          console.log('[DEBUG] Playing TTS for AI response immediately');
           const aiMessage: ChatMessage = {
             text: formattedResponse.mainText,
             romanizedText: formattedResponse.romanizedText,
@@ -1784,10 +1854,17 @@ const Analyze = () => {
           };
           const ttsText = getTTSText(aiMessage, userPreferences.romanizationDisplay, language);
           const cacheKey = `ai_message_auto_${Date.now()}`;
-          await playTTSAudio(ttsText, language, cacheKey);
           
-          // Note: TTS will handle autospeak restart in its onended event
-          // No need to manually restart recording here
+          // Play audio immediately for all AI messages
+          playTTSAudio(ttsText, language, cacheKey).catch(error => {
+            console.error('[DEBUG] Error playing AI TTS:', error);
+          });
+          
+          // Also queue for autospeak mode if enabled
+          if (autoSpeak) {
+            console.log('[DEBUG] Adding AI response TTS to queue for autospeak mode');
+            setAiTTSQueued({ text: ttsText, language, cacheKey });
+          }
         }
       
       // Note: TTS is handled separately if needed
@@ -1835,7 +1912,24 @@ const Analyze = () => {
       );
       setShortFeedback(response.data.feedback);
       // Optionally, add to chatHistory
-              setChatHistory(prev => [...prev, { sender: 'System', text: response.data.feedback, timestamp: new Date(), isFromOriginalConversation: false }]);
+      setChatHistory(prev => [...prev, { sender: 'System', text: response.data.feedback, timestamp: new Date(), isFromOriginalConversation: false }]);
+      
+      // Play TTS for detailed feedback System message
+      console.log('[DEBUG] Playing TTS for detailed feedback System message');
+      const systemMessage: ChatMessage = {
+        text: response.data.feedback,
+        sender: 'System',
+        timestamp: new Date(),
+        isFromOriginalConversation: false
+      };
+      const ttsText = getTTSText(systemMessage, userPreferences.romanizationDisplay, language);
+      const cacheKey = `system_feedback_${Date.now()}`;
+      
+      // Play audio immediately for System messages
+      playTTSAudio(ttsText, language, cacheKey).catch(error => {
+        console.error('[DEBUG] Error playing System TTS:', error);
+      });
+      
       // Feedback is applied to the message, no need to add to chat
     } catch (error: unknown) {
       console.error('Error getting detailed feedback:', error);
@@ -2864,7 +2958,7 @@ const Analyze = () => {
       console.log('[DEBUG] Response data:', response.data);
       console.log('[DEBUG] Response status:', response.status);
 
-      const shortFeedback = response.data.short_feedback;
+      const shortFeedback = response.data.feedback;
       console.log('[DEBUG] Extracted short feedback:', shortFeedback);
       
       // Store short feedback in state
@@ -3290,7 +3384,7 @@ const Analyze = () => {
     if (autoSpeak && !isRecording && !isProcessing) {
       startRecording();
     }
-    // When Autospeak is turned OFF, stop any ongoing recording
+    // When Autospeak is turned OFF, stop any ongoing recording and clear TTS queue
     if (!autoSpeak) {
       stopRecording();
       // Stop any playing TTS audio
@@ -3299,10 +3393,65 @@ const Analyze = () => {
         ttsAudioRef.current.currentTime = 0;
         ttsAudioRef.current = null;
       }
+      // Clear TTS queue and stop processing
+      setTtsQueue([]);
+      setIsProcessingTtsQueue(false);
+      setIsPlayingAnyTTS(false);
+      
+      // Clear new autospeak pipeline state
+      setIsPlayingShortFeedbackTTS(false);
+      setIsPlayingAITTS(false);
+      setAiTTSQueued(null);
+      
+      // Stop any ongoing TTS playback
+      if (ttsAudioRef.current) {
+        (ttsAudioRef.current as HTMLAudioElement).pause();
+        ttsAudioRef.current = null;
+      }
     }
     // Only run this effect when autoSpeak changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoSpeak]);
+
+  // Monitor TTS queue and start processing when items are added
+  useEffect(() => {
+    if (ttsQueue.length > 0 && !isProcessingTtsQueue && autoSpeak) {
+      processTtsQueue();
+    }
+  }, [ttsQueue, isProcessingTtsQueue, autoSpeak]);
+
+  // Handle AI TTS playback when short feedback TTS finishes
+  useEffect(() => {
+    if (!isPlayingShortFeedbackTTS && aiTTSQueued && !isPlayingAITTS && autoSpeak) {
+      console.log('[DEBUG] Short feedback TTS finished, playing AI TTS');
+      setIsPlayingAITTS(true);
+      
+      const playAITTS = async () => {
+        try {
+          await playTTSAudio(aiTTSQueued.text, aiTTSQueued.language, aiTTSQueued.cacheKey);
+          console.log('[DEBUG] AI TTS finished');
+        } catch (error) {
+          console.error('[DEBUG] Error playing AI TTS:', error);
+        } finally {
+          setIsPlayingAITTS(false);
+          setAiTTSQueued(null);
+          
+          // Restart recording after AI TTS is completely done
+          if (autoSpeak) {
+            console.log('[DEBUG] AI TTS finished, restarting recording');
+            setTimeout(() => {
+              if (autoSpeak && !isAnyTTSPlaying) {
+                console.log('[DEBUG] Starting recording after AI TTS completion');
+                startRecording();
+              }
+            }, 300);
+          }
+        }
+      };
+      
+      playAITTS();
+    }
+  }, [isPlayingShortFeedbackTTS, aiTTSQueued, isPlayingAITTS, autoSpeak, isAnyTTSPlaying]);
 
   // Add this useEffect to load chat history from backend if conversationIdParam is present and chatHistory is empty
   useEffect(() => {

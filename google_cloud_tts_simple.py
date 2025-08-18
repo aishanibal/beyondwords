@@ -36,6 +36,7 @@ class SimpleGoogleCloudTTS:
         """
         self.api_key = (
             api_key
+            or os.getenv('GOOGLE_CLOUD_TTS_API_KEY')
             or os.getenv('GOOGLE_AI_API_KEY')
             or os.getenv('GEMINI_API_KEY')
             or os.getenv('GOOGLE_API_KEY')
@@ -90,20 +91,33 @@ class SimpleGoogleCloudTTS:
             }
             
             # Make the request
+            print(f"🔗 Making request to Google Cloud TTS API...")
+            print(f"📝 Request payload: {payload}")
             response = requests.post(url, json=payload)
+            
+            print(f"📊 Response status: {response.status_code}")
+            print(f"📊 Response headers: {dict(response.headers)}")
             
             if response.status_code == 200:
                 # Decode the audio content
-                audio_content = base64.b64decode(response.json()['audioContent'])
+                response_data = response.json()
+                print(f"📊 Response data keys: {list(response_data.keys())}")
                 
-                # Write to file
-                with open(output_path, "wb") as f:
-                    f.write(audio_content)
-                
-                print(f"✅ Simple Google Cloud TTS output saved to: {output_path}")
-                return output_path
+                if 'audioContent' in response_data:
+                    audio_content = base64.b64decode(response_data['audioContent'])
+                    
+                    # Write to file
+                    with open(output_path, "wb") as f:
+                        f.write(audio_content)
+                    
+                    print(f"✅ Simple Google Cloud TTS output saved to: {output_path}")
+                    return output_path
+                else:
+                    print(f"❌ No audioContent in response: {response_data}")
+                    return None
             else:
-                print(f"❌ Google Cloud TTS API error: {response.status_code} - {response.text}")
+                print(f"❌ Google Cloud TTS API error: {response.status_code}")
+                print(f"❌ Error response: {response.text}")
                 return None
                 
         except Exception as e:
