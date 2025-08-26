@@ -134,8 +134,12 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         console.log('Auth state changed:', event, session);
+        console.log('Current user state:', user);
+        console.log('Current loading state:', isLoading);
         
-        if (event === 'SIGNED_IN' && session?.user) {
+        // Only handle SIGNED_IN if we don't already have a user
+        if (event === 'SIGNED_IN' && session?.user && !user) {
+          console.log('Processing SIGNED_IN event for new user');
           try {
             // Get or create user profile
             const { success, data: profile, error } = await getUserProfile(session.user.id);
@@ -152,6 +156,11 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
               };
               console.log('Setting user with profile:', userData);
               setUser(userData);
+              
+              // Sync theme with user preferences
+              if (profile.preferences?.theme) {
+                syncWithUserPreferences(profile.preferences.theme);
+              }
             } else {
               // Create new user profile
               const userData = {
@@ -197,19 +206,20 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
               photoUrl: session.user.user_metadata?.picture,
               onboarding_complete: false
             });
-          } finally {
-            // Ensure loading state is resolved after auth state change
-            console.log('Auth state change completed, ensuring loading is false');
-            setIsLoading(false);
           }
+        } else if (event === 'SIGNED_IN' && session?.user && user) {
+          console.log('SIGNED_IN event but user already exists, skipping profile creation');
         } else if (event === 'SIGNED_OUT') {
+          console.log('User signed out, clearing user state');
           setUser(null);
-          setIsLoading(false);
         } else if (event === 'INITIAL_SESSION') {
           // This event fires when the initial session is loaded
-          console.log('Initial session loaded, ensuring loading is false');
-          setIsLoading(false);
+          console.log('Initial session loaded');
         }
+        
+        // Always ensure loading is false after any auth state change
+        console.log('Auth state change completed, ensuring loading is false');
+        setIsLoading(false);
       }
     );
 
@@ -236,6 +246,11 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   // Handle routing after authentication
   useEffect(() => {
     console.log('[ROUTING] Routing effect triggered:', { isLoading, user, pathname });
+    console.log('[ROUTING] User details:', user ? {
+      id: user.id,
+      email: user.email,
+      onboarding_complete: user.onboarding_complete
+    } : 'No user');
     
     if (!isLoading && user === null) {
       console.log('[ROUTING] User not authenticated, redirecting to login');
@@ -259,6 +274,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           router.push('/dashboard');
         }
       }
+    } else if (isLoading) {
+      console.log('[ROUTING] Still loading, not making routing decisions yet');
     }
   }, [isLoading, user, pathname, router]);
 
