@@ -45,28 +45,34 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const { syncWithUserPreferences } = useDarkMode();
 
   useEffect(() => {
+    console.log('[EFFECT] useEffect triggered, starting authentication flow');
+    
     // Add a timeout to prevent infinite loading
     const timeoutId = setTimeout(() => {
-      console.log('Loading timeout reached, setting loading to false');
+      console.log('[TIMEOUT] Loading timeout reached, setting loading to false');
       setIsLoading(false);
     }, 10000); // 10 second timeout
 
     // Get initial session
     const getInitialSession = async () => {
+      console.log('[INIT] Starting getInitialSession');
       try {
+        console.log('[INIT] Calling supabase.auth.getSession()');
         const { data: { session }, error } = await supabase.auth.getSession();
+        console.log('[INIT] getSession result:', { session: !!session, error, userId: session?.user?.id });
         
         if (error) {
-          console.error('Error getting session:', error);
+          console.error('[INIT] Error getting session:', error);
           setIsLoading(false);
           return;
         }
 
         if (session?.user) {
-          console.log('Found existing session:', session.user);
+          console.log('[INIT] Found existing session:', session.user);
           // Get user profile from our database
+          console.log('[INIT] Calling getUserProfile for user:', session.user.id);
           const { success, data: profile, error: profileError } = await getUserProfile(session.user.id);
-          console.log('getUserProfile result:', { success, profile, profileError });
+          console.log('[INIT] getUserProfile result:', { success, profile, profileError });
           
           if (success && profile) {
             const userData = {
@@ -77,7 +83,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
               onboarding_complete: profile.onboarding_complete,
               ...profile
             };
-            console.log('Setting user with profile:', userData);
+            console.log('[INIT] Setting user with profile:', userData);
             setUser(userData);
             
             // Sync theme with user preferences
@@ -93,9 +99,9 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
               google_id: session.user.user_metadata?.sub
             };
             
-            console.log('Creating user profile:', userData);
+            console.log('[INIT] Creating user profile:', userData);
             const { success: createSuccess, error: createError } = await createUserProfile(userData);
-            console.log('createUserProfile result:', { createSuccess, createError });
+            console.log('[INIT] createUserProfile result:', { createSuccess, createError });
             
             if (createSuccess) {
               setUser({
@@ -107,7 +113,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
               });
             } else {
               // Set basic user data even if profile creation fails
-              console.log('Profile creation failed, setting basic user data');
+              console.log('[INIT] Profile creation failed, setting basic user data');
               setUser({
                 id: session.user.id,
                 email: session.user.email,
@@ -118,11 +124,12 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             }
           }
         } else {
-          console.log('No existing session found');
+          console.log('[INIT] No existing session found');
         }
       } catch (error) {
-        console.error('Error in getInitialSession:', error);
+        console.error('[INIT] Error in getInitialSession:', error);
       } finally {
+        console.log('[INIT] getInitialSession completed, clearing timeout and setting loading to false');
         clearTimeout(timeoutId);
         setIsLoading(false);
       }
@@ -131,6 +138,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     getInitialSession();
 
     // Listen for auth changes
+    console.log('[EFFECT] Setting up auth state change listener');
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         console.log('Auth state changed:', event, session);
@@ -140,10 +148,87 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         // Only handle SIGNED_IN if we don't already have a user
         if (event === 'SIGNED_IN' && session?.user && !user) {
           console.log('Processing SIGNED_IN event for new user');
+          
+          // Debug Supabase configuration
+          console.log('[AUTH] Supabase URL:', process.env.NEXT_PUBLIC_SUPABASE_URL);
+          console.log('[AUTH] Supabase client:', supabase);
+          console.log('[AUTH] Session user ID:', session.user.id);
+          
+          // Test Supabase connection first
+          console.log('[AUTH] Testing Supabase connection...');
+          try {
+            console.log('[AUTH] About to call supabase.from("users").select("count").limit(1)');
+            
+            // Add a timeout to the Supabase operation
+            const connectionPromise = supabase
+              .from('users')
+              .select('count')
+              .limit(1);
+            
+            const connectionTimeout = setTimeout(() => {
+              console.log('[AUTH] Connection test timed out after 3 seconds');
+            }, 3000);
+            
+            const { data: testData, error: testError } = await connectionPromise;
+            clearTimeout(connectionTimeout);
+            console.log('[AUTH] Supabase connection test result:', { testData, testError });
+          } catch (testErr) {
+            console.error('[AUTH] Supabase connection test failed:', testErr);
+          }
+          
+          // Test a simpler operation
+          console.log('[AUTH] Testing simple Supabase operation...');
+          try {
+            console.log('[AUTH] About to call supabase.auth.getUser()');
+            const { data: userData, error: userError } = await supabase.auth.getUser();
+            console.log('[AUTH] getUser result:', { userData, userError });
+          } catch (userErr) {
+            console.error('[AUTH] getUser test failed:', userErr);
+          }
+          
+          // Test a simple count query that should work
+          console.log('[AUTH] Testing simple count query...');
+          try {
+            console.log('[AUTH] About to call supabase.from("users").select("*").limit(1)');
+            const { data: countData, error: countError } = await supabase
+              .from('users')
+              .select('*')
+              .limit(1);
+            console.log('[AUTH] Count query result:', { countData, countError });
+          } catch (countErr) {
+            console.error('[AUTH] Count query failed:', countErr);
+          }
+          
+          // Add a timeout for profile operations
+          const profileTimeout = setTimeout(() => {
+            console.log('[TIMEOUT] Profile operations timed out, setting basic user data');
+            setUser({
+              id: session.user.id,
+              email: session.user.email,
+              name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'User',
+              photoUrl: session.user.user_metadata?.picture,
+              onboarding_complete: false
+            });
+            setIsLoading(false);
+          }, 5000); // 5 second timeout for profile operations
+          
+          // Also add a shorter timeout to set user data immediately if profile ops hang
+          const quickTimeout = setTimeout(() => {
+            console.log('[QUICK] Setting user data immediately to prevent hanging');
+            setUser({
+              id: session.user.id,
+              email: session.user.email,
+              name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'User',
+              photoUrl: session.user.user_metadata?.picture,
+              onboarding_complete: false
+            });
+          }, 2000); // 2 second timeout for immediate user data
+          
           try {
             // Get or create user profile
+            console.log('[AUTH] Calling getUserProfile for user:', session.user.id);
             const { success, data: profile, error } = await getUserProfile(session.user.id);
-            console.log('getUserProfile result:', { success, profile, error });
+            console.log('[AUTH] getUserProfile result:', { success, profile, error });
             
             if (success && profile) {
               const userData = {
@@ -154,7 +239,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 onboarding_complete: profile.onboarding_complete,
                 ...profile
               };
-              console.log('Setting user with profile:', userData);
+              console.log('[AUTH] Setting user with profile:', userData);
               setUser(userData);
               
               // Sync theme with user preferences
@@ -170,9 +255,9 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 google_id: session.user.user_metadata?.sub
               };
               
-              console.log('Creating new user profile:', userData);
+              console.log('[AUTH] Creating new user profile:', userData);
               const { success: createSuccess, error: createError } = await createUserProfile(userData);
-              console.log('createUserProfile result:', { createSuccess, createError });
+              console.log('[AUTH] createUserProfile result:', { createSuccess, createError });
               
               if (createSuccess) {
                 const newUser = {
@@ -182,11 +267,11 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                   photoUrl: session.user.user_metadata?.picture,
                   onboarding_complete: false
                 };
-                console.log('Setting new user:', newUser);
+                console.log('[AUTH] Setting new user:', newUser);
                 setUser(newUser);
               } else {
                 // Even if profile creation fails, set basic user data to prevent loading state
-                console.log('Profile creation failed, setting basic user data');
+                console.log('[AUTH] Profile creation failed, setting basic user data');
                 setUser({
                   id: session.user.id,
                   email: session.user.email,
@@ -196,8 +281,16 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 });
               }
             }
+            
+            // Clear the timeout since we succeeded
+            clearTimeout(profileTimeout);
+            clearTimeout(quickTimeout); // Clear the quick timeout
           } catch (error) {
-            console.error('Error in auth state change handler:', error);
+            console.error('[AUTH] Error in auth state change handler:', error);
+            // Clear the timeout
+            clearTimeout(profileTimeout);
+            clearTimeout(quickTimeout); // Clear the quick timeout
+            
             // Set basic user data even if there's an error
             setUser({
               id: session.user.id,
