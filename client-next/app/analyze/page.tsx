@@ -23,7 +23,7 @@ import { pinyin as pinyinPro } from 'pinyin-pro';
 import { transliterate } from 'transliteration';
 import * as wanakana from 'wanakana';
 import { convert as romanizeHangul } from 'hangul-romanization';
-import Sanscript from '@sanskrit-coders/sanscript';
+import Sanscript from '@indic-transliteration/sanscript';
 
 
 // Kuroshiro singleton with explicit Kuromoji dict path served from /public
