@@ -12,6 +12,15 @@ import { useDarkMode } from './contexts/DarkModeContext';
 import { supabase } from '../lib/supabase';
 import { getUserProfile, createUserProfile, testDatabaseConnection } from '../lib/supabase';
 
+// Debug Supabase client configuration
+console.log('[SUPABASE_DEBUG] Client imported successfully');
+console.log('[SUPABASE_DEBUG] Environment check:', {
+  hasUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+  hasKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+  url: process.env.NEXT_PUBLIC_SUPABASE_URL?.substring(0, 30) + '...',
+  key: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.substring(0, 20) + '...'
+});
+
 const translucentBg = 'rgba(60,76,115,0.06)';
 const translucentRose = 'rgba(195,141,148,0.08)';
 
@@ -56,8 +65,14 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       // Replace problematic database test with simple auth test
       console.log('[INIT] Testing Supabase auth connection...');
       try {
-        const { data: authData, error: authError } = await supabase.auth.getUser();
-        console.log('[INIT] Auth connection test result:', { hasAuthData: !!authData, authError });
+        // Add timeout to prevent hanging
+        const authPromise = supabase.auth.getUser();
+        const timeoutPromise = new Promise<never>((_, reject) => 
+          setTimeout(() => reject(new Error('Auth connection timeout after 5 seconds')), 5000)
+        );
+        
+        const result = await Promise.race([authPromise, timeoutPromise]);
+        console.log('[INIT] Auth connection test result:', { hasAuthData: !!result.data, authError: result.error });
       } catch (authErr) {
         console.error('[INIT] Auth connection test failed:', authErr);
       }
@@ -333,15 +348,18 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       onboarding_complete: user.onboarding_complete
     } : 'No user');
     
-    if (!isLoading && user === null) {
-      console.log('[ROUTING] User not authenticated, redirecting to login');
-      // User is not authenticated, redirect to login
+    if (user === null) {
+      console.log('[ROUTING] User not authenticated, redirecting to login immediately');
+      // User is not authenticated, redirect to login immediately
       if (pathname !== '/login' && pathname !== '/signup' && pathname !== '/') {
         router.push('/login');
       }
-    } else if (!isLoading && user) {
-      console.log('[ROUTING] User authenticated:', { onboarding_complete: user.onboarding_complete, pathname });
-      // User is authenticated, check if they need onboarding
+    } else if (user && isLoading) {
+      console.log('[ROUTING] User authenticated but still loading profile data, waiting...');
+      // User is authenticated but we're still loading their profile data
+    } else if (user && !isLoading) {
+      console.log('[ROUTING] User authenticated and profile loaded:', { onboarding_complete: user.onboarding_complete, pathname });
+      // User is authenticated and profile is loaded, check if they need onboarding
       if (user.onboarding_complete === false) {
         // If onboarding is not complete, redirect to onboarding immediately
         if (pathname !== '/onboarding') {
@@ -355,8 +373,6 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           router.push('/dashboard');
         }
       }
-    } else if (isLoading) {
-      console.log('[ROUTING] Still loading, not making routing decisions yet');
     }
   }, [isLoading, user, pathname, router]);
 
