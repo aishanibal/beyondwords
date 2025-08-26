@@ -1,10 +1,20 @@
 'use client';
-import React from 'react';
+export const dynamic = "force-dynamic";
+
+import React, { useState, useEffect } from 'react';
 import { useDarkMode } from '../contexts/DarkModeContext';
 import ThemeToggle from '../components/ThemeToggle';
 
 export default function TestDarkMode() {
   const { isDarkMode, theme } = useDarkMode();
+  const [systemPreference, setSystemPreference] = useState<string>('Loading...');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      setSystemPreference(isDark ? 'Dark' : 'Light');
+    }
+  }, []);
 
   return (
     <div className={`min-h-screen transition-colors duration-300 ${isDarkMode ? 'bg-gray-900 text-white' : 'bg-cream text-gray-900'}`}>
@@ -26,7 +36,7 @@ export default function TestDarkMode() {
               <strong>Is Dark Mode:</strong> {isDarkMode ? 'Yes' : 'No'}
             </p>
             <p className={`${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-              <strong>System Preference:</strong> {window.matchMedia('(prefers-color-scheme: dark)').matches ? 'Dark' : 'Light'}
+              <strong>System Preference:</strong> {systemPreference}
             </p>
           </div>
         </div>
