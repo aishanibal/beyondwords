@@ -197,9 +197,18 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
               photoUrl: session.user.user_metadata?.picture,
               onboarding_complete: false
             });
+          } finally {
+            // Ensure loading state is resolved after auth state change
+            console.log('Auth state change completed, ensuring loading is false');
+            setIsLoading(false);
           }
         } else if (event === 'SIGNED_OUT') {
           setUser(null);
+          setIsLoading(false);
+        } else if (event === 'INITIAL_SESSION') {
+          // This event fires when the initial session is loaded
+          console.log('Initial session loaded, ensuring loading is false');
+          setIsLoading(false);
         }
       }
     );
@@ -226,21 +235,27 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
   // Handle routing after authentication
   useEffect(() => {
+    console.log('[ROUTING] Routing effect triggered:', { isLoading, user, pathname });
+    
     if (!isLoading && user === null) {
+      console.log('[ROUTING] User not authenticated, redirecting to login');
       // User is not authenticated, redirect to login
       if (pathname !== '/login' && pathname !== '/signup' && pathname !== '/') {
         router.push('/login');
       }
     } else if (!isLoading && user) {
+      console.log('[ROUTING] User authenticated:', { onboarding_complete: user.onboarding_complete, pathname });
       // User is authenticated, check if they need onboarding
       if (user.onboarding_complete === false) {
         // If onboarding is not complete, redirect to onboarding immediately
         if (pathname !== '/onboarding') {
+          console.log('[ROUTING] Redirecting to onboarding');
           router.push('/onboarding');
         }
       } else {
         // If onboarding is complete, redirect away from onboarding/login/signup
         if (pathname === '/onboarding' || pathname === '/login' || pathname === '/signup') {
+          console.log('[ROUTING] Redirecting to dashboard');
           router.push('/dashboard');
         }
       }
@@ -248,6 +263,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   }, [isLoading, user, pathname, router]);
 
   if (isLoading) {
+    console.log('[LOADING] Showing loading screen, user:', user, 'isLoading:', isLoading);
     return <LoadingScreen />;
   }
 

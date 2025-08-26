@@ -1,7 +1,8 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { NextApiRequest, NextApiResponse } from 'next';
 import axios from 'axios';
 
-const BACKEND_URL = 'http://localhost:5000/conversation_summary';
+const BACKEND_URL = process.env.AI_BACKEND_URL || 'http://localhost:5000/conversation_summary';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -10,60 +11,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const { chat_history, subgoal_instructions, target_language, feedback_language, is_continued_conversation } = req.body;
-
-    console.log('[DEBUG] API: Sending request to backend:', {
-      chat_history_length: chat_history?.length,
-      subgoal_instructions,
-      target_language: target_language || 'en',
-      feedback_language: feedback_language || 'en',
-      is_continued_conversation: is_continued_conversation || false
-    });
-
     const response = await axios.post(BACKEND_URL, {
-      chat_history,
-      subgoal_instructions,
-      target_language: target_language || 'en',
-      feedback_language: feedback_language || 'en',
-      is_continued_conversation: is_continued_conversation || false
+      conversation_id: req.body.conversation_id,
+      messages: req.body.messages,
+      language: req.body.language
+    }, {
+      headers: {
+        'Content-Type': 'application/json',
+      }
     });
-
-    console.log('[DEBUG] API: Received response from backend:', {
-      status: response.status,
-      data: response.data,
-      progress_percentages: response.data?.progress_percentages,
-      title: response.data?.title,
-      dataKeys: Object.keys(response.data || {}),
-      progressType: typeof response.data?.progress_percentages,
-      progressIsArray: Array.isArray(response.data?.progress_percentages)
-    });
-
-    // CRITICAL: Ensure progress_percentages is always included in the response
-    const responseData = {
-      ...response.data,
-      progress_percentages: response.data?.progress_percentages || []
-    };
-
-    // Double-check that progress_percentages is included
-    if (!responseData.hasOwnProperty('progress_percentages')) {
-      responseData.progress_percentages = [];
-      console.log('[DEBUG] API: Added missing progress_percentages field');
-    }
-
-    console.log('[DEBUG] API: Final response data being sent:', {
-      progress_percentages: responseData.progress_percentages,
-      hasProgressData: !!responseData.progress_percentages,
-      progressDataLength: responseData.progress_percentages?.length,
-      responseKeys: Object.keys(responseData)
-    });
-
-    res.status(response.status).json(responseData);
-  } catch (error: any) {
-    console.error('Conversation summary error:', error);
-    if (error.response) {
-      res.status(error.response.status).json(error.response.data);
+    res.status(response.status).json(response.data);
+  } catch (err: any) {
+    if (err.response) {
+      res.status(err.response.status).json(err.response.data);
     } else {
-      res.status(500).json({ error: 'Failed to generate conversation summary' });
+      res.status(500).json({ error: 'Proxy error', details: err.message });
     }
   }
 } 

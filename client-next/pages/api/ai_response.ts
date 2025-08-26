@@ -2,7 +2,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import axios from 'axios';
 
-const BACKEND_URL = 'http://localhost:5000/ai_response';
+const BACKEND_URL = process.env.AI_BACKEND_URL || 'http://localhost:5000/ai_response';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -10,27 +10,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).end(`Method ${req.method} Not Allowed`);
   }
 
-  console.log('--- [api/ai_response] REQUEST BODY:', req.body);
-
   try {
     const response = await axios.post(BACKEND_URL, req.body, {
       headers: {
         'Content-Type': 'application/json',
-      },
-      timeout: 120000, // 2 minutes
+      }
     });
-    
-    console.log('--- [api/ai_response] PYTHON RESPONSE:', response.data);
     res.status(response.status).json(response.data);
-  } catch (error: any) {
-    console.error('--- [api/ai_response] ERROR:', error.message);
-    if (axios.isAxiosError(error)) {
-      console.error('--- [api/ai_response] AXIOS ERROR DETAILS:', {
-        status: error.response?.status,
-        data: error.response?.data,
-        message: error.message
-      });
+  } catch (err: any) {
+    if (err.response) {
+      res.status(err.response.status).json(err.response.data);
+    } else {
+      res.status(500).json({ error: 'Proxy error', details: err.message });
     }
-    res.status(500).json({ error: 'Proxy error', details: error.message });
   }
 } 
