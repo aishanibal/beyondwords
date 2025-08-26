@@ -163,3 +163,26 @@ export const getUserPersonas = async (userId: string) => {
     return { success: false, data: null, error: err instanceof Error ? err.message : 'Unknown error' };
   }
 };
+
+// Add this function to get user conversations
+export const getUserConversations = async (userId: string) => {
+  try {
+    console.log('[SUPABASE] Getting conversations for user:', userId);
+    const { data, error } = await supabase
+      .from('conversations')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      console.error('[SUPABASE] Error getting conversations:', error);
+      return { success: false, data: null, error: error.message };
+    }
+    
+    console.log('[SUPABASE] Conversations retrieved:', data);
+    return { success: true, data, error: null };
+  } catch (err) {
+    console.error('[SUPABASE] Exception getting conversations:', err);
+    return { success: false, data: null, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+};
