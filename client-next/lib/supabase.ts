@@ -27,9 +27,20 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 // Test connection function for debugging
 export const testSupabaseConnection = async () => {
   try {
-    const { data, error } = await supabase.from('users').select('count').limit(1);
-    return { success: !error, data, error };
+    console.log('[SUPABASE] Testing connection with auth session...');
+    
+    // Test connection using auth.getSession() which doesn't require RLS
+    const { data, error } = await supabase.auth.getSession();
+    
+    if (error) {
+      console.error('[SUPABASE] Auth session error:', error);
+      return { success: false, data: null, error };
+    }
+    
+    console.log('[SUPABASE] Connection successful, session:', data.session ? 'exists' : 'none');
+    return { success: true, data: { hasSession: !!data.session }, error: null };
   } catch (err) {
+    console.error('[SUPABASE] Connection exception:', err);
     return { success: false, data: null, error: err };
   }
 };
