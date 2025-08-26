@@ -3,6 +3,8 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable react/no-unescaped-entities */
 "use client";
+export const dynamic = "force-dynamic";
+
 import React, { useState, useRef, useEffect, useMemo, useCallback, Suspense } from 'react';
 import { useUser } from '../ClientLayout';
 import { useDarkMode } from '../contexts/DarkModeContext';
@@ -209,6 +211,13 @@ function usePersistentChatHistory(user: User | null): [ChatMessage[], React.Disp
 }
 
 const AnalyzeContent = () => {
+  // Ensure this component only runs on the client side
+  const [isClient, setIsClient] = useState(false);
+  
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+  
   const router = useRouter();
   const { isDarkMode } = useDarkMode();
 
@@ -229,14 +238,16 @@ const AnalyzeContent = () => {
 
   // Get search params in useEffect to avoid SSR issues
   React.useEffect(() => {
-    const searchParams = new URLSearchParams(window.location.search);
-    setUrlParams({
-      conversationId: searchParams.get('conversation') || '',
-      lang: searchParams.get('language') || '',
-      topics: searchParams.get('topics') || '',
-      formality: searchParams.get('formality') || '',
-      usePersona: searchParams.get('usePersona') === 'true'
-    });
+    if (typeof window !== 'undefined') {
+      const searchParams = new URLSearchParams(window.location.search);
+      setUrlParams({
+        conversationId: searchParams.get('conversation') || '',
+        lang: searchParams.get('language') || '',
+        topics: searchParams.get('topics') || '',
+        formality: searchParams.get('formality') || '',
+        usePersona: searchParams.get('usePersona') === 'true'
+      });
+    }
   }, []);
 
   const urlConversationId = urlParams.conversationId;
@@ -390,9 +401,9 @@ const AnalyzeContent = () => {
     }
   }, [user, router]);
 
-  // Show loading while checking authentication
-  if (user === null) {
-    return <LoadingScreen message="Checking authentication..." />;
+  // Show loading while checking authentication or if not on client
+  if (!isClient || user === null) {
+    return <LoadingScreen message="Loading..." />;
   }
 
   // Hide suggestions when processing starts and prevent re-showing
@@ -6835,7 +6846,11 @@ Yes, the current serials don't have the same quality as the old ones, right?
 
 export default function AnalyzePage() {
   return (
-    <Suspense fallback={<div>Loading...</div>}>
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-lg">Loading analyze page...</div>
+      </div>
+    }>
       <AnalyzeContent />
     </Suspense>
   );
