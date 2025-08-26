@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useUser } from '../ClientLayout';
 import axios from 'axios';
 import { LANGUAGES, PROFICIENCY_LEVELS, TALK_TOPICS, LEARNING_GOALS, PRACTICE_PREFERENCES, FEEDBACK_LANGUAGES, Language, ProficiencyLevel, Topic, LearningGoal, PracticePreference, FeedbackLanguage } from '../../lib/preferences';
+import { createLanguageDashboard } from '../../lib/supabase';
 
 
 interface LanguageOnboardingProps {
@@ -151,24 +152,34 @@ function LanguageOnboarding({ onComplete, existingLanguages = [] }: LanguageOnbo
     setIsLoading(true);
     setError('');
     try {
-      const token = localStorage.getItem('jwt');
-      const response = await axios.post('/api/user/language-dashboards', {
+      const { user } = useUser();
+      if (!user?.id) {
+        throw new Error('User not authenticated');
+      }
+
+      const { success, data: dashboard } = await createLanguageDashboard({
+        user_id: user.id,
         language: onboardingData.language,
-        proficiency: onboardingData.proficiency,
-        talkTopics: onboardingData.talkTopics,
-        learningGoals: onboardingData.learningGoals,
-        practicePreference: onboardingData.practicePreference,
-        feedbackLanguage: onboardingData.feedbackLanguage
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
+        proficiency_level: onboardingData.proficiency,
+        talk_topics: onboardingData.talkTopics,
+        learning_goals: onboardingData.learningGoals,
+        practice_preference: onboardingData.practicePreference,
+        feedback_language: onboardingData.feedbackLanguage,
+        is_primary: false
       });
+
+      if (!success) {
+        throw new Error('Failed to create language dashboard');
+      }
+
       if (onComplete) {
-        onComplete(response.data.dashboard);
+        onComplete(dashboard);
       } else {
         router.push('/dashboard');
       }
-    } catch (err) {
-      setError('Failed to create language dashboard. Please try again.');
+    } catch (err: any) {
+      console.error('Language onboarding error:', err);
+      setError(err.message || 'Failed to create language dashboard. Please try again.');
       setIsLoading(false);
     }
   };

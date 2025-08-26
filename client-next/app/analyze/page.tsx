@@ -13,6 +13,7 @@ import TopicSelectionModal from './TopicSelectionModal';
 import PersonaModal from './PersonaModal';
 import LoadingScreen from '../components/LoadingScreen';
 import { LEARNING_GOALS, LearningGoal, getProgressiveSubgoalDescription, getSubgoalLevel, updateSubgoalProgress, SubgoalProgress, LevelUpEvent } from '../../lib/preferences';
+import { getUserLanguageDashboards } from '../../lib/supabase';
 import ChatMessageItem from './ChatMessageItem';
 import unidecode from 'unidecode';
 import Kuroshiro from 'kuroshiro';
@@ -690,9 +691,18 @@ const Analyze = () => {
   // Function to fetch user's dashboard preferences
   const fetchUserDashboardPreferences = async (languageCode: string) => {
     try {
-      const response = await axios.get(`/api/user/language-dashboards`, { headers: getAuthHeaders() });
-      const dashboards = response.data.dashboards || [];
-      const dashboard = dashboards.find((d: any) => d.language === languageCode);
+      if (!user?.id) {
+        return null;
+      }
+
+      const { success, data: dashboards } = await getUserLanguageDashboards(user.id);
+      
+      if (!success) {
+        console.error('Failed to fetch language dashboards');
+        return null;
+      }
+
+      const dashboard = (dashboards || []).find((d: any) => d.language === languageCode);
       
       if (dashboard) {
         return {
