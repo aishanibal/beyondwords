@@ -3,7 +3,7 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable react/no-unescaped-entities */
 "use client";
-import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback, Suspense } from 'react';
 import { useUser } from '../ClientLayout';
 import { useDarkMode } from '../contexts/DarkModeContext';
 import axios from 'axios';
@@ -6813,4 +6813,13 @@ Yes, the current serials don't have the same quality as the old ones, right?
   );
 };
 
-export default Analyze;
+// Wrap the component in Suspense to fix the build error
+const AnalyzePage = () => {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <Analyze />
+    </Suspense>
+  );
+};
+
+export default AnalyzePage;
