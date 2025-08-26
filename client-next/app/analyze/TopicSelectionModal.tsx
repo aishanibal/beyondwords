@@ -3,6 +3,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import { TALK_TOPICS, CLOSENESS_LEVELS, LEARNING_GOALS, Topic, LearningGoal } from '../../lib/preferences';
+import { getUserLanguageDashboards, getUserPersonas } from '../../lib/supabase';
+import { useUser } from '../ClientLayout';
 
 interface TopicSelectionModalProps {
   isOpen: boolean;
@@ -37,6 +39,7 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
   const [isUsingExistingPersona, setIsUsingExistingPersona] = useState<boolean>(false);
   const [selectedPersonaId, setSelectedPersonaId] = useState<string | null>(null);
   const [modalRef, setModalRef] = useState<HTMLDivElement | null>(null);
+  const { user } = useUser();
 
   const scrollToBottom = useCallback(() => {
     if (modalRef) {
@@ -61,12 +64,18 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
   }, [modalRef]);
 
   const fetchLanguageDashboard = useCallback(async () => {
-    if (!currentLanguage) return;
+    if (!currentLanguage || !user?.id) return;
     
     try {
-      const response = await axios.get(`/api/user/language-dashboards`, { headers: getAuthHeaders() });
-      const dashboards = response.data.dashboards || [];
-      const dashboard = dashboards.find((d: any) => d.language === currentLanguage);
+      const { success, data: dashboards } = await getUserLanguageDashboards(user.id);
+      
+      if (!success) {
+        console.error('Failed to fetch language dashboards');
+        setDashboardExists(false);
+        return;
+      }
+
+      const dashboard = (dashboards || []).find((d: any) => d.language === currentLanguage);
       
       if (dashboard) {
         setCurrentDashboard(dashboard);
@@ -78,19 +87,28 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
       console.error('Error fetching language dashboard:', err);
       setDashboardExists(false);
     }
-  }, [currentLanguage]);
+  }, [currentLanguage, user?.id]);
 
   const fetchSavedPersonas = useCallback(async () => {
+    if (!user?.id) return;
+    
     setIsLoadingPersonas(true);
     try {
-      const response = await axios.get('/api/personas', { headers: getAuthHeaders() });
-      setSavedPersonas(response.data.personas || []);
+      const { success, data: personas } = await getUserPersonas(user.id);
+      
+      if (success) {
+        setSavedPersonas(personas || []);
+      } else {
+        console.error('Failed to fetch personas');
+        setSavedPersonas([]);
+      }
     } catch (err: any) {
       console.error('Error fetching saved personas:', err);
+      setSavedPersonas([]);
     } finally {
       setIsLoadingPersonas(false);
     }
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     if (currentLanguage && isOpen) {

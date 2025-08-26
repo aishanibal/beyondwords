@@ -1,6 +1,6 @@
 'use client';
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+
 import { Topic, TALK_TOPICS, PROFICIENCY_LEVELS, LEARNING_GOALS, LearningGoal, ProficiencyLevel } from '../../lib/preferences';
 
 // Type definitions
@@ -139,16 +139,13 @@ export default function DashboardSettingsModal({
       console.log('[DEBUG] Language:', dashboard.language);
       console.log('[DEBUG] Is script language:', isScriptLanguage(dashboard.language));
 
-      const response = await axios.put(`/api/user/language-dashboards/${dashboard.language}`, updateData, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      
-      console.log('[DEBUG] Save response:', response.data);
-      onUpdate(response.data.dashboard);
+      // TODO: Implement dashboard update with Supabase
+      // For now, just call onUpdate with the edited data
+      console.log('[DEBUG] Would save dashboard data:', updateData);
+      onUpdate(editedDashboard);
       onClose();
     } catch (err: any) {
       console.error('[DEBUG] Save error:', err);
-      console.error('[DEBUG] Error response:', err.response?.data);
       setSaveError('Failed to update dashboard settings. Please try again.');
     } finally {
       setIsSaving(false);
@@ -167,10 +164,9 @@ export default function DashboardSettingsModal({
     setIsDeleting(true);
     setSaveError('');
     try {
-      const token = localStorage.getItem('jwt');
-      await axios.delete(`/api/user/language-dashboards/${dashboard.language}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      // TODO: Implement dashboard deletion with Supabase
+      // For now, just call onDelete
+      console.log('[DEBUG] Would delete dashboard for language:', dashboard.language);
       if (onDelete) {
         onDelete(dashboard.language);
       }

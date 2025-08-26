@@ -45,6 +45,12 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const { syncWithUserPreferences } = useDarkMode();
 
   useEffect(() => {
+    // Add a timeout to prevent infinite loading
+    const timeoutId = setTimeout(() => {
+      console.log('Loading timeout reached, setting loading to false');
+      setIsLoading(false);
+    }, 10000); // 10 second timeout
+
     // Get initial session
     const getInitialSession = async () => {
       try {
@@ -57,8 +63,10 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         }
 
         if (session?.user) {
+          console.log('Found existing session:', session.user);
           // Get user profile from our database
-          const { success, data: profile } = await getUserProfile(session.user.id);
+          const { success, data: profile, error: profileError } = await getUserProfile(session.user.id);
+          console.log('getUserProfile result:', { success, profile, profileError });
           
           if (success && profile) {
             const userData = {
@@ -69,6 +77,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
               onboarding_complete: profile.onboarding_complete,
               ...profile
             };
+            console.log('Setting user with profile:', userData);
             setUser(userData);
             
             // Sync theme with user preferences
@@ -84,8 +93,21 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
               google_id: session.user.user_metadata?.sub
             };
             
-            const { success: createSuccess } = await createUserProfile(userData);
+            console.log('Creating user profile:', userData);
+            const { success: createSuccess, error: createError } = await createUserProfile(userData);
+            console.log('createUserProfile result:', { createSuccess, createError });
+            
             if (createSuccess) {
+              setUser({
+                id: session.user.id,
+                email: session.user.email,
+                name: userData.name,
+                photoUrl: session.user.user_metadata?.picture,
+                onboarding_complete: false
+              });
+            } else {
+              // Set basic user data even if profile creation fails
+              console.log('Profile creation failed, setting basic user data');
               setUser({
                 id: session.user.id,
                 email: session.user.email,
@@ -95,10 +117,13 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
               });
             }
           }
+        } else {
+          console.log('No existing session found');
         }
       } catch (error) {
         console.error('Error in getInitialSession:', error);
       } finally {
+        clearTimeout(timeoutId);
         setIsLoading(false);
       }
     };
@@ -111,38 +136,67 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         console.log('Auth state changed:', event, session);
         
         if (event === 'SIGNED_IN' && session?.user) {
-          // Get or create user profile
-          const { success, data: profile } = await getUserProfile(session.user.id);
-          
-          if (success && profile) {
-            const userData = {
-              id: session.user.id,
-              email: session.user.email,
-              name: profile.name || session.user.user_metadata?.full_name,
-              photoUrl: session.user.user_metadata?.picture,
-              onboarding_complete: profile.onboarding_complete,
-              ...profile
-            };
-            setUser(userData);
-          } else {
-            // Create new user profile
-            const userData = {
-              id: session.user.id,
-              email: session.user.email || '',
-              name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'User',
-              google_id: session.user.user_metadata?.sub
-            };
+          try {
+            // Get or create user profile
+            const { success, data: profile, error } = await getUserProfile(session.user.id);
+            console.log('getUserProfile result:', { success, profile, error });
             
-            const { success: createSuccess } = await createUserProfile(userData);
-            if (createSuccess) {
-              setUser({
+            if (success && profile) {
+              const userData = {
                 id: session.user.id,
                 email: session.user.email,
-                name: userData.name,
+                name: profile.name || session.user.user_metadata?.full_name,
                 photoUrl: session.user.user_metadata?.picture,
-                onboarding_complete: false
-              });
+                onboarding_complete: profile.onboarding_complete,
+                ...profile
+              };
+              console.log('Setting user with profile:', userData);
+              setUser(userData);
+            } else {
+              // Create new user profile
+              const userData = {
+                id: session.user.id,
+                email: session.user.email || '',
+                name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'User',
+                google_id: session.user.user_metadata?.sub
+              };
+              
+              console.log('Creating new user profile:', userData);
+              const { success: createSuccess, error: createError } = await createUserProfile(userData);
+              console.log('createUserProfile result:', { createSuccess, createError });
+              
+              if (createSuccess) {
+                const newUser = {
+                  id: session.user.id,
+                  email: session.user.email,
+                  name: userData.name,
+                  photoUrl: session.user.user_metadata?.picture,
+                  onboarding_complete: false
+                };
+                console.log('Setting new user:', newUser);
+                setUser(newUser);
+              } else {
+                // Even if profile creation fails, set basic user data to prevent loading state
+                console.log('Profile creation failed, setting basic user data');
+                setUser({
+                  id: session.user.id,
+                  email: session.user.email,
+                  name: userData.name,
+                  photoUrl: session.user.user_metadata?.picture,
+                  onboarding_complete: false
+                });
+              }
             }
+          } catch (error) {
+            console.error('Error in auth state change handler:', error);
+            // Set basic user data even if there's an error
+            setUser({
+              id: session.user.id,
+              email: session.user.email,
+              name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'User',
+              photoUrl: session.user.user_metadata?.picture,
+              onboarding_complete: false
+            });
           }
         } else if (event === 'SIGNED_OUT') {
           setUser(null);
