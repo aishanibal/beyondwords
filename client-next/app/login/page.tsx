@@ -69,18 +69,17 @@ export default function LoginPage() {
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          queryParams: {
-            access_token: credentialResponse.credential,
-          },
-        },
+          redirectTo: `${window.location.origin}/dashboard`
+        }
       });
 
       if (error) {
         throw error;
       }
 
-      // User will be set automatically by the auth state change listener
-      // No need to manually set user here
+      // User will be redirected to Google OAuth, then back to dashboard
+      // No need to manually handle the user state here
+      
     } catch (err: any) {
       console.error('Google login error:', err);
       setError(err.message || 'Google login failed. Please try again.');

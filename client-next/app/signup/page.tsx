@@ -90,17 +90,15 @@ export default function SignupPage() {
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          queryParams: {
-            access_token: credentialResponse.credential,
-          },
-        },
+          redirectTo: `${window.location.origin}/onboarding`
+        }
       });
 
       if (error) {
         throw error;
       }
 
-      // User will be set automatically by the auth state change listener
+      // User will be redirected to Google OAuth, then back to onboarding
       // New users will be redirected to onboarding
       
     } catch (err: any) {
