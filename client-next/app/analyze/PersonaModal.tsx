@@ -1,5 +1,6 @@
 import React from 'react';
 import axios from 'axios';
+export const dynamic = "force-dynamic";
 
 interface PersonaModalProps {
   isOpen: boolean;

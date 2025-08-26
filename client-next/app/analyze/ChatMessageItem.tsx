@@ -1,5 +1,7 @@
 import React, { useMemo, useCallback } from 'react';
 import { motion } from 'framer-motion';
+export const dynamic = "force-dynamic";
+
 
 // Helper function to format message for display
 const formatMessageForDisplay = (message: any, romanizationDisplay: 'always' | 'never' | 'if_different') => {

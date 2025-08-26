@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { TALK_TOPICS, CLOSENESS_LEVELS, LEARNING_GOALS, Topic, LearningGoal } from '../../lib/preferences';
 import { getUserLanguageDashboards, getUserPersonas } from '../../lib/supabase';
 import { useUser } from '../ClientLayout';
+export const dynamic = "force-dynamic";
 
 interface TopicSelectionModalProps {
   isOpen: boolean;

@@ -1,5 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
+export const dynamic = "force-dynamic";
+
 import React, { useEffect, useState, createContext, useContext } from 'react';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { usePathname, useRouter } from 'next/navigation';
