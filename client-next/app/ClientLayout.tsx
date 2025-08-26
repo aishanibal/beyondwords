@@ -360,10 +360,13 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     }
   }, [isLoading, user, pathname, router]);
 
-  if (isLoading) {
-    console.log('[LOADING] Showing loading screen, user:', user, 'isLoading:', isLoading);
+  if (isLoading && user) {
+    console.log('[LOADING] Showing loading screen for authenticated user:', user);
     return <LoadingScreen />;
   }
+
+  // If not loading or no user, show the app content
+  console.log('[RENDER] Rendering app content, user:', user, 'isLoading:', isLoading);
 
   return (
     <UserContext.Provider value={{ user, setUser, logout }}>
