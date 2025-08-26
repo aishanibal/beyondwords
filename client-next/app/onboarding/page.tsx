@@ -4,9 +4,10 @@
 import React, { useState, ChangeEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '../ClientLayout';
-import axios from 'axios';
+
 import LoadingScreen from '../components/LoadingScreen';
 import { LANGUAGES, PROFICIENCY_LEVELS, TALK_TOPICS, LEARNING_GOALS, PRACTICE_PREFERENCES, FEEDBACK_LANGUAGES, Language, ProficiencyLevel, Topic, LearningGoal, PracticePreference, FeedbackLanguage } from '../../lib/preferences';
+import { supabase, createLanguageDashboard } from '../../lib/supabase';
 
 export default function OnboardingPage() {
   const { user, setUser } = useUser();
@@ -159,24 +160,52 @@ export default function OnboardingPage() {
     }
     setIsLoading(true);
     setError('');
+    
     try {
-      const token = localStorage.getItem('jwt');
-      const response = await axios.post('/api/user/onboarding', {
+      // Get current user from context
+      const currentUser = user;
+      if (!currentUser?.id) {
+        throw new Error('User not authenticated');
+      }
+
+      // Create language dashboard using Supabase
+      const { success, error: dashboardError } = await createLanguageDashboard({
+        user_id: currentUser.id,
         language: onboardingData.language,
-        proficiency: onboardingData.proficiency,
-        talkTopics: onboardingData.talkTopics,
-        learningGoals: onboardingData.learningGoals,
-        practicePreference: onboardingData.practicePreference,
-        feedbackLanguage: onboardingData.feedbackLanguage
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
+        proficiency_level: onboardingData.proficiency,
+        talk_topics: onboardingData.talkTopics,
+        learning_goals: onboardingData.learningGoals,
+        practice_preference: onboardingData.practicePreference,
+        feedback_language: onboardingData.feedbackLanguage,
+        is_primary: true
       });
-      setUser(response.data.user);
+
+      if (!success) {
+        throw new Error(dashboardError || 'Failed to create language dashboard');
+      }
+
+      // Update user profile to mark onboarding as complete
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({ onboarding_complete: true })
+        .eq('id', currentUser.id);
+
+      if (updateError) {
+        throw new Error(updateError.message || 'Failed to update user profile');
+      }
+
+      // Update local user state
+      setUser({
+        ...currentUser,
+        onboarding_complete: true
+      });
+
       // Persist selected language for dashboard auto-selection
       localStorage.setItem('selectedLanguage', onboardingData.language);
       router.push('/dashboard');
-    } catch (err) {
-      setError('Failed to save onboarding. Please try again.');
+    } catch (err: any) {
+      console.error('Onboarding error:', err);
+      setError(err.message || 'Failed to save onboarding. Please try again.');
       setIsLoading(false);
     }
   };

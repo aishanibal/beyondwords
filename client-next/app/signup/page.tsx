@@ -54,7 +54,7 @@ export default function SignupPage() {
     }
 
     try {
-      // Sign up with Supabase
+      // Sign up with Supabase (no email confirmation)
       const { data, error } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
@@ -62,6 +62,7 @@ export default function SignupPage() {
           data: {
             name: formData.name,
           },
+          emailRedirectTo: `${window.location.origin}/dashboard`,
         },
       });
 
