@@ -88,19 +88,22 @@ export default function SignupPage() {
     setError('');
 
     try {
-      const { data, error } = await supabase.auth.signInWithOAuth({
+      // Decode the JWT token to get user info
+      const decoded = JSON.parse(atob(credentialResponse.credential.split('.')[1]));
+      
+      // Sign in with Supabase using the Google credential
+      const { data, error } = await supabase.auth.signInWithIdToken({
         provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/onboarding`
-        }
+        token: credentialResponse.credential,
       });
 
       if (error) {
         throw error;
       }
 
-      // User will be redirected to Google OAuth, then back to onboarding
+      // User will be set automatically by the auth state change listener
       // New users will be redirected to onboarding
+      router.push('/onboarding');
       
     } catch (err: any) {
       console.error('Google signup error:', err);

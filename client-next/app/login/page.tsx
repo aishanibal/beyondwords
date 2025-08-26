@@ -61,24 +61,35 @@ export default function LoginPage() {
     }
   };
 
+  const handleGoogleLogin = () => {
+    supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/dashboard`
+      }
+    });
+  };
+
   const handleGoogleSuccess = async (credentialResponse: any) => {
     setIsLoading(true);
     setError('');
 
     try {
-      const { data, error } = await supabase.auth.signInWithOAuth({
+      // Decode the JWT token to get user info
+      const decoded = JSON.parse(atob(credentialResponse.credential.split('.')[1]));
+      
+      // Sign in with Supabase using the Google credential
+      const { data, error } = await supabase.auth.signInWithIdToken({
         provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/dashboard`
-        }
+        token: credentialResponse.credential,
       });
 
       if (error) {
         throw error;
       }
 
-      // User will be redirected to Google OAuth, then back to dashboard
-      // No need to manually handle the user state here
+      // User will be set automatically by the auth state change listener
+      router.push('/dashboard');
       
     } catch (err: any) {
       console.error('Google login error:', err);
