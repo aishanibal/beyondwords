@@ -208,7 +208,7 @@ function usePersistentChatHistory(user: User | null): [ChatMessage[], React.Disp
   return [chatHistory, setChatHistory];
 }
 
-const Analyze = () => {
+const AnalyzeContent = () => {
   const router = useRouter();
   const { isDarkMode } = useDarkMode();
 
@@ -6833,4 +6833,10 @@ Yes, the current serials don't have the same quality as the old ones, right?
   );
 };
 
-export default Analyze;
+export default function AnalyzePage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <AnalyzeContent />
+    </Suspense>
+  );
+}
