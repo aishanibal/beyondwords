@@ -5,6 +5,15 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
 
+console.log('[SUPABASE] Config check:', {
+  hasUrl: !!supabaseUrl,
+  hasKey: !!supabaseAnonKey,
+  urlLength: supabaseUrl?.length,
+  keyLength: supabaseAnonKey?.length,
+  url: supabaseUrl?.substring(0, 50) + '...',
+  key: supabaseAnonKey?.substring(0, 20) + '...'
+});
+
 if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.');
 }
@@ -17,6 +26,41 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     detectSessionInUrl: true
   }
 });
+
+// Test the client immediately
+console.log('[SUPABASE] Client created, testing connection...');
+supabase.auth.getSession().then(({ data, error }) => {
+  console.log('[SUPABASE] Initial connection test:', { hasData: !!data, error });
+}).catch(err => {
+  console.error('[SUPABASE] Initial connection test failed:', err);
+});
+
+// Test database connection without RLS
+export const testDatabaseConnection = async () => {
+  try {
+    console.log('[DB_TEST] Testing database connection...');
+    
+    // Test 1: Simple count query
+    const { data: countData, error: countError } = await supabase
+      .from('users')
+      .select('*', { count: 'exact', head: true });
+    
+    console.log('[DB_TEST] Count query result:', { countData, countError });
+    
+    // Test 2: Check if we can access the table at all
+    const { data: tableData, error: tableError } = await supabase
+      .from('users')
+      .select('id')
+      .limit(1);
+    
+    console.log('[DB_TEST] Table access result:', { tableData, tableError });
+    
+    return { success: true, countData, tableData };
+  } catch (error) {
+    console.error('[DB_TEST] Database test failed:', error);
+    return { success: false, error };
+  }
+};
 
 // Function to save waitlist email
 export const saveWaitlistEmail = async (email: string, source: string = 'website'):

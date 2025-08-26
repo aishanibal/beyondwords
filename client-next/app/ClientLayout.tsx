@@ -10,7 +10,7 @@ import SignupFloating from "./components/SignupFloating";
 import LoadingScreen from "./components/LoadingScreen";
 import { useDarkMode } from './contexts/DarkModeContext';
 import { supabase } from '../lib/supabase';
-import { getUserProfile, createUserProfile } from '../lib/supabase';
+import { getUserProfile, createUserProfile, testDatabaseConnection } from '../lib/supabase';
 
 const translucentBg = 'rgba(60,76,115,0.06)';
 const translucentRose = 'rgba(195,141,148,0.08)';
@@ -47,18 +47,29 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   useEffect(() => {
     console.log('[EFFECT] useEffect triggered, starting authentication flow');
     
-    // Add a timeout to prevent infinite loading
-    const timeoutId = setTimeout(() => {
-      console.log('[TIMEOUT] Loading timeout reached, setting loading to false');
-      setIsLoading(false);
-    }, 10000); // 10 second timeout
+    // Removed artificial loading timeout to avoid premature state changes
 
     // Get initial session
     const getInitialSession = async () => {
       console.log('[INIT] Starting getInitialSession');
+      
+      // Test Supabase connection first
+      console.log('[INIT] Testing Supabase connection...');
+      try {
+        const { data: testData, error: testError } = await supabase
+          .from('users')
+          .select('count')
+          .limit(1);
+        console.log('[INIT] Supabase test result:', { testData, testError });
+      } catch (testErr) {
+        console.error('[INIT] Supabase test failed:', testErr);
+      }
+      
       try {
         console.log('[INIT] Calling supabase.auth.getSession()');
+        
         const { data: { session }, error } = await supabase.auth.getSession();
+        
         console.log('[INIT] getSession result:', { session: !!session, error, userId: session?.user?.id });
         
         if (error) {
@@ -129,8 +140,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       } catch (error) {
         console.error('[INIT] Error in getInitialSession:', error);
       } finally {
-        console.log('[INIT] getInitialSession completed, clearing timeout and setting loading to false');
-        clearTimeout(timeoutId);
+        console.log('[INIT] getInitialSession completed, setting loading to false');
         setIsLoading(false);
       }
     };
@@ -153,27 +163,36 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           console.log('[AUTH] Supabase URL:', process.env.NEXT_PUBLIC_SUPABASE_URL);
           console.log('[AUTH] Supabase client:', supabase);
           console.log('[AUTH] Session user ID:', session.user.id);
+          console.log('[AUTH] Environment check:', {
+            hasUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+            hasKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+            url: process.env.NEXT_PUBLIC_SUPABASE_URL?.substring(0, 30) + '...',
+            key: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.substring(0, 20) + '...'
+          });
           
           // Test Supabase connection first
           console.log('[AUTH] Testing Supabase connection...');
           try {
             console.log('[AUTH] About to call supabase.from("users").select("count").limit(1)');
             
-            // Add a timeout to the Supabase operation
             const connectionPromise = supabase
               .from('users')
               .select('count')
               .limit(1);
             
-            const connectionTimeout = setTimeout(() => {
-              console.log('[AUTH] Connection test timed out after 3 seconds');
-            }, 3000);
-            
             const { data: testData, error: testError } = await connectionPromise;
-            clearTimeout(connectionTimeout);
             console.log('[AUTH] Supabase connection test result:', { testData, testError });
           } catch (testErr) {
             console.error('[AUTH] Supabase connection test failed:', testErr);
+          }
+          
+          // Test database connection with our test function
+          console.log('[AUTH] Running database connection test...');
+          try {
+            const dbTestResult = await testDatabaseConnection();
+            console.log('[AUTH] Database test result:', dbTestResult);
+          } catch (dbTestErr) {
+            console.error('[AUTH] Database test failed:', dbTestErr);
           }
           
           // Test a simpler operation
@@ -199,30 +218,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             console.error('[AUTH] Count query failed:', countErr);
           }
           
-          // Add a timeout for profile operations
-          const profileTimeout = setTimeout(() => {
-            console.log('[TIMEOUT] Profile operations timed out, setting basic user data');
-            setUser({
-              id: session.user.id,
-              email: session.user.email,
-              name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'User',
-              photoUrl: session.user.user_metadata?.picture,
-              onboarding_complete: false
-            });
-            setIsLoading(false);
-          }, 5000); // 5 second timeout for profile operations
-          
-          // Also add a shorter timeout to set user data immediately if profile ops hang
-          const quickTimeout = setTimeout(() => {
-            console.log('[QUICK] Setting user data immediately to prevent hanging');
-            setUser({
-              id: session.user.id,
-              email: session.user.email,
-              name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'User',
-              photoUrl: session.user.user_metadata?.picture,
-              onboarding_complete: false
-            });
-          }, 2000); // 2 second timeout for immediate user data
+          // Removed artificial timeouts around profile operations
           
           try {
             // Get or create user profile
@@ -282,14 +278,9 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
               }
             }
             
-            // Clear the timeout since we succeeded
-            clearTimeout(profileTimeout);
-            clearTimeout(quickTimeout); // Clear the quick timeout
+            // Profile operations completed successfully
           } catch (error) {
             console.error('[AUTH] Error in auth state change handler:', error);
-            // Clear the timeout
-            clearTimeout(profileTimeout);
-            clearTimeout(quickTimeout); // Clear the quick timeout
             
             // Set basic user data even if there's an error
             setUser({
