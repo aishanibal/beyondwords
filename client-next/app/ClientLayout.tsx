@@ -53,16 +53,13 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     const getInitialSession = async () => {
       console.log('[INIT] Starting getInitialSession');
       
-      // Test Supabase connection first
-      console.log('[INIT] Testing Supabase connection...');
+      // Replace problematic database test with simple auth test
+      console.log('[INIT] Testing Supabase auth connection...');
       try {
-        const { data: testData, error: testError } = await supabase
-          .from('users')
-          .select('count')
-          .limit(1);
-        console.log('[INIT] Supabase test result:', { testData, testError });
-      } catch (testErr) {
-        console.error('[INIT] Supabase test failed:', testErr);
+        const { data: authData, error: authError } = await supabase.auth.getUser();
+        console.log('[INIT] Auth connection test result:', { hasAuthData: !!authData, authError });
+      } catch (authErr) {
+        console.error('[INIT] Auth connection test failed:', authErr);
       }
       
       try {
