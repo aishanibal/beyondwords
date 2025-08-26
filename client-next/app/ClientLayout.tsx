@@ -179,7 +179,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       }
     } else if (!isLoading && user) {
       // User is authenticated, check if they need onboarding
-      if (!user.onboarding_complete) {
+      if (user.onboarding_complete === false) {
         // If onboarding is not complete, redirect to onboarding immediately
         if (pathname !== '/onboarding') {
           router.push('/onboarding');

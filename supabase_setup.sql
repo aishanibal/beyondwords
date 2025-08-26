@@ -15,6 +15,8 @@ CREATE TABLE IF NOT EXISTS users (
   google_id VARCHAR(255),
   target_language VARCHAR(10),
   proficiency_level VARCHAR(50),
+  onboarding_complete BOOLEAN DEFAULT false,
+  preferences JSONB DEFAULT '{}',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

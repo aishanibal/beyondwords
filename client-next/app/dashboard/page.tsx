@@ -4,7 +4,7 @@
 "use client";
 import React, { useEffect, useState, useCallback } from 'react';
 import { useUser } from '../ClientLayout';
-import axios from 'axios';
+
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
@@ -13,6 +13,7 @@ import DashboardSettingsModal from '../components/DashboardSettingsModal';
 import LoadingScreen from '../components/LoadingScreen';
 
 import { LEARNING_GOALS, LearningGoal, getProgressiveSubgoalDescription, getSubgoalLevel, getSubgoalProgress, updateSubgoalProgress, SubgoalProgress, LevelUpEvent } from '../../lib/preferences';
+import { getUserLanguageDashboards, getUserConversations, getUserPersonas } from '../../lib/supabase';
 
 // Type definitions
 interface DashboardType {
@@ -326,18 +327,24 @@ export default function DashboardPage() {
     setLoading(true);
     setError('');
     try {
-      const token = localStorage.getItem('jwt');
-      const dashboardsRes = await axios.get('/api/user/language-dashboards', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const dashboards: DashboardType[] = dashboardsRes.data.dashboards || [];
-      const processedDashboards: DashboardType[] = dashboards.map((dashboard: DashboardType) => ({
+      if (!user?.id) {
+        throw new Error('User not authenticated');
+      }
+
+      const { success, data: dashboards } = await getUserLanguageDashboards(user.id);
+      
+      if (!success) {
+        throw new Error('Failed to fetch dashboards');
+      }
+
+      const processedDashboards: DashboardType[] = (dashboards || []).map((dashboard: DashboardType) => ({
         ...dashboard,
         talk_topics: dashboard.talk_topics || [],
         learning_goals: dashboard.learning_goals || [],
         speak_speed: dashboard.speak_speed || 1.0,
         romanization_display: dashboard.romanization_display || 'both'
       }));
+      
       setLanguageDashboards(processedDashboards);
       
       // Get saved language from localStorage
@@ -362,6 +369,7 @@ export default function DashboardPage() {
         setSelectedLanguage(languageToSelect);
       }
     } catch (err) {
+      console.error('Dashboard fetch error:', err);
       setError('Failed to load dashboard data.');
     } finally {
       setLoading(false);
@@ -431,12 +439,17 @@ export default function DashboardPage() {
     if (selectedLanguage && user?.id) {
       try {
         setConversations([]);
-        const token = localStorage.getItem('jwt');
-        const conversationsRes = await axios.get(`/api/conversations?language=${selectedLanguage}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        if (!user?.id) return;
         
-        const conversations = conversationsRes.data.conversations || [];
+        const { success, data: conversations } = await getUserConversations(user.id);
+        
+        if (!success) {
+          throw new Error('Failed to fetch conversations');
+        }
+        
+        const filteredConversations = (conversations || []).filter((conv: any) => 
+          conv.language_dashboards?.language === selectedLanguage
+        );
         
         // Sort conversations by created_at date (newest first)
         const sortedConversations = conversations.sort((a: ConversationType, b: ConversationType) => {
@@ -479,11 +492,13 @@ export default function DashboardPage() {
     async function fetchPersonas() {
       if (user?.id) {
         try {
-          const token = localStorage.getItem('jwt');
-          const personasRes = await axios.get(`/api/personas?userId=${user.id}`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          setPersonas(personasRes.data.personas || []);
+          const { success, data: personas } = await getUserPersonas(user.id);
+          
+          if (!success) {
+            throw new Error('Failed to fetch personas');
+          }
+          
+          setPersonas(personas || []);
         } catch (err) {
           setPersonas([]);
         }
@@ -499,7 +514,8 @@ export default function DashboardPage() {
       return;
     }
     try {
-      await axios.delete(`/api/conversations/${conversationId}`);
+      // TODO: Implement conversation deletion with Supabase
+      // await deleteConversation(conversationId);
       setConversations((prev: ConversationType[]) => prev.filter((conv: ConversationType) => conv.id !== conversationId));
     } catch (error) {
       alert('Failed to delete conversation. Please try again.');
@@ -511,10 +527,8 @@ export default function DashboardPage() {
       return;
     }
     try {
-      const token = localStorage.getItem('jwt');
-      await axios.delete(`/api/personas/${personaId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      // TODO: Implement persona deletion with Supabase
+      // await deletePersona(personaId);
       setPersonas((prev: PersonaType[]) => prev.filter((persona: PersonaType) => persona.id !== personaId));
     } catch (error) {
       alert('Failed to delete persona. Please try again.');
@@ -562,8 +576,9 @@ export default function DashboardPage() {
     async function fetchStreak() {
       if (user?.id && selectedLanguage) {
         try {
-          const res = await axios.get(`/api/user/streak?userId=${user.id}&language=${selectedLanguage}`);
-          setStreak(res.data.streak || 0);
+                  // TODO: Implement streak API with Supabase
+        // const res = await getStreak(user.id, selectedLanguage);
+        setStreak(0); // Default streak value
         } catch (err) {
           setStreak(0);
         }
