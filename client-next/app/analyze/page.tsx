@@ -210,7 +210,6 @@ function usePersistentChatHistory(user: User | null): [ChatMessage[], React.Disp
 
 const Analyze = () => {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { isDarkMode } = useDarkMode();
 
   // Helper to get JWT token
@@ -219,11 +218,32 @@ const Analyze = () => {
     return token ? { Authorization: `Bearer ${token}` } : {};
   };
 
-  const urlConversationId = searchParams?.get('conversation');
-  const urlLang = searchParams?.get('language');
-  const urlTopics = searchParams?.get('topics');
-  const urlFormality = searchParams?.get('formality');
-  const usePersona = searchParams?.get('usePersona') === 'true';
+  // Move searchParams usage to state to avoid SSR issues
+  const [urlParams, setUrlParams] = useState({
+    conversationId: '',
+    lang: '',
+    topics: '',
+    formality: '',
+    usePersona: false
+  });
+
+  // Get search params in useEffect to avoid SSR issues
+  React.useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    setUrlParams({
+      conversationId: searchParams.get('conversation') || '',
+      lang: searchParams.get('language') || '',
+      topics: searchParams.get('topics') || '',
+      formality: searchParams.get('formality') || '',
+      usePersona: searchParams.get('usePersona') === 'true'
+    });
+  }, []);
+
+  const urlConversationId = urlParams.conversationId;
+  const urlLang = urlParams.lang;
+  const urlTopics = urlParams.topics;
+  const urlFormality = urlParams.formality;
+  const usePersona = urlParams.usePersona;
 
   // Flag to skip validation right after creating a conversation
   const [skipValidation, setSkipValidation] = useState(false);
@@ -6813,13 +6833,4 @@ Yes, the current serials don't have the same quality as the old ones, right?
   );
 };
 
-// Wrap the component in Suspense to fix the build error
-const AnalyzePage = () => {
-  return (
-    <Suspense fallback={<div>Loading...</div>}>
-      <Analyze />
-    </Suspense>
-  );
-};
-
-export default AnalyzePage;
+export default Analyze;
