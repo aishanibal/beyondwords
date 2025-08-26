@@ -1,9 +1,7 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
-import React, { useEffect, useState, createContext, useContext, useRef } from 'react';
+import React, { useEffect, useState, createContext, useContext } from 'react';
 import { GoogleOAuthProvider } from '@react-oauth/google';
-import axios from 'axios';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { FaUserCircle } from 'react-icons/fa';
@@ -11,6 +9,8 @@ import Navigation from "./components/Navigation";
 import SignupFloating from "./components/SignupFloating";
 import LoadingScreen from "./components/LoadingScreen";
 import { useDarkMode } from './contexts/DarkModeContext';
+import { supabase } from '../lib/supabase';
+import { getUserProfile, createUserProfile } from '../lib/supabase';
 
 const translucentBg = 'rgba(60,76,115,0.06)';
 const translucentRose = 'rgba(195,141,148,0.08)';
@@ -20,13 +20,17 @@ interface User {
   role?: string;
   onboarding_complete?: boolean | number;
   photoUrl?: string;
+  email?: string;
+  name?: string;
   [key: string]: any;
 }
+
 interface UserContextType {
   user: User | null;
   setUser: React.Dispatch<React.SetStateAction<User | null>>;
   logout: () => Promise<void>;
 }
+
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
 export function useUser() {
@@ -41,45 +45,124 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const { syncWithUserPreferences } = useDarkMode();
 
   useEffect(() => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('jwt') : null;
-    const fallbackTimeout = setTimeout(() => {
-      setIsLoading(false);
-    }, 5000);
-    if (token) {
-      axios.get('/api/user/profile', {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-        .then((res: any) => {
-          clearTimeout(fallbackTimeout);
-          setUser(res.data.user);
-          console.log('APP setUser called:', res.data.user);
-          
-          // Sync theme with user preferences
-          if (res.data.user?.preferences?.theme) {
-            syncWithUserPreferences(res.data.user.preferences.theme);
-          }
-        })
-        .catch(() => {
-          clearTimeout(fallbackTimeout);
-          if (typeof window !== 'undefined') localStorage.removeItem('jwt');
-          setUser(null);
-        })
-        .finally(() => {
+    // Get initial session
+    const getInitialSession = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('Error getting session:', error);
           setIsLoading(false);
-        });
-    } else {
-      clearTimeout(fallbackTimeout);
-      setIsLoading(false);
-    }
-    return () => {
-      clearTimeout(fallbackTimeout);
+          return;
+        }
+
+        if (session?.user) {
+          // Get user profile from our database
+          const { success, data: profile } = await getUserProfile(session.user.id);
+          
+          if (success && profile) {
+            const userData = {
+              id: session.user.id,
+              email: session.user.email,
+              name: profile.name || session.user.user_metadata?.full_name,
+              photoUrl: session.user.user_metadata?.picture,
+              onboarding_complete: profile.onboarding_complete,
+              ...profile
+            };
+            setUser(userData);
+            
+            // Sync theme with user preferences
+            if (profile.preferences?.theme) {
+              syncWithUserPreferences(profile.preferences.theme);
+            }
+          } else {
+            // Create user profile if it doesn't exist
+            const userData = {
+              id: session.user.id,
+              email: session.user.email || '',
+              name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'User',
+              google_id: session.user.user_metadata?.sub
+            };
+            
+            const { success: createSuccess } = await createUserProfile(userData);
+            if (createSuccess) {
+              setUser({
+                id: session.user.id,
+                email: session.user.email,
+                name: userData.name,
+                photoUrl: session.user.user_metadata?.picture,
+                onboarding_complete: false
+              });
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error in getInitialSession:', error);
+      } finally {
+        setIsLoading(false);
+      }
     };
-  }, []);
+
+    getInitialSession();
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('Auth state changed:', event, session);
+        
+        if (event === 'SIGNED_IN' && session?.user) {
+          // Get or create user profile
+          const { success, data: profile } = await getUserProfile(session.user.id);
+          
+          if (success && profile) {
+            const userData = {
+              id: session.user.id,
+              email: session.user.email,
+              name: profile.name || session.user.user_metadata?.full_name,
+              photoUrl: session.user.user_metadata?.picture,
+              onboarding_complete: profile.onboarding_complete,
+              ...profile
+            };
+            setUser(userData);
+          } else {
+            // Create new user profile
+            const userData = {
+              id: session.user.id,
+              email: session.user.email || '',
+              name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'User',
+              google_id: session.user.user_metadata?.sub
+            };
+            
+            const { success: createSuccess } = await createUserProfile(userData);
+            if (createSuccess) {
+              setUser({
+                id: session.user.id,
+                email: session.user.email,
+                name: userData.name,
+                photoUrl: session.user.user_metadata?.picture,
+                onboarding_complete: false
+              });
+            }
+          }
+        } else if (event === 'SIGNED_OUT') {
+          setUser(null);
+        }
+      }
+    );
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [syncWithUserPreferences]);
 
   const logout = async () => {
-    if (typeof window !== 'undefined') localStorage.removeItem('jwt');
-    setUser(null);
-    window.location.href = '/';
+    try {
+      await supabase.auth.signOut();
+      setUser(null);
+      router.push('/');
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
   };
 
   const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
@@ -102,13 +185,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           router.push('/onboarding');
         }
       } else {
-        // Onboarding is complete, handle normal routing
-        if (pathname === '/onboarding') {
-          // Prevent access to onboarding if already completed
-          router.push('/dashboard');
-        } else if (pathname === '/login' || pathname === '/signup') {
-          router.push('/dashboard');
-        } else if (pathname === '/' && user.onboarding_complete) {
+        // If onboarding is complete, redirect away from onboarding/login/signup
+        if (pathname === '/onboarding' || pathname === '/login' || pathname === '/signup') {
           router.push('/dashboard');
         }
       }
@@ -116,16 +194,20 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   }, [isLoading, user, pathname, router]);
 
   if (isLoading) {
-    return <LoadingScreen message="Loading your experience..." />;
+    return <LoadingScreen />;
   }
 
   return (
-    <GoogleOAuthProvider clientId={googleClientId || 'client-id-fake'}>
-      <UserContext.Provider value={{ user, setUser, logout }}>
-        <Navigation />
-        {children}
-        <SignupFloating />
-      </UserContext.Provider>
-    </GoogleOAuthProvider>
+    <UserContext.Provider value={{ user, setUser, logout }}>
+      <GoogleOAuthProvider clientId={googleClientId}>
+        <div className="min-h-screen bg-gradient-to-br from-rose-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+          <Navigation />
+          <main className="flex-1">
+            {children}
+          </main>
+          <SignupFloating />
+        </div>
+      </GoogleOAuthProvider>
+    </UserContext.Provider>
   );
 } 

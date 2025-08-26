@@ -1,23 +1,24 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
-// TODO: This file should be split into Next.js pages and components.
 import React, { useState, ChangeEvent, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { GoogleLogin } from '@react-oauth/google';
-import axios from 'axios';
 import { useUser } from '../ClientLayout';
+import { supabase } from '../../lib/supabase';
 import logo from '../../assets/logo.png';
 
 export default function SignupPage() {
   const router = useRouter();
   const { setUser } = useUser();
+  
   interface SignUpForm {
     name: string;
     email: string;
     password: string;
     confirmPassword: string;
   }
+  
   const [formData, setFormData] = useState<SignUpForm>({
     name: '',
     email: '',
@@ -53,35 +54,30 @@ export default function SignupPage() {
     }
 
     try {
-      // Use axios to call the Next.js API route
-      const response = await axios.post('/api/auth/register', {
-        name: formData.name,
+      // Sign up with Supabase
+      const { data, error } = await supabase.auth.signUp({
         email: formData.email,
-        password: formData.password
+        password: formData.password,
+        options: {
+          data: {
+            name: formData.name,
+          },
+        },
       });
-      
-      // Registration now returns token directly
-      if (response.data.token && response.data.user) {
-        localStorage.setItem('jwt', response.data.token);
-        setUser(response.data.user);
-        setIsLoading(false);
-        
+
+      if (error) {
+        throw error;
+      }
+
+      if (data.user) {
+        // User will be set automatically by the auth state change listener
         // New users always need onboarding
         router.push('/onboarding');
-      } else {
-        throw new Error('Registration response missing token or user');
       }
       
-    } catch (err) {
+    } catch (err: any) {
       console.error('Sign-up error:', err);
-      if (typeof err === 'object' && err !== null && 'response' in err) {
-        const errorObj = err as { response?: { data?: { error?: string }, status?: number }, message?: string };
-        setError(errorObj.response?.data?.error || errorObj.message || 'Sign-up failed. Please try again.');
-      } else if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError('Sign-up failed. Please try again.');
-      }
+      setError(err.message || 'Sign-up failed. Please try again.');
       setIsLoading(false);
     }
   };
@@ -91,31 +87,25 @@ export default function SignupPage() {
     setError('');
 
     try {
-      // Use axios to call the Next.js API route
-      const response = await axios.post('/api/auth/google/token', {
-        credential: credentialResponse.credential
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          queryParams: {
+            access_token: credentialResponse.credential,
+          },
+        },
       });
-      
-      console.log('Google signup response:', response.data);
-      
-      if (response.data.user && response.data.token) {
-        localStorage.setItem('jwt', response.data.token);
-        setUser(response.data.user);
-        
-        console.log('User onboarding_complete:', response.data.user.onboarding_complete);
-        console.log('Boolean onboarding_complete:', Boolean(response.data.user.onboarding_complete));
-        
-        if (!Boolean(response.data.user.onboarding_complete)) {
-          console.log('Redirecting to onboarding...');
-          router.push('/onboarding');
-        } else {
-          console.log('Redirecting to dashboard...');
-          router.push('/dashboard');
-        }
+
+      if (error) {
+        throw error;
       }
-    } catch (err) {
-      console.error('Google sign-up error:', err);
-      setError('Google sign-up failed. Please try again.');
+
+      // User will be set automatically by the auth state change listener
+      // New users will be redirected to onboarding
+      
+    } catch (err: any) {
+      console.error('Google signup error:', err);
+      setError(err.message || 'Google signup failed. Please try again.');
     } finally {
       setIsLoading(false);
     }

@@ -3,21 +3,22 @@
 /* eslint-disable @next/next/no-img-element */
 /* eslint-disable react/no-unescaped-entities */
 "use client";
-// TODO: This file should be split into Next.js pages and components.
 import React, { useState, ChangeEvent, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { GoogleLogin } from '@react-oauth/google';
 import { useUser } from '../ClientLayout';
-import axios from 'axios';
+import { supabase } from '../../lib/supabase';
 
 export default function LoginPage() {
   const router = useRouter();
   const { setUser } = useUser();
+  
   interface LoginForm {
     email: string;
     password: string;
   }
+  
   const [formData, setFormData] = useState<LoginForm>({
     email: '',
     password: ''
@@ -36,17 +37,26 @@ export default function LoginPage() {
     e.preventDefault();
     setIsLoading(true);
     setError('');
+    
     try {
-      const response = await axios.post('/api/auth/login', formData);
-      localStorage.setItem('jwt', response.data.token);
-      setUser(response.data.user);
-      if (!Boolean(response.data.user.onboarding_complete)) {
-        router.push('/onboarding');
-      } else {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: formData.email,
+        password: formData.password,
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      if (data.user) {
+        // User will be set automatically by the auth state change listener
+        // No need to manually set user here
         router.push('/dashboard');
       }
-    } catch (err) {
-      setError('Login failed. Please try again.');
+    } catch (err: any) {
+      console.error('Login error:', err);
+      setError(err.message || 'Login failed. Please try again.');
+    } finally {
       setIsLoading(false);
     }
   };
@@ -56,22 +66,24 @@ export default function LoginPage() {
     setError('');
 
     try {
-      const response = await axios.post('/api/auth/google/token', {
-        credential: credentialResponse.credential
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          queryParams: {
+            access_token: credentialResponse.credential,
+          },
+        },
       });
-      
-      if (response.data.user && response.data.token) {
-        localStorage.setItem('jwt', response.data.token);
-        setUser(response.data.user);
-        if (!Boolean(response.data.user.onboarding_complete)) {
-          router.push('/onboarding');
-        } else {
-          router.push('/dashboard');
-        }
+
+      if (error) {
+        throw error;
       }
-    } catch (err) {
+
+      // User will be set automatically by the auth state change listener
+      // No need to manually set user here
+    } catch (err: any) {
       console.error('Google login error:', err);
-      setError('Google login failed. Please try again.');
+      setError(err.message || 'Google login failed. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -91,16 +103,16 @@ export default function LoginPage() {
       padding: '2rem',
       paddingTop: '1rem'
     }}>
-              <div style={{
-          background: '#fff',
-          borderRadius: 20,
-          padding: '2rem',
-          boxShadow: '0 20px 60px rgba(60,76,115,0.15)',
-          maxWidth: 700,
-          width: '100%',
-          position: 'relative',
-          overflow: 'hidden'
-        }}>
+      <div style={{
+        background: '#fff',
+        borderRadius: 20,
+        padding: '2rem',
+        boxShadow: '0 20px 60px rgba(60,76,115,0.15)',
+        maxWidth: 700,
+        width: '100%',
+        position: 'relative',
+        overflow: 'hidden'
+      }}>
         {/* Decorative background elements */}
         <div style={{
           position: 'absolute',
