@@ -12,7 +12,7 @@ import SignupFloating from "./components/SignupFloating";
 import LoadingScreen from "./components/LoadingScreen";
 import { useDarkMode } from './contexts/DarkModeContext';
 import { supabase } from '../lib/supabase';
-import { getUserProfile, createUserProfile, testDatabaseConnection } from '../lib/supabase';
+import { getUserProfile, createUserProfile, testSupabaseConnection } from '../lib/supabase';
 
 // Debug Supabase client configuration
 console.log('[SUPABASE_DEBUG] Client imported successfully');
@@ -54,6 +54,43 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const router = useRouter();
   const pathname = usePathname();
   const { syncWithUserPreferences } = useDarkMode();
+
+  // Add this effect to handle authentication state better
+  useEffect(() => {
+    // Only run auth logic on client side
+    if (typeof window === 'undefined') return;
+    
+    const initializeAuth = async () => {
+      try {
+        // Test Supabase connection first
+        const connectionTest = await testSupabaseConnection();
+        console.log('[AUTH] Supabase connection test:', connectionTest);
+        
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('[AUTH] Session error:', error);
+          setIsLoading(false);
+          return;
+        }
+
+        if (session?.user) {
+          const { success, data: profile } = await getUserProfile(session.user.id);
+          if (success && profile) {
+            setUser(profile);
+            syncWithUserPreferences(profile);
+          }
+        }
+        
+        setIsLoading(false);
+      } catch (err) {
+        console.error('[AUTH] Initialization error:', err);
+        setIsLoading(false);
+      }
+    };
+
+    initializeAuth();
+  }, [syncWithUserPreferences]);
 
   useEffect(() => {
     console.log('[EFFECT] useEffect triggered, starting authentication flow');
@@ -203,7 +240,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           // Test database connection with our test function
           console.log('[AUTH] Running database connection test...');
           try {
-            const dbTestResult = await testDatabaseConnection();
+            const dbTestResult = await testSupabaseConnection();
             console.log('[AUTH] Database test result:', dbTestResult);
           } catch (dbTestErr) {
             console.error('[AUTH] Database test failed:', dbTestErr);

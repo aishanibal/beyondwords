@@ -1,403 +1,165 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js'
 
-// Supabase configuration
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-console.log('[SUPABASE] Config check:', {
-  hasUrl: !!supabaseUrl,
-  hasKey: !!supabaseAnonKey,
-  urlLength: supabaseUrl?.length,
-  keyLength: supabaseAnonKey?.length,
-  url: supabaseUrl?.substring(0, 50) + '...',
-  key: supabaseAnonKey?.substring(0, 20) + '...'
-});
-
+// Add better error handling for missing environment variables
 if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.');
+  console.error('Missing Supabase environment variables:', {
+    hasUrl: !!supabaseUrl,
+    hasKey: !!supabaseAnonKey
+  });
 }
 
-// Create Supabase client with auth configuration
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    autoRefreshToken: true,
     persistSession: true,
+    autoRefreshToken: true,
     detectSessionInUrl: true
+  },
+  global: {
+    headers: {
+      'x-application-name': 'beyondwords-client'
+    }
   }
-});
+})
 
-// Test the client immediately
-console.log('[SUPABASE] Client created, testing connection...');
-supabase.auth.getSession().then(({ data, error }) => {
-  console.log('[SUPABASE] Initial connection test:', { hasData: !!data, error });
-}).catch(err => {
-  console.error('[SUPABASE] Initial connection test failed:', err);
-});
-
-// Test database connection without RLS
-export const testDatabaseConnection = async () => {
+// Test connection function for debugging
+export const testSupabaseConnection = async () => {
   try {
-    console.log('[DB_TEST] Testing database connection...');
-    
-    // Test 1: Simple count query
-    const { data: countData, error: countError } = await supabase
-      .from('users')
-      .select('*', { count: 'exact', head: true });
-    
-    console.log('[DB_TEST] Count query result:', { countData, countError });
-    
-    // Test 2: Check if we can access the table at all
-    const { data: tableData, error: tableError } = await supabase
-      .from('users')
-      .select('id')
-      .limit(1);
-    
-    console.log('[DB_TEST] Table access result:', { tableData, tableError });
-    
-    return { success: true, countData, tableData };
-  } catch (error) {
-    console.error('[DB_TEST] Database test failed:', error);
-    return { success: false, error };
+    const { data, error } = await supabase.from('users').select('count').limit(1);
+    return { success: !error, data, error };
+  } catch (err) {
+    return { success: false, data: null, error: err };
   }
 };
 
-// Function to save waitlist email
-export const saveWaitlistEmail = async (email: string, source: string = 'website'):
-  Promise<{ success: boolean; data?: any; error?: string }> => {
+// Enhanced user profile functions with better error handling
+export const getUserProfile = async (userId: string) => {
   try {
-    const { data, error } = await supabase
-      .from('waitlist_emails')
-      .insert([
-        { 
-          email: email,
-          source: source,
-          created_at: new Date().toISOString()
-        }
-      ])
-    
-    if (error) {
-      console.error('Error saving email:', error)
-      throw error
-    }
-    
-    return { success: true, data }
-  } catch (error: any) {
-    console.error('Supabase error:', error)
-    return { success: false, error: error.message }
-  }
-}
-
-// Function to get all waitlist emails (for admin purposes)
-export const getWaitlistEmails = async ():
-  Promise<{ success: boolean; data?: any; error?: string }> => {
-  try {
-    const { data, error } = await supabase
-      .from('waitlist_emails')
-      .select('*')
-      .order('created_at', { ascending: false })
-    
-    if (error) {
-      console.error('Error fetching emails:', error)
-      throw error
-    }
-    
-    return { success: true, data }
-  } catch (error: any) {
-    console.error('Supabase error:', error)
-    return { success: false, error: error.message }
-  }
-}
-
-// User management functions
-export const createUserProfile = async (userData: {
-  id: string;
-  email: string;
-  name: string;
-  google_id?: string;
-  target_language?: string;
-  proficiency_level?: string;
-}): Promise<{ success: boolean; data?: any; error?: string }> => {
-  try {
-    const { data, error } = await supabase
-      .from('users')
-      .insert([userData])
-    
-    if (error) {
-      console.error('Error creating user profile:', error)
-      throw error
-    }
-    
-    return { success: true, data }
-  } catch (error: any) {
-    console.error('Supabase error:', error)
-    return { success: false, error: error.message }
-  }
-}
-
-export const getUserProfile = async (userId: string):
-  Promise<{ success: boolean; data?: any; error?: string }> => {
-  try {
+    console.log('[SUPABASE] Getting user profile for:', userId);
     const { data, error } = await supabase
       .from('users')
       .select('*')
       .eq('id', userId)
-      .single()
+      .single();
     
     if (error) {
-      console.error('Error fetching user profile:', error)
-      throw error
+      console.error('[SUPABASE] Error getting user profile:', error);
+      return { success: false, data: null, error };
     }
     
-    return { success: true, data }
-  } catch (error: any) {
-    console.error('Supabase error:', error)
-    return { success: false, error: error.message }
+    console.log('[SUPABASE] User profile retrieved:', data);
+    return { success: true, data, error: null };
+  } catch (err) {
+    console.error('[SUPABASE] Exception getting user profile:', err);
+    return { success: false, data: null, error: err };
   }
-}
+};
 
-// Language dashboard functions
+export const createUserProfile = async (userData: any) => {
+  try {
+    console.log('[SUPABASE] Creating user profile:', userData);
+    const { data, error } = await supabase
+      .from('users')
+      .insert([userData])
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('[SUPABASE] Error creating user profile:', error);
+      return { success: false, data: null, error };
+    }
+    
+    console.log('[SUPABASE] User profile created:', data);
+    return { success: true, data, error: null };
+  } catch (err) {
+    console.error('[SUPABASE] Exception creating user profile:', err);
+    return { success: false, data: null, error: err };
+  }
+};
+
+export const getUserLanguageDashboards = async (userId: string) => {
+  try {
+    console.log('[SUPABASE] Getting language dashboards for:', userId);
+    const { data, error } = await supabase
+      .from('language_dashboards')
+      .select('*')
+      .eq('user_id', userId);
+    
+    if (error) {
+      console.error('[SUPABASE] Error getting language dashboards:', error);
+      return { success: false, data: null, error };
+    }
+    
+    console.log('[SUPABASE] Language dashboards retrieved:', data);
+    return { success: true, data, error: null };
+  } catch (err) {
+    console.error('[SUPABASE] Exception getting language dashboards:', err);
+    return { success: false, data: null, error: err };
+  }
+};
+
+// Add the missing createLanguageDashboard function
 export const createLanguageDashboard = async (dashboardData: {
   user_id: string;
   language: string;
-  proficiency_level?: string;
-  talk_topics?: string[];
-  learning_goals?: string[];
-  practice_preference?: string;
-  feedback_language?: string;
-  speak_speed?: number;
-  romanization_display?: string;
-  is_primary?: boolean;
-}): Promise<{ success: boolean; data?: any; error?: string }> => {
+  proficiency_level: string;
+  talk_topics: string[];
+  learning_goals: string[];
+  practice_preference: string;
+  feedback_language: string;
+  is_primary: boolean;
+}) => {
   try {
+    console.log('[SUPABASE] Creating language dashboard:', dashboardData);
+    
+    // Convert arrays to JSON strings for storage
+    const dataToInsert = {
+      ...dashboardData,
+      talk_topics: JSON.stringify(dashboardData.talk_topics),
+      learning_goals: JSON.stringify(dashboardData.learning_goals),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    
     const { data, error } = await supabase
       .from('language_dashboards')
-      .insert([dashboardData])
+      .insert([dataToInsert])
+      .select()
+      .single();
     
     if (error) {
-      console.error('Error creating language dashboard:', error)
-      throw error
+      console.error('[SUPABASE] Error creating language dashboard:', error);
+      return { success: false, data: null, error: error.message };
     }
     
-    return { success: true, data }
-  } catch (error: any) {
-    console.error('Supabase error:', error)
-    return { success: false, error: error.message }
+    console.log('[SUPABASE] Language dashboard created:', data);
+    return { success: true, data, error: null };
+  } catch (err) {
+    console.error('[SUPABASE] Exception creating language dashboard:', err);
+    return { success: false, data: null, error: err instanceof Error ? err.message : 'Unknown error' };
   }
-}
+};
 
-export const getUserLanguageDashboards = async (userId: string):
-  Promise<{ success: boolean; data?: any; error?: string }> => {
+// Add this function to your existing supabase.ts file
+export const getUserPersonas = async (userId: string) => {
   try {
-    const { data, error } = await supabase
-      .from('language_dashboards')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-    
-    if (error) {
-      console.error('Error fetching language dashboards:', error)
-      throw error
-    }
-    
-    return { success: true, data }
-  } catch (error: any) {
-    console.error('Supabase error:', error)
-    return { success: false, error: error.message }
-  }
-}
-
-// Persona functions
-export const createPersona = async (personaData: {
-  user_id: string;
-  name: string;
-  description?: string;
-  topics?: string[];
-  formality?: string;
-  language?: string;
-  conversation_id?: string;
-}): Promise<{ success: boolean; data?: any; error?: string }> => {
-  try {
-    const { data, error } = await supabase
-      .from('personas')
-      .insert([personaData])
-    
-    if (error) {
-      console.error('Error creating persona:', error)
-      throw error
-    }
-    
-    return { success: true, data }
-  } catch (error: any) {
-    console.error('Supabase error:', error)
-    return { success: false, error: error.message }
-  }
-}
-
-export const getUserPersonas = async (userId: string):
-  Promise<{ success: boolean; data?: any; error?: string }> => {
-  try {
+    console.log('[SUPABASE] Getting personas for user:', userId);
     const { data, error } = await supabase
       .from('personas')
       .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
+      .eq('user_id', userId);
     
     if (error) {
-      console.error('Error fetching personas:', error)
-      throw error
+      console.error('[SUPABASE] Error getting personas:', error);
+      return { success: false, data: null, error: error.message };
     }
     
-    return { success: true, data }
-  } catch (error: any) {
-    console.error('Supabase error:', error)
-    return { success: false, error: error.message }
+    console.log('[SUPABASE] Personas retrieved:', data);
+    return { success: true, data, error: null };
+  } catch (err) {
+    console.error('[SUPABASE] Exception getting personas:', err);
+    return { success: false, data: null, error: err instanceof Error ? err.message : 'Unknown error' };
   }
-}
-
-// Conversation functions
-export const createConversation = async (conversationData: {
-  user_id: string;
-  language_dashboard_id: number;
-  title?: string;
-  topics?: string[];
-  formality?: string;
-  description?: string;
-  uses_persona?: boolean;
-  persona_id?: number;
-  learning_goals?: string[];
-}): Promise<{ success: boolean; data?: any; error?: string }> => {
-  try {
-    const { data, error } = await supabase
-      .from('conversations')
-      .insert([conversationData])
-    
-    if (error) {
-      console.error('Error creating conversation:', error)
-      throw error
-    }
-    
-    return { success: true, data }
-  } catch (error: any) {
-    console.error('Supabase error:', error)
-    return { success: false, error: error.message }
-  }
-}
-
-export const getUserConversations = async (userId: string):
-  Promise<{ success: boolean; data?: any; error?: string }> => {
-  try {
-    const { data, error } = await supabase
-      .from('conversations')
-      .select(`
-        *,
-        language_dashboards(language),
-        personas(name, description)
-      `)
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-    
-    if (error) {
-      console.error('Error fetching conversations:', error)
-      throw error
-    }
-    
-    return { success: true, data }
-  } catch (error: any) {
-    console.error('Supabase error:', error)
-    return { success: false, error: error.message }
-  }
-}
-
-// Message functions
-export const createMessage = async (messageData: {
-  conversation_id: number;
-  sender: string;
-  text: string;
-  romanized_text?: string;
-  message_type?: string;
-  audio_file_path?: string;
-  detailed_feedback?: string;
-  message_order: number;
-}): Promise<{ success: boolean; data?: any; error?: string }> => {
-  try {
-    const { data, error } = await supabase
-      .from('messages')
-      .insert([messageData])
-    
-    if (error) {
-      console.error('Error creating message:', error)
-      throw error
-    }
-    
-    return { success: true, data }
-  } catch (error: any) {
-    console.error('Supabase error:', error)
-    return { success: false, error: error.message }
-  }
-}
-
-export const getConversationMessages = async (conversationId: number):
-  Promise<{ success: boolean; data?: any; error?: string }> => {
-  try {
-    const { data, error } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('conversation_id', conversationId)
-      .order('message_order', { ascending: true })
-    
-    if (error) {
-      console.error('Error fetching messages:', error)
-      throw error
-    }
-    
-    return { success: true, data }
-  } catch (error: any) {
-    console.error('Supabase error:', error)
-    return { success: false, error: error.message }
-  }
-}
-
-// Session functions
-export const createSession = async (sessionData: {
-  user_id: string;
-  chat_history?: any[];
-  language?: string;
-}): Promise<{ success: boolean; data?: any; error?: string }> => {
-  try {
-    const { data, error } = await supabase
-      .from('sessions')
-      .insert([sessionData])
-    
-    if (error) {
-      console.error('Error creating session:', error)
-      throw error
-    }
-    
-    return { success: true, data }
-  } catch (error: any) {
-    console.error('Supabase error:', error)
-    return { success: false, error: error.message }
-  }
-}
-
-export const getUserSessions = async (userId: string):
-  Promise<{ success: boolean; data?: any; error?: string }> => {
-  try {
-    const { data, error } = await supabase
-      .from('sessions')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-    
-    if (error) {
-      console.error('Error fetching sessions:', error)
-      throw error
-    }
-    
-    return { success: true, data }
-  } catch (error: any) {
-    console.error('Supabase error:', error)
-    return { success: false, error: error.message }
-  }
-} 
+};
