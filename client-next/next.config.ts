@@ -76,6 +76,11 @@ const nextConfig: NextConfig = {
         source: '/api/messages/feedback',
         destination: 'http://localhost:4000/api/messages/feedback', // Express backend
       }
+      ,
+      {
+        source: '/api/explain_suggestion',
+        destination: 'http://localhost:4000/api/explain_suggestion', // Express backend
+      }
     ];
   },
 };

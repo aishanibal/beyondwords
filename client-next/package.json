@@ -21,6 +21,7 @@
     "hangul-romanization": "^1.0.1",
     "kuroshiro": "^1.2.0",
     "kuroshiro-analyzer-kuromoji": "^1.1.0",
+    "lightningcss": "^1.30.1",
     "lucide-react": "^0.525.0",
     "next": "15.4.1",
     "pinyin": "^4.0.0",
@@ -46,7 +47,6 @@
     "autoprefixer": "^10.4.21",
     "eslint": "^9",
     "eslint-config-next": "15.4.1",
-    "lightningcss-darwin-arm64": "^1.30.1",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.11",
     "typescript": "^5"
