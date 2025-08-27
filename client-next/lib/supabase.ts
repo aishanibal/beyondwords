@@ -15,7 +15,10 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
-    detectSessionInUrl: true
+    detectSessionInUrl: true,
+    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+    storageKey: 'supabase.auth.token',
+    flowType: 'pkce'
   },
   global: {
     headers: {
@@ -25,6 +28,36 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 })
 
 // Test connection function for debugging
+export const getCurrentSession = async () => {
+  try {
+    // Try to get session from storage first
+    const storedSession = typeof window !== 'undefined' ? 
+      localStorage.getItem('supabase.auth.token') : null;
+
+    if (storedSession) {
+      console.log('[AUTH] Found stored session');
+    }
+
+    const { data: { session }, error } = await supabase.auth.getSession();
+    
+    if (error) {
+      console.error('[AUTH] Session error:', error);
+      return { session: null, error };
+    }
+
+    if (!session) {
+      console.log('[AUTH] No active session');
+      return { session: null, error: null };
+    }
+
+    console.log('[AUTH] Active session found:', session.user.id);
+    return { session, error: null };
+  } catch (err) {
+    console.error('[AUTH] Session retrieval error:', err);
+    return { session: null, error: err };
+  }
+};
+
 export const testSupabaseConnection = async () => {
   try {
     console.log('[SUPABASE] Testing connection with auth session...');

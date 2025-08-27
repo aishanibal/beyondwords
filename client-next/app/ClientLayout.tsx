@@ -12,7 +12,7 @@ import SignupFloating from "./components/SignupFloating";
 import LoadingScreen from "./components/LoadingScreen";
 import { useDarkMode } from './contexts/DarkModeContext';
 import { supabase } from '../lib/supabase';
-import { getUserProfile, createUserProfile, testSupabaseConnection } from '../lib/supabase';
+import { getUserProfile, createUserProfile, testSupabaseConnection, getCurrentSession } from '../lib/supabase';
 
 // Debug Supabase client configuration
 console.log('[SUPABASE_DEBUG] Client imported successfully');
@@ -60,11 +60,11 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     
     const initAuth = async () => {
       try {
-        // Get initial session
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        // Get current session with enhanced session management
+        const { session, error } = await getCurrentSession();
         
-        if (sessionError) {
-          console.error('[AUTH] Session error:', sessionError);
+        if (error) {
+          console.error('[AUTH] Session error:', error);
           setIsLoading(false);
           return;
         }
@@ -72,25 +72,23 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         // Set up auth state change listener first
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
           async (event, newSession) => {
-            console.log('[AUTH] State change:', event, !!newSession);
+            console.log('[AUTH] State change:', event, newSession?.user?.id);
             
-            if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+            if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
               if (!newSession?.user) return;
               
               try {
-                // Get or create profile
                 const { success, data: profile } = await getUserProfile(newSession.user.id);
                 
                 if (success && profile) {
-                  const userData = {
+                  setUser({
                     id: newSession.user.id,
                     email: newSession.user.email,
                     name: profile.name || newSession.user.user_metadata?.full_name,
                     photoUrl: newSession.user.user_metadata?.picture,
                     onboarding_complete: profile.onboarding_complete,
                     ...profile
-                  };
-                  setUser(userData);
+                  });
                   syncWithUserPreferences(profile);
                 } else {
                   // Create new profile
@@ -105,6 +103,9 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                   const { success: createSuccess } = await createUserProfile(newProfile);
                   if (createSuccess) {
                     setUser(newProfile);
+                  } else {
+                    console.error('[AUTH] Failed to create user profile');
+                    setUser(null);
                   }
                 }
               } catch (err) {
@@ -112,14 +113,16 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 setUser(null);
               }
             } else if (event === 'SIGNED_OUT') {
+              console.log('[AUTH] User signed out');
               setUser(null);
+              localStorage.removeItem('supabase.auth.token');
             }
             
             setIsLoading(false);
           }
         );
 
-        // Handle initial session if exists
+        // Handle initial session
         if (session?.user) {
           const { success, data: profile } = await getUserProfile(session.user.id);
           if (success && profile) {
@@ -137,6 +140,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
         return () => {
           subscription.unsubscribe();
+          console.log('[AUTH] Cleanup: unsubscribed from auth changes');
         };
       } catch (err) {
         console.error('[AUTH] Init error:', err);
