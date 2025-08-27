@@ -128,8 +128,8 @@ export const createLanguageDashboard = async (dashboardData: {
     // Store arrays directly (database expects text[] type)
     const dataToInsert = {
       ...dashboardData,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
+      created_at: new Date(),
+      updated_at: new Date()
     };
     
     const { data, error } = await supabase

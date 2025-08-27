@@ -55,312 +55,96 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const pathname = usePathname();
   const { syncWithUserPreferences } = useDarkMode();
 
-  // Add this effect to handle authentication state better
   useEffect(() => {
-    // Only run auth logic on client side
-    if (typeof window === 'undefined') return;
+    console.log('[EFFECT] Starting authentication flow');
     
-    const initializeAuth = async () => {
+    const initAuth = async () => {
       try {
-        // Test Supabase connection first
-        const connectionTest = await testSupabaseConnection();
-        console.log('[AUTH] Supabase connection test:', connectionTest);
+        // Get initial session
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         
-        const { data: { session }, error } = await supabase.auth.getSession();
-        
-        if (error) {
-          console.error('[AUTH] Session error:', error);
+        if (sessionError) {
+          console.error('[AUTH] Session error:', sessionError);
           setIsLoading(false);
           return;
         }
 
+        // Set up auth state change listener first
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(
+          async (event, newSession) => {
+            console.log('[AUTH] State change:', event, !!newSession);
+            
+            if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+              if (!newSession?.user) return;
+              
+              try {
+                // Get or create profile
+                const { success, data: profile } = await getUserProfile(newSession.user.id);
+                
+                if (success && profile) {
+                  const userData = {
+                    id: newSession.user.id,
+                    email: newSession.user.email,
+                    name: profile.name || newSession.user.user_metadata?.full_name,
+                    photoUrl: newSession.user.user_metadata?.picture,
+                    onboarding_complete: profile.onboarding_complete,
+                    ...profile
+                  };
+                  setUser(userData);
+                  syncWithUserPreferences(profile);
+                } else {
+                  // Create new profile
+                  const newProfile = {
+                    id: newSession.user.id,
+                    email: newSession.user.email || '',
+                    name: newSession.user.user_metadata?.full_name || newSession.user.email?.split('@')[0] || 'User',
+                    google_id: newSession.user.user_metadata?.sub,
+                    onboarding_complete: false
+                  };
+                  
+                  const { success: createSuccess } = await createUserProfile(newProfile);
+                  if (createSuccess) {
+                    setUser(newProfile);
+                  }
+                }
+              } catch (err) {
+                console.error('[AUTH] Profile error:', err);
+                setUser(null);
+              }
+            } else if (event === 'SIGNED_OUT') {
+              setUser(null);
+            }
+            
+            setIsLoading(false);
+          }
+        );
+
+        // Handle initial session if exists
         if (session?.user) {
           const { success, data: profile } = await getUserProfile(session.user.id);
           if (success && profile) {
-            setUser(profile);
-            syncWithUserPreferences(profile);
-          }
-        }
-        
-        setIsLoading(false);
-      } catch (err) {
-        console.error('[AUTH] Initialization error:', err);
-        setIsLoading(false);
-      }
-    };
-
-    initializeAuth();
-  }, [syncWithUserPreferences]);
-
-  useEffect(() => {
-    console.log('[EFFECT] useEffect triggered, starting authentication flow');
-    
-    // Removed artificial loading timeout to avoid premature state changes
-
-    // Get initial session
-    const getInitialSession = async () => {
-      console.log('[INIT] Starting getInitialSession');
-      
-      // Replace problematic database test with simple auth test
-      console.log('[INIT] Testing Supabase auth connection...');
-      try {
-        // Add timeout to prevent hanging
-        const authPromise = supabase.auth.getUser();
-        const timeoutPromise = new Promise<never>((_, reject) => 
-          setTimeout(() => reject(new Error('Auth connection timeout after 5 seconds')), 5000)
-        );
-        
-        const result = await Promise.race([authPromise, timeoutPromise]);
-        console.log('[INIT] Auth connection test result:', { hasAuthData: !!result.data, authError: result.error });
-      } catch (authErr) {
-        console.error('[INIT] Auth connection test failed:', authErr);
-      }
-      
-      try {
-        console.log('[INIT] Calling supabase.auth.getSession()');
-        
-        const { data: { session }, error } = await supabase.auth.getSession();
-        
-        console.log('[INIT] getSession result:', { session: !!session, error, userId: session?.user?.id });
-        
-        if (error) {
-          console.error('[INIT] Error getting session:', error);
-          setIsLoading(false);
-          return;
-        }
-
-        if (session?.user) {
-          console.log('[INIT] Found existing session:', session.user);
-          // Get user profile from our database
-          console.log('[INIT] Calling getUserProfile for user:', session.user.id);
-          const { success, data: profile, error: profileError } = await getUserProfile(session.user.id);
-          console.log('[INIT] getUserProfile result:', { success, profile, profileError });
-          
-          if (success && profile) {
-            const userData = {
+            setUser({
               id: session.user.id,
               email: session.user.email,
               name: profile.name || session.user.user_metadata?.full_name,
               photoUrl: session.user.user_metadata?.picture,
               onboarding_complete: profile.onboarding_complete,
               ...profile
-            };
-            console.log('[INIT] Setting user with profile:', userData);
-            setUser(userData);
-            
-            // Sync theme with user preferences
-            if (profile.preferences?.theme) {
-              syncWithUserPreferences(profile.preferences.theme);
-            }
-          } else {
-            // Create user profile if it doesn't exist
-            const userData = {
-              id: session.user.id,
-              email: session.user.email || '',
-              name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'User',
-              google_id: session.user.user_metadata?.sub
-            };
-            
-            console.log('[INIT] Creating user profile:', userData);
-            const { success: createSuccess, error: createError } = await createUserProfile(userData);
-            console.log('[INIT] createUserProfile result:', { createSuccess, createError });
-            
-            if (createSuccess) {
-              setUser({
-                id: session.user.id,
-                email: session.user.email,
-                name: userData.name,
-                photoUrl: session.user.user_metadata?.picture,
-                onboarding_complete: false
-              });
-            } else {
-              // Set basic user data even if profile creation fails
-              console.log('[INIT] Profile creation failed, setting basic user data');
-              setUser({
-                id: session.user.id,
-                email: session.user.email,
-                name: userData.name,
-                photoUrl: session.user.user_metadata?.picture,
-                onboarding_complete: false
-              });
-            }
-          }
-        } else {
-          console.log('[INIT] No existing session found');
-        }
-      } catch (error) {
-        console.error('[INIT] Error in getInitialSession:', error);
-      } finally {
-        console.log('[INIT] getInitialSession completed, setting loading to false');
-        setIsLoading(false);
-      }
-    };
-
-    getInitialSession();
-
-    // Listen for auth changes
-    console.log('[EFFECT] Setting up auth state change listener');
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('Auth state changed:', event, session);
-        console.log('Current user state:', user);
-        console.log('Current loading state:', isLoading);
-        
-        // Only handle SIGNED_IN if we don't already have a user
-        if (event === 'SIGNED_IN' && session?.user && !user) {
-          console.log('Processing SIGNED_IN event for new user');
-          
-          // Debug Supabase configuration
-          console.log('[AUTH] Supabase URL:', process.env.NEXT_PUBLIC_SUPABASE_URL);
-          console.log('[AUTH] Supabase client:', supabase);
-          console.log('[AUTH] Session user ID:', session.user.id);
-          console.log('[AUTH] Environment check:', {
-            hasUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
-            hasKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-            url: process.env.NEXT_PUBLIC_SUPABASE_URL?.substring(0, 30) + '...',
-            key: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.substring(0, 20) + '...'
-          });
-          
-          // Test Supabase connection first
-          console.log('[AUTH] Testing Supabase connection...');
-          try {
-            console.log('[AUTH] About to call supabase.from("users").select("count").limit(1)');
-            
-            const connectionPromise = supabase
-              .from('users')
-              .select('count')
-              .limit(1);
-            
-            const { data: testData, error: testError } = await connectionPromise;
-            console.log('[AUTH] Supabase connection test result:', { testData, testError });
-          } catch (testErr) {
-            console.error('[AUTH] Supabase connection test failed:', testErr);
-          }
-          
-          // Test database connection with our test function
-          console.log('[AUTH] Running database connection test...');
-          try {
-            const dbTestResult = await testSupabaseConnection();
-            console.log('[AUTH] Database test result:', dbTestResult);
-          } catch (dbTestErr) {
-            console.error('[AUTH] Database test failed:', dbTestErr);
-          }
-          
-          // Test a simpler operation
-          console.log('[AUTH] Testing simple Supabase operation...');
-          try {
-            console.log('[AUTH] About to call supabase.auth.getUser()');
-            const { data: userData, error: userError } = await supabase.auth.getUser();
-            console.log('[AUTH] getUser result:', { userData, userError });
-          } catch (userErr) {
-            console.error('[AUTH] getUser test failed:', userErr);
-          }
-          
-          // Test a simple count query that should work
-          console.log('[AUTH] Testing simple count query...');
-          try {
-            console.log('[AUTH] About to call supabase.from("users").select("*").limit(1)');
-            const { data: countData, error: countError } = await supabase
-              .from('users')
-              .select('*')
-              .limit(1);
-            console.log('[AUTH] Count query result:', { countData, countError });
-          } catch (countErr) {
-            console.error('[AUTH] Count query failed:', countErr);
-          }
-          
-          // Removed artificial timeouts around profile operations
-          
-          try {
-            // Get or create user profile
-            console.log('[AUTH] Calling getUserProfile for user:', session.user.id);
-            const { success, data: profile, error } = await getUserProfile(session.user.id);
-            console.log('[AUTH] getUserProfile result:', { success, profile, error });
-            
-            if (success && profile) {
-              const userData = {
-                id: session.user.id,
-                email: session.user.email,
-                name: profile.name || session.user.user_metadata?.full_name,
-                photoUrl: session.user.user_metadata?.picture,
-                onboarding_complete: profile.onboarding_complete,
-                ...profile
-              };
-              console.log('[AUTH] Setting user with profile:', userData);
-              setUser(userData);
-              
-              // Sync theme with user preferences
-              if (profile.preferences?.theme) {
-                syncWithUserPreferences(profile.preferences.theme);
-              }
-            } else {
-              // Create new user profile
-              const userData = {
-                id: session.user.id,
-                email: session.user.email || '',
-                name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'User',
-                google_id: session.user.user_metadata?.sub
-              };
-              
-              console.log('[AUTH] Creating new user profile:', userData);
-              const { success: createSuccess, error: createError } = await createUserProfile(userData);
-              console.log('[AUTH] createUserProfile result:', { createSuccess, createError });
-              
-              if (createSuccess) {
-                const newUser = {
-                  id: session.user.id,
-                  email: session.user.email,
-                  name: userData.name,
-                  photoUrl: session.user.user_metadata?.picture,
-                  onboarding_complete: false
-                };
-                console.log('[AUTH] Setting new user:', newUser);
-                setUser(newUser);
-              } else {
-                // Even if profile creation fails, set basic user data to prevent loading state
-                console.log('[AUTH] Profile creation failed, setting basic user data');
-                setUser({
-                  id: session.user.id,
-                  email: session.user.email,
-                  name: userData.name,
-                  photoUrl: session.user.user_metadata?.picture,
-                  onboarding_complete: false
-                });
-              }
-            }
-            
-            // Profile operations completed successfully
-          } catch (error) {
-            console.error('[AUTH] Error in auth state change handler:', error);
-            
-            // Set basic user data even if there's an error
-            setUser({
-              id: session.user.id,
-              email: session.user.email,
-              name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'User',
-              photoUrl: session.user.user_metadata?.picture,
-              onboarding_complete: false
             });
+            syncWithUserPreferences(profile);
           }
-        } else if (event === 'SIGNED_IN' && session?.user && user) {
-          console.log('SIGNED_IN event but user already exists, skipping profile creation');
-        } else if (event === 'SIGNED_OUT') {
-          console.log('User signed out, clearing user state');
-          setUser(null);
-        } else if (event === 'INITIAL_SESSION') {
-          // This event fires when the initial session is loaded
-          console.log('Initial session loaded');
         }
-        
-        // Always ensure loading is false after any auth state change
-        console.log('Auth state change completed, ensuring loading is false');
+
+        return () => {
+          subscription.unsubscribe();
+        };
+      } catch (err) {
+        console.error('[AUTH] Init error:', err);
         setIsLoading(false);
       }
-    );
-
-    return () => {
-      subscription.unsubscribe();
     };
+
+    initAuth();
   }, [syncWithUserPreferences]);
 
   const logout = async () => {
