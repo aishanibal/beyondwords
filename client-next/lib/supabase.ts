@@ -125,11 +125,9 @@ export const createLanguageDashboard = async (dashboardData: {
   try {
     console.log('[SUPABASE] Creating language dashboard:', dashboardData);
     
-    // Convert arrays to JSON strings for storage
+    // Store arrays directly (database expects text[] type)
     const dataToInsert = {
       ...dashboardData,
-      talk_topics: JSON.stringify(dashboardData.talk_topics),
-      learning_goals: JSON.stringify(dashboardData.learning_goals),
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
