@@ -167,41 +167,47 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   }
 
   // Handle routing after authentication
+  const [isRedirecting, setIsRedirecting] = useState(false);
+
   useEffect(() => {
-    console.log('[ROUTING] Routing effect triggered:', { isLoading, user, pathname });
-    console.log('[ROUTING] User details:', user ? {
-      id: user.id,
-      email: user.email,
-      onboarding_complete: user.onboarding_complete
-    } : 'No user');
-    
-    if (user === null) {
-      console.log('[ROUTING] User not authenticated, redirecting to login immediately');
-      // User is not authenticated, redirect to login immediately
-      if (pathname !== '/login' && pathname !== '/signup' && pathname !== '/') {
-        router.push('/login');
-      }
-    } else if (user && isLoading) {
-      console.log('[ROUTING] User authenticated but still loading profile data, waiting...');
-      // User is authenticated but we're still loading their profile data
-    } else if (user && !isLoading) {
-      console.log('[ROUTING] User authenticated and profile loaded:', { onboarding_complete: user.onboarding_complete, pathname });
-      // User is authenticated and profile is loaded, check if they need onboarding
-      if (user.onboarding_complete === false) {
-        // If onboarding is not complete, redirect to onboarding immediately
-        if (pathname !== '/onboarding') {
-          console.log('[ROUTING] Redirecting to onboarding');
-          router.push('/onboarding');
+    let redirectTimeout: NodeJS.Timeout;
+
+    const handleRedirect = () => {
+      if (isRedirecting) return; // Prevent multiple redirects
+
+      console.log('[ROUTING] State:', { isLoading, user, pathname });
+
+      if (user === null) {
+        if (pathname !== '/login' && pathname !== '/signup' && pathname !== '/') {
+          setIsRedirecting(true);
+          redirectTimeout = setTimeout(() => {
+            router.replace('/login');
+          }, 100);
         }
-      } else {
-        // If onboarding is complete, redirect away from onboarding/login/signup
-        if (pathname === '/onboarding' || pathname === '/login' || pathname === '/signup') {
-          console.log('[ROUTING] Redirecting to dashboard');
-          router.push('/dashboard');
+      } else if (user && !isLoading) {
+        if (user.onboarding_complete === false && pathname !== '/onboarding') {
+          setIsRedirecting(true);
+          redirectTimeout = setTimeout(() => {
+            router.replace('/onboarding');
+          }, 100);
+        } else if (user.onboarding_complete && (pathname === '/onboarding' || pathname === '/login' || pathname === '/signup')) {
+          setIsRedirecting(true);
+          redirectTimeout = setTimeout(() => {
+            router.replace('/dashboard');
+          }, 100);
         }
       }
-    }
-  }, [isLoading, user, pathname, router]);
+    };
+
+    handleRedirect();
+
+    return () => {
+      if (redirectTimeout) {
+        clearTimeout(redirectTimeout);
+      }
+      setIsRedirecting(false);
+    };
+  }, [isLoading, user, pathname, router, isRedirecting]);
 
   if (isLoading && user) {
     console.log('[LOADING] Showing loading screen for authenticated user:', user);

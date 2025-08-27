@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
+import { supabase } from '../../lib/supabase';
 import { motion, AnimatePresence } from 'framer-motion';
 import { TALK_TOPICS, CLOSENESS_LEVELS, LEARNING_GOALS, Topic, LearningGoal } from '../../lib/preferences';
 import { getUserLanguageDashboards, getUserPersonas } from '../../lib/supabase';
@@ -313,32 +314,56 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
     setIsLoading(true);
     setError('');
     try {
+      // Check session first
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session) {
+        setError('Session expired. Please refresh the page and try again.');
+        setIsLoading(false);
+        return;
+      }
+
       const token = localStorage.getItem('jwt');
+      if (!token) {
+        setError('Authentication token missing. Please log in again.');
+        setIsLoading(false);
+        return;
+      }
+
       const dashboardLanguage = currentDashboard?.language || currentLanguage || 'en';
       
-      const response = await axios.post('/api/conversations', {
-        language: dashboardLanguage,
-        title: `${finalSubtopic} Discussion`,
-        topics: [finalSubtopic],
-        formality: selectedFormality,
-        learningGoals: [selectedGoal],
-        description: finalSubtopic,
-        usesPersona: false,
-        personaId: null
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const { conversation, aiMessage } = response.data;
-      if (!conversation || !conversation.id) {
+      // Add timeout to the request
+      const timeoutDuration = 10000; // 10 seconds
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), timeoutDuration);
+      
+      try {
+        const response = await axios.post('/api/conversations', {
+          language: dashboardLanguage,
+          title: `${finalSubtopic} Discussion`,
+          topics: [finalSubtopic],
+          formality: selectedFormality,
+          learningGoals: [selectedGoal],
+          description: finalSubtopic,
+          usesPersona: false,
+          personaId: null
+        }, {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: controller.signal
+        });
+        clearTimeout(timeout);
+        const { conversation, aiMessage } = response.data;
+
+      if (!conversation?.id) {
         setError('Failed to create conversation. Check your language dashboard.');
         setIsLoading(false);
         return;
       }
+
       let verified = null;
       for (let i = 0; i < 5; i++) {
         try {
           const fetchRes = await axios.get(`/api/conversations/${conversation.id}`, { headers: { Authorization: `Bearer ${token}` } });
-          if (fetchRes.data && fetchRes.data.conversation) {
+          if (fetchRes.data?.conversation) {
             verified = fetchRes.data.conversation;
             break;
           }
@@ -346,8 +371,8 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
           await new Promise(res => setTimeout(res, 300));
         }
       }
+
       if (verified) {
-        // Start the conversation directly without showing persona modal
         onStartConversation(
           conversation.id, 
           [finalSubtopic], 
@@ -365,6 +390,10 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
     } catch (err: any) {
       console.error('Error creating conversation:', err);
       setError('Failed to start conversation. Try again.');
+      setIsLoading(false);
+    } catch (err) {
+      console.error('Error in handleStartConversation:', err);
+      setError('An unexpected error occurred. Please try again.');
       setIsLoading(false);
     }
   };
