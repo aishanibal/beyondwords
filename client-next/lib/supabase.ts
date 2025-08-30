@@ -81,19 +81,19 @@ export const testSupabaseConnection = async () => {
 // Enhanced user profile functions with better error handling
 export const getUserProfile = async (userId: string) => {
   try {
-    console.log('[SUPABASE] Getting user profile for:', userId);
+    // console.log('[SUPABASE] Getting user profile for:', userId);
     const { data, error } = await supabase
       .from('users')
       .select('*')
       .eq('id', userId)
-      .single();
+      .maybeSingle();
     
     if (error) {
       console.error('[SUPABASE] Error getting user profile:', error);
       return { success: false, data: null, error };
     }
     
-    console.log('[SUPABASE] User profile retrieved:', data);
+    // console.log('[SUPABASE] User profile retrieved:', data);
     return { success: true, data, error: null };
   } catch (err) {
     console.error('[SUPABASE] Exception getting user profile:', err);
@@ -125,7 +125,7 @@ export const createUserProfile = async (userData: any) => {
 
 export const getUserLanguageDashboards = async (userId: string) => {
   try {
-    console.log('[SUPABASE] Getting language dashboards for:', userId);
+    // console.log('[SUPABASE] Getting language dashboards for:', userId);
     const { data, error } = await supabase
       .from('language_dashboards')
       .select('*')
@@ -136,7 +136,7 @@ export const getUserLanguageDashboards = async (userId: string) => {
       return { success: false, data: null, error };
     }
     
-    console.log('[SUPABASE] Language dashboards retrieved:', data);
+    // console.log('[SUPABASE] Language dashboards retrieved:', data);
     return { success: true, data, error: null };
   } catch (err) {
     console.error('[SUPABASE] Exception getting language dashboards:', err);

@@ -56,7 +56,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const { syncWithUserPreferences } = useDarkMode();
 
   useEffect(() => {
-    console.log('[EFFECT] Starting authentication flow');
+    // console.log('[EFFECT] Starting authentication flow');
     
     const initAuth = async () => {
       try {
@@ -72,7 +72,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         // Set up auth state change listener first
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
           async (event, newSession) => {
-            console.log('[AUTH] State change:', event, newSession?.user?.id);
+            // console.log('[AUTH] State change:', event, newSession?.user?.id);
             
             if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
               if (!newSession?.user) return;
@@ -140,7 +140,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
         return () => {
           subscription.unsubscribe();
-          console.log('[AUTH] Cleanup: unsubscribed from auth changes');
+          // console.log('[AUTH] Cleanup: unsubscribed from auth changes');
         };
       } catch (err) {
         console.error('[AUTH] Init error:', err);
@@ -175,7 +175,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     const handleRedirect = () => {
       if (isRedirecting) return; // Prevent multiple redirects
 
-      console.log('[ROUTING] State:', { isLoading, user, pathname });
+      // console.log('[ROUTING] State:', { isLoading, user, pathname });
 
       if (user === null) {
         if (pathname !== '/login' && pathname !== '/signup' && pathname !== '/') {

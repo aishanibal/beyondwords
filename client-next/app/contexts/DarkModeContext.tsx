@@ -1,5 +1,5 @@
 'use client';
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 
 interface DarkModeContextType {
   isDarkMode: boolean;
@@ -44,26 +44,26 @@ export function DarkModeProvider({ children }: { children: React.ReactNode }) {
     return () => mediaQuery.removeEventListener('change', handleSystemThemeChange);
   }, [theme]);
 
-  const handleThemeChange = (newTheme: 'light' | 'dark' | 'auto') => {
+  const handleThemeChange = useCallback((newTheme: 'light' | 'dark' | 'auto') => {
     setTheme(newTheme);
     localStorage.setItem('theme', newTheme);
     applyTheme(newTheme);
-  };
+  }, []);
 
-  const handleDarkModeToggle = (dark: boolean) => {
+  const handleDarkModeToggle = useCallback((dark: boolean) => {
     const newTheme = dark ? 'dark' : 'light';
     setTheme(newTheme);
     localStorage.setItem('theme', newTheme);
     applyTheme(newTheme);
-  };
+  }, []);
 
-  const syncWithUserPreferences = (userTheme?: 'light' | 'dark' | 'auto') => {
+  const syncWithUserPreferences = useCallback((userTheme?: 'light' | 'dark' | 'auto') => {
     if (userTheme) {
       setTheme(userTheme);
       localStorage.setItem('theme', userTheme);
       applyTheme(userTheme);
     }
-  };
+  }, []);
 
   return (
     <DarkModeContext.Provider value={{
