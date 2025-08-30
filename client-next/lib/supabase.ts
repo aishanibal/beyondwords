@@ -7,8 +7,13 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 if (!supabaseUrl || !supabaseAnonKey) {
   console.error('Missing Supabase environment variables:', {
     hasUrl: !!supabaseUrl,
-    hasKey: !!supabaseAnonKey
+    hasKey: !!supabaseAnonKey,
+    environment: process.env.NODE_ENV
   });
+  
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Critical: Supabase environment variables are missing in production');
+  }
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
@@ -90,6 +95,13 @@ export const getUserProfile = async (userId: string) => {
     
     if (error) {
       console.error('[SUPABASE] Error getting user profile:', error);
+      
+      // Handle specific deployment errors
+      if (error.code === 'PGRST116') {
+        console.log('[SUPABASE] User not found in database - this is expected for new users');
+        return { success: true, data: null, error: null };
+      }
+      
       return { success: false, data: null, error };
     }
     

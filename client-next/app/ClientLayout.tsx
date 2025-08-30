@@ -2,7 +2,7 @@
 "use client";
 export const dynamic = "force-dynamic";
 
-import React, { useEffect, useState, createContext, useContext } from 'react';
+import React, { useEffect, useState, createContext, useContext, useMemo } from 'react';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -169,28 +169,34 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   // Handle routing after authentication
   const [isRedirecting, setIsRedirecting] = useState(false);
 
+  // Memoize only the user properties needed for routing to prevent infinite loops
+  const userRoutingState = useMemo(() => ({
+    exists: !!user,
+    onboardingComplete: user?.onboarding_complete
+  }), [user?.onboarding_complete, !!user]);
+
   useEffect(() => {
     let redirectTimeout: NodeJS.Timeout;
 
     const handleRedirect = () => {
       if (isRedirecting) return; // Prevent multiple redirects
 
-      // console.log('[ROUTING] State:', { isLoading, user, pathname });
+      // console.log('[ROUTING] State:', { isLoading, userExists: userRoutingState.exists, pathname });
 
-      if (user === null) {
+      if (!userRoutingState.exists) {
         if (pathname !== '/login' && pathname !== '/signup' && pathname !== '/') {
           setIsRedirecting(true);
           redirectTimeout = setTimeout(() => {
             router.replace('/login');
           }, 100);
         }
-      } else if (user && !isLoading) {
-        if (user.onboarding_complete === false && pathname !== '/onboarding') {
+      } else if (userRoutingState.exists && !isLoading) {
+        if (userRoutingState.onboardingComplete === false && pathname !== '/onboarding') {
           setIsRedirecting(true);
           redirectTimeout = setTimeout(() => {
             router.replace('/onboarding');
           }, 100);
-        } else if (user.onboarding_complete && (pathname === '/onboarding' || pathname === '/login' || pathname === '/signup')) {
+        } else if (userRoutingState.onboardingComplete && (pathname === '/onboarding' || pathname === '/login' || pathname === '/signup')) {
           setIsRedirecting(true);
           redirectTimeout = setTimeout(() => {
             router.replace('/dashboard');
@@ -207,15 +213,15 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       }
       setIsRedirecting(false);
     };
-  }, [isLoading, user, pathname, router, isRedirecting]);
+  }, [isLoading, userRoutingState.exists, userRoutingState.onboardingComplete, pathname, router, isRedirecting]);
 
   if (isLoading && user) {
-    console.log('[LOADING] Showing loading screen for authenticated user:', user);
+    // console.log('[LOADING] Showing loading screen for authenticated user:', user);
     return <LoadingScreen />;
   }
 
   // If not loading or no user, show the app content
-  console.log('[RENDER] Rendering app content, user:', user, 'isLoading:', isLoading);
+  // console.log('[RENDER] Rendering app content, user:', user, 'isLoading:', isLoading);
 
   return (
     <UserContext.Provider value={{ user, setUser, logout }}>
