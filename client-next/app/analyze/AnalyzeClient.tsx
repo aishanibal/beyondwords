@@ -207,13 +207,25 @@ function usePersistentChatHistory(user: User | null): [ChatMessage[], React.Disp
 
 
 const AnalyzeContent = () => {
-    // Ensure this component only runs on the client side
     const [isClient, setIsClient] = useState(false);
     
     useEffect(() => {
       setIsClient(true);
     }, []);
     
+    // Early return to prevent hydration mismatch - before other hooks
+    if (!isClient) {
+      return (
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="text-lg">Loading analyze page...</div>
+        </div>
+      );
+    }
+    
+    return <AnalyzeContentInner />;
+};
+
+const AnalyzeContentInner = () => {
     const router = useRouter();
     const { isDarkMode } = useDarkMode();
   
@@ -397,8 +409,8 @@ const AnalyzeContent = () => {
       }
     }, [user, router]);
   
-    // Show loading while checking authentication or if not on client
-    if (!isClient || user === null) {
+    // Show loading while checking authentication
+    if (user === null) {
       return <LoadingScreen message="Loading..." />;
     }
   
@@ -6840,4 +6852,4 @@ const AnalyzeContent = () => {
     );
   };
 
-  export default AnalyzeContent;
+export default AnalyzeContent;
