@@ -73,7 +73,9 @@ export default function SignupPage() {
       if (data.user) {
         // User will be set automatically by the auth state change listener
         // New users always need onboarding
-        router.push('/onboarding');
+        console.log('[SIGNUP] Success, redirecting to onboarding');
+        setIsLoading(false);
+        router.replace('/onboarding');
       }
       
     } catch (err: any) {
@@ -103,7 +105,8 @@ export default function SignupPage() {
 
       // User will be set automatically by the auth state change listener
       // New users will be redirected to onboarding
-      router.push('/onboarding');
+      console.log('[SIGNUP] Google success, redirecting to onboarding');
+      router.replace('/onboarding');
       
     } catch (err: any) {
       console.error('Google signup error:', err);

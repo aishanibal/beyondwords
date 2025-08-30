@@ -181,10 +181,16 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     const handleRedirect = () => {
       if (isRedirecting) return; // Prevent multiple redirects
 
-      // console.log('[ROUTING] State:', { isLoading, userExists: userRoutingState.exists, pathname });
+      console.log('[ROUTING] State:', { 
+        isLoading, 
+        userExists: userRoutingState.exists, 
+        onboardingComplete: userRoutingState.onboardingComplete,
+        pathname 
+      });
 
       if (!userRoutingState.exists) {
         if (pathname !== '/login' && pathname !== '/signup' && pathname !== '/') {
+          console.log('[ROUTING] No user, redirecting to login');
           setIsRedirecting(true);
           redirectTimeout = setTimeout(() => {
             router.replace('/login');
@@ -192,11 +198,13 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         }
       } else if (userRoutingState.exists && !isLoading) {
         if (userRoutingState.onboardingComplete === false && pathname !== '/onboarding') {
+          console.log('[ROUTING] User needs onboarding, redirecting from', pathname);
           setIsRedirecting(true);
           redirectTimeout = setTimeout(() => {
             router.replace('/onboarding');
           }, 100);
         } else if (userRoutingState.onboardingComplete && (pathname === '/onboarding' || pathname === '/login' || pathname === '/signup')) {
+          console.log('[ROUTING] User completed onboarding, redirecting to dashboard');
           setIsRedirecting(true);
           redirectTimeout = setTimeout(() => {
             router.replace('/dashboard');
@@ -205,18 +213,22 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       }
     };
 
-    handleRedirect();
+    // Add a small delay to let signup navigation complete first
+    const routingTimeout = setTimeout(handleRedirect, 200);
 
     return () => {
       if (redirectTimeout) {
         clearTimeout(redirectTimeout);
       }
+      if (routingTimeout) {
+        clearTimeout(routingTimeout);
+      }
       setIsRedirecting(false);
     };
   }, [isLoading, userRoutingState.exists, userRoutingState.onboardingComplete, pathname, router, isRedirecting]);
 
-  if (isLoading && user) {
-    // console.log('[LOADING] Showing loading screen for authenticated user:', user);
+  if (isLoading) {
+    console.log('[LOADING] Showing loading screen, user:', !!user);
     return <LoadingScreen />;
   }
 
