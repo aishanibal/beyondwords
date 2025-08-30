@@ -353,50 +353,49 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
         clearTimeout(timeout);
         const { conversation, aiMessage } = response.data;
 
-      if (!conversation?.id) {
-        setError('Failed to create conversation. Check your language dashboard.');
-        setIsLoading(false);
-        return;
-      }
-
-      let verified = null;
-      for (let i = 0; i < 5; i++) {
-        try {
-          const fetchRes = await axios.get(`/api/conversations/${conversation.id}`, { headers: { Authorization: `Bearer ${token}` } });
-          if (fetchRes.data?.conversation) {
-            verified = fetchRes.data.conversation;
-            break;
-          }
-        } catch (e) {
-          await new Promise(res => setTimeout(res, 300));
+        if (!conversation?.id) {
+          setError('Failed to create conversation. Check your language dashboard.');
+          setIsLoading(false);
+          return;
         }
-      }
 
-      if (verified) {
-        onStartConversation(
-          conversation.id, 
-          [finalSubtopic], 
-          aiMessage, 
-          selectedFormality, 
-          [selectedGoal],
-          finalSubtopic,
-          isUsingExistingPersona
-        );
-        onClose();
-      } else {
-        setError('Failed to verify conversation. Try again.');
+        let verified = null;
+        for (let i = 0; i < 5; i++) {
+          try {
+            const fetchRes = await axios.get(`/api/conversations/${conversation.id}`, { headers: { Authorization: `Bearer ${token}` } });
+            if (fetchRes.data?.conversation) {
+              verified = fetchRes.data.conversation;
+              break;
+            }
+          } catch (e) {
+            await new Promise(res => setTimeout(res, 300));
+          }
+        }
+
+        if (verified) {
+          onStartConversation(
+            conversation.id, 
+            [finalSubtopic], 
+            aiMessage, 
+            selectedFormality, 
+            [selectedGoal],
+            finalSubtopic,
+            isUsingExistingPersona
+          );
+          onClose();
+        } else {
+          setError('Failed to verify conversation. Try again.');
+          setIsLoading(false);
+        }
+      } catch (err: any) {
+        console.error('Error creating conversation:', err);
+        setError('Failed to start conversation. Try again.');
         setIsLoading(false);
       }
-    } catch (err: any) {
-      console.error('Error creating conversation:', err);
-      setError('Failed to start conversation. Try again.');
-      setIsLoading(false);
-    } catch (err) {
-      console.error('Error in handleStartConversation:', err);
-      setError('An unexpected error occurred. Please try again.');
-      setIsLoading(false);
-    }
-  };
+          } catch {
+        setError('Failed to start conversation. Try again.');
+      }
+    };
 
   if (!isOpen) return null;
 
