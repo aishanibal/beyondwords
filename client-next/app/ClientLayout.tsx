@@ -100,9 +100,16 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                     onboarding_complete: false
                   };
                   
-                  const { success: createSuccess } = await createUserProfile(newProfile);
-                  if (createSuccess) {
-                    setUser(newProfile);
+                  const { success: createSuccess, data: createdProfile } = await createUserProfile(newProfile);
+                  if (createSuccess && createdProfile) {
+                    setUser({
+                      id: createdProfile.id,
+                      email: createdProfile.email,
+                      name: createdProfile.name,
+                      photoUrl: newSession.user.user_metadata?.picture,
+                      onboarding_complete: createdProfile.onboarding_complete || false,
+                      ...createdProfile
+                    });
                   } else {
                     console.error('[AUTH] Failed to create user profile');
                     setUser(null);
@@ -136,7 +143,14 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             });
             syncWithUserPreferences(profile);
           }
+        } else {
+          // No initial session, user is not logged in
+          console.log('[AUTH] No initial session found');
+          setUser(null);
         }
+        
+        // Always set loading to false after handling initial session
+        setIsLoading(false);
 
         return () => {
           subscription.unsubscribe();
@@ -227,8 +241,9 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     };
   }, [isLoading, userRoutingState.exists, userRoutingState.onboardingComplete, pathname, router, isRedirecting]);
 
+  // Only show loading screen if we're still checking authentication
   if (isLoading) {
-    console.log('[LOADING] Showing loading screen, user:', !!user);
+    console.log('[LOADING] Checking authentication, user:', !!user);
     return <LoadingScreen />;
   }
 

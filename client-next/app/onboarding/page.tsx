@@ -202,6 +202,11 @@ export default function OnboardingPage() {
 
       // Persist selected language for dashboard auto-selection
       localStorage.setItem('selectedLanguage', onboardingData.language);
+      
+      // Set loading to false before navigation
+      setIsLoading(false);
+      
+      console.log('[ONBOARDING] Completed successfully, navigating to dashboard');
       router.push('/dashboard');
     } catch (err: any) {
       console.error('Onboarding error:', err);
