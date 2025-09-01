@@ -2,8 +2,12 @@ flask==2.3.3
 flask-cors==4.0.0
 google-generativeai
 google-cloud-texttospeech
+google-cloud-speech
 google-auth
+google-auth-oauthlib
+google-auth-httplib2
 supabase
 python-dotenv
+numpy
 requests
 gunicorn
