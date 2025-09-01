@@ -31,7 +31,7 @@ services:
     name: heirloom-python-api
     env: python
     plan: starter
-    buildCommand: pip install -r requirements.txt
+    buildCommand: pip install --upgrade pip setuptools wheel && pip install -r requirements.txt
     startCommand: python python_api.py
     envVars:
       - key: PORT

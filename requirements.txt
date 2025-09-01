@@ -1,13 +1,23 @@
+# Core build tools - must be first
+setuptools>=65.0.0
+wheel>=0.37.0
+pip>=23.0.0
+
+# Web framework
 flask==2.3.3
 flask-cors==4.0.0
+gunicorn==21.2.0
+
+# Google AI/Cloud services
 google-generativeai==0.3.2
 google-cloud-texttospeech==2.16.3
 google-cloud-speech==2.21.0
 google-auth==2.23.4
 google-auth-oauthlib==1.1.0
 google-auth-httplib2==0.1.1
+
+# Database and utilities
 supabase==2.0.2
 python-dotenv==1.0.0
 numpy==1.24.3
 requests==2.31.0
-gunicorn==21.2.0
