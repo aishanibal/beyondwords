@@ -16,8 +16,27 @@ interface LanguageOnboardingProps {
 }
 
 function LanguageOnboarding({ onComplete, existingLanguages = [] }: LanguageOnboardingProps) {
-  const { setUser } = useUser();
+  const { user } = useUser();
   const router = useRouter();
+  
+  // Authentication check
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-cream flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-blue-800 mb-4">Authentication Required</h2>
+          <p className="text-gray-600 mb-4">Please log in to continue with language onboarding.</p>
+          <button 
+            onClick={() => router.push('/login')}
+            className="bg-rose-500 text-white px-6 py-2 rounded-lg hover:bg-rose-600 transition-colors"
+          >
+            Go to Login
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const [currentStep, setCurrentStep] = useState(1);
   interface OnboardingData {
     language: string;
@@ -152,7 +171,6 @@ function LanguageOnboarding({ onComplete, existingLanguages = [] }: LanguageOnbo
     setIsLoading(true);
     setError('');
     try {
-      const { user } = useUser();
       if (!user?.id) {
         throw new Error('User not authenticated');
       }
