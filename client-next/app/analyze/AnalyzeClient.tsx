@@ -1141,7 +1141,7 @@ const AnalyzeContentInner = () => {
     };
   
     // New: Separate function to fetch and show short feedback
-    const fetchAndShowShortFeedback = async (transcription: string) => {
+    const fetchAndShowShortFeedback = async (transcription: string, detectedLanguage?: string) => {
       if (!autoSpeak || !enableShortFeedback) return;
       
       // Prevent duplicate calls while processing
@@ -1173,7 +1173,7 @@ const AnalyzeContentInner = () => {
           {
             user_input: transcription,
             context,
-            language,
+            language: detectedLanguage || language, // Use detected language if available
             user_level: userPreferences.userLevel,
             user_topics: userPreferences.topics,
             formality: userPreferences.formality,
@@ -1202,7 +1202,7 @@ const AnalyzeContentInner = () => {
           console.log('[DEBUG] Playing short feedback TTS immediately');
           setIsPlayingShortFeedbackTTS(true);
           try {
-            await playTTSAudio(shortFeedback, language, cacheKey);
+            await playTTSAudio(shortFeedback, detectedLanguage || language, cacheKey);
             console.log('[DEBUG] Short feedback TTS finished');
           } catch (error) {
             console.error('[DEBUG] Error playing short feedback TTS:', error);
@@ -1779,10 +1779,11 @@ const AnalyzeContentInner = () => {
         // Add placeholder message immediately
         setChatHistory(prev => [...prev, placeholderMessage]);
         
-        // Step 1: Get transcription first
+        // Step 1: Get transcription first with language detection
         const formData = new FormData();
         formData.append('audio', audioBlob, 'recording.webm');
-        formData.append('language', language);
+        // Don't specify language - let the backend detect it automatically
+        // formData.append('language', language);
         
         // Add JWT token to headers
         const token = localStorage.getItem('jwt');
@@ -1794,11 +1795,13 @@ const AnalyzeContentInner = () => {
         });
         
         const transcription = transcriptionResponse.data.transcription || 'Speech recorded';
+        const detectedLanguage = transcriptionResponse.data.detected_language || language; // Fallback to selected language
         
         // Generate romanized text for user messages in script languages
+        // Use detected language for romanization, not the selected language
         let userRomanizedText = '';
-        if (isScriptLanguage(language) && transcription !== 'Speech recorded') {
-          userRomanizedText = await generateRomanizedText(transcription, language);
+        if (isScriptLanguage(detectedLanguage) && transcription !== 'Speech recorded') {
+          userRomanizedText = await generateRomanizedText(transcription, detectedLanguage);
         }
         
         // Replace the placeholder message with the actual transcript
@@ -1828,7 +1831,7 @@ const AnalyzeContentInner = () => {
         // Step 1.5: Get short feedback first for autospeak mode
         if (autoSpeak && enableShortFeedback && transcription !== 'Speech recorded') {
           console.log('[DEBUG] Step 1.5: Getting short feedback for autospeak mode...');
-          await fetchAndShowShortFeedback(transcription);
+          await fetchAndShowShortFeedback(transcription, detectedLanguage); // Pass detected language
           console.log('[DEBUG] Short feedback completed, now starting AI processing...');
         }
         
@@ -1858,7 +1861,7 @@ const AnalyzeContentInner = () => {
         const aiResponseData = {
           transcription: transcription,
           chat_history: updatedChatHistory,
-          language: language,
+          language: detectedLanguage, // Use detected language for AI processing
           user_level: userPreferences.userLevel,
           user_topics: userPreferences.topics,
           user_goals: user?.learning_goals ? (typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : user.learning_goals) : [],
