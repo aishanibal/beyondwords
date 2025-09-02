@@ -813,8 +813,15 @@ const AnalyzeContentInner = () => {
         setIsNewPersona(false); // Existing conversations are not new personas
         setConversationDescription(personaDescription);
         
-        const messages = conversation.messages || [];
-        const history = messages.map((msg: unknown) => {
+                const messages = conversation.messages || [];
+        
+        // Set pagination state
+        setMessageCount(messages.length);
+        setHasMoreMessages(messages.length > MESSAGES_PER_PAGE);
+        
+        // Load only the most recent messages for performance
+        const recentMessages = messages.slice(-MESSAGES_PER_PAGE);
+        const history = recentMessages.map((msg: unknown) => {
           // If the database already has romanized_text stored separately, use it
           if ((msg as any).romanized_text) {
             return {
@@ -836,7 +843,7 @@ const AnalyzeContentInner = () => {
             };
           }
         });
-  
+
         setChatHistory(history);
         
         // Don't set session start time here - it will be set when the conversation is actually continued
@@ -4661,6 +4668,65 @@ const AnalyzeContentInner = () => {
       }
     }, [chatHistory.length, chatHistory]);
     // --- END VIRTUALIZATION LOGIC ---
+    
+    // --- START PAGINATION LOGIC ---
+    // Pagination state for performance optimization
+    const [messageCount, setMessageCount] = useState<number>(0);
+    const [hasMoreMessages, setHasMoreMessages] = useState<boolean>(false);
+    const [isLoadingMoreMessages, setIsLoadingMoreMessages] = useState<boolean>(false);
+    const MESSAGES_PER_PAGE = 50;
+    
+    // Load more messages for pagination
+    const loadMoreMessages = async () => {
+      if (!conversationId || !hasMoreMessages || isLoadingMoreMessages) {
+        return;
+      }
+
+      setIsLoadingMoreMessages(true);
+      try {
+        const currentCount = chatHistory.length;
+        const offset = Math.max(0, messageCount - currentCount - MESSAGES_PER_PAGE);
+        const limit = Math.min(MESSAGES_PER_PAGE, messageCount - currentCount);
+
+        const response = await axios.get(`/api/conversations/${conversationId}?limit=${limit}&offset=${offset}`, {
+          headers: getAuthHeaders()
+        });
+
+        const conversation = response.data.conversation;
+        const messages = conversation.messages || [];
+        
+        const olderMessages = messages.map((msg: unknown) => {
+          if ((msg as any).romanized_text) {
+            return {
+              sender: (msg as any).sender,
+              text: (msg as any).text,
+              romanizedText: (msg as any).romanized_text,
+              timestamp: new Date((msg as any).created_at),
+              isFromOriginalConversation: true
+            };
+          } else {
+            const formatted = formatScriptLanguageText((msg as any).text, conversation.language || 'en');
+            return {
+              sender: (msg as any).sender,
+              text: formatted.mainText,
+              romanizedText: formatted.romanizedText,
+              timestamp: new Date((msg as any).created_at),
+              isFromOriginalConversation: true
+            };
+          }
+        });
+
+        // Prepend older messages to the beginning of chat history
+        setChatHistory(prev => [...olderMessages.reverse(), ...prev]);
+        setHasMoreMessages(offset > 0);
+      } catch (error: unknown) {
+        console.error('[DEBUG] Error loading more messages:', error);
+      } finally {
+        setIsLoadingMoreMessages(false);
+      }
+    };
+    // --- END PAGINATION LOGIC ---
+    
     return (
       <div className="analyze-page" style={{ 
         display: 'flex', 
@@ -5940,6 +6006,13 @@ const AnalyzeContentInner = () => {
             <div 
               ref={chatContainerRef}
               className="chat-messages-container"
+              onScroll={(e) => {
+                const target = e.target as HTMLDivElement;
+                // Load more messages when user scrolls to the top
+                if (target.scrollTop === 0 && hasMoreMessages && !isLoadingMoreMessages) {
+                  loadMoreMessages();
+                }
+              }}
               style={{
                 padding: '1.5rem',
                 overflowY: 'auto',
@@ -5952,6 +6025,47 @@ const AnalyzeContentInner = () => {
               }}
             >
                         <div style={{ height: `${totalHeight}px`, position: 'relative' }}>
+                          {/* Loading indicators for pagination */}
+                          {isLoadingMoreMessages && (
+                            <div style={{
+                              position: 'absolute',
+                              top: '0',
+                              left: '0',
+                              width: '100%',
+                              padding: '1rem',
+                              textAlign: 'center',
+                              background: isDarkMode 
+                                ? 'rgba(30,41,59,0.8)' 
+                                : 'rgba(255,255,255,0.8)',
+                              borderRadius: '8px',
+                              marginBottom: '1rem',
+                              zIndex: 10
+                            }}>
+                              ⏳ Loading more messages...
+                            </div>
+                          )}
+                          
+                          {messageCount > 0 && (
+                            <div style={{
+                              position: 'absolute',
+                              top: isLoadingMoreMessages ? '60px' : '0',
+                              left: '0',
+                              width: '100%',
+                              padding: '0.5rem',
+                              textAlign: 'center',
+                              fontSize: '0.8rem',
+                              color: isDarkMode ? '#94a3b8' : '#6b7280',
+                              background: isDarkMode 
+                                ? 'rgba(30,41,59,0.6)' 
+                                : 'rgba(255,255,255,0.6)',
+                              borderRadius: '6px',
+                              marginBottom: '0.5rem',
+                              zIndex: 5
+                            }}>
+                              Showing {chatHistory.length} of {messageCount} messages • Scroll up to load more
+                            </div>
+                          )}
+                          
                 {virtualItems.map(({ index, start }) => {
                   const message = chatHistory[index];
                   if (!message) return null;
