@@ -813,8 +813,15 @@ const AnalyzeContentInner = () => {
         setIsNewPersona(false); // Existing conversations are not new personas
         setConversationDescription(personaDescription);
         
-        const messages = conversation.messages || [];
-        const history = messages.map((msg: unknown) => {
+                const messages = conversation.messages || [];
+        
+        // Set pagination state
+        setMessageCount(messages.length);
+        setHasMoreMessages(messages.length > MESSAGES_PER_PAGE);
+        
+        // Load only the most recent messages for performance
+        const recentMessages = messages.slice(-MESSAGES_PER_PAGE);
+        const history = recentMessages.map((msg: unknown) => {
           // If the database already has romanized_text stored separately, use it
           if ((msg as any).romanized_text) {
             return {
@@ -836,7 +843,7 @@ const AnalyzeContentInner = () => {
             };
           }
         });
-  
+
         setChatHistory(history);
         
         // Don't set session start time here - it will be set when the conversation is actually continued
@@ -1134,7 +1141,7 @@ const AnalyzeContentInner = () => {
     };
   
     // New: Separate function to fetch and show short feedback
-    const fetchAndShowShortFeedback = async (transcription: string) => {
+    const fetchAndShowShortFeedback = async (transcription: string, detectedLanguage?: string) => {
       if (!autoSpeak || !enableShortFeedback) return;
       
       // Prevent duplicate calls while processing
@@ -1166,7 +1173,7 @@ const AnalyzeContentInner = () => {
           {
             user_input: transcription,
             context,
-            language,
+            language: detectedLanguage || language, // Use detected language if available
             user_level: userPreferences.userLevel,
             user_topics: userPreferences.topics,
             formality: userPreferences.formality,
@@ -1195,7 +1202,7 @@ const AnalyzeContentInner = () => {
           console.log('[DEBUG] Playing short feedback TTS immediately');
           setIsPlayingShortFeedbackTTS(true);
           try {
-            await playTTSAudio(shortFeedback, language, cacheKey);
+            await playTTSAudio(shortFeedback, detectedLanguage || language, cacheKey);
             console.log('[DEBUG] Short feedback TTS finished');
           } catch (error) {
             console.error('[DEBUG] Error playing short feedback TTS:', error);
@@ -1772,10 +1779,11 @@ const AnalyzeContentInner = () => {
         // Add placeholder message immediately
         setChatHistory(prev => [...prev, placeholderMessage]);
         
-        // Step 1: Get transcription first
+        // Step 1: Get transcription first with language detection
         const formData = new FormData();
         formData.append('audio', audioBlob, 'recording.webm');
-        formData.append('language', language);
+        // Don't specify language - let the backend detect it automatically
+        // formData.append('language', language);
         
         // Add JWT token to headers
         const token = localStorage.getItem('jwt');
@@ -1787,11 +1795,13 @@ const AnalyzeContentInner = () => {
         });
         
         const transcription = transcriptionResponse.data.transcription || 'Speech recorded';
+        const detectedLanguage = transcriptionResponse.data.detected_language || language; // Fallback to selected language
         
         // Generate romanized text for user messages in script languages
+        // Use detected language for romanization, not the selected language
         let userRomanizedText = '';
-        if (isScriptLanguage(language) && transcription !== 'Speech recorded') {
-          userRomanizedText = await generateRomanizedText(transcription, language);
+        if (isScriptLanguage(detectedLanguage) && transcription !== 'Speech recorded') {
+          userRomanizedText = await generateRomanizedText(transcription, detectedLanguage);
         }
         
         // Replace the placeholder message with the actual transcript
@@ -1821,7 +1831,7 @@ const AnalyzeContentInner = () => {
         // Step 1.5: Get short feedback first for autospeak mode
         if (autoSpeak && enableShortFeedback && transcription !== 'Speech recorded') {
           console.log('[DEBUG] Step 1.5: Getting short feedback for autospeak mode...');
-          await fetchAndShowShortFeedback(transcription);
+          await fetchAndShowShortFeedback(transcription, detectedLanguage); // Pass detected language
           console.log('[DEBUG] Short feedback completed, now starting AI processing...');
         }
         
@@ -1851,7 +1861,7 @@ const AnalyzeContentInner = () => {
         const aiResponseData = {
           transcription: transcription,
           chat_history: updatedChatHistory,
-          language: language,
+          language: detectedLanguage, // Use detected language for AI processing
           user_level: userPreferences.userLevel,
           user_topics: userPreferences.topics,
           user_goals: user?.learning_goals ? (typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : user.learning_goals) : [],
@@ -4661,6 +4671,65 @@ const AnalyzeContentInner = () => {
       }
     }, [chatHistory.length, chatHistory]);
     // --- END VIRTUALIZATION LOGIC ---
+    
+    // --- START PAGINATION LOGIC ---
+    // Pagination state for performance optimization
+    const [messageCount, setMessageCount] = useState<number>(0);
+    const [hasMoreMessages, setHasMoreMessages] = useState<boolean>(false);
+    const [isLoadingMoreMessages, setIsLoadingMoreMessages] = useState<boolean>(false);
+    const MESSAGES_PER_PAGE = 50;
+    
+    // Load more messages for pagination
+    const loadMoreMessages = async () => {
+      if (!conversationId || !hasMoreMessages || isLoadingMoreMessages) {
+        return;
+      }
+
+      setIsLoadingMoreMessages(true);
+      try {
+        const currentCount = chatHistory.length;
+        const offset = Math.max(0, messageCount - currentCount - MESSAGES_PER_PAGE);
+        const limit = Math.min(MESSAGES_PER_PAGE, messageCount - currentCount);
+
+        const response = await axios.get(`/api/conversations/${conversationId}?limit=${limit}&offset=${offset}`, {
+          headers: getAuthHeaders()
+        });
+
+        const conversation = response.data.conversation;
+        const messages = conversation.messages || [];
+        
+        const olderMessages = messages.map((msg: unknown) => {
+          if ((msg as any).romanized_text) {
+            return {
+              sender: (msg as any).sender,
+              text: (msg as any).text,
+              romanizedText: (msg as any).romanized_text,
+              timestamp: new Date((msg as any).created_at),
+              isFromOriginalConversation: true
+            };
+          } else {
+            const formatted = formatScriptLanguageText((msg as any).text, conversation.language || 'en');
+            return {
+              sender: (msg as any).sender,
+              text: formatted.mainText,
+              romanizedText: formatted.romanizedText,
+              timestamp: new Date((msg as any).created_at),
+              isFromOriginalConversation: true
+            };
+          }
+        });
+
+        // Prepend older messages to the beginning of chat history
+        setChatHistory(prev => [...olderMessages.reverse(), ...prev]);
+        setHasMoreMessages(offset > 0);
+      } catch (error: unknown) {
+        console.error('[DEBUG] Error loading more messages:', error);
+      } finally {
+        setIsLoadingMoreMessages(false);
+      }
+    };
+    // --- END PAGINATION LOGIC ---
+    
     return (
       <div className="analyze-page" style={{ 
         display: 'flex', 
@@ -5940,6 +6009,13 @@ const AnalyzeContentInner = () => {
             <div 
               ref={chatContainerRef}
               className="chat-messages-container"
+              onScroll={(e) => {
+                const target = e.target as HTMLDivElement;
+                // Load more messages when user scrolls to the top
+                if (target.scrollTop === 0 && hasMoreMessages && !isLoadingMoreMessages) {
+                  loadMoreMessages();
+                }
+              }}
               style={{
                 padding: '1.5rem',
                 overflowY: 'auto',
@@ -5952,6 +6028,47 @@ const AnalyzeContentInner = () => {
               }}
             >
                         <div style={{ height: `${totalHeight}px`, position: 'relative' }}>
+                          {/* Loading indicators for pagination */}
+                          {isLoadingMoreMessages && (
+                            <div style={{
+                              position: 'absolute',
+                              top: '0',
+                              left: '0',
+                              width: '100%',
+                              padding: '1rem',
+                              textAlign: 'center',
+                              background: isDarkMode 
+                                ? 'rgba(30,41,59,0.8)' 
+                                : 'rgba(255,255,255,0.8)',
+                              borderRadius: '8px',
+                              marginBottom: '1rem',
+                              zIndex: 10
+                            }}>
+                              ⏳ Loading more messages...
+                            </div>
+                          )}
+                          
+                          {messageCount > 0 && (
+                            <div style={{
+                              position: 'absolute',
+                              top: isLoadingMoreMessages ? '60px' : '0',
+                              left: '0',
+                              width: '100%',
+                              padding: '0.5rem',
+                              textAlign: 'center',
+                              fontSize: '0.8rem',
+                              color: isDarkMode ? '#94a3b8' : '#6b7280',
+                              background: isDarkMode 
+                                ? 'rgba(30,41,59,0.6)' 
+                                : 'rgba(255,255,255,0.6)',
+                              borderRadius: '6px',
+                              marginBottom: '0.5rem',
+                              zIndex: 5
+                            }}>
+                              Showing {chatHistory.length} of {messageCount} messages • Scroll up to load more
+                            </div>
+                          )}
+                          
                 {virtualItems.map(({ index, start }) => {
                   const message = chatHistory[index];
                   if (!message) return null;
