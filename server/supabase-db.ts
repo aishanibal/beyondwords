@@ -91,6 +91,7 @@ export interface Persona {
   formality?: string;
   language?: string;
   conversation_id?: number;
+  conversationId?: number; // Add camelCase version for compatibility
   created_at?: string;
   updated_at?: string;
 }
@@ -421,12 +422,21 @@ export const addMessage = async (
 
 // Persona functions
 export const createPersona = async (userId: string, personaData: Partial<Persona>): Promise<Persona> => {
+  // Convert camelCase to snake_case for database
+  const dbData: any = {
+    user_id: userId,
+    ...personaData
+  };
+  
+  // Handle conversationId -> conversation_id conversion
+  if (personaData.conversationId) {
+    dbData.conversation_id = personaData.conversationId;
+    delete dbData.conversationId;
+  }
+  
   const { data, error } = await supabase
     .from('personas')
-    .insert([{
-      user_id: userId,
-      ...personaData
-    }])
+    .insert([dbData])
     .select()
     .single();
   
