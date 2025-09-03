@@ -39,7 +39,7 @@ import {
   Conversation,
   Message,
   Persona
-} from './database';
+} from './supabase-db';
 import { OAuth2Client } from 'google-auth-library';
 import path from 'path';
 import fs from 'fs'; // Use fs, not fs/promises
