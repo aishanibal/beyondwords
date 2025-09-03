@@ -1324,32 +1324,74 @@ app.post('/api/tts', authenticateJWT, (req, res) => __awaiter(void 0, void 0, vo
 }));
 // TTS endpoint for testing (without authentication)
 app.post('/api/tts-test', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a, _b;
     try {
         const { text, language } = req.body;
         if (!text || !text.trim()) {
             return res.status(400).json({ error: 'Text is required' });
         }
         const lang = language || 'en';
+        console.log(`🎯 [TTS DEBUG] TTS request received:`, {
+            textLength: text.length,
+            textPreview: text.substring(0, 50) + '...',
+            language: lang,
+            timestamp: new Date().toISOString()
+        });
         // Check Python API health first
         const isHealthy = yield checkPythonAPIHealth();
         if (!isHealthy) {
+            console.log(`🎯 [TTS DEBUG] Python API health check failed`);
             return res.status(503).json({
                 error: 'Python API is not available',
-                details: 'The TTS service is temporarily unavailable. Please try again later.'
+                details: 'The TTS service is temporarily unavailable. Please try again later.',
+                debug: {
+                    service_used: 'none',
+                    fallback_reason: 'Python API unavailable',
+                    admin_settings: {},
+                    cost_estimate: 'unknown'
+                }
             });
         }
-        // Generate TTS for the text
-        const ttsUrl = yield generateTTS(text, lang);
-        if (ttsUrl) {
-            res.json({ ttsUrl });
+        console.log(`🎯 [TTS DEBUG] Python API health check passed`);
+        // Generate TTS for the text with debug info
+        const ttsResult = yield generateTTSWithDebug(text, lang);
+        if (ttsResult.ttsUrl) {
+            console.log(`🎯 [TTS DEBUG] TTS generation successful:`, {
+                url: ttsResult.ttsUrl,
+                serviceUsed: (_a = ttsResult.debug) === null || _a === void 0 ? void 0 : _a.service_used,
+                costEstimate: (_b = ttsResult.debug) === null || _b === void 0 ? void 0 : _b.cost_estimate
+            });
+            res.json({
+                ttsUrl: ttsResult.ttsUrl,
+                debug: ttsResult.debug
+            });
         }
         else {
-            res.status(500).json({ error: 'Failed to generate TTS' });
+            console.log(`🎯 [TTS DEBUG] TTS generation failed`);
+            res.status(500).json({
+                error: 'Failed to generate TTS',
+                debug: ttsResult.debug || {
+                    service_used: 'none',
+                    fallback_reason: 'All TTS services failed',
+                    admin_settings: {},
+                    cost_estimate: 'unknown'
+                }
+            });
         }
     }
     catch (error) {
-        console.error('TTS test endpoint error:', error);
-        res.status(500).json({ error: 'TTS generation failed', details: error.message });
+        console.error('🎯 [TTS DEBUG] TTS test endpoint error:', error);
+        res.status(500).json({
+            error: 'TTS generation failed',
+            details: error.message,
+            debug: {
+                service_used: 'none',
+                fallback_reason: 'Exception occurred',
+                admin_settings: {},
+                cost_estimate: 'unknown',
+                error: error.message
+            }
+        });
     }
 }));
 // Quick translation endpoint
@@ -1418,16 +1460,23 @@ function checkPythonAPIHealth() {
 // Helper function to generate TTS for any text using Gemini TTS API
 function generateTTS(text, language) {
     return __awaiter(this, void 0, void 0, function* () {
+        const result = yield generateTTSWithDebug(text, language);
+        return result.ttsUrl;
+    });
+}
+// Helper function to generate TTS with debug information
+function generateTTSWithDebug(text, language) {
+    return __awaiter(this, void 0, void 0, function* () {
         try {
             // Use .aiff extension for macOS compatibility
             const ttsFileName = `tts_${Date.now()}.aiff`;
             const ttsFilePath = path_1.default.join(uploadsDir, ttsFileName);
-            console.log('Generating TTS using Gemini API for language:', language);
-            console.log('TTS text length:', text.length);
-            // Call Python API for Gemini TTS
+            console.log('🎯 [TTS DEBUG] Generating TTS using admin-controlled system for language:', language);
+            console.log('🎯 [TTS DEBUG] TTS text length:', text.length);
+            // Call Python API for TTS with debug info
             const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5000';
-            console.log(`🔗 Calling Python API at: ${pythonApiUrl}/generate_tts`);
-            console.log(`📝 Request payload: text='${text.substring(0, 50)}...', language='${language}', output_path='${ttsFilePath}'`);
+            console.log(`🎯 [TTS DEBUG] Calling Python API at: ${pythonApiUrl}/generate_tts`);
+            console.log(`🎯 [TTS DEBUG] Request payload: text='${text.substring(0, 50)}...', language='${language}', output_path='${ttsFilePath}'`);
             const ttsResponse = yield axios_1.default.post(`${pythonApiUrl}/generate_tts`, {
                 text: text,
                 language_code: language,
@@ -1436,42 +1485,71 @@ function generateTTS(text, language) {
                 headers: { 'Content-Type': 'application/json' },
                 timeout: 30000
             });
-            console.log(`📊 Python API response status: ${ttsResponse.status}`);
-            console.log(`📊 Python API response data:`, ttsResponse.data);
+            console.log(`🎯 [TTS DEBUG] Python API response status: ${ttsResponse.status}`);
+            console.log(`🎯 [TTS DEBUG] Python API response data:`, ttsResponse.data);
+            // Extract debug information from Python API response
+            const debugInfo = {
+                service_used: ttsResponse.data.service_used || 'unknown',
+                fallback_reason: ttsResponse.data.fallback_reason || 'none',
+                admin_settings: ttsResponse.data.admin_settings || {},
+                cost_estimate: ttsResponse.data.cost_estimate || 'unknown',
+                request_id: ttsResponse.data.request_id || 'unknown',
+                python_debug: ttsResponse.data.debug || {}
+            };
+            console.log(`🎯 [TTS DEBUG] Extracted debug info:`, debugInfo);
             if (ttsResponse.data.success && ttsResponse.data.output_path) {
                 // Use the actual file path returned by Python API
                 const actualFilePath = ttsResponse.data.output_path;
-                console.log('📁 Python API returned file path:', actualFilePath);
+                console.log(`🎯 [TTS DEBUG] Actual file path from Python API: ${actualFilePath}`);
                 // Check if file was created
                 if (fs_1.default.existsSync(actualFilePath)) {
                     const stats = fs_1.default.statSync(actualFilePath);
-                    console.log('✅ TTS file created, size:', stats.size, 'bytes');
+                    console.log('🎯 [TTS DEBUG] TTS file created, size:', stats.size, 'bytes');
                     // Get the filename from the path
                     const fileName = path_1.default.basename(actualFilePath);
                     // Check if file is in uploads directory or root directory
                     const isInUploads = actualFilePath.includes('uploads');
                     const ttsUrl = isInUploads ? `/uploads/${fileName}` : `/files/${fileName}`;
-                    console.log('✅ TTS audio generated at:', ttsUrl);
-                    console.log('📁 File location:', isInUploads ? 'uploads directory' : 'root directory');
-                    console.log('📄 File extension:', path_1.default.extname(actualFilePath));
-                    return ttsUrl;
+                    console.log('🎯 [TTS DEBUG] TTS audio generated at:', ttsUrl);
+                    console.log('🎯 [TTS DEBUG] File location:', isInUploads ? 'uploads directory' : 'root directory');
+                    console.log('🎯 [TTS DEBUG] File extension:', path_1.default.extname(actualFilePath));
+                    return {
+                        ttsUrl: ttsUrl,
+                        debug: debugInfo
+                    };
                 }
                 else {
-                    console.error('❌ TTS file was not created at:', actualFilePath);
-                    return null;
+                    console.error('🎯 [TTS DEBUG] TTS file was not created at expected path');
+                    return {
+                        ttsUrl: null,
+                        debug: Object.assign(Object.assign({}, debugInfo), { fallback_reason: 'File not created', error: 'TTS file was not created at expected path' })
+                    };
                 }
             }
             else {
-                console.error('❌ TTS generation failed:', ttsResponse.data.error);
-                return null;
+                console.error('🎯 [TTS DEBUG] TTS generation failed:', ttsResponse.data.error);
+                return {
+                    ttsUrl: null,
+                    debug: Object.assign(Object.assign({}, debugInfo), { fallback_reason: 'Python API returned failure', error: ttsResponse.data.error || 'Unknown error' })
+                };
             }
         }
         catch (ttsError) {
-            console.error('❌ TTS error:', ttsError.message);
+            console.error('🎯 [TTS DEBUG] TTS error:', ttsError.message);
             if (ttsError.response) {
-                console.error('❌ Python API error response:', ttsError.response.status, ttsError.response.data);
+                console.error('🎯 [TTS DEBUG] Python API error response:', ttsError.response.status, ttsError.response.data);
             }
-            return null;
+            return {
+                ttsUrl: null,
+                debug: {
+                    service_used: 'none',
+                    fallback_reason: 'Exception occurred',
+                    admin_settings: {},
+                    cost_estimate: 'unknown',
+                    error: ttsError.message,
+                    error_type: ttsError.name
+                }
+            };
         }
     });
 }
