@@ -12,16 +12,24 @@ export interface User {
   email: string;
   name: string;
   google_id?: string;
+  googleId?: string; // Add camelCase version for compatibility
   password_hash?: string;
+  passwordHash?: string; // Add camelCase version for compatibility
   role: string;
   target_language?: string;
+  targetLanguage?: string; // Add camelCase version for compatibility
   proficiency_level?: string;
+  proficiencyLevel?: string; // Add camelCase version for compatibility
   talk_topics?: string[] | string;
+  talkTopics?: string[] | string; // Add camelCase version for compatibility
   learning_goals?: string[] | string;
+  learningGoals?: string[] | string; // Add camelCase version for compatibility
   practice_preference?: string;
+  practicePreference?: string; // Add camelCase version for compatibility
   motivation?: string;
   preferences?: string;
   onboarding_complete: boolean;
+  onboardingComplete?: boolean; // Add camelCase version for compatibility
   created_at?: string;
   updated_at?: string;
 }
@@ -29,15 +37,24 @@ export interface User {
 export interface LanguageDashboard {
   id: number;
   user_id: string;
+  userId?: string; // Add camelCase version for compatibility
   language: string;
   proficiency_level?: string;
+  proficiencyLevel?: string; // Add camelCase version for compatibility
   talk_topics?: string[];
+  talkTopics?: string[]; // Add camelCase version for compatibility
   learning_goals?: string[];
+  learningGoals?: string[]; // Add camelCase version for compatibility
   practice_preference?: string;
+  practicePreference?: string; // Add camelCase version for compatibility
   feedback_language?: string;
+  feedbackLanguage?: string; // Add camelCase version for compatibility
   speak_speed?: number;
+  speakSpeed?: number; // Add camelCase version for compatibility
   romanization_display?: string;
+  romanizationDisplay?: string; // Add camelCase version for compatibility
   is_primary: boolean;
+  isPrimary?: boolean; // Add camelCase version for compatibility
   created_at?: string;
   updated_at?: string;
 }
@@ -98,9 +115,46 @@ export interface Persona {
 
 // User functions
 export const createUser = async (userData: Partial<User>): Promise<User> => {
+  // Convert camelCase to snake_case for database
+  const dbData: any = { ...userData };
+  
+  // Handle camelCase -> snake_case conversions
+  if (userData.googleId) {
+    dbData.google_id = userData.googleId;
+    delete dbData.googleId;
+  }
+  if (userData.passwordHash) {
+    dbData.password_hash = userData.passwordHash;
+    delete dbData.passwordHash;
+  }
+  if (userData.targetLanguage) {
+    dbData.target_language = userData.targetLanguage;
+    delete dbData.targetLanguage;
+  }
+  if (userData.proficiencyLevel) {
+    dbData.proficiency_level = userData.proficiencyLevel;
+    delete dbData.proficiencyLevel;
+  }
+  if (userData.talkTopics) {
+    dbData.talk_topics = userData.talkTopics;
+    delete dbData.talkTopics;
+  }
+  if (userData.learningGoals) {
+    dbData.learning_goals = userData.learningGoals;
+    delete dbData.learningGoals;
+  }
+  if (userData.practicePreference) {
+    dbData.practice_preference = userData.practicePreference;
+    delete dbData.practicePreference;
+  }
+  if (userData.onboardingComplete !== undefined) {
+    dbData.onboarding_complete = userData.onboardingComplete;
+    delete dbData.onboardingComplete;
+  }
+  
   const { data, error } = await supabase
     .from('users')
-    .insert([userData])
+    .insert([dbData])
     .select()
     .single();
   
@@ -142,9 +196,46 @@ export const findUserById = async (id: string): Promise<User | null> => {
 };
 
 export const updateUser = async (id: string, updates: Partial<User>): Promise<User> => {
+  // Convert camelCase to snake_case for database
+  const dbUpdates: any = { ...updates };
+  
+  // Handle camelCase -> snake_case conversions
+  if (updates.googleId) {
+    dbUpdates.google_id = updates.googleId;
+    delete dbUpdates.googleId;
+  }
+  if (updates.passwordHash) {
+    dbUpdates.password_hash = updates.passwordHash;
+    delete dbUpdates.passwordHash;
+  }
+  if (updates.targetLanguage) {
+    dbUpdates.target_language = updates.targetLanguage;
+    delete dbUpdates.targetLanguage;
+  }
+  if (updates.proficiencyLevel) {
+    dbUpdates.proficiency_level = updates.proficiencyLevel;
+    delete dbUpdates.proficiencyLevel;
+  }
+  if (updates.talkTopics) {
+    dbUpdates.talk_topics = updates.talkTopics;
+    delete dbUpdates.talkTopics;
+  }
+  if (updates.learningGoals) {
+    dbUpdates.learning_goals = updates.learningGoals;
+    delete dbUpdates.learningGoals;
+  }
+  if (updates.practicePreference) {
+    dbUpdates.practice_preference = updates.practicePreference;
+    delete dbUpdates.practicePreference;
+  }
+  if (updates.onboardingComplete !== undefined) {
+    dbUpdates.onboarding_complete = updates.onboardingComplete;
+    delete dbUpdates.onboardingComplete;
+  }
+  
   const { data, error } = await supabase
     .from('users')
-    .update(updates)
+    .update(dbUpdates)
     .eq('id', id)
     .select()
     .single();
