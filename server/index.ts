@@ -271,7 +271,7 @@ app.get('/api/user/streak', async (req: Request, res: Response) => {
   }
 
   try {
-    const result = await getUserStreak(Number(userId), language);
+    const result = await getUserStreak(userId, language);
     res.json(result);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -542,7 +542,7 @@ app.post('/api/save-session', async (req: Request, res: Response) => {
     }
     
     // Save the session
-    const session = await saveSession(Number(userId), chatHistory, language);
+    const session = await saveSession(userId, chatHistory, language);
     res.json({ success: true, sessionId: session.id });
   } catch (error: any) {
     console.error('Save session error:', error);
@@ -554,7 +554,7 @@ app.post('/api/save-session', async (req: Request, res: Response) => {
 app.get('/api/sessions/:userId', async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
-    const sessions = await getAllSessions(Number(userId));
+    const sessions = await getAllSessions(userId);
     res.json({ sessions });
   } catch (error: any) {
     console.error('Get sessions error:', error);
@@ -566,7 +566,7 @@ app.get('/api/sessions/:userId', async (req: Request, res: Response) => {
 app.get('/api/sessions/:userId/latest', async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
-    const session = await getSession(Number(userId));
+    const session = await getSession(userId);
     res.json({ session });
   } catch (error: any) {
     console.error('Get latest session error:', error);
