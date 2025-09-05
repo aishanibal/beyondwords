@@ -11,7 +11,7 @@ import TopicSelectionModal from './TopicSelectionModal';
 import PersonaModal from './PersonaModal';
 import LoadingScreen from '../components/LoadingScreen';
 import { LEARNING_GOALS, LearningGoal, getProgressiveSubgoalDescription, getSubgoalLevel, updateSubgoalProgress, SubgoalProgress, LevelUpEvent } from '../../lib/preferences';
-import { getUserLanguageDashboards } from '../../lib/supabase';
+import { getUserLanguageDashboards } from '../../lib/api';
 import ChatMessageItem from './ChatMessageItem';
 import unidecode from 'unidecode';
 import Kuroshiro from 'kuroshiro';

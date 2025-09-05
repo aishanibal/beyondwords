@@ -4,7 +4,7 @@ import axios from 'axios';
 import { supabase } from '../../lib/supabase';
 import { motion, AnimatePresence } from 'framer-motion';
 import { TALK_TOPICS, CLOSENESS_LEVELS, LEARNING_GOALS, Topic, LearningGoal } from '../../lib/preferences';
-import { getUserLanguageDashboards, getUserPersonas } from '../../lib/supabase';
+import { getUserLanguageDashboards, getUserPersonas } from '../../lib/api';
 import { useUser } from '../ClientLayout';
 export const dynamic = "force-dynamic";
 
@@ -66,7 +66,9 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
   }, [modalRef]);
 
   const fetchLanguageDashboard = useCallback(async () => {
-    if (!currentLanguage || !user?.id) return;
+    if (!currentLanguage || !user?.id) {
+      return;
+    }
     
     try {
       const { success, data: dashboards } = await getUserLanguageDashboards(user.id);
