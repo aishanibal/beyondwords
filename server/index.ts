@@ -750,6 +750,7 @@ app.post('/auth/login', async (req: Request, res: Response) => {
 app.post('/api/user/onboarding', authenticateJWT, async (req: Request, res: Response) => {
   try {
     console.log('Onboarding request received:', req.body);
+    console.log('User from token:', req.user);
     const { language, proficiency, talkTopics, learningGoals, practicePreference } = req.body;
     
     console.log('Extracted fields:', { language, proficiency, talkTopics, learningGoals, practicePreference });
@@ -759,7 +760,22 @@ app.post('/api/user/onboarding', authenticateJWT, async (req: Request, res: Resp
       return res.status(400).json({ error: 'Missing required onboarding fields' });
     }
     
+    // Ensure user exists in database (create if not found)
+    let user = await findUserById(req.user.userId);
+    if (!user) {
+      console.log('User not found in database, creating new user record');
+      user = await createUser({
+        id: req.user.userId, // Use the Supabase user ID
+        email: req.user.email || '',
+        name: req.user.name || '',
+        role: 'user',
+        onboarding_complete: false
+      });
+      console.log('Created user record:', user);
+    }
+    
     // Create the first language dashboard (primary)
+    console.log('Creating language dashboard for user:', req.user.userId);
     const dashboard = await createLanguageDashboard(
       req.user.userId,
       language,
@@ -770,24 +786,29 @@ app.post('/api/user/onboarding', authenticateJWT, async (req: Request, res: Resp
       'en', // feedbackLanguage
       true // isPrimary as boolean
     );
+    console.log('Created dashboard:', dashboard);
     
     // Update user to mark onboarding as complete
+    console.log('Updating user onboarding status');
     await updateUser(req.user.userId, {
       onboarding_complete: true
     });
     
-    const user = await findUserById(req.user.userId);
+    // Get updated user
+    const updatedUser = await findUserById(req.user.userId);
+    console.log('Updated user:', updatedUser);
     
     res.json({ 
       user: {
-        ...user,
-        onboarding_complete: Boolean(user?.onboarding_complete)
+        ...updatedUser,
+        onboarding_complete: Boolean(updatedUser?.onboarding_complete)
       },
       dashboard 
     });
   } catch (error: any) {
     console.error('Onboarding error:', error);
-    res.status(500).json({ error: 'Failed to save onboarding' });
+    console.error('Error stack:', error.stack);
+    res.status(500).json({ error: 'Failed to save onboarding', details: error.message });
   }
 });
 
