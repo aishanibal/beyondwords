@@ -66,11 +66,14 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
   }, [modalRef]);
 
   const fetchLanguageDashboard = useCallback(async () => {
-    if (!currentLanguage || !user?.id) {
+    if (!user?.id) {
       return;
     }
     
     try {
+      console.log('[TOPIC_MODAL] Fetching dashboards for user:', user.id);
+      console.log('[TOPIC_MODAL] Current language:', currentLanguage);
+      
       const { success, data: dashboards } = await getUserLanguageDashboards(user.id);
       
       if (!success) {
@@ -79,12 +82,23 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
         return;
       }
 
-      const dashboard = (dashboards || []).find((d: any) => d.language === currentLanguage);
+      console.log('[TOPIC_MODAL] Available dashboards:', dashboards);
+
+      // First try to find exact match
+      let dashboard = (dashboards || []).find((d: any) => d.language === currentLanguage);
+      
+      // If no exact match and we have dashboards, use the first available dashboard
+      if (!dashboard && dashboards && dashboards.length > 0) {
+        dashboard = dashboards[0];
+        console.log('[TOPIC_MODAL] No exact match found, using first available dashboard:', dashboard);
+      }
       
       if (dashboard) {
+        console.log('[TOPIC_MODAL] Using dashboard:', dashboard);
         setCurrentDashboard(dashboard);
         setDashboardExists(true);
       } else {
+        console.log('[TOPIC_MODAL] No dashboard found');
         setDashboardExists(false);
       }
     } catch (err: any) {
