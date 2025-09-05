@@ -2,7 +2,7 @@
 // API client for server communication
 import axios from 'axios';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://beyondwords-api.onrender.com';
 
 // Helper function to get auth token
 const getAuthToken = (): string | null => {
@@ -22,7 +22,7 @@ const getAuthHeaders = () => {
 export const getUserLanguageDashboards = async (userId: string) => {
   try {
     console.log('[API] Getting language dashboards for user:', userId);
-    const response = await axios.get(`/api/user/language-dashboards`, {
+    const response = await axios.get(`${API_BASE_URL}/api/user/language-dashboards`, {
       headers: getAuthHeaders()
     });
     
@@ -54,7 +54,7 @@ export const createLanguageDashboard = async (dashboardData: {
 }) => {
   try {
     console.log('[API] Creating language dashboard:', dashboardData);
-    const response = await axios.post(`/api/user/language-dashboards`, {
+    const response = await axios.post(`${API_BASE_URL}/api/user/language-dashboards`, {
       language: dashboardData.language,
       proficiency: dashboardData.proficiency_level,
       talkTopics: dashboardData.talk_topics,
@@ -84,7 +84,7 @@ export const createLanguageDashboard = async (dashboardData: {
 export const updateLanguageDashboard = async (language: string, updates: any) => {
   try {
     console.log('[API] Updating language dashboard:', language, updates);
-    const response = await axios.put(`/api/user/language-dashboards/${language}`, updates, {
+    const response = await axios.put(`${API_BASE_URL}/api/user/language-dashboards/${language}`, updates, {
       headers: getAuthHeaders()
     });
     
@@ -107,7 +107,7 @@ export const updateLanguageDashboard = async (language: string, updates: any) =>
 export const deleteLanguageDashboard = async (language: string) => {
   try {
     console.log('[API] Deleting language dashboard:', language);
-    await axios.delete(`/api/user/language-dashboards/${language}`, {
+    await axios.delete(`${API_BASE_URL}/api/user/language-dashboards/${language}`, {
       headers: getAuthHeaders()
     });
     
@@ -131,7 +131,7 @@ export const deleteLanguageDashboard = async (language: string) => {
 export const getUserPersonas = async (userId: string) => {
   try {
     console.log('[API] Getting personas for user:', userId);
-    const response = await axios.get(`/api/personas`, {
+    const response = await axios.get(`${API_BASE_URL}/api/personas`, {
       headers: getAuthHeaders()
     });
     
@@ -154,7 +154,7 @@ export const getUserPersonas = async (userId: string) => {
 export const getUserConversations = async (userId: string) => {
   try {
     console.log('[API] Getting conversations for user:', userId);
-    const response = await axios.get(`/api/conversations`, {
+    const response = await axios.get(`${API_BASE_URL}/api/conversations`, {
       headers: getAuthHeaders()
     });
     
