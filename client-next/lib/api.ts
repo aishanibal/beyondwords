@@ -7,7 +7,20 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://beyondword
 // Helper function to get auth token
 const getAuthToken = (): string | null => {
   if (typeof window !== 'undefined') {
-    return localStorage.getItem('jwt');
+    // First try to get the custom JWT token
+    const customJwt = localStorage.getItem('jwt');
+    if (customJwt) return customJwt;
+    
+    // Fallback to Supabase token
+    const supabaseToken = localStorage.getItem('supabase.auth.token');
+    if (supabaseToken) {
+      try {
+        const tokenData = JSON.parse(supabaseToken);
+        return tokenData.access_token;
+      } catch (e) {
+        console.error('Failed to parse Supabase token:', e);
+      }
+    }
   }
   return null;
 };

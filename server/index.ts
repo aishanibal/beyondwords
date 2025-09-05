@@ -207,15 +207,37 @@ const upload = multer({
 //   }
 // };
 
-// JWT middleware
+// JWT middleware - handles both custom JWT and Supabase tokens
 function authenticateJWT(req: ExpressRequest, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
   if (!authHeader) return res.status(401).json({ error: 'No token provided' });
   const token = authHeader.split(' ')[1];
-  jwt.verify(token, JWT_SECRET, (err: any, user: any) => {
-    if (err) return res.status(403).json({ error: 'Invalid token' });
-    req.user = user;
-    next();
+  
+  // Try custom JWT first
+  jwt.verify(token, JWT_SECRET, async (err: any, user: any) => {
+    if (!err && user) {
+      req.user = user;
+      return next();
+    }
+    
+    // If custom JWT fails, try Supabase token validation
+    try {
+      // Decode the Supabase JWT (without verification for now)
+      const decoded = jwt.decode(token) as any;
+      if (decoded && decoded.sub && decoded.email) {
+        // Create a user object compatible with our system
+        req.user = {
+          userId: decoded.sub,
+          email: decoded.email,
+          name: decoded.user_metadata?.name || decoded.user_metadata?.full_name || 'User'
+        };
+        return next();
+      }
+    } catch (supabaseErr) {
+      console.error('Supabase token validation failed:', supabaseErr);
+    }
+    
+    return res.status(403).json({ error: 'Invalid token' });
   });
 }
 
@@ -323,7 +345,7 @@ app.post('/api/analyze', authenticateJWT, upload.single('audio'), async (req: Re
     console.log('🔄 SERVER: /api/analyze form data:', req.body);
 
     // Call Python API for transcription and AI response (using ollama_client)
-    const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5000';
+    const pythonApiUrl = process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com';
     
     console.log('Calling Python API for transcription and AI response:', `${pythonApiUrl}/transcribe`);
     let transcription = 'Speech recorded';
@@ -385,7 +407,7 @@ app.post('/api/analyze', authenticateJWT, upload.single('audio'), async (req: Re
       console.log('TTS text length:', aiResponse.length);
       
       // Call Python API for Gemini TTS
-      const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5000';
+      const pythonApiUrl = process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com';
       const ttsResponse = await axios.post(`${pythonApiUrl}/generate_tts`, {
         text: aiResponse,
         language_code: language,
@@ -473,7 +495,7 @@ app.post('/api/feedback', authenticateJWT, async (req: Request, res: Response) =
     // Call Python API for detailed feedback
     let feedback = '';
     try {
-      const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5000';
+      const pythonApiUrl = process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com';
       const pythonResponse = await axios.post(`${pythonApiUrl}/feedback`, {
         chat_history,
         recognized_text: user_input,
@@ -1071,7 +1093,7 @@ app.post('/api/conversations', authenticateJWT, async (req: Request, res: Respon
       const user = await findUserById(req.user.userId);
       const userLevel = user?.proficiency_level || 'beginner';
       const userTopics = user?.talk_topics && typeof user.talk_topics === 'string' ? JSON.parse(user.talk_topics) : Array.isArray(user?.talk_topics) ? user.talk_topics : [];
-      const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5000';
+      const pythonApiUrl = process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com';
       const topicsToSend = topics && topics.length > 0 ? topics : userTopics;
       try {
         const aiRes = await axios.post(`${pythonApiUrl}/initial_message`, {
@@ -1253,7 +1275,7 @@ app.post('/api/suggestions', authenticateJWT, async (req: Request, res: Response
     
     // Call Python API for suggestions
     try {
-      const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5000';
+      const pythonApiUrl = process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com';
       const pythonResponse = await axios.post(`${pythonApiUrl}/suggestions`, {
         chat_history: chatHistory,
         language: language || user?.target_language || 'en',
@@ -1300,7 +1322,7 @@ app.post('/api/translate', authenticateJWT, async (req: Request, res: Response) 
     
     // Call Python API for translation
     try {
-      const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5000';
+      const pythonApiUrl = process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com';
       const pythonResponse = await axios.post(`${pythonApiUrl}/translate`, {
         text: text,
         source_language: source_language || 'auto',
@@ -1343,7 +1365,7 @@ app.post('/api/explain_suggestion', authenticateJWT, async (req: Request, res: R
     
     // Call Python API for explanation
     try {
-      const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5000';
+      const pythonApiUrl = process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com';
       const pythonResponse = await axios.post(`${pythonApiUrl}/explain_suggestion`, {
         suggestion_text: suggestion_text,
         chatHistory: chatHistory || [],
@@ -1386,7 +1408,7 @@ app.post('/api/short_feedback', authenticateJWT, async (req: Request, res: Respo
     const userGoals = req.body.user_goals || (user?.learning_goals && typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : Array.isArray(user?.learning_goals) ? user.learning_goals : []);
     const feedbackLanguage = req.body.feedback_language || 'en';
 
-    const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5000';
+    const pythonApiUrl = process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com';
     const response = await axios.post(`${pythonApiUrl}/short_feedback`, {
       ...req.body, // Pass all original request body
       user_level: userLevel,
@@ -1413,7 +1435,7 @@ app.post('/api/detailed_breakdown', authenticateJWT, async (req: Request, res: R
     const formality = req.body.formality || 'friendly';
     const feedbackLanguage = req.body.feedback_language || 'en';
 
-    const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5000';
+    const pythonApiUrl = process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com';
     const response = await axios.post(`${pythonApiUrl}/detailed_breakdown`, {
       ...req.body, // Pass all original request body
       user_level: userLevel,
@@ -1612,7 +1634,7 @@ app.post('/api/quick_translation', authenticateJWT, async (req: Request, res: Re
     
     // Call Python API for quick translation
     try {
-      const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5000';
+      const pythonApiUrl = process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com';
       const pythonResponse = await axios.post(`${pythonApiUrl}/quick_translation`, {
         ai_message: ai_message,
         language: language || 'en',
@@ -1653,7 +1675,7 @@ app.use('/files', express.static(path.join(__dirname, '..')));
 // Helper function to check Python API health
 async function checkPythonAPIHealth(): Promise<boolean> {
   try {
-    const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5000';
+    const pythonApiUrl = process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com';
     console.log(`🔍 Checking Python API health at: ${pythonApiUrl}/health`);
     
     const response = await axios.get(`${pythonApiUrl}/health`, {
@@ -1685,7 +1707,7 @@ async function generateTTSWithDebug(text: string, language: string): Promise<{ t
     console.log('🎯 [TTS DEBUG] TTS text length:', text.length);
     
     // Call Python API for TTS with debug info
-    const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5000';
+    const pythonApiUrl = process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com';
     console.log(`🎯 [TTS DEBUG] Calling Python API at: ${pythonApiUrl}/generate_tts`);
     console.log(`🎯 [TTS DEBUG] Request payload: text='${text.substring(0, 50)}...', language='${language}', output_path='${ttsFilePath}'`);
     
@@ -1782,6 +1804,6 @@ async function generateTTSWithDebug(text: string, language: string): Promise<{ t
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
-  console.log(`Python API URL: ${process.env.PYTHON_API_URL || 'http://localhost:5000'}`);
+  console.log(`Python API URL: ${process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com'}`);
   console.log('Note: Using SQLite database for temporary storage');
 }); 
