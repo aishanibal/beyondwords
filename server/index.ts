@@ -70,7 +70,7 @@ const globalAny = global as GlobalWithSpeechVars;
 const app = express();
 
 // Log every incoming request for debugging
-app.use((req, res, next) => {
+app.use((req: Request, res: Response, next: NextFunction) => {
   console.log('INCOMING REQUEST:', req.method, req.url, 'Headers:', req.headers);
   next();
 });
