@@ -76,7 +76,13 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 });
 
 app.use(express.json());
-app.use(cors({ origin: 'http://localhost:3000', credentials: false }));
+app.use(cors({ 
+  origin: [
+    'http://localhost:3000',
+    'https://speakbeyondwords-sigma.vercel.app'
+  ], 
+  credentials: false 
+}));
 
 // Multer configuration for file uploads
 const storage: StorageEngine = multer.diskStorage({
