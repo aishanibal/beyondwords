@@ -231,8 +231,26 @@ const AnalyzeContentInner = () => {
   
     // Helper to get JWT token
     const getAuthHeaders = () => {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('jwt') : null;
-      return token ? { Authorization: `Bearer ${token}` } : {};
+      if (typeof window === 'undefined') return {};
+      
+      // Try custom JWT first, then Supabase token
+      const customJwt = localStorage.getItem('jwt');
+      if (customJwt) {
+        return { Authorization: `Bearer ${customJwt}` };
+      }
+      
+      // Fallback to Supabase token
+      const supabaseToken = localStorage.getItem('supabase.auth.token');
+      if (supabaseToken) {
+        try {
+          const tokenData = JSON.parse(supabaseToken);
+          return { Authorization: `Bearer ${tokenData.access_token}` };
+        } catch (e) {
+          console.error('Failed to parse Supabase token:', e);
+        }
+      }
+      
+      return {};
     };
   
     // Move searchParams usage to state to avoid SSR issues

@@ -16,8 +16,24 @@ interface TopicSelectionModalProps {
 }
 
 function getAuthHeaders() {
-  const token = localStorage.getItem('jwt');
-  return { Authorization: `Bearer ${token}` };
+  // Try custom JWT first, then Supabase token
+  const customJwt = localStorage.getItem('jwt');
+  if (customJwt) {
+    return { Authorization: `Bearer ${customJwt}` };
+  }
+  
+  // Fallback to Supabase token
+  const supabaseToken = localStorage.getItem('supabase.auth.token');
+  if (supabaseToken) {
+    try {
+      const tokenData = JSON.parse(supabaseToken);
+      return { Authorization: `Bearer ${tokenData.access_token}` };
+    } catch (e) {
+      console.error('Failed to parse Supabase token:', e);
+    }
+  }
+  
+  return {};
 }
 
 export default function TopicSelectionModal({ isOpen, onClose, onStartConversation, currentLanguage }: TopicSelectionModalProps) {
@@ -338,8 +354,9 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
         return;
       }
 
-      const token = localStorage.getItem('jwt');
-      if (!token) {
+      // Get auth headers (includes token validation)
+      const authHeaders = getAuthHeaders();
+      if (!authHeaders.Authorization) {
         setError('Authentication token missing. Please log in again.');
         setIsLoading(false);
         return;
@@ -363,7 +380,7 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
           usesPersona: false,
           personaId: null
         }, {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: authHeaders,
           signal: controller.signal
         });
         clearTimeout(timeout);
