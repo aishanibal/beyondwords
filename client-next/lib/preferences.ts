@@ -72,6 +72,15 @@ export const LANGUAGES: Language[] = [
   { code: 'ml', label: 'Malayalam', flag: '🇮🇳', description: 'AI ഉപയോഗിച്ച് മലയാളം പരിശീലിക്കുക' },
   { code: 'ta', label: 'Tamil', flag: '🇮🇳', description: 'AI உடன் தமிழ் பயிற்சி' },
   { code: 'or', label: 'Odia', flag: '🇮🇳', description: 'AI ସହିତ ଓଡ଼ିଆ ଅଭ୍ୟାସ କରନ୍ତୁ' },
+  // Additional Script Languages
+  { code: 'th', label: 'Thai', flag: '🇹🇭', description: 'ฝึกภาษาไทยกับ AI' },
+  { code: 'bn', label: 'Bengali', flag: '🇧🇩', description: 'AI দিয়ে বাংলা অনুশীলন করুন' },
+  { code: 'pa', label: 'Punjabi', flag: '🇮🇳', description: 'AI ਨਾਲ ਪੰਜਾਬੀ ਦਾ ਅਭਿਆਸ ਕਰੋ' },
+  { code: 'gu', label: 'Gujarati', flag: '🇮🇳', description: 'AI સાથે ગુજરાતીનો અભ્યાસ કરો' },
+  { code: 'mr', label: 'Marathi', flag: '🇮🇳', description: 'AI सह मराठीचा सराव करा' },
+  { code: 'kn', label: 'Kannada', flag: '🇮🇳', description: 'AI ಜೊತೆ ಕನ್ನಡ ಅಭ್ಯಾಸ ಮಾಡಿ' },
+  { code: 'te', label: 'Telugu', flag: '🇮🇳', description: 'AI తో తెలుగు అభ్యాసం చేయండి' },
+  { code: 'ar', label: 'Arabic', flag: '🇸🇦', description: 'تدرب على العربية مع الذكاء الاصطناعي' },
 ];
 
 export const PROFICIENCY_LEVELS: ProficiencyLevel[] = [
