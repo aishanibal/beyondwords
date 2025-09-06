@@ -13,7 +13,7 @@ import DashboardSettingsModal from '../components/DashboardSettingsModal';
 import LoadingScreen from '../components/LoadingScreen';
 
 import { LEARNING_GOALS, LearningGoal, getProgressiveSubgoalDescription, getSubgoalLevel, getSubgoalProgress, updateSubgoalProgress, SubgoalProgress, LevelUpEvent } from '../../lib/preferences';
-import { getUserLanguageDashboards, getUserConversations, getUserPersonas } from '../../lib/supabase';
+import { getUserLanguageDashboards, getUserConversations, getUserPersonas } from '../../lib/api';
 
 // Type definitions
 interface DashboardType {
@@ -452,7 +452,7 @@ export default function DashboardPage() {
         );
         
         // Sort conversations by created_at date (newest first)
-        const sortedConversations = conversations.sort((a: ConversationType, b: ConversationType) => {
+        const sortedConversations = (conversations || []).sort((a: ConversationType, b: ConversationType) => {
           return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
         });
         

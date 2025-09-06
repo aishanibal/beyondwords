@@ -1,8 +1,8 @@
 services:
   - type: web
-    name: heirloom-express-backend
+    name: beyondwords-api
     env: node
-    plan: starter
+    plan: free
     buildCommand: npm install && npm run build
     startCommand: npm start
     envVars:
@@ -11,16 +11,19 @@ services:
       - key: PORT
         value: 4000
       - key: SUPABASE_URL
-        sync: false
-      - key: SUPABASE_ANON_KEY
-        sync: false
+        fromService: 
+          type: envVar
+          name: SUPABASE_URL
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        fromService:
+          type: envVar
+          name: SUPABASE_SERVICE_ROLE_KEY
       - key: JWT_SECRET
         generateValue: true
       - key: GOOGLE_CLIENT_ID
-        sync: false
-      - key: GOOGLE_CLIENT_SECRET
-        sync: false
-      - key: GOOGLE_API_KEY
-        sync: false
-      - key: GOOGLE_CLOUD_PROJECT
-        sync: false 
+        fromService:
+          type: envVar
+          name: GOOGLE_CLIENT_ID
+      - key: PYTHON_API_URL
+        value: http://localhost:5000
+    healthCheckPath: /api/health

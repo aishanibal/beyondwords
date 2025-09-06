@@ -7,7 +7,6 @@ import { useUser } from '../ClientLayout';
 
 import LoadingScreen from '../components/LoadingScreen';
 import { LANGUAGES, PROFICIENCY_LEVELS, TALK_TOPICS, LEARNING_GOALS, PRACTICE_PREFERENCES, FEEDBACK_LANGUAGES, Language, ProficiencyLevel, Topic, LearningGoal, PracticePreference, FeedbackLanguage } from '../../lib/preferences';
-import { supabase, createLanguageDashboard } from '../../lib/supabase';
 
 export default function OnboardingPage() {
   const { user, setUser } = useUser();
@@ -168,31 +167,29 @@ export default function OnboardingPage() {
         throw new Error('User not authenticated');
       }
 
-      // Create language dashboard using Supabase
-      const { success, error: dashboardError } = await createLanguageDashboard({
-        user_id: currentUser.id,
-        language: onboardingData.language,
-        proficiency_level: onboardingData.proficiency,
-        talk_topics: onboardingData.talkTopics,
-        learning_goals: onboardingData.learningGoals,
-        practice_preference: onboardingData.practicePreference,
-        feedback_language: onboardingData.feedbackLanguage,
-        is_primary: true
+      // Create language dashboard using Express server API
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || 'https://beyondwords-express.onrender.com'}/api/user/onboarding`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('supabase.auth.token') ? JSON.parse(localStorage.getItem('supabase.auth.token')!).access_token : ''}`
+        },
+        body: JSON.stringify({
+          language: onboardingData.language,
+          proficiency: onboardingData.proficiency,
+          talkTopics: onboardingData.talkTopics,
+          learningGoals: onboardingData.learningGoals,
+          practicePreference: onboardingData.practicePreference
+        })
       });
 
-      if (!success) {
-        throw new Error(dashboardError || 'Failed to create language dashboard');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create language dashboard');
       }
 
-      // Update user profile to mark onboarding as complete
-      const { error: updateError } = await supabase
-        .from('users')
-        .update({ onboarding_complete: true })
-        .eq('id', currentUser.id);
-
-      if (updateError) {
-        throw new Error(updateError.message || 'Failed to update user profile');
-      }
+      const result = await response.json();
+      console.log('[ONBOARDING] Server response:', result);
 
       // Update local user state
       setUser({

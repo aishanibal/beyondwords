@@ -135,9 +135,10 @@ export const createUserProfile = async (userData: any) => {
   }
 };
 
+// Note: This function is deprecated - use the API client in lib/api.ts instead
 export const getUserLanguageDashboards = async (userId: string) => {
+  console.warn('[SUPABASE] getUserLanguageDashboards is deprecated. Use the API client from lib/api.ts instead.');
   try {
-    // console.log('[SUPABASE] Getting language dashboards for:', userId);
     const { data, error } = await supabase
       .from('language_dashboards')
       .select('*')
@@ -148,7 +149,6 @@ export const getUserLanguageDashboards = async (userId: string) => {
       return { success: false, data: null, error };
     }
     
-    // console.log('[SUPABASE] Language dashboards retrieved:', data);
     return { success: true, data, error: null };
   } catch (err) {
     console.error('[SUPABASE] Exception getting language dashboards:', err);

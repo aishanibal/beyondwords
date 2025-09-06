@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useUser } from '../ClientLayout';
 import axios from 'axios';
 import { LANGUAGES, PROFICIENCY_LEVELS, TALK_TOPICS, LEARNING_GOALS, PRACTICE_PREFERENCES, FEEDBACK_LANGUAGES, Language, ProficiencyLevel, Topic, LearningGoal, PracticePreference, FeedbackLanguage } from '../../lib/preferences';
-import { createLanguageDashboard } from '../../lib/supabase';
+import { createLanguageDashboard } from '../../lib/api';
 
 
 interface LanguageOnboardingProps {
