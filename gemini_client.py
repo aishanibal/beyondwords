@@ -3,6 +3,7 @@ import os
 from datetime import datetime
 from typing import Optional, Dict, List
 import re
+import requests
 
 # Try to import Google AI, but make it optional
 try:
@@ -2434,4 +2435,132 @@ CRITICAL INSTRUCTIONS:
             
     except Exception as e:
         print(f"Quick translation error: {e}")
+        return "Translation error occurred"
+
+def get_quick_translation_hybrid(ai_message: str, language: str = 'en', user_level: str = 'beginner', user_topics: list = None, formality: str = 'friendly', feedback_language: str = 'en', user_goals: list = None, description: str = None) -> str:
+    """Get quick translation using hybrid approach: free APIs + AI fallback"""
+    
+    if user_topics is None:
+        user_topics = []
+    if user_goals is None:
+        user_goals = []
+    
+    if not ai_message or not ai_message.strip():
+        return ""
+    
+    print(f"🔍 [HYBRID DEBUG] Starting hybrid translation for language: {language}")
+    
+    # Try offline/free API approach first
+    try:
+        print(f"🔍 [HYBRID DEBUG] Attempting offline/free API breakdown...")
+        result = _get_offline_breakdown(ai_message, language, feedback_language)
+        if result and _is_complete_breakdown(result):
+            print(f"🔍 [HYBRID DEBUG] Offline breakdown successful! Using free API translation.")
+            return _format_breakdown_output(result, language, feedback_language)
+        else:
+            print(f"🔍 [HYBRID DEBUG] Offline breakdown incomplete or failed. Quality check failed.")
+    except Exception as e:
+        print(f"🔍 [HYBRID DEBUG] Offline breakdown failed with error: {e}")
+    
+    # Fallback to AI if offline approach fails
+    print("🔍 [HYBRID DEBUG] Falling back to AI-based translation")
+    return _get_ai_breakdown(ai_message, language, user_level, feedback_language)
+
+def get_quick_translation_hybrid_with_meta(ai_message: str, language: str = 'en', user_level: str = 'beginner', user_topics: list = None, formality: str = 'friendly', feedback_language: str = 'en', user_goals: list = None, description: str = None) -> dict:
+    """Same as get_quick_translation_hybrid but returns {'translation': str, 'source': 'HYBRID_FREE'|'AI_FALLBACK'}"""
+    if user_topics is None:
+        user_topics = []
+    if user_goals is None:
+        user_goals = []
+    if not ai_message or not ai_message.strip():
+        return {"translation": "", "source": "EMPTY"}
+
+    print(f"🔍 [HYBRID DEBUG] (with meta) Starting hybrid translation for language: {language}")
+    
+    # TEMPORARILY DISABLED: API-based breakdown due to quality issues
+    # TODO: Re-enable when API results improve for all languages
+    """
+    try:
+        print(f"🔍 [HYBRID DEBUG] (with meta) Attempting offline/free API breakdown...")
+        result = _get_offline_breakdown(ai_message, language, feedback_language)
+        if result and _is_complete_breakdown(result):
+            print(f"🔍 [HYBRID DEBUG] (with meta) Offline breakdown successful! Using free API translation.")
+            return {"translation": _format_breakdown_output(result, language, feedback_language), "source": "HYBRID_FREE"}
+        else:
+            print(f"🔍 [HYBRID DEBUG] (with meta) Offline breakdown incomplete or failed. Quality check failed.")
+    except Exception as e:
+        print(f"🔍 [HYBRID DEBUG] (with meta) Offline breakdown failed with error: {e}")
+    """
+
+    print("🔍 [HYBRID DEBUG] (with meta) Using AI-based translation (API breakdown temporarily disabled)")
+    return {"translation": _get_ai_breakdown(ai_message, language, user_level, feedback_language), "source": "AI_FALLBACK"}
+
+def _get_ai_breakdown(ai_message: str, language: str, user_level: str, feedback_language: str) -> str:
+    """Get AI-based breakdown as fallback"""
+    try:
+        if not GOOGLE_AI_AVAILABLE:
+            return "AI translation unavailable - Google AI not configured"
+        
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        
+        # Check if language is a script language
+        is_script = language in LanguageTutor.SCRIPT_LANGUAGES
+        
+        # Build translation prompt
+        if is_script:
+            prompt = f"""You are a language tutor helping a {user_level} level learner understand an AI message in {language}.
+
+AI MESSAGE TO TRANSLATE: "{ai_message}"
+
+TASK:
+Provide a complete translation with word-by-word breakdown in this EXACT format:
+
+**Full Translation:**
+[Complete translation of the entire message in {feedback_language}]
+
+**Word-by-Word Breakdown:**
+[IMPORTANT: Translate EVERY SINGLE WORD in the original message, including articles, prepositions, and common words. Do not skip any words. Do not make punctuation marks a separate word.]
+
+[Original word/phrase script] / [Original word/phrase romanized] -- [Translation in {feedback_language}]
+[Continue for each word/phrase, but do NOT make punctuation marks a separate word - make sure to include ALL words and maintain SPELLING]
+
+**BREAKDOWN RULE: "Hello." counts as ONE word, not "Hello" + ".". Keep punctuation attached to words.**
+
+CRITICAL INSTRUCTIONS:
+- PLEASE DO NOT separate punctuation marks from words. Keep punctuation WITH the word it belongs to.
+- Keep the AI message exactly the same. Do not add or change any words or punctuation.
+"""
+        else:
+            prompt = f"""You are a language tutor helping a {user_level} level learner understand an AI message in {language}.
+
+AI MESSAGE TO TRANSLATE: "{ai_message}"
+
+TASK:
+Provide a complete translation with word-by-word breakdown in this EXACT format:
+
+**Full Translation:**
+[Complete translation of the entire message in {feedback_language}]
+
+**Word-by-Word Breakdown:**
+[IMPORTANT: Translate EVERY SINGLE WORD in the original message, including articles, prepositions, and common words. Do not skip any words. Do not make punctuation marks a separate word.]
+
+[Original word/phrase] -- [Translation in {feedback_language}]
+[Continue for each word/phrase, but do NOT make punctuation marks a separate word - make sure to include ALL words and maintain SPELLING]
+
+**BREAKDOWN RULE: "Hello." counts as ONE word, not "Hello" + ".". Keep punctuation attached to words.**
+
+CRITICAL INSTRUCTIONS:
+- PLEASE DO NOT separate punctuation marks from words. Keep punctuation WITH the word it belongs to.
+- Keep the AI message exactly the same. Do not add or change any words or punctuation.
+"""
+        
+        response = model.generate_content(prompt)
+        
+        if response and response.text:
+            return response.text.strip()
+        else:
+            return "Translation failed"
+            
+    except Exception as e:
+        print(f"AI breakdown error: {e}")
         return "Translation error occurred"

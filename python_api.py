@@ -8,7 +8,7 @@ import shutil
 from werkzeug.utils import secure_filename
 import numpy as np
 import datetime
-from gemini_client import get_conversational_response, get_detailed_feedback, get_text_suggestions, get_translation, is_gemini_ready, get_short_feedback, get_detailed_breakdown, create_tutor, get_quick_translation
+from gemini_client import get_conversational_response, get_detailed_feedback, get_text_suggestions, get_translation, is_gemini_ready, get_short_feedback, get_detailed_breakdown, create_tutor, get_quick_translation, get_quick_translation_hybrid_with_meta
 from tts_synthesizer_admin_controlled import synthesize_speech
 
 # Use Gemini for transcription
@@ -622,8 +622,8 @@ def quick_translation():
         
         print(f"🌐 Quick translation request - Language: {language}")
         
-        # Get quick translation
-        translation = get_quick_translation(
+        # Get quick translation (hybrid with source metadata)
+        result = get_quick_translation_hybrid_with_meta(
             ai_message,
             language,
             user_level,
@@ -635,7 +635,8 @@ def quick_translation():
         )
         
         return jsonify({
-            "translation": translation,
+            "translation": result.get("translation", ""),
+            "source": result.get("source", "UNKNOWN"),
             "success": True
         })
         

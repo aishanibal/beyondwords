@@ -1,10 +1,11 @@
 {
   "admin_password_hash": "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9",
   "tts_settings": {
-    "active_tts": "gemini",
+    "default_tts": "google_cloud",
     "gemini_enabled": true,
     "cost_limit_per_day": 1,
-    "usage_tracking": true
+    "usage_tracking": true,
+    "active_tts": "system"
   },
   "google_api_settings": {
     "services_enabled": true,
