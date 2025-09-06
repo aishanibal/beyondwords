@@ -10,7 +10,7 @@ export const config = {
   },
 };
 
-const BACKEND_URL = process.env.BACKEND_URL || 'https://beyondwords-api.onrender.com/api/analyze';
+const BACKEND_URL = process.env.BACKEND_URL || 'https://beyondwords-express.onrender.com/api/analyze';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {

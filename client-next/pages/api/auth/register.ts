@@ -7,7 +7,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     // Forward the registration request to your Express backend at /auth/register
-    const response = await axios.post('https://beyondwords-api.onrender.com/api/auth/register', req.body);
+    const response = await axios.post('https://beyondwords-express.onrender.com/api/auth/register', req.body);
     res.status(response.status).json(response.data);
   } catch (error: any) {
     res.status(error.response?.status || 500).json(error.response?.data || { error: 'Registration failed' });
