@@ -101,7 +101,14 @@ const SCRIPT_LANGUAGES = {
   'ar': 'Arabic',
   'ta': 'Tamil',
   'ml': 'Malayalam',
-  'or': 'Odia'
+  'or': 'Odia',
+  'th': 'Thai',
+  'bn': 'Bengali',
+  'pa': 'Punjabi',
+  'gu': 'Gujarati',
+  'mr': 'Marathi',
+  'kn': 'Kannada',
+  'te': 'Telugu'
 };
 
 const isScriptLanguage = (languageCode: string): boolean => {
@@ -3597,9 +3604,22 @@ const AnalyzeContentInner = () => {
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [usePersona, user]);
   
-    const formatMessageForDisplay = (message: ChatMessage, romanizationDisplay: string | undefined): { mainText: string; romanizedText: string } => {
+    const formatMessageForDisplay = (message: ChatMessage, romanizationDisplay: string | undefined, language?: string): { mainText: string; romanizedText: string } => {
       const romanizedText = message.romanizedText || '';
-      // For non-script languages or undefined preference, just show the text
+      
+      // Define script languages
+      const SCRIPT_LANGUAGES = ['ja', 'ko', 'zh', 'hi', 'ar', 'ta', 'ml', 'or', 'th', 'bn', 'pa', 'gu', 'mr', 'kn', 'te'];
+      const isScript = language && SCRIPT_LANGUAGES.includes(language);
+      
+      // For non-script languages, never show romanization
+      if (!isScript) {
+        return {
+          mainText: message.text,
+          romanizedText: '',
+        };
+      }
+      
+      // For script languages, handle display preferences
       if (!romanizationDisplay || romanizationDisplay === 'both') {
         return { mainText: message.text, romanizedText: romanizedText };
       } else if (romanizationDisplay === 'script_only') {
@@ -4320,7 +4340,7 @@ const AnalyzeContentInner = () => {
         }
       } else {
         // Fallback to original message text
-        const displayText = formatMessageForDisplay(message, userPreferences.romanizationDisplay);
+        const displayText = formatMessageForDisplay(message, userPreferences.romanizationDisplay, language);
         const textToRender = displayText.romanizedText || displayText.mainText;
         return renderClickableWords(textToRender, translation, messageIndex);
       }
@@ -4508,7 +4528,7 @@ const AnalyzeContentInner = () => {
     // Memoized formatted messages to prevent unnecessary re-computations
     const memoizedFormattedMessages = useMemo(() => {
       return chatHistory.map(message => 
-        formatMessageForDisplay(message, userPreferences.romanizationDisplay)
+        formatMessageForDisplay(message, userPreferences.romanizationDisplay, language)
       );
     }, [chatHistory, userPreferences.romanizationDisplay]);
   
@@ -6073,7 +6093,7 @@ const AnalyzeContentInner = () => {
                   const message = chatHistory[index];
                   if (!message) return null;
   
-                  const formatted = formatMessageForDisplay(message, userPreferences.romanizationDisplay);
+                  const formatted = formatMessageForDisplay(message, userPreferences.romanizationDisplay, language);
                   
                   return (
                     <div key={message.id || index} style={{
@@ -6206,7 +6226,7 @@ const AnalyzeContentInner = () => {
                                   const suggestion = suggestionMessages[currentSuggestionIndex];
                                   if (!suggestion) return null;
                                   
-                                  const formatted = formatMessageForDisplay(suggestion, userPreferences.romanizationDisplay);
+                                  const formatted = formatMessageForDisplay(suggestion, userPreferences.romanizationDisplay, language);
                                   return (
                                     <>
                                       <span>{formatted.mainText}</span>

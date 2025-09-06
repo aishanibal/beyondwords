@@ -4,9 +4,23 @@ export const dynamic = "force-dynamic";
 
 
 // Helper function to format message for display
-const formatMessageForDisplay = (message: any, romanizationDisplay: 'always' | 'never' | 'if_different') => {
+const formatMessageForDisplay = (message: any, romanizationDisplay: 'always' | 'never' | 'if_different', language?: string) => {
   const mainText = message.text || '';
   const romanizedText = message.romanized_text || '';
+  
+  // Define script languages
+  const SCRIPT_LANGUAGES = ['ja', 'ko', 'zh', 'hi', 'ar', 'ta', 'ml', 'or', 'th', 'bn', 'pa', 'gu', 'mr', 'kn', 'te'];
+  const isScript = language && SCRIPT_LANGUAGES.includes(language);
+  
+  // For non-script languages, never show romanization
+  if (!isScript) {
+    return {
+      mainText: mainText,
+      romanizedText: '',
+    };
+  }
+  
+  // For script languages, handle display preferences
   const showRomanized =
     romanizationDisplay === 'always' ||
     (romanizationDisplay === 'if_different' &&
@@ -20,9 +34,12 @@ const formatMessageForDisplay = (message: any, romanizationDisplay: 'always' | '
 
 // Helper function to get text for TTS
 const getTTSText = (message: any, romanizationDisplay: 'always' | 'never' | 'if_different', language: string) => {
-    // For languages that use roman characters primarily, always use the main text.
-    const romanCharLanguages = ['en', 'es', 'fr', 'de', 'it', 'pt', 'nl', 'sv', 'da', 'no', 'fi'];
-    if (romanCharLanguages.includes(language.split('-')[0])) {
+    // Define script languages
+    const SCRIPT_LANGUAGES = ['ja', 'ko', 'zh', 'hi', 'ar', 'ta', 'ml', 'or', 'th', 'bn', 'pa', 'gu', 'mr', 'kn', 'te'];
+    const isScript = language && SCRIPT_LANGUAGES.includes(language);
+    
+    // For non-script languages, always use the main text
+    if (!isScript) {
       return message.text;
     }
   
@@ -34,7 +51,7 @@ const getTTSText = (message: any, romanizationDisplay: 'always' | 'never' | 'if_
         romanizedText &&
         mainText.toLowerCase() !== romanizedText.toLowerCase());
   
-    // Prefer romanized text if it's available and supposed to be shown, otherwise use main text.
+    // For script languages, prefer romanized text if it's available and supposed to be shown, otherwise use main text.
     return showRomanized && romanizedText ? romanizedText : mainText;
 };
   
