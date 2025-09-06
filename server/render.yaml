@@ -25,5 +25,5 @@ services:
           type: envVar
           name: GOOGLE_CLIENT_ID
       - key: PYTHON_API_URL
-        value: http://localhost:5000
+        value: https://beyondwords.onrender.com
     healthCheckPath: /api/health

@@ -2,7 +2,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import axios from 'axios';
 
-const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:4000/api/conversations';
+const BACKEND_URL = process.env.BACKEND_URL || 'https://beyondwords-api.onrender.com/api/conversations';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { id } = req.query;
