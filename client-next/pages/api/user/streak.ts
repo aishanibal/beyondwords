@@ -7,7 +7,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { userId, language } = req.query;
   if (!userId || !language) return res.status(400).json({ error: 'Missing user or language' });
   try {
-    const response = await axios.get('http://localhost:4000/api/user/streak', {
+    const response = await axios.get('https://beyondwords-express.onrender.com/api/user/streak', {
       params: { userId, language }
     });
     res.json(response.data);

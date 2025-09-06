@@ -10,7 +10,7 @@ export const config = {
   },
 };
 
-const BACKEND_URL = process.env.AI_BACKEND_URL || 'http://localhost:5000/transcribe_only';
+const BACKEND_URL = process.env.AI_BACKEND_URL || 'https://beyondwords.onrender.com/transcribe_only';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
