@@ -22,9 +22,9 @@ const onboardingStyles = `
 
   .onboarding-title {
     color: var(--blue-secondary);
-    font-size: clamp(1.4rem, 3.5vw, 2rem);
+    font-size: clamp(1.2rem, 3vw, 1.6rem);
     font-weight: 700;
-    margin-bottom: clamp(0.2rem, 0.8vw, 0.4rem);
+    margin-bottom: clamp(0.1rem, 0.5vw, 0.3rem);
     text-align: center;
     font-family: 'Gabriela', Arial, sans-serif;
     line-height: 1.1;
@@ -33,8 +33,8 @@ const onboardingStyles = `
   .onboarding-subtitle {
     color: var(--rose-primary);
     text-align: center;
-    margin-bottom: clamp(0.4rem, 1vw, 0.6rem);
-    font-size: clamp(0.9rem, 2.2vw, 1.2rem);
+    margin-bottom: clamp(0.3rem, 0.8vw, 0.5rem);
+    font-size: clamp(0.8rem, 1.8vw, 1rem);
     font-family: 'AR One Sans', Arial, sans-serif;
     line-height: 1.2;
     max-width: 90%;
@@ -58,9 +58,9 @@ const onboardingStyles = `
   }
 
   .language-card {
-    padding: clamp(0.2rem, 0.5vw, 0.3rem);
-    border-radius: clamp(0.2rem, 0.8vw, 0.4rem);
-    border: 2px solid rgba(126,90,117,0.2);
+    padding: clamp(0.15rem, 0.4vw, 0.25rem);
+    border-radius: clamp(0.15rem, 0.6vw, 0.3rem);
+    border: 1px solid rgba(126,90,117,0.2);
     background-color: var(--cream);
     cursor: pointer;
     transition: all 0.3s ease;
@@ -71,10 +71,10 @@ const onboardingStyles = `
     align-items: center;
     box-sizing: border-box;
     width: 100%;
-    max-width: 120px;
+    max-width: 110px;
     margin: 0 auto;
     min-height: 0;
-    aspect-ratio: 0.7;
+    aspect-ratio: 0.6;
   }
 
   .language-card:hover {
@@ -90,22 +90,22 @@ const onboardingStyles = `
   }
 
   .language-flag {
-    font-size: clamp(1rem, 2vw, 1.3rem);
-    margin-bottom: clamp(0.05rem, 0.2vw, 0.1rem);
+    font-size: clamp(0.9rem, 1.8vw, 1.1rem);
+    margin-bottom: clamp(0.03rem, 0.1vw, 0.05rem);
     line-height: 1;
   }
 
   .language-name {
     font-weight: 600;
     color: var(--blue-secondary);
-    margin-bottom: clamp(0.05rem, 0.2vw, 0.1rem);
-    font-size: clamp(0.6rem, 1.2vw, 0.75rem);
+    margin-bottom: clamp(0.03rem, 0.1vw, 0.05rem);
+    font-size: clamp(0.55rem, 1.1vw, 0.7rem);
     font-family: 'Gabriela', Arial, sans-serif;
     line-height: 1;
   }
 
   .language-description {
-    font-size: clamp(0.45rem, 0.9vw, 0.55rem);
+    font-size: clamp(0.4rem, 0.8vw, 0.5rem);
     color: var(--rose-primary);
     line-height: 1;
     font-family: 'AR One Sans', Arial, sans-serif;
