@@ -127,28 +127,30 @@ const onboardingStyles = `
   @media (max-width: 480px) {
     .language-grid {
       grid-template-columns: repeat(2, 1fr);
-      gap: 0.3rem;
-      padding: 0.2rem;
+      gap: clamp(0.15rem, 0.4vw, 0.25rem);
+      padding: clamp(0.1rem, 0.3vw, 0.15rem);
     }
     
     .language-card {
-      padding: 0.3rem;
-      max-width: 100px;
+      padding: clamp(0.08rem, 0.25vw, 0.15rem);
+      max-width: 85px;
+      height: calc((50vh - 1rem) / 11);
+      max-height: calc((50vh - 1rem) / 11);
     }
     
     .language-flag {
-      font-size: 1rem;
-      margin-bottom: 0.05rem;
+      font-size: clamp(0.6rem, 1.2vw, 0.8rem);
+      margin-bottom: clamp(0.01rem, 0.03vw, 0.02rem);
     }
     
     .language-name {
-      font-size: 0.6rem;
-      margin-bottom: 0.05rem;
+      font-size: clamp(0.4rem, 0.8vw, 0.5rem);
+      margin-bottom: clamp(0.01rem, 0.03vw, 0.02rem);
     }
     
     .language-description {
-      font-size: 0.45rem;
-      -webkit-line-clamp: 2;
+      font-size: clamp(0.3rem, 0.6vw, 0.4rem);
+      -webkit-line-clamp: 1;
     }
   }
 
@@ -200,74 +202,80 @@ const onboardingStyles = `
 
   @media (min-width: 1025px) and (max-width: 1439px) {
     .language-grid {
-      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-      gap: 0.8rem;
+      grid-template-columns: repeat(4, 1fr) !important;
+      gap: clamp(0.2rem, 0.5vw, 0.4rem);
     }
     
     .language-card {
-      max-width: 180px;
+      max-width: 90px;
+      height: calc((50vh - 1.5rem) / 6);
+      max-height: calc((50vh - 1.5rem) / 6);
     }
     
     .language-flag {
-      font-size: 1.6rem;
+      font-size: clamp(0.7rem, 1.4vw, 0.9rem);
     }
     
     .language-name {
-      font-size: 0.85rem;
+      font-size: clamp(0.45rem, 0.9vw, 0.55rem);
     }
     
     .language-description {
-      font-size: 0.65rem;
+      font-size: clamp(0.35rem, 0.7vw, 0.45rem);
     }
   }
 
   /* Large screens optimization */
   @media (min-width: 1440px) and (max-width: 1919px) {
     .language-grid {
-      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-      gap: 0.8rem;
-      max-width: 95%;
+      grid-template-columns: repeat(4, 1fr) !important;
+      gap: clamp(0.2rem, 0.5vw, 0.4rem);
+      max-width: 100%;
     }
     
     .language-card {
-      max-width: 180px;
+      max-width: 90px;
+      height: calc((50vh - 1.5rem) / 6);
+      max-height: calc((50vh - 1.5rem) / 6);
     }
     
     .language-flag {
-      font-size: 1.5rem;
+      font-size: clamp(0.7rem, 1.4vw, 0.9rem);
     }
     
     .language-name {
-      font-size: 0.85rem;
+      font-size: clamp(0.45rem, 0.9vw, 0.55rem);
     }
     
     .language-description {
-      font-size: 0.65rem;
+      font-size: clamp(0.35rem, 0.7vw, 0.45rem);
     }
   }
 
   /* Ultra-wide screens */
   @media (min-width: 1920px) {
     .language-grid {
-      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-      gap: 1rem;
-      max-width: 90%;
+      grid-template-columns: repeat(4, 1fr) !important;
+      gap: clamp(0.2rem, 0.5vw, 0.4rem);
+      max-width: 100%;
     }
     
     .language-card {
-      max-width: 190px;
+      max-width: 90px;
+      height: calc((50vh - 1.5rem) / 6);
+      max-height: calc((50vh - 1.5rem) / 6);
     }
     
     .language-flag {
-      font-size: 1.6rem;
+      font-size: clamp(0.7rem, 1.4vw, 0.9rem);
     }
     
     .language-name {
-      font-size: 0.9rem;
+      font-size: clamp(0.45rem, 0.9vw, 0.55rem);
     }
     
     .language-description {
-      font-size: 0.7rem;
+      font-size: clamp(0.35rem, 0.7vw, 0.45rem);
     }
   }
 `;
