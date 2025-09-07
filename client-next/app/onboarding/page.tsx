@@ -44,8 +44,8 @@ const onboardingStyles = `
 
   .language-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
-    gap: clamp(0.75rem, 2vw, 1.5rem);
+    grid-template-columns: repeat(4, 1fr);
+    gap: clamp(1rem, 2.5vw, 2rem);
     margin-bottom: clamp(1rem, 3vw, 2rem);
     max-width: 95%;
     margin-left: auto;
@@ -64,10 +64,10 @@ const onboardingStyles = `
     cursor: pointer;
     transition: all 0.3s ease;
     text-align: center;
-    min-height: clamp(8rem, 15vw, 12rem);
+    height: clamp(10rem, 18vw, 14rem);
     display: flex;
     flex-direction: column;
-    justify-content: center;
+    justify-content: space-between;
     box-sizing: border-box;
     width: 100%;
     max-width: 280px;
@@ -104,7 +104,7 @@ const onboardingStyles = `
   .language-description {
     font-size: clamp(0.75rem, 2vw, 1rem);
     color: var(--rose-primary);
-    line-height: 1.3;
+    line-height: 1.2;
     font-family: 'AR One Sans', Arial, sans-serif;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -112,19 +112,48 @@ const onboardingStyles = `
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     word-wrap: break-word;
+    hyphens: auto;
+    text-align: center;
+    flex-grow: 1;
   }
 
   /* Mobile-first responsive breakpoints */
   @media (max-width: 480px) {
     .language-grid {
-      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      grid-template-columns: repeat(2, 1fr);
       gap: 0.75rem;
       padding: 0.5rem;
     }
     
     .language-card {
-      min-height: 7rem;
+      height: 8rem;
       padding: 0.75rem;
+    }
+    
+    .language-flag {
+      font-size: 1.5rem;
+      margin-bottom: 0.25rem;
+    }
+    
+    .language-name {
+      font-size: 0.8rem;
+      margin-bottom: 0.25rem;
+    }
+    
+    .language-description {
+      font-size: 0.65rem;
+      -webkit-line-clamp: 2;
+    }
+  }
+
+  @media (min-width: 481px) and (max-width: 768px) {
+    .language-grid {
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+    }
+    
+    .language-card {
+      height: 9rem;
     }
     
     .language-flag {
@@ -140,60 +169,99 @@ const onboardingStyles = `
     }
   }
 
-  @media (min-width: 481px) and (max-width: 768px) {
-    .language-grid {
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 1rem;
-    }
-    
-    .language-card {
-      min-height: 9rem;
-    }
-  }
-
   @media (min-width: 769px) and (max-width: 1024px) {
     .language-grid {
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      grid-template-columns: repeat(4, 1fr);
       gap: 1.25rem;
     }
     
     .language-card {
-      min-height: 10rem;
+      height: 10rem;
+    }
+    
+    .language-flag {
+      font-size: 2.2rem;
+    }
+    
+    .language-name {
+      font-size: 1rem;
+    }
+    
+    .language-description {
+      font-size: 0.8rem;
     }
   }
 
-  @media (min-width: 1025px) {
+  @media (min-width: 1025px) and (max-width: 1439px) {
     .language-grid {
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      grid-template-columns: repeat(4, 1fr);
       gap: 1.5rem;
     }
     
     .language-card {
-      min-height: 12rem;
+      height: 12rem;
+    }
+    
+    .language-flag {
+      font-size: 2.5rem;
+    }
+    
+    .language-name {
+      font-size: 1.1rem;
+    }
+    
+    .language-description {
+      font-size: 0.9rem;
     }
   }
 
   /* Large screens optimization */
-  @media (min-width: 1440px) {
+  @media (min-width: 1440px) and (max-width: 1919px) {
     .language-grid {
-      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1.75rem;
       max-width: 90%;
     }
     
     .language-card {
-      min-height: 13rem;
+      height: 13rem;
+    }
+    
+    .language-flag {
+      font-size: 2.8rem;
+    }
+    
+    .language-name {
+      font-size: 1.2rem;
+    }
+    
+    .language-description {
+      font-size: 1rem;
     }
   }
 
   /* Ultra-wide screens */
   @media (min-width: 1920px) {
     .language-grid {
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      grid-template-columns: repeat(5, 1fr);
+      gap: 2rem;
       max-width: 85%;
     }
     
     .language-card {
-      min-height: 14rem;
+      height: 14rem;
+    }
+    
+    .language-flag {
+      font-size: 3rem;
+    }
+    
+    .language-name {
+      font-size: 1.3rem;
+    }
+    
+    .language-description {
+      font-size: 1.1rem;
     }
   }
 `;
