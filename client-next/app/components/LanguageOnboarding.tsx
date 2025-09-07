@@ -45,7 +45,7 @@ const languageOnboardingStyles = `
 
   .language-onboarding-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    grid-template-columns: repeat(4, 1fr);
     gap: clamp(0.2rem, 0.5vw, 0.3rem);
     margin-bottom: clamp(0.3rem, 0.8vw, 0.5rem);
     max-width: 100%;
@@ -56,7 +56,7 @@ const languageOnboardingStyles = `
     align-items: stretch;
     height: auto;
     justify-items: center;
-    max-height: 40vh;
+    max-height: 50vh;
     overflow: hidden;
   }
 
@@ -77,8 +77,8 @@ const languageOnboardingStyles = `
     max-width: 110px;
     margin: 0 auto;
     min-height: 0;
-    height: calc((40vh - 1rem) / 3);
-    max-height: calc((40vh - 1rem) / 3);
+    height: calc((50vh - 1.5rem) / 6);
+    max-height: calc((50vh - 1.5rem) / 6);
   }
 
   .language-onboarding-card:hover {
