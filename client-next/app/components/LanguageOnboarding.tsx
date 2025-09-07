@@ -23,21 +23,21 @@ const languageOnboardingStyles = `
 
   .language-onboarding-title {
     color: var(--blue-secondary);
-    font-size: clamp(1.5rem, 4vw, 2.5rem);
+    font-size: clamp(2.2rem, 5vw, 3.2rem);
     font-weight: 700;
-    margin-bottom: clamp(0.5rem, 2vw, 1rem);
+    margin-bottom: clamp(0.3rem, 1.5vw, 0.8rem);
     text-align: center;
     font-family: 'Gabriela', Arial, sans-serif;
-    line-height: 1.2;
+    line-height: 1.1;
   }
 
   .language-onboarding-subtitle {
     color: var(--rose-primary);
     text-align: center;
-    margin-bottom: clamp(1rem, 3vw, 2rem);
-    font-size: clamp(1rem, 2.5vw, 1.5rem);
+    margin-bottom: clamp(0.8rem, 2vw, 1.2rem);
+    font-size: clamp(1.3rem, 3.2vw, 1.8rem);
     font-family: 'AR One Sans', Arial, sans-serif;
-    line-height: 1.3;
+    line-height: 1.2;
     max-width: 90%;
     margin-left: auto;
     margin-right: auto;
@@ -45,13 +45,13 @@ const languageOnboardingStyles = `
 
   .language-onboarding-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    gap: clamp(0.4rem, 1.2vw, 0.8rem);
-    margin-bottom: clamp(1rem, 3vw, 2rem);
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: clamp(0.3rem, 0.8vw, 0.5rem);
+    margin-bottom: clamp(0.5rem, 1.5vw, 1rem);
     max-width: 100%;
     margin-left: auto;
     margin-right: auto;
-    padding: clamp(0.25rem, 1vw, 0.5rem);
+    padding: clamp(0.2rem, 0.8vw, 0.4rem);
     box-sizing: border-box;
     align-items: stretch;
     height: auto;
@@ -59,8 +59,8 @@ const languageOnboardingStyles = `
   }
 
   .language-onboarding-card {
-    padding: clamp(0.4rem, 1.2vw, 0.6rem);
-    border-radius: clamp(0.4rem, 1.5vw, 0.8rem);
+    padding: clamp(0.3rem, 0.8vw, 0.4rem);
+    border-radius: clamp(0.3rem, 1vw, 0.6rem);
     border: 2px solid rgba(126,90,117,0.2);
     background-color: var(--cream);
     cursor: pointer;
@@ -72,10 +72,10 @@ const languageOnboardingStyles = `
     align-items: center;
     box-sizing: border-box;
     width: 100%;
-    max-width: 160px;
+    max-width: 140px;
     margin: 0 auto;
     min-height: 0;
-    aspect-ratio: 1;
+    aspect-ratio: 0.8;
   }
 
   .language-onboarding-card:hover {
@@ -106,7 +106,7 @@ const languageOnboardingStyles = `
   }
 
   .language-onboarding-description {
-    font-size: clamp(0.5rem, 1.2vw, 0.65rem);
+    font-size: clamp(0.5rem, 1.1vw, 0.65rem);
     color: var(--rose-primary);
     line-height: 1;
     font-family: 'AR One Sans', Arial, sans-serif;
@@ -124,63 +124,40 @@ const languageOnboardingStyles = `
   /* Mobile-first responsive breakpoints */
   @media (max-width: 480px) {
     .language-onboarding-grid {
-      grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
-      gap: 0.3rem;
-      padding: 0.2rem;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 0.5rem;
+      padding: 0.3rem;
     }
     
     .language-onboarding-card {
-      padding: 0.3rem;
-      max-width: 120px;
+      padding: 0.4rem;
+      max-width: 140px;
     }
     
     .language-onboarding-flag {
-      font-size: 0.9rem;
-      margin-bottom: 0.05rem;
+      font-size: 1.2rem;
+      margin-bottom: 0.1rem;
     }
     
     .language-onboarding-name {
-      font-size: 0.55rem;
-      margin-bottom: 0.05rem;
+      font-size: 0.65rem;
+      margin-bottom: 0.1rem;
     }
     
     .language-onboarding-description {
-      font-size: 0.4rem;
+      font-size: 0.5rem;
       -webkit-line-clamp: 2;
     }
   }
 
   @media (min-width: 481px) and (max-width: 768px) {
     .language-onboarding-grid {
-      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-      gap: 0.5rem;
-    }
-    
-    .language-onboarding-card {
-      max-width: 140px;
-    }
-    
-    .language-onboarding-flag {
-      font-size: 1.1rem;
-    }
-    
-    .language-onboarding-name {
-      font-size: 0.65rem;
-    }
-    
-    .language-onboarding-description {
-      font-size: 0.5rem;
-    }
-  }
-
-  @media (min-width: 769px) and (max-width: 1024px) {
-    .language-onboarding-grid {
-      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
       gap: 0.6rem;
     }
     
     .language-onboarding-card {
-      max-width: 160px;
+      max-width: 150px;
     }
     
     .language-onboarding-flag {
@@ -188,7 +165,7 @@ const languageOnboardingStyles = `
     }
     
     .language-onboarding-name {
-      font-size: 0.75rem;
+      font-size: 0.7rem;
     }
     
     .language-onboarding-description {
@@ -196,7 +173,7 @@ const languageOnboardingStyles = `
     }
   }
 
-  @media (min-width: 1025px) and (max-width: 1439px) {
+  @media (min-width: 769px) and (max-width: 1024px) {
     .language-onboarding-grid {
       grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
       gap: 0.7rem;
@@ -207,7 +184,7 @@ const languageOnboardingStyles = `
     }
     
     .language-onboarding-flag {
-      font-size: 1.4rem;
+      font-size: 1.5rem;
     }
     
     .language-onboarding-name {
@@ -216,6 +193,29 @@ const languageOnboardingStyles = `
     
     .language-onboarding-description {
       font-size: 0.6rem;
+    }
+  }
+
+  @media (min-width: 1025px) and (max-width: 1439px) {
+    .language-onboarding-grid {
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 0.8rem;
+    }
+    
+    .language-onboarding-card {
+      max-width: 180px;
+    }
+    
+    .language-onboarding-flag {
+      font-size: 1.6rem;
+    }
+    
+    .language-onboarding-name {
+      font-size: 0.85rem;
+    }
+    
+    .language-onboarding-description {
+      font-size: 0.65rem;
     }
   }
 

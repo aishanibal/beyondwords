@@ -22,21 +22,21 @@ const onboardingStyles = `
 
   .onboarding-title {
     color: var(--blue-secondary);
-    font-size: clamp(1.5rem, 4vw, 2.5rem);
+    font-size: clamp(2.2rem, 5vw, 3.2rem);
     font-weight: 700;
-    margin-bottom: clamp(0.5rem, 2vw, 1rem);
+    margin-bottom: clamp(0.3rem, 1.5vw, 0.8rem);
     text-align: center;
     font-family: 'Gabriela', Arial, sans-serif;
-    line-height: 1.2;
+    line-height: 1.1;
   }
 
   .onboarding-subtitle {
     color: var(--rose-primary);
     text-align: center;
-    margin-bottom: clamp(1rem, 3vw, 2rem);
-    font-size: clamp(1rem, 2.5vw, 1.5rem);
+    margin-bottom: clamp(0.8rem, 2vw, 1.2rem);
+    font-size: clamp(1.3rem, 3.2vw, 1.8rem);
     font-family: 'AR One Sans', Arial, sans-serif;
-    line-height: 1.3;
+    line-height: 1.2;
     max-width: 90%;
     margin-left: auto;
     margin-right: auto;
@@ -44,13 +44,13 @@ const onboardingStyles = `
 
   .language-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    gap: clamp(0.4rem, 1.2vw, 0.8rem);
-    margin-bottom: clamp(1rem, 3vw, 2rem);
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: clamp(0.3rem, 0.8vw, 0.5rem);
+    margin-bottom: clamp(0.5rem, 1.5vw, 1rem);
     max-width: 100%;
     margin-left: auto;
     margin-right: auto;
-    padding: clamp(0.25rem, 1vw, 0.5rem);
+    padding: clamp(0.2rem, 0.8vw, 0.4rem);
     box-sizing: border-box;
     align-items: stretch;
     height: auto;
@@ -58,8 +58,8 @@ const onboardingStyles = `
   }
 
   .language-card {
-    padding: clamp(0.4rem, 1.2vw, 0.6rem);
-    border-radius: clamp(0.4rem, 1.5vw, 0.8rem);
+    padding: clamp(0.3rem, 0.8vw, 0.4rem);
+    border-radius: clamp(0.3rem, 1vw, 0.6rem);
     border: 2px solid rgba(126,90,117,0.2);
     background-color: var(--cream);
     cursor: pointer;
@@ -71,10 +71,10 @@ const onboardingStyles = `
     align-items: center;
     box-sizing: border-box;
     width: 100%;
-    max-width: 160px;
+    max-width: 140px;
     margin: 0 auto;
     min-height: 0;
-    aspect-ratio: 1;
+    aspect-ratio: 0.8;
   }
 
   .language-card:hover {
@@ -105,7 +105,7 @@ const onboardingStyles = `
   }
 
   .language-description {
-    font-size: clamp(0.5rem, 1.2vw, 0.65rem);
+    font-size: clamp(0.5rem, 1.1vw, 0.65rem);
     color: var(--rose-primary);
     line-height: 1;
     font-family: 'AR One Sans', Arial, sans-serif;
@@ -134,29 +134,29 @@ const onboardingStyles = `
     }
     
     .language-flag {
-      font-size: 0.9rem;
+      font-size: 1rem;
       margin-bottom: 0.05rem;
     }
     
     .language-name {
-      font-size: 0.55rem;
+      font-size: 0.6rem;
       margin-bottom: 0.05rem;
     }
     
     .language-description {
-      font-size: 0.4rem;
+      font-size: 0.45rem;
       -webkit-line-clamp: 2;
     }
   }
 
   @media (min-width: 481px) and (max-width: 768px) {
     .language-grid {
-      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-      gap: 0.5rem;
+      grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+      gap: 0.4rem;
     }
     
     .language-card {
-      max-width: 140px;
+      max-width: 130px;
     }
     
     .language-flag {
@@ -174,29 +174,6 @@ const onboardingStyles = `
 
   @media (min-width: 769px) and (max-width: 1024px) {
     .language-grid {
-      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-      gap: 0.6rem;
-    }
-    
-    .language-card {
-      max-width: 160px;
-    }
-    
-    .language-flag {
-      font-size: 1.3rem;
-    }
-    
-    .language-name {
-      font-size: 0.75rem;
-    }
-    
-    .language-description {
-      font-size: 0.55rem;
-    }
-  }
-
-  @media (min-width: 1025px) and (max-width: 1439px) {
-    .language-grid {
       grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
       gap: 0.7rem;
     }
@@ -206,7 +183,7 @@ const onboardingStyles = `
     }
     
     .language-flag {
-      font-size: 1.4rem;
+      font-size: 1.5rem;
     }
     
     .language-name {
@@ -215,6 +192,29 @@ const onboardingStyles = `
     
     .language-description {
       font-size: 0.6rem;
+    }
+  }
+
+  @media (min-width: 1025px) and (max-width: 1439px) {
+    .language-grid {
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 0.8rem;
+    }
+    
+    .language-card {
+      max-width: 180px;
+    }
+    
+    .language-flag {
+      font-size: 1.6rem;
+    }
+    
+    .language-name {
+      font-size: 0.85rem;
+    }
+    
+    .language-description {
+      font-size: 0.65rem;
     }
   }
 
