@@ -56,6 +56,8 @@ const languageOnboardingStyles = `
     align-items: stretch;
     height: auto;
     justify-items: center;
+    max-height: 40vh;
+    overflow: hidden;
   }
 
   .language-onboarding-card {
@@ -75,7 +77,8 @@ const languageOnboardingStyles = `
     max-width: 110px;
     margin: 0 auto;
     min-height: 0;
-    aspect-ratio: 0.6;
+    height: calc((40vh - 1rem) / 3);
+    max-height: calc((40vh - 1rem) / 3);
   }
 
   .language-onboarding-card:hover {
