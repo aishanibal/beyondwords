@@ -46,6 +46,7 @@ const languageOnboardingStyles = `
   .language-onboarding-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
+    grid-auto-rows: minmax(8rem, auto);
     gap: clamp(1rem, 2.5vw, 2rem);
     margin-bottom: clamp(1rem, 3vw, 2rem);
     max-width: 95%;
@@ -55,6 +56,7 @@ const languageOnboardingStyles = `
     max-height: 70vh;
     overflow-y: auto;
     box-sizing: border-box;
+    align-items: start;
   }
 
   .language-onboarding-card {
@@ -295,9 +297,10 @@ function LanguageOnboarding({ onComplete, existingLanguages = [] }: LanguageOnbo
   const router = useRouter();
   
   // Debug logging to verify this component is running
-  console.log('🌍 LanguageOnboarding component loaded with responsive fixes v2.0');
+  console.log('🌍 LanguageOnboarding component loaded with responsive fixes v2.1 - FORCE DEPLOY');
   console.log('Available languages count:', LANGUAGES.length);
   console.log('Existing languages:', existingLanguages);
+  console.log('Current timestamp:', new Date().toISOString());
   
   // Authentication check
   if (!user) {
@@ -539,6 +542,19 @@ function LanguageOnboarding({ onComplete, existingLanguages = [] }: LanguageOnbo
         </div>
       ) : (
         <div className="language-onboarding-grid">
+          {/* Debug indicator */}
+          <div style={{
+            gridColumn: '1 / -1',
+            background: 'rgba(255, 0, 0, 0.1)',
+            border: '2px solid red',
+            padding: '0.5rem',
+            textAlign: 'center',
+            fontSize: '0.8rem',
+            color: 'red',
+            fontWeight: 'bold'
+          }}>
+            🚀 RESPONSIVE FIXES v2.1 ACTIVE - If you see this, the new code is running!
+          </div>
           {availableLanguages.map((lang: Language) => (
             <div
               key={lang.code}

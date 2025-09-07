@@ -271,8 +271,9 @@ export default function OnboardingPage() {
   const router = useRouter();
   
   // Debug logging to verify this component is running
-  console.log('🎯 Main OnboardingPage component loaded with responsive fixes v2.0');
+  console.log('🎯 Main OnboardingPage component loaded with responsive fixes v2.1 - FORCE DEPLOY');
   console.log('Available languages count:', LANGUAGES.length);
+  console.log('Current timestamp:', new Date().toISOString());
   const [currentStep, setCurrentStep] = useState(1);
   interface OnboardingData {
     language: string;
