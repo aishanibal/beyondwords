@@ -16,15 +16,15 @@ const onboardingStyles = `
     flex-direction: column;
     justify-content: flex-start;
     overflow: hidden;
-    padding: clamp(1rem, 3vw, 2rem) 0;
+    padding: clamp(0.5rem, 1.5vw, 1rem) 0;
     box-sizing: border-box;
   }
 
   .onboarding-title {
     color: var(--blue-secondary);
-    font-size: clamp(2.2rem, 5vw, 3.2rem);
+    font-size: clamp(1.4rem, 3.5vw, 2rem);
     font-weight: 700;
-    margin-bottom: clamp(0.3rem, 1.5vw, 0.8rem);
+    margin-bottom: clamp(0.2rem, 0.8vw, 0.4rem);
     text-align: center;
     font-family: 'Gabriela', Arial, sans-serif;
     line-height: 1.1;
@@ -33,8 +33,8 @@ const onboardingStyles = `
   .onboarding-subtitle {
     color: var(--rose-primary);
     text-align: center;
-    margin-bottom: clamp(0.8rem, 2vw, 1.2rem);
-    font-size: clamp(1.3rem, 3.2vw, 1.8rem);
+    margin-bottom: clamp(0.4rem, 1vw, 0.6rem);
+    font-size: clamp(0.9rem, 2.2vw, 1.2rem);
     font-family: 'AR One Sans', Arial, sans-serif;
     line-height: 1.2;
     max-width: 90%;
@@ -44,13 +44,13 @@ const onboardingStyles = `
 
   .language-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-    gap: clamp(0.3rem, 0.8vw, 0.5rem);
-    margin-bottom: clamp(0.5rem, 1.5vw, 1rem);
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    gap: clamp(0.2rem, 0.5vw, 0.3rem);
+    margin-bottom: clamp(0.3rem, 0.8vw, 0.5rem);
     max-width: 100%;
     margin-left: auto;
     margin-right: auto;
-    padding: clamp(0.2rem, 0.8vw, 0.4rem);
+    padding: clamp(0.1rem, 0.4vw, 0.2rem);
     box-sizing: border-box;
     align-items: stretch;
     height: auto;
@@ -58,8 +58,8 @@ const onboardingStyles = `
   }
 
   .language-card {
-    padding: clamp(0.3rem, 0.8vw, 0.4rem);
-    border-radius: clamp(0.3rem, 1vw, 0.6rem);
+    padding: clamp(0.2rem, 0.5vw, 0.3rem);
+    border-radius: clamp(0.2rem, 0.8vw, 0.4rem);
     border: 2px solid rgba(126,90,117,0.2);
     background-color: var(--cream);
     cursor: pointer;
@@ -71,10 +71,10 @@ const onboardingStyles = `
     align-items: center;
     box-sizing: border-box;
     width: 100%;
-    max-width: 140px;
+    max-width: 120px;
     margin: 0 auto;
     min-height: 0;
-    aspect-ratio: 0.8;
+    aspect-ratio: 0.7;
   }
 
   .language-card:hover {
@@ -90,22 +90,22 @@ const onboardingStyles = `
   }
 
   .language-flag {
-    font-size: clamp(1.2rem, 2.5vw, 1.6rem);
-    margin-bottom: clamp(0.1rem, 0.3vw, 0.2rem);
+    font-size: clamp(1rem, 2vw, 1.3rem);
+    margin-bottom: clamp(0.05rem, 0.2vw, 0.1rem);
     line-height: 1;
   }
 
   .language-name {
     font-weight: 600;
     color: var(--blue-secondary);
-    margin-bottom: clamp(0.1rem, 0.3vw, 0.2rem);
-    font-size: clamp(0.7rem, 1.5vw, 0.85rem);
+    margin-bottom: clamp(0.05rem, 0.2vw, 0.1rem);
+    font-size: clamp(0.6rem, 1.2vw, 0.75rem);
     font-family: 'Gabriela', Arial, sans-serif;
     line-height: 1;
   }
 
   .language-description {
-    font-size: clamp(0.5rem, 1.1vw, 0.65rem);
+    font-size: clamp(0.45rem, 0.9vw, 0.55rem);
     color: var(--rose-primary);
     line-height: 1;
     font-family: 'AR One Sans', Arial, sans-serif;
