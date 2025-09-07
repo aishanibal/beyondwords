@@ -46,17 +46,16 @@ const languageOnboardingStyles = `
   .language-onboarding-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    grid-auto-rows: minmax(8rem, auto);
-    gap: clamp(1rem, 2.5vw, 2rem);
+    grid-auto-rows: 1fr;
+    gap: clamp(0.75rem, 2vw, 1.5rem);
     margin-bottom: clamp(1rem, 3vw, 2rem);
     max-width: 95%;
     margin-left: auto;
     margin-right: auto;
     padding: clamp(0.5rem, 2vw, 1rem);
-    max-height: 70vh;
-    overflow-y: auto;
     box-sizing: border-box;
-    align-items: start;
+    align-items: stretch;
+    height: auto;
   }
 
   .language-onboarding-card {
@@ -67,17 +66,14 @@ const languageOnboardingStyles = `
     cursor: pointer;
     transition: all 0.3s ease;
     text-align: center;
-    height: clamp(8rem, 15vw, 12rem);
-    max-height: clamp(8rem, 15vw, 12rem);
     display: flex;
     flex-direction: column;
     justify-content: space-between;
     align-items: center;
     box-sizing: border-box;
     width: 100%;
-    max-width: 280px;
     margin: 0 auto;
-    overflow: hidden;
+    min-height: 0;
   }
 
   .language-onboarding-card:hover {

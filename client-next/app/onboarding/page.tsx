@@ -45,35 +45,33 @@ const onboardingStyles = `
   .language-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    grid-auto-rows: minmax(8rem, auto);
-    gap: clamp(1rem, 2.5vw, 2rem);
+    grid-auto-rows: 1fr;
+    gap: clamp(0.75rem, 2vw, 1.5rem);
     margin-bottom: clamp(1rem, 3vw, 2rem);
     max-width: 95%;
     margin-left: auto;
     margin-right: auto;
     padding: clamp(0.5rem, 2vw, 1rem);
-    max-height: 70vh;
-    overflow-y: auto;
     box-sizing: border-box;
-    align-items: start;
+    align-items: stretch;
+    height: auto;
   }
 
   .language-card {
-    padding: clamp(1rem, 3vw, 1.5rem);
+    padding: clamp(0.75rem, 2vw, 1.25rem);
     border-radius: clamp(0.5rem, 2vw, 1rem);
     border: 2px solid rgba(126,90,117,0.2);
     background-color: var(--cream);
     cursor: pointer;
     transition: all 0.3s ease;
     text-align: center;
-    height: clamp(10rem, 18vw, 14rem);
     display: flex;
     flex-direction: column;
     justify-content: space-between;
     box-sizing: border-box;
     width: 100%;
-    max-width: 280px;
     margin: 0 auto;
+    min-height: 0;
   }
 
   .language-card:hover {
@@ -89,24 +87,24 @@ const onboardingStyles = `
   }
 
   .language-flag {
-    font-size: clamp(2rem, 5vw, 3rem);
-    margin-bottom: clamp(0.25rem, 1vw, 0.5rem);
+    font-size: clamp(1.5rem, 3vw, 2rem);
+    margin-bottom: clamp(0.2rem, 0.5vw, 0.3rem);
     line-height: 1;
   }
 
   .language-name {
     font-weight: 600;
     color: var(--blue-secondary);
-    margin-bottom: clamp(0.25rem, 1vw, 0.5rem);
-    font-size: clamp(1rem, 2.5vw, 1.25rem);
+    margin-bottom: clamp(0.2rem, 0.5vw, 0.3rem);
+    font-size: clamp(0.8rem, 1.8vw, 1rem);
     font-family: 'Gabriela', Arial, sans-serif;
-    line-height: 1.2;
+    line-height: 1.1;
   }
 
   .language-description {
-    font-size: clamp(0.75rem, 2vw, 1rem);
+    font-size: clamp(0.6rem, 1.4vw, 0.8rem);
     color: var(--rose-primary);
-    line-height: 1.2;
+    line-height: 1.1;
     font-family: 'AR One Sans', Arial, sans-serif;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -123,27 +121,26 @@ const onboardingStyles = `
   @media (max-width: 480px) {
     .language-grid {
       grid-template-columns: repeat(2, 1fr);
-      gap: 0.75rem;
-      padding: 0.5rem;
+      gap: 0.5rem;
+      padding: 0.25rem;
     }
     
     .language-card {
-      height: 8rem;
-      padding: 0.75rem;
+      padding: 0.5rem;
     }
     
     .language-flag {
-      font-size: 1.5rem;
-      margin-bottom: 0.25rem;
+      font-size: 1.2rem;
+      margin-bottom: 0.15rem;
     }
     
     .language-name {
-      font-size: 0.8rem;
-      margin-bottom: 0.25rem;
+      font-size: 0.7rem;
+      margin-bottom: 0.15rem;
     }
     
     .language-description {
-      font-size: 0.65rem;
+      font-size: 0.55rem;
       -webkit-line-clamp: 2;
     }
   }
@@ -151,15 +148,30 @@ const onboardingStyles = `
   @media (min-width: 481px) and (max-width: 768px) {
     .language-grid {
       grid-template-columns: repeat(3, 1fr);
-      gap: 1rem;
-    }
-    
-    .language-card {
-      height: 9rem;
+      gap: 0.75rem;
     }
     
     .language-flag {
-      font-size: 2rem;
+      font-size: 1.5rem;
+    }
+    
+    .language-name {
+      font-size: 0.8rem;
+    }
+    
+    .language-description {
+      font-size: 0.6rem;
+    }
+  }
+
+  @media (min-width: 769px) and (max-width: 1024px) {
+    .language-grid {
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+    }
+    
+    .language-flag {
+      font-size: 1.8rem;
     }
     
     .language-name {
@@ -171,18 +183,14 @@ const onboardingStyles = `
     }
   }
 
-  @media (min-width: 769px) and (max-width: 1024px) {
+  @media (min-width: 1025px) and (max-width: 1439px) {
     .language-grid {
       grid-template-columns: repeat(4, 1fr);
       gap: 1.25rem;
     }
     
-    .language-card {
-      height: 10rem;
-    }
-    
     .language-flag {
-      font-size: 2.2rem;
+      font-size: 2rem;
     }
     
     .language-name {
@@ -194,18 +202,16 @@ const onboardingStyles = `
     }
   }
 
-  @media (min-width: 1025px) and (max-width: 1439px) {
+  /* Large screens optimization */
+  @media (min-width: 1440px) and (max-width: 1919px) {
     .language-grid {
       grid-template-columns: repeat(4, 1fr);
       gap: 1.5rem;
-    }
-    
-    .language-card {
-      height: 12rem;
+      max-width: 90%;
     }
     
     .language-flag {
-      font-size: 2.5rem;
+      font-size: 2.2rem;
     }
     
     .language-name {
@@ -217,20 +223,16 @@ const onboardingStyles = `
     }
   }
 
-  /* Large screens optimization */
-  @media (min-width: 1440px) and (max-width: 1919px) {
+  /* Ultra-wide screens */
+  @media (min-width: 1920px) {
     .language-grid {
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(5, 1fr);
       gap: 1.75rem;
-      max-width: 90%;
-    }
-    
-    .language-card {
-      height: 13rem;
+      max-width: 85%;
     }
     
     .language-flag {
-      font-size: 2.8rem;
+      font-size: 2.5rem;
     }
     
     .language-name {
@@ -239,31 +241,6 @@ const onboardingStyles = `
     
     .language-description {
       font-size: 1rem;
-    }
-  }
-
-  /* Ultra-wide screens */
-  @media (min-width: 1920px) {
-    .language-grid {
-      grid-template-columns: repeat(5, 1fr);
-      gap: 2rem;
-      max-width: 85%;
-    }
-    
-    .language-card {
-      height: 14rem;
-    }
-    
-    .language-flag {
-      font-size: 3rem;
-    }
-    
-    .language-name {
-      font-size: 1.3rem;
-    }
-    
-    .language-description {
-      font-size: 1.1rem;
     }
   }
 `;
