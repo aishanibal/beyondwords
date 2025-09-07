@@ -58,21 +58,24 @@ const languageOnboardingStyles = `
   }
 
   .language-onboarding-card {
-    padding: clamp(1rem, 3vw, 1.5rem);
+    padding: clamp(0.75rem, 2vw, 1.25rem);
     border-radius: clamp(0.5rem, 2vw, 1rem);
     border: 2px solid rgba(126,90,117,0.2);
     background-color: var(--cream);
     cursor: pointer;
     transition: all 0.3s ease;
     text-align: center;
-    height: clamp(10rem, 18vw, 14rem);
+    height: clamp(8rem, 15vw, 12rem);
+    max-height: clamp(8rem, 15vw, 12rem);
     display: flex;
     flex-direction: column;
     justify-content: space-between;
+    align-items: center;
     box-sizing: border-box;
     width: 100%;
     max-width: 280px;
     margin: 0 auto;
+    overflow: hidden;
   }
 
   .language-onboarding-card:hover {
@@ -103,9 +106,9 @@ const languageOnboardingStyles = `
   }
 
   .language-onboarding-description {
-    font-size: clamp(0.75rem, 2vw, 1rem);
+    font-size: clamp(0.7rem, 1.8vw, 0.9rem);
     color: var(--rose-primary);
-    line-height: 1.2;
+    line-height: 1.1;
     font-family: 'AR One Sans', Arial, sans-serif;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -116,6 +119,8 @@ const languageOnboardingStyles = `
     hyphens: auto;
     text-align: center;
     flex-grow: 1;
+    max-height: 2.4em;
+    margin-top: auto;
   }
 
   /* Mobile-first responsive breakpoints */
@@ -127,23 +132,25 @@ const languageOnboardingStyles = `
     }
     
     .language-onboarding-card {
-      height: 8rem;
-      padding: 0.75rem;
+      height: 7rem;
+      max-height: 7rem;
+      padding: 0.5rem;
     }
     
     .language-onboarding-flag {
       font-size: 1.5rem;
-      margin-bottom: 0.25rem;
+      margin-bottom: 0.2rem;
     }
     
     .language-onboarding-name {
-      font-size: 0.8rem;
-      margin-bottom: 0.25rem;
+      font-size: 0.75rem;
+      margin-bottom: 0.2rem;
     }
     
     .language-onboarding-description {
-      font-size: 0.65rem;
+      font-size: 0.6rem;
       -webkit-line-clamp: 2;
+      max-height: 1.2em;
     }
   }
 
@@ -154,7 +161,33 @@ const languageOnboardingStyles = `
     }
     
     .language-onboarding-card {
+      height: 8rem;
+      max-height: 8rem;
+    }
+    
+    .language-onboarding-flag {
+      font-size: 1.8rem;
+    }
+    
+    .language-onboarding-name {
+      font-size: 0.85rem;
+    }
+    
+    .language-onboarding-description {
+      font-size: 0.65rem;
+      max-height: 1.3em;
+    }
+  }
+
+  @media (min-width: 769px) and (max-width: 1024px) {
+    .language-onboarding-grid {
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1.25rem;
+    }
+    
+    .language-onboarding-card {
       height: 9rem;
+      max-height: 9rem;
     }
     
     .language-onboarding-flag {
@@ -167,17 +200,19 @@ const languageOnboardingStyles = `
     
     .language-onboarding-description {
       font-size: 0.7rem;
+      max-height: 1.4em;
     }
   }
 
-  @media (min-width: 769px) and (max-width: 1024px) {
+  @media (min-width: 1025px) and (max-width: 1439px) {
     .language-onboarding-grid {
       grid-template-columns: repeat(4, 1fr);
-      gap: 1.25rem;
+      gap: 1.5rem;
     }
     
     .language-onboarding-card {
       height: 10rem;
+      max-height: 10rem;
     }
     
     .language-onboarding-flag {
@@ -190,29 +225,7 @@ const languageOnboardingStyles = `
     
     .language-onboarding-description {
       font-size: 0.8rem;
-    }
-  }
-
-  @media (min-width: 1025px) and (max-width: 1439px) {
-    .language-onboarding-grid {
-      grid-template-columns: repeat(4, 1fr);
-      gap: 1.5rem;
-    }
-    
-    .language-onboarding-card {
-      height: 12rem;
-    }
-    
-    .language-onboarding-flag {
-      font-size: 2.5rem;
-    }
-    
-    .language-onboarding-name {
-      font-size: 1.1rem;
-    }
-    
-    .language-onboarding-description {
-      font-size: 0.9rem;
+      max-height: 1.6em;
     }
   }
 
@@ -225,19 +238,21 @@ const languageOnboardingStyles = `
     }
     
     .language-onboarding-card {
-      height: 13rem;
+      height: 11rem;
+      max-height: 11rem;
     }
     
     .language-onboarding-flag {
-      font-size: 2.8rem;
+      font-size: 2.5rem;
     }
     
     .language-onboarding-name {
-      font-size: 1.2rem;
+      font-size: 1.1rem;
     }
     
     .language-onboarding-description {
-      font-size: 1rem;
+      font-size: 0.85rem;
+      max-height: 1.7em;
     }
   }
 
@@ -250,19 +265,21 @@ const languageOnboardingStyles = `
     }
     
     .language-onboarding-card {
-      height: 14rem;
+      height: 12rem;
+      max-height: 12rem;
     }
     
     .language-onboarding-flag {
-      font-size: 3rem;
+      font-size: 2.8rem;
     }
     
     .language-onboarding-name {
-      font-size: 1.3rem;
+      font-size: 1.2rem;
     }
     
     .language-onboarding-description {
-      font-size: 1.1rem;
+      font-size: 0.9rem;
+      max-height: 1.8em;
     }
   }
 `;
@@ -276,6 +293,11 @@ interface LanguageOnboardingProps {
 function LanguageOnboarding({ onComplete, existingLanguages = [] }: LanguageOnboardingProps) {
   const { user } = useUser();
   const router = useRouter();
+  
+  // Debug logging to verify this component is running
+  console.log('🌍 LanguageOnboarding component loaded with responsive fixes v2.0');
+  console.log('Available languages count:', LANGUAGES.length);
+  console.log('Existing languages:', existingLanguages);
   
   // Authentication check
   if (!user) {
@@ -493,14 +515,18 @@ function LanguageOnboarding({ onComplete, existingLanguages = [] }: LanguageOnbo
     </div>
   );
 
-  const renderStep1 = () => (
-    <div className="language-onboarding-step-container">
-      <h2 className="language-onboarding-title">
-        Which language would you like to add?
-      </h2>
-      <p className="language-onboarding-subtitle">
-        Choose another language you want to practice speaking with AI feedback
-      </p>
+  const renderStep1 = () => {
+    console.log('🎯 renderStep1 called with responsive CSS classes');
+    console.log('Available languages for selection:', availableLanguages.length);
+    
+    return (
+      <div className="language-onboarding-step-container">
+        <h2 className="language-onboarding-title">
+          Which language would you like to add?
+        </h2>
+        <p className="language-onboarding-subtitle">
+          Choose another language you want to practice speaking with AI feedback
+        </p>
       {availableLanguages.length === 0 ? (
         <div style={{ 
           textAlign: 'center', 
@@ -528,7 +554,8 @@ function LanguageOnboarding({ onComplete, existingLanguages = [] }: LanguageOnbo
       )}
       {renderFeedbackLanguageSelector()}
     </div>
-  );
+    );
+  };
 
   const renderStep2 = () => (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>

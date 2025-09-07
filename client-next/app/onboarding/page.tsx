@@ -269,6 +269,10 @@ const onboardingStyles = `
 export default function OnboardingPage() {
   const { user, setUser } = useUser();
   const router = useRouter();
+  
+  // Debug logging to verify this component is running
+  console.log('🎯 Main OnboardingPage component loaded with responsive fixes v2.0');
+  console.log('Available languages count:', LANGUAGES.length);
   const [currentStep, setCurrentStep] = useState(1);
   interface OnboardingData {
     language: string;
