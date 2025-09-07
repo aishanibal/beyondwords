@@ -73,7 +73,7 @@ const onboardingStyles = `
     align-items: center;
     box-sizing: border-box;
     width: 100%;
-    max-width: 110px;
+    max-width: 100px;
     margin: 0 auto;
     min-height: 0;
     height: calc((50vh - 1.5rem) / 6);
@@ -126,14 +126,14 @@ const onboardingStyles = `
   /* Mobile-first responsive breakpoints */
   @media (max-width: 480px) {
     .language-grid {
-      grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+      grid-template-columns: repeat(2, 1fr);
       gap: 0.3rem;
       padding: 0.2rem;
     }
     
     .language-card {
       padding: 0.3rem;
-      max-width: 120px;
+      max-width: 100px;
     }
     
     .language-flag {
@@ -154,12 +154,12 @@ const onboardingStyles = `
 
   @media (min-width: 481px) and (max-width: 768px) {
     .language-grid {
-      grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+      grid-template-columns: repeat(3, 1fr);
       gap: 0.4rem;
     }
     
     .language-card {
-      max-width: 130px;
+      max-width: 100px;
     }
     
     .language-flag {
@@ -177,12 +177,12 @@ const onboardingStyles = `
 
   @media (min-width: 769px) and (max-width: 1024px) {
     .language-grid {
-      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      grid-template-columns: repeat(4, 1fr);
       gap: 0.7rem;
     }
     
     .language-card {
-      max-width: 170px;
+      max-width: 100px;
     }
     
     .language-flag {

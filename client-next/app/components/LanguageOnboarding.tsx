@@ -74,7 +74,7 @@ const languageOnboardingStyles = `
     align-items: center;
     box-sizing: border-box;
     width: 100%;
-    max-width: 110px;
+    max-width: 100px;
     margin: 0 auto;
     min-height: 0;
     height: calc((50vh - 1.5rem) / 6);
@@ -127,52 +127,52 @@ const languageOnboardingStyles = `
   /* Mobile-first responsive breakpoints */
   @media (max-width: 480px) {
     .language-onboarding-grid {
-      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-      gap: 0.5rem;
-      padding: 0.3rem;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.3rem;
+      padding: 0.2rem;
     }
     
     .language-onboarding-card {
-      padding: 0.4rem;
-      max-width: 140px;
+      padding: 0.3rem;
+      max-width: 100px;
     }
     
     .language-onboarding-flag {
-      font-size: 1.2rem;
-      margin-bottom: 0.1rem;
+      font-size: 1rem;
+      margin-bottom: 0.05rem;
     }
     
     .language-onboarding-name {
-      font-size: 0.65rem;
-      margin-bottom: 0.1rem;
+      font-size: 0.6rem;
+      margin-bottom: 0.05rem;
     }
     
     .language-onboarding-description {
-      font-size: 0.5rem;
+      font-size: 0.45rem;
       -webkit-line-clamp: 2;
     }
   }
 
   @media (min-width: 481px) and (max-width: 768px) {
     .language-onboarding-grid {
-      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-      gap: 0.6rem;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.4rem;
     }
     
     .language-onboarding-card {
-      max-width: 150px;
+      max-width: 100px;
     }
     
     .language-onboarding-flag {
-      font-size: 1.3rem;
+      font-size: 1.1rem;
     }
     
     .language-onboarding-name {
-      font-size: 0.7rem;
+      font-size: 0.65rem;
     }
     
     .language-onboarding-description {
-      font-size: 0.55rem;
+      font-size: 0.5rem;
     }
   }
 
