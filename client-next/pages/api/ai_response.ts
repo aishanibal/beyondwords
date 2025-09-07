@@ -2,7 +2,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import axios from 'axios';
 
-const BACKEND_URL = process.env.AI_BACKEND_URL || 'http://localhost:5000/ai_response';
+const BACKEND_URL = process.env.AI_BACKEND_URL || 'https://beyondwords.onrender.com/ai_response';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {

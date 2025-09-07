@@ -183,13 +183,13 @@ class AdminDashboard:
     def get_system_status(self) -> Dict[str, Any]:
         """Get system status information"""
         return {
-            "current_tts": self.config["tts_settings"]["default_tts"],
-            "gemini_enabled": self.config["tts_settings"]["gemini_enabled"],
+            "current_tts": self.config["tts_settings"].get("active_tts", "system"),
+            "gemini_enabled": self.config["tts_settings"].get("gemini_enabled", False),
             "google_api_enabled": self.is_google_api_enabled(),
-            "cost_tracking": self.config["tts_settings"]["usage_tracking"],
-            "daily_cost_limit": self.config["tts_settings"]["cost_limit_per_day"],
-            "total_cost": self.config["usage_stats"]["total_cost"],
-            "last_reset": self.config["usage_stats"]["last_reset"]
+            "cost_tracking": self.config["tts_settings"].get("usage_tracking", True),
+            "daily_cost_limit": self.config["tts_settings"].get("cost_limit_per_day", 1.00),
+            "total_cost": self.config["usage_stats"].get("total_cost", 0.0),
+            "last_reset": self.config["usage_stats"].get("last_reset", "never")
         }
     
     def is_gemini_allowed(self) -> bool:
@@ -198,7 +198,7 @@ class AdminDashboard:
     
     def get_cost_effective_tts(self) -> str:
         """Get the cost-effective TTS system to use"""
-        return self.config["tts_settings"]["default_tts"]
+        return self.config["tts_settings"].get("active_tts", "system")
 
 def main():
     """Admin Dashboard CLI"""
@@ -275,7 +275,7 @@ def main():
             
             new_default = input("New default TTS (google_cloud/system): ")
             if new_default in ["google_cloud", "system"]:
-                dashboard.update_tts_settings({"default_tts": new_default})
+                dashboard.update_tts_settings({"active_tts": new_default})
                 print("✅ Settings updated")
         
         elif choice == "8":

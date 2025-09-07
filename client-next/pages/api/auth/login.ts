@@ -7,7 +7,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     // Forward the login request to your Express backend at /auth/login
-    const response = await axios.post('http://localhost:4000/auth/login', req.body);
+    const response = await axios.post('https://beyondwords-express.onrender.com/api/auth/login', req.body);
     res.status(response.status).json(response.data);
   } catch (error: any) {
     res.status(error.response?.status || 500).json(error.response?.data || { error: 'Login failed' });

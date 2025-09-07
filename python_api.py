@@ -727,33 +727,76 @@ def generate_tts():
 @app.route('/admin')
 def admin_index():
     """Main admin dashboard page"""
-    from admin_dashboard import AdminDashboard
-    dashboard = AdminDashboard()
-    
-    settings = dashboard.get_tts_settings()
-    usage_stats = dashboard.get_usage_stats()
-    google_api_settings = dashboard.get_google_api_settings()
-    
-    return render_template('admin_dashboard.html', 
-                         settings=settings,
-                         usage_stats=usage_stats,
-                         google_api_settings=google_api_settings)
+    try:
+        from admin_dashboard import AdminDashboard
+        dashboard = AdminDashboard()
+        
+        return jsonify({
+            "message": "Admin dashboard is available",
+            "status": "ok",
+            "time": datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            "system_status": dashboard.get_system_status(),
+            "login_url": "/admin/login",
+            "api_endpoints": {
+                "status": "/admin/api/status",
+                "enable_gemini": "/admin/api/enable_gemini",
+                "disable_gemini": "/admin/api/disable_gemini",
+                "update_settings": "/admin/api/update_settings"
+            }
+        })
+    except Exception as e:
+        print(f"❌ Admin index error: {e}")
+        return jsonify({
+            "message": "Admin dashboard is temporarily disabled",
+            "status": "error",
+            "error": str(e),
+            "time": datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        }), 500
 
 @app.route('/admin/login', methods=['GET', 'POST'])
 def admin_login():
     """Admin login page"""
-    from admin_dashboard import AdminDashboard
-    dashboard = AdminDashboard()
-    
-    if request.method == 'POST':
-        password = request.form.get('password')
-        if dashboard.verify_password(password):
-            session['admin_logged_in'] = True
-            return redirect(url_for('admin_index'))
+    try:
+        from admin_dashboard import AdminDashboard
+        dashboard = AdminDashboard()
+        
+        if request.method == 'POST':
+            password = request.form.get('password')
+            if dashboard.verify_password(password):
+                session['admin_logged_in'] = True
+                return redirect(url_for('admin_index'))
+            else:
+                error_msg = "Invalid password"
         else:
-            return render_template('login.html', error="Invalid password")
-    
-    return render_template('login.html')
+            error_msg = None
+        
+        # Try to render template, fallback to simple HTML
+        try:
+            return render_template('login.html', error=error_msg)
+        except:
+            # Fallback HTML if template fails
+            html = f"""
+            <!DOCTYPE html>
+            <html>
+            <head><title>Admin Login</title></head>
+            <body>
+                <h1>🔐 Admin Login</h1>
+                <p>Default Password: admin123</p>
+                {"<p style='color:red'>" + error_msg + "</p>" if error_msg else ""}
+                <form method="POST">
+                    <input type="password" name="password" placeholder="Password" required>
+                    <button type="submit">Login</button>
+                </form>
+            </body>
+            </html>
+            """
+            return html
+    except Exception as e:
+        print(f"❌ Admin login error: {e}")
+        return jsonify({
+            "error": f"Admin login failed: {str(e)}",
+            "message": "Please check server logs for details"
+        }), 500
 
 @app.route('/admin/logout')
 def admin_logout():
@@ -764,17 +807,24 @@ def admin_logout():
 @app.route('/admin/api/status')
 def admin_api_status():
     """Get system status as JSON"""
-    from admin_dashboard import AdminDashboard
-    dashboard = AdminDashboard()
-    
-    if 'admin_logged_in' not in session:
-        return jsonify({"error": "Not authenticated"}), 401
-    
-    return jsonify({
-        "status": dashboard.get_system_status(),
-        "stats": dashboard.get_usage_stats(),
-        "settings": dashboard.get_tts_settings()
-    })
+    try:
+        from admin_dashboard import AdminDashboard
+        dashboard = AdminDashboard()
+        
+        if 'admin_logged_in' not in session:
+            return jsonify({"error": "Not authenticated"}), 401
+        
+        return jsonify({
+            "status": dashboard.get_system_status(),
+            "stats": dashboard.get_usage_stats(),
+            "settings": dashboard.get_tts_settings()
+        })
+    except Exception as e:
+        print(f"❌ Admin API status error: {e}")
+        return jsonify({
+            "error": f"Failed to get system status: {str(e)}",
+            "message": "Please check server logs for details"
+        }), 500
 
 @app.route('/admin/api/enable_gemini', methods=['POST'])
 def admin_api_enable_gemini():

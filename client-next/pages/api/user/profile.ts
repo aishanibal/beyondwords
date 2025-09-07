@@ -7,7 +7,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (req.method === 'GET') {
     try {
-      const response = await axios.get('http://localhost:4000/api/user', {
+      const response = await axios.get('https://beyondwords-express.onrender.com/api/user', {
         headers: { Authorization: authHeader }
       });
       // Forward backend status and data
@@ -31,7 +31,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       console.log('Next.js API proxy - Original request body:', req.body);
       console.log('Next.js API proxy - Transformed backend data:', backendData);
       
-      const response = await axios.put('http://localhost:4000/api/user/profile', backendData, {
+      const response = await axios.put('https://beyondwords-express.onrender.com/api/user/profile', backendData, {
         headers: { Authorization: authHeader }
       });
       // Forward backend status and data
@@ -45,7 +45,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (req.method === 'DELETE') {
     try {
-      const response = await axios.delete('http://localhost:4000/api/user', {
+      const response = await axios.delete('https://beyondwords-express.onrender.com/api/user', {
         headers: { Authorization: authHeader }
       });
       // Forward backend status and data

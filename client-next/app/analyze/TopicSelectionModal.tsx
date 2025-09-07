@@ -395,7 +395,7 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
         let verified = null;
         for (let i = 0; i < 5; i++) {
           try {
-            const fetchRes = await axios.get(`/api/conversations/${conversation.id}`, { headers: { Authorization: `Bearer ${token}` } });
+            const fetchRes = await axios.get(`/api/conversations/${conversation.id}`, { headers: authHeaders });
             if (fetchRes.data?.conversation) {
               verified = fetchRes.data.conversation;
               break;

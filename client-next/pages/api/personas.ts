@@ -2,7 +2,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import axios from 'axios';
 
-const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:4000/api/personas';
+const BACKEND_URL = process.env.BACKEND_URL || 'https://beyondwords-express.onrender.com/api/personas';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const authHeader = req.headers.authorization || '';
