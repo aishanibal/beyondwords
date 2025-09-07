@@ -60,8 +60,8 @@ const onboardingStyles = `
   }
 
   .language-card {
-    padding: clamp(0.15rem, 0.4vw, 0.25rem);
-    border-radius: clamp(0.15rem, 0.6vw, 0.3rem);
+    padding: clamp(0.1rem, 0.3vw, 0.2rem);
+    border-radius: clamp(0.1rem, 0.4vw, 0.2rem);
     border: 1px solid rgba(126,90,117,0.2);
     background-color: var(--cream);
     cursor: pointer;
@@ -73,7 +73,7 @@ const onboardingStyles = `
     align-items: center;
     box-sizing: border-box;
     width: 100%;
-    max-width: 100px;
+    max-width: 90px;
     margin: 0 auto;
     min-height: 0;
     height: calc((50vh - 1.5rem) / 6);
@@ -93,29 +93,29 @@ const onboardingStyles = `
   }
 
   .language-flag {
-    font-size: clamp(0.9rem, 1.8vw, 1.1rem);
-    margin-bottom: clamp(0.03rem, 0.1vw, 0.05rem);
+    font-size: clamp(0.7rem, 1.4vw, 0.9rem);
+    margin-bottom: clamp(0.02rem, 0.05vw, 0.03rem);
     line-height: 1;
   }
 
   .language-name {
     font-weight: 600;
     color: var(--blue-secondary);
-    margin-bottom: clamp(0.03rem, 0.1vw, 0.05rem);
-    font-size: clamp(0.55rem, 1.1vw, 0.7rem);
+    margin-bottom: clamp(0.02rem, 0.05vw, 0.03rem);
+    font-size: clamp(0.45rem, 0.9vw, 0.55rem);
     font-family: 'Gabriela', Arial, sans-serif;
     line-height: 1;
   }
 
   .language-description {
-    font-size: clamp(0.4rem, 0.8vw, 0.5rem);
+    font-size: clamp(0.35rem, 0.7vw, 0.45rem);
     color: var(--rose-primary);
     line-height: 1;
     font-family: 'AR One Sans', Arial, sans-serif;
     overflow: hidden;
     text-overflow: ellipsis;
     display: -webkit-box;
-    -webkit-line-clamp: 2;
+    -webkit-line-clamp: 1;
     -webkit-box-orient: vertical;
     word-wrap: break-word;
     hyphens: auto;
