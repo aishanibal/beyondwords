@@ -44,21 +44,21 @@ const onboardingStyles = `
 
   .language-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    grid-auto-rows: 1fr;
-    gap: clamp(0.75rem, 2vw, 1.5rem);
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: clamp(0.4rem, 1.2vw, 0.8rem);
     margin-bottom: clamp(1rem, 3vw, 2rem);
-    max-width: 95%;
+    max-width: 100%;
     margin-left: auto;
     margin-right: auto;
-    padding: clamp(0.5rem, 2vw, 1rem);
+    padding: clamp(0.25rem, 1vw, 0.5rem);
     box-sizing: border-box;
     align-items: stretch;
     height: auto;
+    justify-items: center;
   }
 
   .language-card {
-    padding: clamp(0.5rem, 1.5vw, 0.75rem);
+    padding: clamp(0.4rem, 1.2vw, 0.6rem);
     border-radius: clamp(0.4rem, 1.5vw, 0.8rem);
     border: 2px solid rgba(126,90,117,0.2);
     background-color: var(--cream);
@@ -71,6 +71,7 @@ const onboardingStyles = `
     align-items: center;
     box-sizing: border-box;
     width: 100%;
+    max-width: 160px;
     margin: 0 auto;
     min-height: 0;
     aspect-ratio: 1;
@@ -122,35 +123,63 @@ const onboardingStyles = `
   /* Mobile-first responsive breakpoints */
   @media (max-width: 480px) {
     .language-grid {
-      grid-template-columns: repeat(2, 1fr);
-      gap: 0.4rem;
+      grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+      gap: 0.3rem;
       padding: 0.2rem;
     }
     
     .language-card {
-      padding: 0.4rem;
+      padding: 0.3rem;
+      max-width: 120px;
     }
     
     .language-flag {
-      font-size: 1rem;
-      margin-bottom: 0.1rem;
+      font-size: 0.9rem;
+      margin-bottom: 0.05rem;
     }
     
     .language-name {
-      font-size: 0.6rem;
-      margin-bottom: 0.1rem;
+      font-size: 0.55rem;
+      margin-bottom: 0.05rem;
     }
     
     .language-description {
-      font-size: 0.45rem;
+      font-size: 0.4rem;
       -webkit-line-clamp: 2;
     }
   }
 
   @media (min-width: 481px) and (max-width: 768px) {
     .language-grid {
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 0.5rem;
+    }
+    
+    .language-card {
+      max-width: 140px;
+    }
+    
+    .language-flag {
+      font-size: 1.1rem;
+    }
+    
+    .language-name {
+      font-size: 0.65rem;
+    }
+    
+    .language-description {
+      font-size: 0.5rem;
+    }
+  }
+
+  @media (min-width: 769px) and (max-width: 1024px) {
+    .language-grid {
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
       gap: 0.6rem;
+    }
+    
+    .language-card {
+      max-width: 160px;
     }
     
     .language-flag {
@@ -158,7 +187,7 @@ const onboardingStyles = `
     }
     
     .language-name {
-      font-size: 0.7rem;
+      font-size: 0.75rem;
     }
     
     .language-description {
@@ -166,14 +195,18 @@ const onboardingStyles = `
     }
   }
 
-  @media (min-width: 769px) and (max-width: 1024px) {
+  @media (min-width: 1025px) and (max-width: 1439px) {
     .language-grid {
-      grid-template-columns: repeat(4, 1fr);
-      gap: 0.8rem;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 0.7rem;
+    }
+    
+    .language-card {
+      max-width: 170px;
     }
     
     .language-flag {
-      font-size: 1.5rem;
+      font-size: 1.4rem;
     }
     
     .language-name {
@@ -185,14 +218,20 @@ const onboardingStyles = `
     }
   }
 
-  @media (min-width: 1025px) and (max-width: 1439px) {
+  /* Large screens optimization */
+  @media (min-width: 1440px) and (max-width: 1919px) {
     .language-grid {
-      grid-template-columns: repeat(4, 1fr);
-      gap: 1rem;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 0.8rem;
+      max-width: 95%;
+    }
+    
+    .language-card {
+      max-width: 180px;
     }
     
     .language-flag {
-      font-size: 1.6rem;
+      font-size: 1.5rem;
     }
     
     .language-name {
@@ -204,16 +243,20 @@ const onboardingStyles = `
     }
   }
 
-  /* Large screens optimization */
-  @media (min-width: 1440px) and (max-width: 1919px) {
+  /* Ultra-wide screens */
+  @media (min-width: 1920px) {
     .language-grid {
-      grid-template-columns: repeat(4, 1fr);
-      gap: 1.2rem;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 1rem;
       max-width: 90%;
     }
     
+    .language-card {
+      max-width: 190px;
+    }
+    
     .language-flag {
-      font-size: 1.8rem;
+      font-size: 1.6rem;
     }
     
     .language-name {
@@ -222,27 +265,6 @@ const onboardingStyles = `
     
     .language-description {
       font-size: 0.7rem;
-    }
-  }
-
-  /* Ultra-wide screens */
-  @media (min-width: 1920px) {
-    .language-grid {
-      grid-template-columns: repeat(5, 1fr);
-      gap: 1.4rem;
-      max-width: 85%;
-    }
-    
-    .language-flag {
-      font-size: 2rem;
-    }
-    
-    .language-name {
-      font-size: 1rem;
-    }
-    
-    .language-description {
-      font-size: 0.8rem;
     }
   }
 `;
