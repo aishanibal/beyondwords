@@ -8,6 +8,196 @@ import { useUser } from '../ClientLayout';
 import LoadingScreen from '../components/LoadingScreen';
 import { LANGUAGES, PROFICIENCY_LEVELS, TALK_TOPICS, LEARNING_GOALS, PRACTICE_PREFERENCES, FEEDBACK_LANGUAGES, Language, ProficiencyLevel, Topic, LearningGoal, PracticePreference, FeedbackLanguage } from '../../lib/preferences';
 
+// Responsive CSS styles for onboarding
+const onboardingStyles = `
+  .onboarding-step-container {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    overflow: hidden;
+    padding: clamp(1rem, 3vw, 2rem) 0;
+    box-sizing: border-box;
+  }
+
+  .onboarding-title {
+    color: var(--blue-secondary);
+    font-size: clamp(1.5rem, 4vw, 2.5rem);
+    font-weight: 700;
+    margin-bottom: clamp(0.5rem, 2vw, 1rem);
+    text-align: center;
+    font-family: 'Gabriela', Arial, sans-serif;
+    line-height: 1.2;
+  }
+
+  .onboarding-subtitle {
+    color: var(--rose-primary);
+    text-align: center;
+    margin-bottom: clamp(1rem, 3vw, 2rem);
+    font-size: clamp(1rem, 2.5vw, 1.5rem);
+    font-family: 'AR One Sans', Arial, sans-serif;
+    line-height: 1.3;
+    max-width: 90%;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .language-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
+    gap: clamp(0.75rem, 2vw, 1.5rem);
+    margin-bottom: clamp(1rem, 3vw, 2rem);
+    max-width: 95%;
+    margin-left: auto;
+    margin-right: auto;
+    padding: clamp(0.5rem, 2vw, 1rem);
+    max-height: 70vh;
+    overflow-y: auto;
+    box-sizing: border-box;
+  }
+
+  .language-card {
+    padding: clamp(1rem, 3vw, 1.5rem);
+    border-radius: clamp(0.5rem, 2vw, 1rem);
+    border: 2px solid rgba(126,90,117,0.2);
+    background-color: var(--cream);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-align: center;
+    min-height: clamp(8rem, 15vw, 12rem);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 280px;
+    margin: 0 auto;
+  }
+
+  .language-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(126,90,117,0.15);
+  }
+
+  .language-card.selected {
+    border-color: var(--rose-primary);
+    background-color: rgba(126,90,117,0.1);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(126,90,117,0.2);
+  }
+
+  .language-flag {
+    font-size: clamp(2rem, 5vw, 3rem);
+    margin-bottom: clamp(0.25rem, 1vw, 0.5rem);
+    line-height: 1;
+  }
+
+  .language-name {
+    font-weight: 600;
+    color: var(--blue-secondary);
+    margin-bottom: clamp(0.25rem, 1vw, 0.5rem);
+    font-size: clamp(1rem, 2.5vw, 1.25rem);
+    font-family: 'Gabriela', Arial, sans-serif;
+    line-height: 1.2;
+  }
+
+  .language-description {
+    font-size: clamp(0.75rem, 2vw, 1rem);
+    color: var(--rose-primary);
+    line-height: 1.3;
+    font-family: 'AR One Sans', Arial, sans-serif;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    word-wrap: break-word;
+  }
+
+  /* Mobile-first responsive breakpoints */
+  @media (max-width: 480px) {
+    .language-grid {
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 0.75rem;
+      padding: 0.5rem;
+    }
+    
+    .language-card {
+      min-height: 7rem;
+      padding: 0.75rem;
+    }
+    
+    .language-flag {
+      font-size: 2rem;
+    }
+    
+    .language-name {
+      font-size: 0.9rem;
+    }
+    
+    .language-description {
+      font-size: 0.7rem;
+    }
+  }
+
+  @media (min-width: 481px) and (max-width: 768px) {
+    .language-grid {
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1rem;
+    }
+    
+    .language-card {
+      min-height: 9rem;
+    }
+  }
+
+  @media (min-width: 769px) and (max-width: 1024px) {
+    .language-grid {
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1.25rem;
+    }
+    
+    .language-card {
+      min-height: 10rem;
+    }
+  }
+
+  @media (min-width: 1025px) {
+    .language-grid {
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1.5rem;
+    }
+    
+    .language-card {
+      min-height: 12rem;
+    }
+  }
+
+  /* Large screens optimization */
+  @media (min-width: 1440px) {
+    .language-grid {
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      max-width: 90%;
+    }
+    
+    .language-card {
+      min-height: 13rem;
+    }
+  }
+
+  /* Ultra-wide screens */
+  @media (min-width: 1920px) {
+    .language-grid {
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      max-width: 85%;
+    }
+    
+    .language-card {
+      min-height: 14rem;
+    }
+  }
+`;
+
 export default function OnboardingPage() {
   const { user, setUser } = useUser();
   const router = useRouter();
@@ -246,71 +436,23 @@ export default function OnboardingPage() {
   );
 
   const renderStep1 = () => (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center', overflow: 'hidden' }}>
-      <h2 style={{ 
-        color: 'var(--blue-secondary)', 
-        fontSize: '2.5vh', 
-        fontWeight: 700, 
-        marginBottom: '0.2vh', 
-        textAlign: 'center',
-        fontFamily: 'Gabriela, Arial, sans-serif'
-      }}>
+    <div className="onboarding-step-container">
+      <h2 className="onboarding-title">
         Which language would you like to learn?
       </h2>
-      <p style={{ 
-        color: 'var(--rose-primary)', 
-        textAlign: 'center', 
-        marginBottom: '0.8vh', 
-        fontSize: '1.8vh',
-        fontFamily: 'AR One Sans, Arial, sans-serif'
-      }}>
+      <p className="onboarding-subtitle">
         Choose the language you want to practice speaking with AI feedback
       </p>
-      <div style={{ 
-        display: 'grid', 
-        gridTemplateColumns: 'repeat(4, 1fr)', 
-        gridTemplateRows: 'repeat(3, 1fr)',
-        gap: '0.6vh', 
-        marginBottom: '0.1vh',
-        maxWidth: '90%',
-        margin: '0 auto'
-      }}>
+      <div className="language-grid">
         {LANGUAGES.map((lang: Language) => (
           <div
             key={lang.code}
             onClick={() => updateOnboardingData('language', lang.code)}
-            style={{
-              padding: '0.8vh',
-              borderRadius: '0.8vh',
-              marginLeft: '0.5vh',
-              marginRight: '0.5vh',
-              marginTop: '0.3vh',
-              marginBottom: '0.3vh',
-              border: `2px solid ${onboardingData.language === lang.code ? 'var(--rose-primary)' : 'rgba(126,90,117,0.2)'}`,
-              backgroundColor: onboardingData.language === lang.code ? 'rgba(126,90,117,0.1)' : 'var(--cream)',
-              cursor: 'pointer',
-              transition: 'all 0.3s ease',
-              textAlign: 'center',
-              minHeight: '6vh',
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'center'
-            }}
+            className={`language-card ${onboardingData.language === lang.code ? 'selected' : ''}`}
           >
-            <div style={{ fontSize: '2.5vh', marginBottom: '0.2vh' }}>{lang.flag}</div>
-            <div style={{ 
-              fontWeight: 600, 
-              color: 'var(--blue-secondary)', 
-              marginBottom: '0.1vh', 
-              fontSize: '1.9vh',
-              fontFamily: 'Gabriela, Arial, sans-serif'
-            }}>{lang.label}</div>
-            <div style={{ 
-              fontSize: '1.2vh', 
-              color: 'var(--rose-primary)', 
-              lineHeight: '1.1',
-              fontFamily: 'AR One Sans, Arial, sans-serif'
-            }}>{lang.description}</div>
+            <div className="language-flag">{lang.flag}</div>
+            <div className="language-name">{lang.label}</div>
+            <div className="language-description">{lang.description}</div>
           </div>
         ))}
       </div>
@@ -569,16 +711,18 @@ export default function OnboardingPage() {
   );
 
   return (
-    <div style={{
-      height: 'calc(100vh - 6rem)', // Account for navigation bar (6rem)
-      background: 'linear-gradient(135deg, var(--cream) 0%, #e8e0d8 50%, #d4c8c0 100%)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '0.5vh',
-      fontFamily: 'Montserrat, Arial, sans-serif',
-      overflow: 'hidden'
-    }}>
+    <>
+      <style dangerouslySetInnerHTML={{ __html: onboardingStyles }} />
+      <div style={{
+        height: 'calc(100vh - 6rem)', // Account for navigation bar (6rem)
+        background: 'linear-gradient(135deg, var(--cream) 0%, #e8e0d8 50%, #d4c8c0 100%)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '0.5vh',
+        fontFamily: 'Montserrat, Arial, sans-serif',
+        overflow: 'hidden'
+      }}>
       <div style={{
         background: '#fff',
         borderRadius: '1.5vh',
