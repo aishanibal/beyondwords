@@ -45,6 +45,7 @@ const onboardingStyles = `
   .language-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
+    grid-auto-rows: minmax(8rem, auto);
     gap: clamp(1rem, 2.5vw, 2rem);
     margin-bottom: clamp(1rem, 3vw, 2rem);
     max-width: 95%;
@@ -54,6 +55,7 @@ const onboardingStyles = `
     max-height: 70vh;
     overflow-y: auto;
     box-sizing: border-box;
+    align-items: start;
   }
 
   .language-card {
@@ -517,6 +519,19 @@ export default function OnboardingPage() {
         Choose the language you want to practice speaking with AI feedback
       </p>
       <div className="language-grid">
+        {/* Debug indicator */}
+        <div style={{
+          gridColumn: '1 / -1',
+          background: 'rgba(255, 0, 0, 0.1)',
+          border: '2px solid red',
+          padding: '0.5rem',
+          textAlign: 'center',
+          fontSize: '0.8rem',
+          color: 'red',
+          fontWeight: 'bold'
+        }}>
+          🚀 MAIN ONBOARDING FIXES v2.1 ACTIVE - If you see this, the new code is running!
+        </div>
         {LANGUAGES.map((lang: Language) => (
           <div
             key={lang.code}

@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Force rebuild for layout fixes v2.1
   typescript: {
     ignoreBuildErrors: true,
   },
