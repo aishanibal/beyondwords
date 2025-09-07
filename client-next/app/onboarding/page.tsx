@@ -272,10 +272,6 @@ export default function OnboardingPage() {
   const { user, setUser } = useUser();
   const router = useRouter();
   
-  // Debug logging to verify this component is running
-  console.log('🎯 Main OnboardingPage component loaded with responsive fixes v2.1 - FORCE DEPLOY');
-  console.log('Available languages count:', LANGUAGES.length);
-  console.log('Current timestamp:', new Date().toISOString());
   const [currentStep, setCurrentStep] = useState(1);
   interface OnboardingData {
     language: string;
@@ -519,19 +515,6 @@ export default function OnboardingPage() {
         Choose the language you want to practice speaking with AI feedback
       </p>
       <div className="language-grid">
-        {/* Debug indicator */}
-        <div style={{
-          gridColumn: '1 / -1',
-          background: 'rgba(255, 0, 0, 0.1)',
-          border: '2px solid red',
-          padding: '0.5rem',
-          textAlign: 'center',
-          fontSize: '0.8rem',
-          color: 'red',
-          fontWeight: 'bold'
-        }}>
-          🚀 MAIN ONBOARDING FIXES v2.1 ACTIVE - If you see this, the new code is running!
-        </div>
         {LANGUAGES.map((lang: Language) => (
           <div
             key={lang.code}

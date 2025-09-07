@@ -296,11 +296,6 @@ function LanguageOnboarding({ onComplete, existingLanguages = [] }: LanguageOnbo
   const { user } = useUser();
   const router = useRouter();
   
-  // Debug logging to verify this component is running
-  console.log('🌍 LanguageOnboarding component loaded with responsive fixes v2.1 - FORCE DEPLOY');
-  console.log('Available languages count:', LANGUAGES.length);
-  console.log('Existing languages:', existingLanguages);
-  console.log('Current timestamp:', new Date().toISOString());
   
   // Authentication check
   if (!user) {
@@ -518,11 +513,7 @@ function LanguageOnboarding({ onComplete, existingLanguages = [] }: LanguageOnbo
     </div>
   );
 
-  const renderStep1 = () => {
-    console.log('🎯 renderStep1 called with responsive CSS classes');
-    console.log('Available languages for selection:', availableLanguages.length);
-    
-    return (
+  const renderStep1 = () => (
       <div className="language-onboarding-step-container">
         <h2 className="language-onboarding-title">
           Which language would you like to add?
@@ -542,19 +533,6 @@ function LanguageOnboarding({ onComplete, existingLanguages = [] }: LanguageOnbo
         </div>
       ) : (
         <div className="language-onboarding-grid">
-          {/* Debug indicator */}
-          <div style={{
-            gridColumn: '1 / -1',
-            background: 'rgba(255, 0, 0, 0.1)',
-            border: '2px solid red',
-            padding: '0.5rem',
-            textAlign: 'center',
-            fontSize: '0.8rem',
-            color: 'red',
-            fontWeight: 'bold'
-          }}>
-            🚀 RESPONSIVE FIXES v2.1 ACTIVE - If you see this, the new code is running!
-          </div>
           {availableLanguages.map((lang: Language) => (
             <div
               key={lang.code}
@@ -570,8 +548,7 @@ function LanguageOnboarding({ onComplete, existingLanguages = [] }: LanguageOnbo
       )}
       {renderFeedbackLanguageSelector()}
     </div>
-    );
-  };
+  );
 
   const renderStep2 = () => (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
