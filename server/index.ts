@@ -1836,4 +1836,4 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Python API URL: ${process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com'}`);
   console.log('Note: Using SQLite database for temporary storage');
-}); 
+}); // Force redeploy Mon Sep  8 16:16:47 EDT 2025

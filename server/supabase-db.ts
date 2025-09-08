@@ -383,19 +383,35 @@ export const createConversation = async (
   personaId?: number,
   learningGoals?: string[]
 ): Promise<Conversation> => {
+  // Resolve the user's language dashboard id for this language
+  let languageDashboardId: number | null = null;
+  try {
+    const dashboard = await getLanguageDashboard(userId, language);
+    languageDashboardId = dashboard?.id ?? null;
+  } catch (e) {
+    // If dashboard lookup fails, continue without it
+    languageDashboardId = null;
+  }
+
+  const insertPayload: any = {
+    user_id: userId,
+    // Do NOT set language if the column doesn't exist in Supabase
+    title,
+    topics,
+    formality,
+    description,
+    uses_persona: usesPersona,
+    persona_id: personaId,
+    learning_goals: learningGoals
+  };
+
+  if (languageDashboardId) {
+    insertPayload.language_dashboard_id = languageDashboardId;
+  }
+
   const { data, error } = await supabase
     .from('conversations')
-    .insert([{
-      user_id: userId,
-      language,
-      title,
-      topics,
-      formality,
-      description,
-      uses_persona: usesPersona,
-      persona_id: personaId,
-      learning_goals: learningGoals
-    }])
+    .insert([insertPayload])
     .select()
     .single();
   
@@ -404,16 +420,30 @@ export const createConversation = async (
 };
 
 export const getUserConversations = async (userId: string, language?: string): Promise<Conversation[]> => {
-  let query = supabase
+  // If a language is provided, map it to the user's language dashboard id
+  if (language) {
+    try {
+      const dashboard = await getLanguageDashboard(userId, language);
+      if (dashboard?.id) {
+        const { data, error } = await supabase
+          .from('conversations')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('language_dashboard_id', dashboard.id)
+          .order('updated_at', { ascending: false });
+        if (error) throw error;
+        return data || [];
+      }
+    } catch (e) {
+      // Fall through to fetch by user only
+    }
+  }
+
+  const { data, error } = await supabase
     .from('conversations')
     .select('*')
-    .eq('user_id', userId);
-  
-  if (language) {
-    query = query.eq('language', language);
-  }
-  
-  const { data, error } = await query.order('updated_at', { ascending: false });
+    .eq('user_id', userId)
+    .order('updated_at', { ascending: false });
   
   if (error) throw error;
   return data || [];
