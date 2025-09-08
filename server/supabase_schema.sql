@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS conversations (
   id BIGSERIAL PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   language_dashboard_id BIGINT REFERENCES language_dashboards(id) ON DELETE SET NULL,
+  language TEXT, -- Added to align with backend usage and filtering
   title TEXT,
   topics TEXT[], -- Array of text
   formality TEXT,
@@ -96,6 +97,7 @@ CREATE INDEX IF NOT EXISTS idx_language_dashboards_user_id ON language_dashboard
 CREATE INDEX IF NOT EXISTS idx_language_dashboards_user_language ON language_dashboards(user_id, language);
 CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id);
 CREATE INDEX IF NOT EXISTS idx_conversations_language_dashboard_id ON conversations(language_dashboard_id);
+CREATE INDEX IF NOT EXISTS idx_conversations_language ON conversations(language);
 CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id);
 CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);
 CREATE INDEX IF NOT EXISTS idx_personas_user_id ON personas(user_id);
