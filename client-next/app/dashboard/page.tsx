@@ -12,7 +12,7 @@ import LanguageOnboarding from '../components/LanguageOnboarding';
 import DashboardSettingsModal from '../components/DashboardSettingsModal';
 import LoadingScreen from '../components/LoadingScreen';
 
-import { LEARNING_GOALS, LearningGoal, getProgressiveSubgoalDescription, getSubgoalLevel, getSubgoalProgress, updateSubgoalProgress, SubgoalProgress, LevelUpEvent } from '../../lib/preferences';
+import { LEARNING_GOALS, LearningGoal, getProgressiveSubgoalDescription, getSubgoalLevel, getSubgoalProgress, updateSubgoalProgress, SubgoalProgress, LevelUpEvent, LANGUAGES } from '../../lib/preferences';
 import { getUserLanguageDashboards, getUserConversations, getUserPersonas } from '../../lib/api';
 
 // Type definitions
@@ -588,21 +588,8 @@ export default function DashboardPage() {
   }, [user?.id, selectedLanguage]);
 
   const getLanguageInfo = (code: string): { label: string; flag: string } => {
-    const languages: Record<string, { label: string; flag: string }> = {
-      'en': { label: 'English', flag: '🇺🇸' },
-      'es': { label: 'Spanish', flag: '🇪🇸' },
-      'fr': { label: 'French', flag: '🇫🇷' },
-      'zh': { label: 'Mandarin', flag: '🇨🇳' },
-      'ja': { label: 'Japanese', flag: '🇯🇵' },
-      'ko': { label: 'Korean', flag: '🇰🇷' },
-      'tl': { label: 'Tagalog', flag: '🇵🇭' },
-      'hi': { label: 'Hindi', flag: '🇮🇳' },
-      'ml': { label: 'Malayalam', flag: '🇮🇳' },
-      'ta': { label: 'Tamil', flag: '🇮🇳' },
-      'or': { label: 'Odia', flag: '🇮🇳' },
-      'ar': { label: 'Arabic', flag: '🇸🇦' }
-    };
-    return languages[code] || { label: code, flag: '🌍' };
+    const lang = LANGUAGES.find(l => l.code === code);
+    return lang ? { label: lang.label, flag: lang.flag } : { label: code, flag: '🌍' };
   };
 
   const getProficiencyDisplay = (level: string): { label: string; icon: string } => {
