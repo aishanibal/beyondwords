@@ -11,6 +11,32 @@ import { createLanguageDashboard } from '../../lib/api';
 
 // Responsive CSS styles for language onboarding
 const languageOnboardingStyles = `
+  /* Step 3 responsive grids (match main onboarding) */
+  .topics-grid, .goals-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.6vh;
+    margin-bottom: 0.2vh;
+    align-items: stretch;
+  }
+  @media (min-width: 481px) and (max-width: 1024px) {
+    .topics-grid, .goals-grid {
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.6vh;
+    }
+  }
+  @media (min-width: 1025px) and (max-width: 1439px) {
+    .topics-grid, .goals-grid {
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.6vh;
+    }
+  }
+  @media (min-width: 1440px) {
+    .topics-grid, .goals-grid {
+      grid-template-columns: repeat(5, 1fr);
+      gap: 0.6vh;
+    }
+  }
   .language-onboarding-step-container {
     height: 100%;
     display: flex;
@@ -640,7 +666,7 @@ function LanguageOnboarding({ onComplete, existingLanguages = [] }: LanguageOnbo
         }}>
           💬 Topics I'd like to talk about
         </h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5vh', marginBottom: '0.2vh' }}>
+        <div className="topics-grid">
           {TALK_TOPICS.map((topic: Topic) => (
             <div
               key={topic.id}
@@ -686,7 +712,7 @@ function LanguageOnboarding({ onComplete, existingLanguages = [] }: LanguageOnbo
         }}>
           🎯 Skills I want to develop
         </h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.3vh' }}>
+        <div className="goals-grid">
           {LEARNING_GOALS.map((goal: LearningGoal) => (
             <div
               key={goal.id}

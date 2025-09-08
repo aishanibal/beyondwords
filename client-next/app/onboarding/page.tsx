@@ -126,22 +126,27 @@ const onboardingStyles = `
   /* Step 3 responsive grids */
   .topics-grid, .goals-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(clamp(140px, 22vw, 240px), 1fr));
-    gap: clamp(0.4vh, 1vw, 1.2vh);
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.6vh;
     margin-bottom: 0.2vh;
     align-items: stretch;
   }
-
-  @media (max-width: 480px) {
+  @media (min-width: 481px) and (max-width: 1024px) {
     .topics-grid, .goals-grid {
-      grid-template-columns: repeat(auto-fit, minmax(clamp(130px, 44vw, 200px), 1fr));
-      gap: clamp(0.3vh, 1.6vw, 0.8vh);
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.6vh;
     }
   }
-
+  @media (min-width: 1025px) and (max-width: 1439px) {
+    .topics-grid, .goals-grid {
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.6vh;
+    }
+  }
   @media (min-width: 1440px) {
     .topics-grid, .goals-grid {
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      grid-template-columns: repeat(5, 1fr);
+      gap: 0.6vh;
     }
   }
 
