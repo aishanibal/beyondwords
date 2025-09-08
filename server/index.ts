@@ -1150,7 +1150,7 @@ app.post('/api/conversations', authenticateJWT, async (req: Request, res: Respon
         console.log('Generated TTS for initial message:', ttsUrl);
       }
       
-      aiMessage = await addMessage(conversation.id, 'AI', aiIntro, 'text', undefined, undefined);
+      aiMessage = await addMessage(conversation.id, 'AI', aiIntro, 'text', undefined, undefined, 1);
     } catch (err) {
       console.error('Error generating/saving AI intro message:', err);
     }
