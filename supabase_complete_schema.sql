@@ -520,3 +520,4 @@ BEGIN
     updated_at = NOW();
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+

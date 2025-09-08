@@ -296,3 +296,4 @@ For issues or questions about Japanese romanization:
 3. Test with the provided test script
 4. Review the method selection logic
 5. Check the visual debug panel for real-time status
+

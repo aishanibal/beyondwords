@@ -177,3 +177,4 @@ Visit `/test-dark-mode` to test the dark mode functionality:
 - Theme switching is optimized with CSS transitions
 - Context updates are minimal and efficient
 - No unnecessary re-renders during theme changes
+

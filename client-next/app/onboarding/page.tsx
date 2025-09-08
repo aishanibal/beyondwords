@@ -22,7 +22,7 @@ const onboardingStyles = `
 
   .onboarding-title {
     color: var(--blue-secondary);
-    font-size: clamp(1.2rem, 3vw, 1.6rem);
+    font-size: 2.3vh;
     font-weight: 700;
     margin-bottom: clamp(0.1rem, 0.5vw, 0.3rem);
     text-align: center;
@@ -34,7 +34,7 @@ const onboardingStyles = `
     color: var(--rose-primary);
     text-align: center;
     margin-bottom: clamp(0.3rem, 0.8vw, 0.5rem);
-    font-size: clamp(0.8rem, 1.8vw, 1rem);
+    font-size: 1.6vh;
     font-family: 'AR One Sans', Arial, sans-serif;
     line-height: 1.2;
     max-width: 90%;
@@ -121,6 +121,49 @@ const onboardingStyles = `
     hyphens: auto;
     text-align: center;
     flex-grow: 1;
+  }
+
+  /* Step 3 responsive grids */
+  .topics-grid, .goals-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: clamp(0.3vh, 0.6vw, 0.5vh);
+    margin-bottom: 0.2vh;
+  }
+
+  @media (max-width: 480px) {
+    .topics-grid, .goals-grid {
+      grid-template-columns: repeat(2, 1fr);
+      gap: clamp(0.2vh, 1vw, 0.4vh);
+    }
+  }
+
+  @media (min-width: 481px) and (max-width: 768px) {
+    .topics-grid, .goals-grid {
+      grid-template-columns: repeat(2, 1fr);
+      gap: clamp(0.3vh, 0.8vw, 0.6vh);
+    }
+  }
+
+  @media (min-width: 769px) and (max-width: 1024px) {
+    .topics-grid, .goals-grid {
+      grid-template-columns: repeat(3, 1fr);
+      gap: clamp(0.4vh, 0.8vw, 0.7vh);
+    }
+  }
+
+  @media (min-width: 1025px) and (max-width: 1439px) {
+    .topics-grid, .goals-grid {
+      grid-template-columns: repeat(3, 1fr);
+      gap: clamp(0.3vh, 0.7vw, 0.6vh);
+    }
+  }
+
+  @media (min-width: 1440px) {
+    .topics-grid, .goals-grid {
+      grid-template-columns: repeat(4, 1fr);
+      gap: clamp(0.4vh, 0.6vw, 0.7vh);
+    }
   }
 
   /* Mobile-first responsive breakpoints */
@@ -637,7 +680,7 @@ export default function OnboardingPage() {
         }}>
           💬 Topics I'd like to talk about
         </h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5vh', marginBottom: '0.2vh' }}>
+        <div className="topics-grid">
           {TALK_TOPICS.map((topic: Topic) => (
             <div
               key={topic.id}
@@ -683,7 +726,7 @@ export default function OnboardingPage() {
         }}>
           🎯 Skills I want to develop
         </h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.3vh' }}>
+        <div className="goals-grid">
           {LEARNING_GOALS.map((goal: LearningGoal) => (
             <div
               key={goal.id}
