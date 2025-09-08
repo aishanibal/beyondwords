@@ -1094,17 +1094,25 @@ app.post('/api/conversations', authenticateJWT, async (req: Request, res: Respon
     console.log('🔄 SERVER: Creating conversation with persona info:', { usesPersona, personaId });
     console.log('🔄 SERVER: Creating conversation with learning goals:', learningGoals);
     console.log('🔄 SERVER: Full request body:', req.body);
+    // Basic validation to provide clearer error messages
+    if (!req.user?.userId) {
+      return res.status(401).json({ error: 'AUTH_ERROR: Missing or invalid user' });
+    }
+    if (!language || !title || !Array.isArray(topics) || topics.length === 0) {
+      return res.status(400).json({ error: 'VALIDATION_ERROR: Missing required fields (language, title, topics[])' });
+    }
+
     const conversation = await createConversation(req.user.userId, language, title, topics, formality, description, usesPersona, personaId, learningGoals);
     console.log('🔄 SERVER: Conversation creation result:', conversation);
     if (!conversation || !conversation.id) {
-      console.error('❌ SERVER: Failed to create conversation');
-      return res.status(500).json({ error: 'Failed to create conversation' });
+      console.error('❌ SERVER: Failed to create conversation (no id)');
+      return res.status(500).json({ error: 'DB_ERROR: Conversation create returned no id' });
     }
     // Immediately try to fetch the conversation from the DB
     const verify = await getConversationWithMessages(conversation.id);
     if (!verify) {
       console.error('❌ SERVER: Conversation not found after creation:', conversation.id);
-      return res.status(500).json({ error: 'Conversation not found after creation' });
+      return res.status(500).json({ error: 'VERIFY_ERROR: Conversation not found after creation' });
     }
     // Generate and save AI intro message
     let aiMessage = null;
@@ -1150,7 +1158,8 @@ app.post('/api/conversations', authenticateJWT, async (req: Request, res: Respon
     res.json({ conversation, aiMessage: { text: aiIntro, ttsUrl } });
   } catch (error: any) {
     console.error('❌ SERVER: Create conversation error:', error);
-    res.status(500).json({ error: 'Failed to create conversation' });
+    const message = typeof error?.message === 'string' ? error.message : 'Unknown error';
+    res.status(500).json({ error: `CREATE_ERROR: ${message}` });
   }
 });
 

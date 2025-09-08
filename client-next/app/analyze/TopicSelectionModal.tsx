@@ -425,8 +425,11 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
         }
       } catch (err: any) {
         console.error('Error creating conversation:', err);
-        if (axios.isCancel && (err as any)?.message?.includes('canceled')) {
+        const serverMsg = err?.response?.data?.error;
+        if (axios.isCancel(err)) {
           setError('Starting took too long. Please try again.');
+        } else if (serverMsg) {
+          setError(serverMsg);
         } else {
           setError('Failed to start conversation. Try again.');
         }
