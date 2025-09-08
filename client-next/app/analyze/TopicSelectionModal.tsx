@@ -424,12 +424,23 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
           setIsLoading(false);
         }
       } catch (err: any) {
-        console.error('Error creating conversation:', err);
-        const serverMsg = err?.response?.data?.error;
+        // Log full error payload for diagnostics without Render access
+        const status = err?.response?.status;
+        const data = err?.response?.data;
+        const serverCode = data?.code;
+        const serverMsg = data?.error || data?.message;
+        console.error('[TOPIC_MODAL] Create conversation failed:', {
+          status,
+          serverCode,
+          serverMsg,
+          data
+        });
+
         if (axios.isCancel(err)) {
           setError('Starting took too long. Please try again.');
-        } else if (serverMsg) {
-          setError(serverMsg);
+        } else if (serverMsg || serverCode) {
+          const friendly = serverCode ? `${serverCode}: ${serverMsg || 'Unknown error'}` : (serverMsg || 'Unknown error');
+          setError(`Failed to start conversation — ${friendly}`);
         } else {
           setError('Failed to start conversation. Try again.');
         }
