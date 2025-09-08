@@ -354,8 +354,11 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
         return;
       }
 
-      // Get auth headers (includes token validation)
-      const authHeaders = getAuthHeaders();
+      // Build auth headers from active Supabase session (v2 stores token internally)
+      const accessToken = (session as any)?.access_token;
+      const authHeaders = accessToken
+        ? { Authorization: `Bearer ${accessToken}` }
+        : getAuthHeaders(); // Fallback to legacy/localStorage if present
       if (!authHeaders.Authorization) {
         setError('Authentication token missing. Please log in again.');
         setIsLoading(false);
@@ -365,7 +368,7 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
       const dashboardLanguage = currentDashboard?.language || currentLanguage || 'en';
       
       // Add timeout to the request
-      const timeoutDuration = 10000; // 10 seconds
+      const timeoutDuration = 15000; // 15 seconds for slower cold starts
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), timeoutDuration);
       
@@ -401,7 +404,7 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
               break;
             }
           } catch (e) {
-            await new Promise(res => setTimeout(res, 300));
+            await new Promise(res => setTimeout(res, 400));
           }
         }
 
@@ -422,7 +425,11 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
         }
       } catch (err: any) {
         console.error('Error creating conversation:', err);
-        setError('Failed to start conversation. Try again.');
+        if (axios.isCancel && (err as any)?.message?.includes('canceled')) {
+          setError('Starting took too long. Please try again.');
+        } else {
+          setError('Failed to start conversation. Try again.');
+        }
         setIsLoading(false);
       }
           } catch {
