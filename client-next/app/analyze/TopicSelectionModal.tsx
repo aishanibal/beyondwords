@@ -398,12 +398,16 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
         let verified = null;
         for (let i = 0; i < 5; i++) {
           try {
+            console.log(`[TOPIC_MODAL] Verifying conversation ${conversation.id}, attempt ${i + 1}`);
             const fetchRes = await axios.get(`/api/conversations/${conversation.id}`, { headers: authHeaders });
+            console.log(`[TOPIC_MODAL] Verification response:`, fetchRes.data);
             if (fetchRes.data?.conversation) {
               verified = fetchRes.data.conversation;
+              console.log(`[TOPIC_MODAL] Conversation verified successfully`);
               break;
             }
           } catch (e) {
+            console.log(`[TOPIC_MODAL] Verification attempt ${i + 1} failed:`, e);
             await new Promise(res => setTimeout(res, 400));
           }
         }
