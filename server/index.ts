@@ -407,7 +407,7 @@ app.post('/api/analyze', authenticateJWT, upload.single('audio'), async (req: Re
       console.log('TTS text length:', aiResponse.length);
       
       // Call Python API for Gemini TTS
-      const pythonApiUrl = process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com';
+      const pythonApiUrl = (process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com').replace(/\/$/, '');
       const ttsResponse = await axios.post(`${pythonApiUrl}/generate_tts`, {
         text: aiResponse,
         language_code: language,
@@ -495,7 +495,7 @@ app.post('/api/feedback', authenticateJWT, async (req: Request, res: Response) =
     // Call Python API for detailed feedback
     let feedback = '';
     try {
-      const pythonApiUrl = process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com';
+      const pythonApiUrl = (process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com').replace(/\/$/, '');
       const pythonResponse = await axios.post(`${pythonApiUrl}/feedback`, {
         chat_history,
         recognized_text: user_input,
@@ -1122,7 +1122,7 @@ app.post('/api/conversations', authenticateJWT, async (req: Request, res: Respon
       const user = await findUserById(req.user.userId);
       const userLevel = user?.proficiency_level || 'beginner';
       const userTopics = user?.talk_topics && typeof user.talk_topics === 'string' ? JSON.parse(user.talk_topics) : Array.isArray(user?.talk_topics) ? user.talk_topics : [];
-      const pythonApiUrl = process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com';
+      const pythonApiUrl = (process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com').replace(/\/$/, '');
       const topicsToSend = topics && topics.length > 0 ? topics : userTopics;
       try {
         const requestPayload = {
@@ -1336,7 +1336,7 @@ app.post('/api/suggestions', authenticateJWT, async (req: Request, res: Response
     
     // Call Python API for suggestions
     try {
-      const pythonApiUrl = process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com';
+      const pythonApiUrl = (process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com').replace(/\/$/, '');
       const pythonResponse = await axios.post(`${pythonApiUrl}/suggestions`, {
         chat_history: chatHistory,
         language: language || user?.target_language || 'en',
@@ -1383,7 +1383,7 @@ app.post('/api/translate', authenticateJWT, async (req: Request, res: Response) 
     
     // Call Python API for translation
     try {
-      const pythonApiUrl = process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com';
+      const pythonApiUrl = (process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com').replace(/\/$/, '');
       const pythonResponse = await axios.post(`${pythonApiUrl}/translate`, {
         text: text,
         source_language: source_language || 'auto',
@@ -1426,7 +1426,7 @@ app.post('/api/explain_suggestion', authenticateJWT, async (req: Request, res: R
     
     // Call Python API for explanation
     try {
-      const pythonApiUrl = process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com';
+      const pythonApiUrl = (process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com').replace(/\/$/, '');
       const pythonResponse = await axios.post(`${pythonApiUrl}/explain_suggestion`, {
         suggestion_text: suggestion_text,
         chatHistory: chatHistory || [],
@@ -1695,7 +1695,7 @@ app.post('/api/quick_translation', authenticateJWT, async (req: Request, res: Re
     
     // Call Python API for quick translation
     try {
-      const pythonApiUrl = process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com';
+      const pythonApiUrl = (process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com').replace(/\/$/, '');
       const pythonResponse = await axios.post(`${pythonApiUrl}/quick_translation`, {
         ai_message: ai_message,
         language: language || 'en',
@@ -1768,7 +1768,7 @@ async function generateTTSWithDebug(text: string, language: string): Promise<{ t
     console.log('🎯 [TTS DEBUG] TTS text length:', text.length);
     
     // Call Python API for TTS with debug info
-    const pythonApiUrl = process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com';
+    const pythonApiUrl = (process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com').replace(/\/$/, '');
     console.log(`🎯 [TTS DEBUG] Calling Python API at: ${pythonApiUrl}/generate_tts`);
     console.log(`🎯 [TTS DEBUG] Request payload: text='${text.substring(0, 50)}...', language='${language}', output_path='${ttsFilePath}'`);
     
