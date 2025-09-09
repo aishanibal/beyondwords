@@ -401,15 +401,26 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
         for (let i = 0; i < 5; i++) {
           try {
             console.log(`[TOPIC_MODAL] Verifying conversation ${conversation.id}, attempt ${i + 1}`);
+            console.log(`[TOPIC_MODAL] Making request to: /api/conversations/${conversation.id}`);
+            console.log(`[TOPIC_MODAL] Auth headers:`, authHeaders);
             const fetchRes = await axios.get(`/api/conversations/${conversation.id}`, { headers: authHeaders });
-            console.log(`[TOPIC_MODAL] Verification response:`, fetchRes.data);
+            console.log(`[TOPIC_MODAL] Verification response status:`, fetchRes.status);
+            console.log(`[TOPIC_MODAL] Verification response data:`, fetchRes.data);
             if (fetchRes.data?.conversation) {
               verified = fetchRes.data.conversation;
               console.log(`[TOPIC_MODAL] Conversation verified successfully`);
               break;
+            } else {
+              console.log(`[TOPIC_MODAL] No conversation in response data`);
             }
           } catch (e) {
             console.log(`[TOPIC_MODAL] Verification attempt ${i + 1} failed:`, e);
+            console.log(`[TOPIC_MODAL] Error details:`, {
+              status: e?.response?.status,
+              statusText: e?.response?.statusText,
+              data: e?.response?.data,
+              url: e?.config?.url
+            });
             await new Promise(res => setTimeout(res, 400));
           }
         }
