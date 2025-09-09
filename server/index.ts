@@ -1185,10 +1185,22 @@ app.post('/api/conversations', authenticateJWT, async (req: Request, res: Respon
         aiIntro = 'Hello! What would you like to talk about today?';
       }
       
-      // Generate TTS for the initial AI message
-      if (aiIntro && aiIntro.trim()) {
-        ttsUrl = await generateTTS(aiIntro, language);
-        console.log('Generated TTS for initial message:', ttsUrl);
+      // Generate TTS for the initial AI message (don't let TTS failure block conversation)
+      try {
+        if (aiIntro && aiIntro.trim()) {
+          const ttsResult = await generateTTSWithDebug(aiIntro, language);
+          ttsUrl = ttsResult.ttsUrl;
+          console.log('Generated TTS for initial message:', ttsUrl);
+          console.log('TTS Debug info:', ttsResult.debug);
+          
+          // If TTS failed, continue without it - don't block conversation creation
+          if (!ttsUrl) {
+            console.log('⚠️ TTS generation failed, continuing without audio');
+          }
+        }
+      } catch (ttsError) {
+        console.error('⚠️ TTS generation error (non-blocking):', ttsError);
+        ttsUrl = null;
       }
       
       aiMessage = await addMessage(conversation.id, 'AI', aiIntro, 'text', undefined, undefined, 1);
