@@ -10,31 +10,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const authHeader = req.headers.authorization || '';
 
   try {
-    // Handle /api/conversations/[id] - GET specific conversation
-    console.log('🔍 [API] Conversations route called:', { method: req.method, url: req.url });
-    const idMatch = req.url?.match(/^\/api\/conversations\/(\d+)$/);
-    console.log('🔍 [API] ID match result:', idMatch);
-    
-    if (req.method === 'GET' && idMatch) {
-      const id = idMatch[1];
-      console.log('🔍 [API] Proxying GET request to backend for conversation ID:', id);
-      const response = await axios.get(`${BACKEND_URL}/${id}`, {
-        headers: { Authorization: authHeader }
-      });
-      console.log('🔍 [API] Backend response:', response.status, response.data);
-      return res.status(response.status).json(response.data);
-    }
-
-    // Handle /api/conversations/[id]/title - PUT update conversation title
-    const titleMatch = req.url?.match(/^\/api\/conversations\/(\d+)\/title$/);
-    if (req.method === 'PUT' && titleMatch) {
-      const id = titleMatch[1];
-      const response = await axios.put(`${BACKEND_URL}/${id}/title`, req.body, {
-        headers: { Authorization: authHeader }
-      });
-      return res.status(response.status).json(response.data);
-    }
-
     // Handle /api/conversations - GET all conversations or POST new conversation
     if (req.method === 'GET') {
       const { language } = req.query;
