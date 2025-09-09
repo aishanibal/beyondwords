@@ -228,7 +228,7 @@ app.post('/api/analyze', authenticateJWT, upload.single('audio'), async (req, re
             const ttsFilePath = path_1.default.join(uploadsDir, ttsFileName);
             console.log('Generating TTS using Gemini API for language:', language);
             console.log('TTS text length:', aiResponse.length);
-            const pythonApiUrl = process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com';
+            const pythonApiUrl = (process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com').replace(/\/$/, '');
             const ttsResponse = await axios_1.default.post(`${pythonApiUrl}/generate_tts`, {
                 text: aiResponse,
                 language_code: language,
@@ -304,7 +304,7 @@ app.post('/api/feedback', authenticateJWT, async (req, res) => {
         console.log('Parsed chat_history:', chat_history);
         let feedback = '';
         try {
-            const pythonApiUrl = process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com';
+            const pythonApiUrl = (process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com').replace(/\/$/, '');
             const pythonResponse = await axios_1.default.post(`${pythonApiUrl}/feedback`, {
                 chat_history,
                 recognized_text: user_input,
@@ -772,16 +772,31 @@ app.post('/api/conversations', authenticateJWT, async (req, res) => {
         console.log('🔄 SERVER: Creating conversation with persona info:', { usesPersona, personaId });
         console.log('🔄 SERVER: Creating conversation with learning goals:', learningGoals);
         console.log('🔄 SERVER: Full request body:', req.body);
-        const conversation = await (0, supabase_db_1.createConversation)(req.user.userId, language, title, topics, formality, description, usesPersona, personaId, learningGoals);
+        if (!req.user?.userId) {
+            return res.status(401).json({ error: 'AUTH_ERROR: Missing or invalid user' });
+        }
+        if (!language || !title || !Array.isArray(topics) || topics.length === 0) {
+            return res.status(400).json({ error: 'VALIDATION_ERROR: Missing required fields (language, title, topics[])' });
+        }
+        let languageDashboardId = null;
+        try {
+            const dashboard = await (0, supabase_db_1.getLanguageDashboard)(req.user.userId, language);
+            languageDashboardId = dashboard?.id ?? null;
+        }
+        catch (e) {
+            console.log('⚠️ SERVER: Could not find language dashboard for language:', language);
+            languageDashboardId = null;
+        }
+        const conversation = await (0, supabase_db_1.createConversation)(req.user.userId, languageDashboardId, title, topics, formality, description, usesPersona, personaId, learningGoals);
         console.log('🔄 SERVER: Conversation creation result:', conversation);
         if (!conversation || !conversation.id) {
-            console.error('❌ SERVER: Failed to create conversation');
-            return res.status(500).json({ error: 'Failed to create conversation' });
+            console.error('❌ SERVER: Failed to create conversation (no id)');
+            return res.status(500).json({ error: 'DB_ERROR: Conversation create returned no id' });
         }
         const verify = await (0, supabase_db_1.getConversationWithMessages)(conversation.id);
         if (!verify) {
             console.error('❌ SERVER: Conversation not found after creation:', conversation.id);
-            return res.status(500).json({ error: 'Conversation not found after creation' });
+            return res.status(500).json({ error: 'VERIFY_ERROR: Conversation not found after creation' });
         }
         let aiMessage = null;
         let aiIntro = 'Hello! What would you like to talk about today?';
@@ -790,33 +805,61 @@ app.post('/api/conversations', authenticateJWT, async (req, res) => {
             const user = await (0, supabase_db_1.findUserById)(req.user.userId);
             const userLevel = user?.proficiency_level || 'beginner';
             const userTopics = user?.talk_topics && typeof user.talk_topics === 'string' ? JSON.parse(user.talk_topics) : Array.isArray(user?.talk_topics) ? user.talk_topics : [];
-            const pythonApiUrl = process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com';
+            const pythonApiUrl = (process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com').replace(/\/$/, '');
             const topicsToSend = topics && topics.length > 0 ? topics : userTopics;
             try {
-                const aiRes = await axios_1.default.post(`${pythonApiUrl}/initial_message`, {
+                const requestPayload = {
                     chat_history: [],
                     language,
                     user_level: userLevel,
                     user_topics: topicsToSend,
                     formality: formality || 'friendly',
                     description: description || null
-                }, {
+                };
+                console.log('🐍 [PYTHON DEBUG] Calling /initial_message with payload:', JSON.stringify(requestPayload, null, 2));
+                console.log('🐍 [PYTHON DEBUG] Python API URL:', `${pythonApiUrl}/initial_message`);
+                console.log('🐍 [PYTHON DEBUG] Request headers:', { 'Content-Type': 'application/json' });
+                console.log('🐍 [PYTHON DEBUG] Timeout: 30000ms');
+                const aiRes = await axios_1.default.post(`${pythonApiUrl}/initial_message`, requestPayload, {
                     headers: { 'Content-Type': 'application/json' },
                     timeout: 30000
                 });
-                console.log('DEBUG: Sending formality to /initial_message:', formality || 'friendly');
-                console.log('DEBUG: Received message from Python API:', aiRes.data.message);
-                aiIntro = aiRes.data.message && aiRes.data.message.trim() ? aiRes.data.message : 'Hello! What would you like to talk about today?';
+                console.log('🐍 [PYTHON DEBUG] /initial_message response status:', aiRes.status);
+                console.log('🐍 [PYTHON DEBUG] /initial_message response headers:', aiRes.headers);
+                console.log('🐍 [PYTHON DEBUG] /initial_message response data:', JSON.stringify(aiRes.data, null, 2));
+                if (aiRes.data && aiRes.data.message) {
+                    aiIntro = aiRes.data.message.trim() || 'Hello! What would you like to talk about today?';
+                    console.log('🐍 [PYTHON DEBUG] Using AI message:', aiIntro);
+                }
+                else {
+                    console.log('🐍 [PYTHON DEBUG] No message in response, using fallback');
+                    aiIntro = 'Hello! What would you like to talk about today?';
+                }
             }
             catch (err) {
-                console.error('Python API /initial_message error:', err.message);
+                console.error('🐍 [PYTHON DEBUG] /initial_message error details:');
+                console.error('🐍 [PYTHON DEBUG] Error message:', err.message);
+                console.error('🐍 [PYTHON DEBUG] Error code:', err.code);
+                console.error('🐍 [PYTHON DEBUG] Error status:', err.response?.status);
+                console.error('🐍 [PYTHON DEBUG] Error response data:', err.response?.data);
+                console.error('🐍 [PYTHON DEBUG] Error response headers:', err.response?.headers);
+                console.error('🐍 [PYTHON DEBUG] Full error object:', err);
+                if (err.response?.status === 429) {
+                    console.log('🐍 [PYTHON DEBUG] Rate limit hit - using fallback message');
+                }
+                else if (err.response?.status === 401) {
+                    console.log('🐍 [PYTHON DEBUG] Authentication error - check API keys');
+                }
+                else if (err.response?.status === 500) {
+                    console.log('🐍 [PYTHON DEBUG] Python API internal error');
+                }
                 aiIntro = 'Hello! What would you like to talk about today?';
             }
             if (aiIntro && aiIntro.trim()) {
                 ttsUrl = await generateTTS(aiIntro, language);
                 console.log('Generated TTS for initial message:', ttsUrl);
             }
-            aiMessage = await (0, supabase_db_1.addMessage)(conversation.id, 'AI', aiIntro, 'text', undefined, undefined);
+            aiMessage = await (0, supabase_db_1.addMessage)(conversation.id, 'AI', aiIntro, 'text', undefined, undefined, 1);
         }
         catch (err) {
             console.error('Error generating/saving AI intro message:', err);
@@ -825,7 +868,8 @@ app.post('/api/conversations', authenticateJWT, async (req, res) => {
     }
     catch (error) {
         console.error('❌ SERVER: Create conversation error:', error);
-        res.status(500).json({ error: 'Failed to create conversation' });
+        const message = typeof error?.message === 'string' ? error.message : 'Unknown error';
+        res.status(500).json({ error: `CREATE_ERROR: ${message}` });
     }
 });
 app.get('/api/conversations', authenticateJWT, async (req, res) => {
@@ -951,7 +995,7 @@ app.post('/api/suggestions', authenticateJWT, async (req, res) => {
             }
         }
         try {
-            const pythonApiUrl = process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com';
+            const pythonApiUrl = (process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com').replace(/\/$/, '');
             const pythonResponse = await axios_1.default.post(`${pythonApiUrl}/suggestions`, {
                 chat_history: chatHistory,
                 language: language || user?.target_language || 'en',
@@ -989,7 +1033,7 @@ app.post('/api/translate', authenticateJWT, async (req, res) => {
         }
         const finalTargetLanguage = target_language || 'en';
         try {
-            const pythonApiUrl = process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com';
+            const pythonApiUrl = (process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com').replace(/\/$/, '');
             const pythonResponse = await axios_1.default.post(`${pythonApiUrl}/translate`, {
                 text: text,
                 source_language: source_language || 'auto',
@@ -1026,7 +1070,7 @@ app.post('/api/explain_suggestion', authenticateJWT, async (req, res) => {
             return res.status(400).json({ error: 'No suggestion text provided' });
         }
         try {
-            const pythonApiUrl = process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com';
+            const pythonApiUrl = (process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com').replace(/\/$/, '');
             const pythonResponse = await axios_1.default.post(`${pythonApiUrl}/explain_suggestion`, {
                 suggestion_text: suggestion_text,
                 chatHistory: chatHistory || [],
@@ -1260,7 +1304,7 @@ app.post('/api/quick_translation', authenticateJWT, async (req, res) => {
             return res.status(400).json({ error: 'No AI message provided' });
         }
         try {
-            const pythonApiUrl = process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com';
+            const pythonApiUrl = (process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com').replace(/\/$/, '');
             const pythonResponse = await axios_1.default.post(`${pythonApiUrl}/quick_translation`, {
                 ai_message: ai_message,
                 language: language || 'en',
@@ -1317,14 +1361,18 @@ async function generateTTSWithDebug(text, language) {
         const ttsFilePath = path_1.default.join(uploadsDir, ttsFileName);
         console.log('🎯 [TTS DEBUG] Generating TTS using admin-controlled system for language:', language);
         console.log('🎯 [TTS DEBUG] TTS text length:', text.length);
-        const pythonApiUrl = process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com';
+        const pythonApiUrl = (process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com').replace(/\/$/, '');
         console.log(`🎯 [TTS DEBUG] Calling Python API at: ${pythonApiUrl}/generate_tts`);
         console.log(`🎯 [TTS DEBUG] Request payload: text='${text.substring(0, 50)}...', language='${language}', output_path='${ttsFilePath}'`);
-        const ttsResponse = await axios_1.default.post(`${pythonApiUrl}/generate_tts`, {
+        const ttsRequestPayload = {
             text: text,
             language_code: language,
             output_path: ttsFilePath
-        }, {
+        };
+        console.log('🎯 [TTS DEBUG] TTS request payload:', JSON.stringify(ttsRequestPayload, null, 2));
+        console.log('🎯 [TTS DEBUG] TTS request headers:', { 'Content-Type': 'application/json' });
+        console.log('🎯 [TTS DEBUG] TTS timeout: 30000ms');
+        const ttsResponse = await axios_1.default.post(`${pythonApiUrl}/generate_tts`, ttsRequestPayload, {
             headers: { 'Content-Type': 'application/json' },
             timeout: 30000
         });
@@ -1381,9 +1429,27 @@ async function generateTTSWithDebug(text, language) {
         }
     }
     catch (ttsError) {
-        console.error('🎯 [TTS DEBUG] TTS error:', ttsError.message);
-        if (ttsError.response) {
-            console.error('🎯 [TTS DEBUG] Python API error response:', ttsError.response.status, ttsError.response.data);
+        console.error('🎯 [TTS DEBUG] TTS error details:');
+        console.error('🎯 [TTS DEBUG] Error message:', ttsError.message);
+        console.error('🎯 [TTS DEBUG] Error code:', ttsError.code);
+        console.error('🎯 [TTS DEBUG] Error status:', ttsError.response?.status);
+        console.error('🎯 [TTS DEBUG] Error response data:', ttsError.response?.data);
+        console.error('🎯 [TTS DEBUG] Error response headers:', ttsError.response?.headers);
+        console.error('🎯 [TTS DEBUG] Full error object:', ttsError);
+        if (ttsError.response?.status === 429) {
+            console.log('🎯 [TTS DEBUG] Rate limit hit - TTS generation failed');
+        }
+        else if (ttsError.response?.status === 401) {
+            console.log('🎯 [TTS DEBUG] Authentication error - check TTS API keys');
+        }
+        else if (ttsError.response?.status === 500) {
+            console.log('🎯 [TTS DEBUG] Python API internal error for TTS');
+        }
+        else if (ttsError.code === 'ECONNREFUSED') {
+            console.log('🎯 [TTS DEBUG] Connection refused - Python API not reachable');
+        }
+        else if (ttsError.code === 'ETIMEDOUT') {
+            console.log('🎯 [TTS DEBUG] Request timeout - Python API too slow');
         }
         return {
             ttsUrl: null,
@@ -1393,7 +1459,9 @@ async function generateTTSWithDebug(text, language) {
                 admin_settings: {},
                 cost_estimate: 'unknown',
                 error: ttsError.message,
-                error_type: ttsError.name
+                error_type: ttsError.name,
+                error_status: ttsError.response?.status,
+                error_code: ttsError.code
             }
         };
     }

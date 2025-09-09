@@ -243,20 +243,23 @@ const deleteLanguageDashboard = async (userId, language) => {
     return { changes: 1 };
 };
 exports.deleteLanguageDashboard = deleteLanguageDashboard;
-const createConversation = async (userId, language, title, topics, formality, description, usesPersona, personaId, learningGoals) => {
+const createConversation = async (userId, languageDashboardId, title, topics, formality, description, usesPersona, personaId, learningGoals) => {
+    const insertPayload = {
+        user_id: userId,
+        title,
+        topics,
+        formality,
+        description,
+        uses_persona: usesPersona,
+        persona_id: personaId,
+        learning_goals: learningGoals
+    };
+    if (languageDashboardId) {
+        insertPayload.language_dashboard_id = languageDashboardId;
+    }
     const { data, error } = await exports.supabase
         .from('conversations')
-        .insert([{
-            user_id: userId,
-            language,
-            title,
-            topics,
-            formality,
-            description,
-            uses_persona: usesPersona,
-            persona_id: personaId,
-            learning_goals: learningGoals
-        }])
+        .insert([insertPayload])
         .select()
         .single();
     if (error)
@@ -265,14 +268,29 @@ const createConversation = async (userId, language, title, topics, formality, de
 };
 exports.createConversation = createConversation;
 const getUserConversations = async (userId, language) => {
-    let query = exports.supabase
+    if (language) {
+        try {
+            const dashboard = await (0, exports.getLanguageDashboard)(userId, language);
+            if (dashboard?.id) {
+                const { data, error } = await exports.supabase
+                    .from('conversations')
+                    .select('*')
+                    .eq('user_id', userId)
+                    .eq('language_dashboard_id', dashboard.id)
+                    .order('updated_at', { ascending: false });
+                if (error)
+                    throw error;
+                return data || [];
+            }
+        }
+        catch (e) {
+        }
+    }
+    const { data, error } = await exports.supabase
         .from('conversations')
         .select('*')
-        .eq('user_id', userId);
-    if (language) {
-        query = query.eq('language', language);
-    }
-    const { data, error } = await query.order('updated_at', { ascending: false });
+        .eq('user_id', userId)
+        .order('updated_at', { ascending: false });
     if (error)
         throw error;
     return data || [];

@@ -1,3 +1,4 @@
+
 import { createClient } from '@supabase/supabase-js';
 
 // Initialize Supabase client
@@ -374,7 +375,7 @@ export const deleteLanguageDashboard = async (userId: string, language: string):
 // Conversation functions
 export const createConversation = async (
   userId: string,
-  language: string,
+  languageDashboardId: number | null,
   title: string,
   topics: string[],
   formality: string,
@@ -383,15 +384,6 @@ export const createConversation = async (
   personaId?: number,
   learningGoals?: string[]
 ): Promise<Conversation> => {
-  // Resolve the user's language dashboard id for this language
-  let languageDashboardId: number | null = null;
-  try {
-    const dashboard = await getLanguageDashboard(userId, language);
-    languageDashboardId = dashboard?.id ?? null;
-  } catch (e) {
-    // If dashboard lookup fails, continue without it
-    languageDashboardId = null;
-  }
 
   const insertPayload: any = {
     user_id: userId,
