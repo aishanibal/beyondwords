@@ -2655,7 +2655,8 @@ const AnalyzeContentInner = () => {
         }]);
         
         // Play TTS for the initial AI message if available
-        if ((aiMessage as any).ttsUrl) {
+        if ((aiMessage as any).ttsUrl && (aiMessage as any).ttsUrl !== null) {
+          console.log('[DEBUG] Playing initial AI message TTS:', (aiMessage as any).ttsUrl);
           // Handle both relative and absolute URLs from backend
           const ttsUrl = (aiMessage as any).ttsUrl;
           const audioUrl = ttsUrl.startsWith('http') ? ttsUrl : `http://localhost:4000${ttsUrl}`;
@@ -2666,29 +2667,22 @@ const AnalyzeContentInner = () => {
               ttsAudioRef.current = audio;
               audio.onended = () => {
                 ttsAudioRef.current = null;
+                console.log('[DEBUG] Initial AI TTS finished playing');
               };
               audio.play().catch(error => {
                 console.error('Failed to play initial TTS audio:', error);
+                ttsAudioRef.current = null;
               });
+            } else {
+              console.log('[DEBUG] Initial TTS file not found, skipping TTS playback');
             }
           } catch (fetchError: unknown) {
             console.error('Error checking initial TTS audio file:', fetchError);
           }
         } else {
-          // Auto-generate and play TTS for initial AI message
-          const aiMessageObj: ChatMessage = {
-            text: formattedMessage.mainText,
-            romanizedText: formattedMessage.romanizedText,
-            sender: 'AI',
-            timestamp: new Date(),
-            isFromOriginalConversation: false
-          };
-          const ttsText = getTTSText(aiMessageObj, romanizationDisplay, language);
-          const cacheKey = `ai_message_initial_${Date.now()}`;
-          await playTTSAudio(ttsText, language, cacheKey);
-          
-          // Note: TTS will handle autospeak restart in its onended event
-          // No need to manually restart recording here
+          console.log('[DEBUG] No TTS URL provided for initial AI message, skipping TTS playback');
+          // Don't try to auto-generate TTS if backend TTS failed
+          // This prevents TTS playing states from being set incorrectly
         }
       } else {
         const fallbackMessage = 'Hello! What would you like to talk about today?';
