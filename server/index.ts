@@ -1102,7 +1102,17 @@ app.post('/api/conversations', authenticateJWT, async (req: Request, res: Respon
       return res.status(400).json({ error: 'VALIDATION_ERROR: Missing required fields (language, title, topics[])' });
     }
 
-    const conversation = await createConversation(req.user.userId, language, title, topics, formality, description, usesPersona, personaId, learningGoals);
+    // Find the language dashboard ID for this language
+    let languageDashboardId: number | null = null;
+    try {
+      const dashboard = await getLanguageDashboard(req.user.userId, language);
+      languageDashboardId = dashboard?.id ?? null;
+    } catch (e) {
+      console.log('⚠️ SERVER: Could not find language dashboard for language:', language);
+      languageDashboardId = null;
+    }
+
+    const conversation = await createConversation(req.user.userId, languageDashboardId, title, topics, formality, description, usesPersona, personaId, learningGoals);
     console.log('🔄 SERVER: Conversation creation result:', conversation);
     if (!conversation || !conversation.id) {
       console.error('❌ SERVER: Failed to create conversation (no id)');
