@@ -1203,7 +1203,24 @@ app.post('/api/conversations', authenticateJWT, async (req: Request, res: Respon
         ttsUrl = null;
       }
       
-      aiMessage = await addMessage(conversation.id, 'AI', aiIntro, 'text', undefined, undefined, 1);
+      // Save the AI message to database
+      console.log('🔄 SERVER: Attempting to save AI message to database...');
+      console.log('🔄 SERVER: Message details:', {
+        conversationId: conversation.id,
+        sender: 'AI',
+        text: aiIntro.substring(0, 50) + '...',
+        messageType: 'text',
+        messageOrder: 1
+      });
+      
+      try {
+        aiMessage = await addMessage(conversation.id, 'AI', aiIntro, 'text', undefined, undefined, 1);
+        console.log('✅ AI message saved to database:', aiMessage?.id);
+      } catch (addMessageError) {
+        console.error('❌ SERVER: Failed to save AI message:', addMessageError);
+        // Don't throw - continue without the message
+        aiMessage = null;
+      }
     } catch (err) {
       console.error('Error generating/saving AI intro message:', err);
     }
