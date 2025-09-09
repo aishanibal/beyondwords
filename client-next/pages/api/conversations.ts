@@ -11,12 +11,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     // Handle /api/conversations/[id] - GET specific conversation
+    console.log('🔍 [API] Conversations route called:', { method: req.method, url: req.url });
     const idMatch = req.url?.match(/^\/api\/conversations\/(\d+)$/);
+    console.log('🔍 [API] ID match result:', idMatch);
+    
     if (req.method === 'GET' && idMatch) {
       const id = idMatch[1];
+      console.log('🔍 [API] Proxying GET request to backend for conversation ID:', id);
       const response = await axios.get(`${BACKEND_URL}/${id}`, {
         headers: { Authorization: authHeader }
       });
+      console.log('🔍 [API] Backend response:', response.status, response.data);
       return res.status(response.status).json(response.data);
     }
 

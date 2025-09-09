@@ -325,6 +325,8 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
   }, [useCustomSubtopic, scrollToBottomWithDelay]);
 
   const handleStartConversation = async () => {
+    console.log('🚀 USING NEW: Start practice button pressed - testing conversation creation with improved routing');
+    
     if (!dashboardExists) {
       setError('No language dashboard found. Complete onboarding or add this language.');
       return;
