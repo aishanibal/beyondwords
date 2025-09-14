@@ -372,6 +372,11 @@ class AdminControlledTTSSynthesizer:
                 voice = self.voice_map.get(language_code, {}).get('macos', 'Eddy (English (US))')
                 print(f"🖥️ macOS voice: '{voice}'")
                 
+                # Ensure aiff_path is always defined
+                aiff_path = output_path
+                if not aiff_path.endswith('.aiff'):
+                    aiff_path = output_path.replace('.wav', '.aiff').replace('.mp3', '.aiff')
+                
                 # Try to create WAV directly first, fallback to AIFF if needed
                 wav_path = output_path
                 if not wav_path.endswith('.wav'):
@@ -388,12 +393,6 @@ class AdminControlledTTSSynthesizer:
                     return wav_path
                 else:
                     print(f"⚠️ WAV creation failed, trying AIFF: {result_wav.stderr}")
-                    
-                    # Fallback to AIFF
-                    aiff_path = output_path
-                    if not aiff_path.endswith('.aiff'):
-                        aiff_path = output_path.replace('.wav', '.aiff').replace('.mp3', '.aiff')
-                    
                     print(f"🖥️ Using AIFF path: {aiff_path}")
                 
                 # Try the specific voice first
@@ -422,6 +421,9 @@ class AdminControlledTTSSynthesizer:
                         else:
                             print(f"⚠️ Conversion failed, using original AIFF: {aiff_path}")
                             return aiff_path
+                    except ImportError:
+                        print(f"⚠️ convert_aiff_to_wav module not available, using original AIFF: {aiff_path}")
+                        return aiff_path
                     except Exception as conv_error:
                         print(f"⚠️ Conversion error: {conv_error}, using original AIFF: {aiff_path}")
                         return aiff_path
@@ -448,6 +450,9 @@ class AdminControlledTTSSynthesizer:
                             else:
                                 print(f"⚠️ Fallback conversion failed, using original AIFF: {aiff_path}")
                                 return aiff_path
+                        except ImportError:
+                            print(f"⚠️ convert_aiff_to_wav module not available, using original AIFF: {aiff_path}")
+                            return aiff_path
                         except Exception as conv_error:
                             print(f"⚠️ Fallback conversion error: {conv_error}, using original AIFF: {aiff_path}")
                             return aiff_path
@@ -467,8 +472,111 @@ class AdminControlledTTSSynthesizer:
                     return output_path
                     
             elif self.system == 'linux':
-                print("🖥️ Linux system TTS not available (no espeak dependency)")
-                print("🖥️ Skipping system TTS, will use fallback services")
+                print("🖥️ Linux system TTS: Attempting to use espeak...")
+                
+                # Try espeak with proper voice mapping
+                try:
+                    # Check if espeak is available
+                    result = subprocess.run(['which', 'espeak'], capture_output=True, text=True)
+                    if result.returncode == 0:
+                        print("🖥️ espeak found, attempting to use it...")
+                        
+                        # Map language codes to espeak voices
+                        espeak_voice_map = {
+                            'en': 'en',      # English
+                            'es': 'es',      # Spanish
+                            'fr': 'fr',      # French
+                            'de': 'de',      # German
+                            'it': 'it',      # Italian
+                            'pt': 'pt',      # Portuguese
+                            'ru': 'ru',      # Russian
+                            'zh': 'zh',      # Chinese
+                            'ja': 'ja',      # Japanese
+                            'ko': 'ko',      # Korean
+                            'hi': 'hi',      # Hindi
+                            'ar': 'ar',      # Arabic
+                            'tl': 'en',      # Tagalog (fallback to English)
+                            'ml': 'en',      # Malayalam (fallback to English)
+                            'ta': 'en',      # Tamil (fallback to English)
+                            'or': 'en'       # Odia (fallback to English)
+                        }
+                        
+                        voice = espeak_voice_map.get(language_code, 'en')
+                        print(f"🖥️ Using espeak voice: {voice}")
+                        
+                        # Create WAV file using espeak
+                        wav_path = output_path.replace('.aiff', '.wav').replace('.mp3', '.wav')
+                        
+                        # espeak command with proper parameters
+                        cmd = [
+                            'espeak',
+                            '-s', '150',           # Speed (words per minute)
+                            '-v', voice,           # Voice
+                            '-w', wav_path,        # Output WAV file
+                            text                   # Text to speak
+                        ]
+                        
+                        print(f"🖥️ Running espeak command: {' '.join(cmd)}")
+                        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+                        
+                        if result.returncode == 0:
+                            # Check if file was created and has content
+                            if os.path.exists(wav_path) and os.path.getsize(wav_path) > 0:
+                                print(f"✅ Linux espeak TTS created: {wav_path} ({os.path.getsize(wav_path)} bytes)")
+                                return wav_path
+                            else:
+                                print(f"⚠️ espeak created file but it's empty or doesn't exist: {wav_path}")
+                        else:
+                            print(f"⚠️ espeak failed with return code {result.returncode}")
+                            print(f"⚠️ espeak stderr: {result.stderr}")
+                            print(f"⚠️ espeak stdout: {result.stdout}")
+                            
+                    else:
+                        print("🖥️ espeak not found on system")
+                        
+                except subprocess.TimeoutExpired:
+                    print("⚠️ espeak command timed out")
+                except Exception as e:
+                    print(f"⚠️ espeak error: {e}")
+                    import traceback
+                    traceback.print_exc()
+                
+                # Try festival as fallback if espeak failed
+                try:
+                    result = subprocess.run(['which', 'festival'], capture_output=True, text=True)
+                    if result.returncode == 0:
+                        print("🖥️ festival found, attempting to use it as fallback...")
+                        wav_path = output_path.replace('.aiff', '.wav').replace('.mp3', '.wav')
+                        
+                        # Create a temporary text file for festival
+                        temp_text_file = '/tmp/festival_text.txt'
+                        with open(temp_text_file, 'w', encoding='utf-8') as f:
+                            f.write(text)
+                        
+                        # Festival command
+                        cmd = ['festival', '--tts', temp_text_file]
+                        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+                        
+                        # Clean up temp file
+                        try:
+                            os.remove(temp_text_file)
+                        except:
+                            pass
+                            
+                        if result.returncode == 0:
+                            print(f"✅ Linux festival TTS completed")
+                            # Festival doesn't create files directly, so we'll return the output path
+                            return output_path
+                        else:
+                            print(f"⚠️ festival failed: {result.stderr}")
+                    else:
+                        print("🖥️ festival not found on system")
+                except subprocess.TimeoutExpired:
+                    print("⚠️ festival command timed out")
+                except Exception as e:
+                    print(f"⚠️ festival error: {e}")
+                
+                print("🖥️ No Linux TTS engines available, will use fallback services")
                 return None
                     
         except Exception as e:
