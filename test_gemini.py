@@ -72,7 +72,7 @@ def test_imports():
             get_text_suggestions,
             get_translation,
             is_gemini_ready,
-            FilipinoHeritageTutor
+            TagalogHeritageTutor
         )
         print_success("All gemini_client functions imported")
     except ImportError as e:
@@ -208,8 +208,7 @@ def test_text_suggestions():
         from gemini_client import get_text_suggestions
         
         suggestions = get_text_suggestions(
-            "Hello, I want to practice",
-            [],
+            [{"sender": "user", "text": "Hello, I want to practice"}],
             "en"
         )
         
@@ -251,14 +250,14 @@ def test_translation():
         for test_case in test_cases:
             print_info(f"Testing {test_case['description']}...")
             
-            translation = get_translation(
+            translation_result = get_translation(
                 test_case["text"],
                 test_case["source"],
                 test_case["target"]
             )
             
-            if translation and len(translation) > 5:
-                print_success(f"{test_case['description']}: {translation}")
+            if translation_result and "translation" in translation_result and translation_result["translation"]:
+                print_success(f"{test_case['description']}: {translation_result['translation']}")
             else:
                 print_error(f"{test_case['description']}: Translation failed")
                 return False
@@ -269,36 +268,36 @@ def test_translation():
         return False
 
 def test_filipino_tutor():
-    """Test Filipino heritage tutor functionality"""
-    print_header("Filipino Heritage Tutor Tests")
+    """Test Tagalog heritage tutor functionality"""
+    print_header("Tagalog Heritage Tutor Tests")
     
     try:
-        from gemini_client import FilipinoHeritageTutor
+        from gemini_client import TagalogHeritageTutor
         
-        tutor = FilipinoHeritageTutor()
+        tutor = TagalogHeritageTutor()
         
         # Test basic response
-        response = tutor.provide_conversational_response(
+        response = tutor.get_conversational_response(
             "Kumusta ka?",
             "Starting a new conversation"
         )
         
         if response and len(response) > 20:
-            print_success(f"Filipino tutor response: {response[:150]}...")
+            print_success(f"Tagalog tutor response: {response[:150]}...")
         else:
-            print_error("Filipino tutor response too short")
+            print_error("Tagalog tutor response too short")
             return False
         
-        # Test grammar correction
-        response = tutor.provide_grammar_correction(
+        # Test detailed feedback
+        response = tutor.get_detailed_feedback(
             "Ako ay maganda",
             "I am beautiful"
         )
         
         if response and len(response) > 20:
-            print_success(f"Grammar correction: {response[:150]}...")
+            print_success(f"Detailed feedback: {response[:150]}...")
         else:
-            print_error("Grammar correction failed")
+            print_error("Detailed feedback failed")
             return False
         
         return True
@@ -349,7 +348,7 @@ def main():
         ("Detailed Feedback", test_detailed_feedback),
         ("Text Suggestions", test_text_suggestions),
         ("Translation", test_translation),
-        ("Filipino Tutor", test_filipino_tutor),
+        ("Tagalog Tutor", test_filipino_tutor),
         ("Performance", test_performance)
     ]
     

@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .section { margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 5px; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+        .status { padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Admin Dashboard</h1>
+        
+        <div class="section">
+            <h2>System Status</h2>
+            <div id="status" class="status">Loading...</div>
+            <button onclick="loadStatus()">Refresh Status</button>
+        </div>
+        
+        <div class="section">
+            <h2>TTS Settings</h2>
+            <button onclick="enableGemini()">Enable Gemini TTS</button>
+            <button onclick="disableGemini()">Disable Gemini TTS</button>
+        </div>
+        
+        <div class="section">
+            <h2>Google API Settings</h2>
+            <button onclick="toggleGoogleAPI()">Toggle Google API</button>
+        </div>
+    </div>
+
+    <script>
+        function loadStatus() {
+            fetch('/admin/api/status')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('status').innerHTML = 
+                        `<div class="success">System is running. Gemini: ${data.gemini_enabled ? 'Enabled' : 'Disabled'}</div>`;
+                })
+                .catch(error => {
+                    document.getElementById('status').innerHTML = 
+                        `<div class="error">Error loading status: ${error.message}</div>`;
+                });
+        }
+        
+        function enableGemini() {
+            fetch('/admin/api/enable_gemini', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    alert('Gemini TTS enabled');
+                    loadStatus();
+                })
+                .catch(error => alert('Error: ' + error.message));
+        }
+        
+        function disableGemini() {
+            fetch('/admin/api/disable_gemini', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    alert('Gemini TTS disabled');
+                    loadStatus();
+                })
+                .catch(error => alert('Error: ' + error.message));
+        }
+        
+        function toggleGoogleAPI() {
+            fetch('/admin/api/toggle_google_api', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    alert('Google API toggled');
+                    loadStatus();
+                })
+                .catch(error => alert('Error: ' + error.message));
+        }
+        
+        // Load status on page load
+        loadStatus();
+    </script>
+</body>
+</html>

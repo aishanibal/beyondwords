@@ -1,0 +1,308 @@
+@import url('https://fonts.googleapis.com/css2?family=Gabriela&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=AR+One+Sans:wght@400;500;600;700&display=swap');
+
+@import "tailwindcss";
+
+
+:root {
+  --background: #f9f6f4;
+  --foreground: hsl(0, 0%, 24%);
+  --primary: #84546d;
+  --secondary: #3b5377;
+  --accent: #d6b6b6;
+  --cream: #f9f6f4;
+  --rose-primary: #84546d;
+  --blue-secondary: #3b5377;
+  --rose-accent: #d6b6b6;
+  --text-dark: hsl(0, 0%, 24%);
+  
+  /* Light mode colors */
+  --card: #ffffff;
+  --card-foreground: hsl(0, 0%, 24%);
+  --popover: #ffffff;
+  --popover-foreground: hsl(0, 0%, 24%);
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --border: #e2e8f0;
+  --input: #ffffff;
+  --ring: #84546d;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+}
+
+.dark {
+  --background: #0f172a;
+  --foreground: #f8fafc;
+  --card: #1e293b;
+  --card-foreground: #f8fafc;
+  --popover: #1e293b;
+  --popover-foreground: #f8fafc;
+  --primary: #84546d;
+  --primary-foreground: #ffffff;
+  --secondary: #3b5377;
+  --secondary-foreground: #f8fafc;
+  --muted: #334155;
+  --muted-foreground: #94a3b8;
+  --accent: #334155;
+  --accent-foreground: #f8fafc;
+  --destructive: #7f1d1d;
+  --destructive-foreground: #f8fafc;
+  --border: #334155;
+  --input: #1e293b;
+  --ring: #84546d;
+  
+  /* Custom dark mode colors - lighter versions of existing theme */
+  --cream: #0f172a;
+  --rose-primary: #e8b3c3;
+  --blue-secondary: #8ba3d9;
+  --rose-accent: #f0c8d0;
+  --text-dark: #f8fafc;
+  --light-purple: #c4b5fd;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: 'Montserrat', Arial, sans-serif;
+  margin: 0;
+  padding: 0;
+  text-align: left;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Prevent body scrolling on analyze page */
+body.analyze-page-active {
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+}
+
+/* Remove any potential spacing between navigation and content */
+body.analyze-page-active * {
+  margin-top: 0;
+}
+
+/* Specifically target the main content area */
+body.analyze-page-active main,
+body.analyze-page-active div[role="main"] {
+  margin: 0;
+  padding: 0;
+}
+
+/* Force immediate positioning after navigation */
+body.analyze-page-active .analyze-page {
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+}
+
+/* Remove any spacing from the ClientLayout */
+body.analyze-page-active > div {
+  margin: 0;
+  padding: 0;
+}
+
+/* Remove any spacing from navigation when on analyze page */
+body.analyze-page-active nav {
+  margin: 0;
+  padding: 0;
+}
+
+/* Ensure analyze page takes full available space */
+body.analyze-page-active .analyze-page {
+  margin: 0;
+  padding: 0;
+  top: 0;
+  height: calc(100vh - 1rem);
+}
+
+/* Prevent scrolling on analyze page */
+.analyze-page {
+  height: calc(100vh - 1rem);
+  overflow: hidden;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 0;
+  margin: 0;
+}
+
+h1 {
+  font-family: 'Gabriela', Arial, sans-serif;
+}
+
+.font-heading {
+  font-family: 'Gabriela', Arial, sans-serif;
+}
+
+.font-body {
+  font-family: 'AR One Sans', Arial, sans-serif;
+}
+
+.font-general {
+  font-family: 'Montserrat', Arial, sans-serif;
+}
+
+.text-rose-primary {
+  color: var(--rose-primary);
+}
+
+.text-blue-secondary {
+  color: var(--blue-secondary);
+}
+
+.text-rose-accent {
+  color: var(--rose-accent);
+}
+
+.text-light-purple {
+  color: var(--light-purple);
+}
+
+.bg-card {
+  background: #fff;
+}
+
+.shadow-card {
+  box-shadow: 0 4px 32px 0 rgba(60, 60, 60, 0.10);
+}
+
+/* Custom scrollbar styling */
+.goals-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.goals-scroll::-webkit-scrollbar-track {
+  background: rgba(126, 90, 117, 0.1);
+  border-radius: 3px;
+}
+
+.goals-scroll::-webkit-scrollbar-thumb {
+  background: var(--rose-accent);
+  border-radius: 3px;
+}
+
+.goals-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--rose-primary);
+}
+
+/* Dark mode utility classes */
+.dark .bg-card {
+  background: var(--card);
+}
+
+.dark .shadow-card {
+  box-shadow: 0 4px 32px 0 rgba(0, 0, 0, 0.3);
+}
+
+/* Smooth transitions for theme switching */
+* {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+/* Dark mode specific styles */
+.dark .text-rose-primary {
+  color: var(--rose-primary);
+}
+
+.dark .text-blue-secondary {
+  color: var(--blue-secondary);
+}
+
+.dark .text-rose-accent {
+  color: var(--rose-accent);
+}
+
+.dark .text-light-purple {
+  color: var(--light-purple);
+}
+
+/* Modal styles for dark mode */
+.dark .modal-overlay {
+  background-color: rgba(0, 0, 0, 0.7);
+}
+
+.dark .modal-content {
+  background-color: var(--card);
+  border: 1px solid var(--border);
+  color: var(--foreground);
+}
+
+.dark .modal-header {
+  border-bottom: 1px solid var(--border);
+}
+
+.dark .modal-footer {
+  border-top: 1px solid var(--border);
+}
+
+.dark .modal-close-button {
+  color: var(--muted-foreground);
+}
+
+.dark .modal-close-button:hover {
+  color: var(--foreground);
+  background-color: var(--muted);
+}
+
+/* Form elements in dark mode */
+.dark input,
+.dark textarea,
+.dark select {
+  background-color: var(--input);
+  border-color: var(--border);
+  color: var(--foreground);
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: var(--muted-foreground);
+}
+
+/* Button styles for dark mode */
+.dark .bg-rose-primary {
+  background-color: var(--rose-primary);
+}
+
+.dark .bg-rose-primary:hover {
+  background-color: #f0c8d0;
+}
+
+.dark .bg-light-purple {
+  background-color: var(--light-purple);
+}
+
+.dark .bg-light-purple:hover {
+  background-color: #a78bfa;
+}
+
+.dark .border-light-purple {
+  border-color: var(--light-purple);
+}
+
+/* Card and container styles */
+.dark .bg-white {
+  background-color: var(--card);
+}
+
+.dark .border-gray-200 {
+  border-color: var(--border);
+}
+
+.dark .text-gray-600 {
+  color: var(--muted-foreground);
+}
+
+.dark .text-gray-700 {
+  color: var(--foreground);
+}
+
+.dark .text-gray-800 {
+  color: var(--foreground);
+}
+
+.dark .text-gray-900 {
+  color: var(--foreground);
+}

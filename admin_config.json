@@ -1,0 +1,52 @@
+{
+  "admin_password_hash": "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9",
+  "tts_settings": {
+    "default_tts": "system",
+    "gemini_enabled": false,
+    "cost_limit_per_day": 1,
+    "usage_tracking": true,
+    "active_tts": "system"
+  },
+  "google_api_settings": {
+    "services_enabled": true,
+    "gemini_enabled": false,
+    "google_cloud_tts_enabled": true,
+    "google_ai_enabled": true
+  },
+  "usage_stats": {
+    "daily_usage": {
+      "2025-08-04": {
+        "google_cloud": 1,
+        "gemini": 1,
+        "system": 20,
+        "total_cost": 0.060000000000000005
+      },
+      "2025-08-05": {
+        "google_cloud": 14,
+        "gemini": 0,
+        "system": 7,
+        "total_cost": 0.0031280000000000006
+      },
+      "2025-08-06": {
+        "google_cloud": 9,
+        "gemini": 8,
+        "system": 26,
+        "total_cost": 0.01065
+      },
+      "2025-08-18": {
+        "google_cloud": 0,
+        "gemini": 2,
+        "system": 0,
+        "total_cost": 0.0021149999999999997
+      }
+    },
+    "total_cost": 0.07589299999999996,
+    "last_reset": "2025-08-04T18:51:13.952106"
+  },
+  "admin_features": {
+    "enable_gemini_tts": false,
+    "enable_cost_tracking": true,
+    "enable_usage_analytics": true,
+    "enable_system_monitoring": true
+  }
+}

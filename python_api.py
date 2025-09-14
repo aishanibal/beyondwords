@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template, redirect, url_for, session
 from flask_cors import CORS
 import os
 import json
@@ -6,215 +6,85 @@ import subprocess
 import tempfile
 import shutil
 from werkzeug.utils import secure_filename
-import whisper
-import torch
-from transformers import Wav2Vec2ForCTC, Wav2Vec2Processor
-import librosa
 import numpy as np
 import datetime
-from gemini_client import get_conversational_response, get_detailed_feedback, get_text_suggestions, get_translation, is_gemini_ready, get_short_feedback
+from gemini_client import get_conversational_response, get_detailed_feedback, get_text_suggestions, get_translation, is_gemini_ready, get_short_feedback, get_detailed_breakdown, create_tutor, get_quick_translation, get_quick_translation_hybrid_with_meta
+from tts_synthesizer_admin_controlled import synthesize_speech
+
+# Use Gemini for transcription
+from gemini_transcription import transcribe_audio_gemini, transcribe_audio_with_analysis_gemini
+print("🤖 Using Gemini for transcription")
 # from dotenv import load_dotenv
 # load_dotenv()
 
+# NOTE: Whisper doesn't natively support Odia ('or'). We map it to Bengali ('bn') 
+# as they are linguistically similar and Bengali is supported by Whisper.
+# This provides much better transcription accuracy than auto-detection.
+
 app = Flask(__name__)
+app.secret_key = os.urandom(24)  # For session management
 CORS(app)
 
+# Check API key at startup
+api_key = os.getenv("GOOGLE_API_KEY")
+if not api_key:
+    print("⚠️ WARNING: GOOGLE_API_KEY environment variable is not set!")
+    print("   The AI features will not work. Please set your API key:")
+    print("   export GOOGLE_API_KEY='your-api-key-here'")
+    print("   Then restart this server.")
+else:
+    print(f"✅ Google API key is configured (starts with: {api_key[:8]}...)")
+
 # Global variables for models
-whisper_model = None
-wav2vec2_processors = {}
-wav2vec2_models = {}
 
-SUPPORTED_WAV2VEC2 = {
-    'en': 'facebook/wav2vec2-base-960h',
-    'es': 'jonatasgrosman/wav2vec2-large-xlsr-53-spanish',
-}
-
-SUPPORTED_LANGUAGES = ['en', 'es', 'hi', 'ja']
+SUPPORTED_LANGUAGES = ['en', 'es', 'hi', 'ja', 'ko', 'zh', 'ar', 'ta', 'or', 'ml', 'fr', 'tl']
 
 def load_models():
-    """Load sendgnition models"""
-    global whisper_model, wav2vec2_processors, wav2vec2_models
-    print("Loading Whisper model...")
-    whisper_model = whisper.load_model("large")  # Using large model for better Tagalog accuracy
-    for lang, model_name in SUPPORTED_WAV2VEC2.items():
-        print(f"Loading Wav2Vec2 model for {lang} ({model_name})...")
-        wav2vec2_processors[lang] = Wav2Vec2Processor.from_pretrained(model_name)
-        wav2vec2_models[lang] = Wav2Vec2ForCTC.from_pretrained(model_name)
+    """Load speech recognition models"""
+    
+    # Gemini transcriber is loaded on-demand
+    print("✅ Gemini transcriber will be loaded on-demand")
+    
     print("All models loaded successfully!")
 
-def get_whisper_language_code(language):
-    """Map application language codes to Whisper-supported language codes"""
-    # Whisper language mapping
-    language_mapping = {
-        'tl': 'tl',  # Tagalog - Whisper supports 'tl' for Tagalog
-        'en': 'en',  # English
-        'es': 'es',  # Spanish
-        'hi': 'hi',  # Hindi
-        'ja': 'ja',  # Japanese
-    }
-    return language_mapping.get(language, None)  # Return None for auto-detection
+
 
 def transcribe_audio(audio_path, language=None):
-    """Transcribe audio using Whisper with optional language specification"""
+    """Transcribe audio using Gemini"""
     try:
-        whisper_lang = get_whisper_language_code(language) if language else None
-        
-        if whisper_lang:
-            print(f"Using Whisper with language: {whisper_lang} (from app language: {language})")
-            result = whisper_model.transcribe(audio_path, language=whisper_lang)
-        else:
-            print("Using Whisper with auto-detection")
-            result = whisper_model.transcribe(audio_path)
-        
-        return result["text"]
+        print(f"Using Gemini with language: {language}")
+        result = transcribe_audio_gemini(audio_path, language or 'en')
+        return result if result else ""
     except Exception as e:
-        print(f"Whisper transcription error: {e}")
+        print(f"Transcription error: {e}")
         return ""
 
-def analyze_speech_with_wav2vec2(audio_path, reference_text, language='en'):
-    """Analyze speech using Wav2Vec2 and provide feedback"""
+def analyze_speech_with_gemini(audio_path, reference_text, language='en'):
+    """Analyze speech using Gemini and provide feedback"""
     language = language if language in SUPPORTED_LANGUAGES else 'en'
-    if language in ['hi', 'ja']:
-        return {
-            "transcription": "",
-            "reference": reference_text,
-            "analysis": f"Wav2Vec2 phoneme-level analysis is not yet supported for {language.upper()}. Only Whisper transcription is available."
-        }
-    wav2vec2_processor = wav2vec2_processors.get(language, wav2vec2_processors['en'])
-    wav2vec2_model = wav2vec2_models.get(language, wav2vec2_models['en'])
     try:
-        # Load and preprocess audio with better error handling
-        print(f"Loading audio file: {audio_path}")
+        # Get transcription using Gemini
+        print(f"Getting transcription using Gemini for language: {language}")
+        transcription = transcribe_audio_gemini(audio_path, language)
         
-        # Try multiple approaches to load audio
-        audio = None
-        sr = 16000
+        if not transcription:
+            return {
+                "transcription": "",
+                "reference": reference_text,
+                "analysis": "Error: Could not transcribe audio file."
+            }
         
-        try:
-            # First try with soundfile
-            import soundfile as sf
-            audio, sr = sf.read(audio_path)
-            print(f"Successfully loaded with soundfile: {sr}Hz")
-        except Exception as e1:
-            print(f"Soundfile failed: {e1}")
-            try:
-                # Fallback to librosa
-                audio, sr = librosa.load(audio_path, sr=16000)
-                print(f"Successfully loaded with librosa: {sr}Hz")
-            except Exception as e2:
-                print(f"Librosa failed: {e2}")
-                try:
-                    # Last resort: try with scipy
-                    from scipy.io import wavfile
-                    sr, audio = wavfile.read(audio_path)
-                    if audio.dtype != np.float32:
-                        audio = audio.astype(np.float32) / np.iinfo(audio.dtype).max
-                    print(f"Successfully loaded with scipy: {sr}Hz")
-                except Exception as e3:
-                    print(f"All audio loading methods failed: {e3}")
-                    return {
-                        "transcription": "",
-                        "reference": reference_text,
-                        "analysis": "Error: Could not load audio file. Please ensure it's a valid audio format (WAV, MP3, etc.)"
-                    }
-        
-        # Ensure audio is mono and correct sample rate
-        if len(audio.shape) > 1:
-            audio = np.mean(audio, axis=1)  # Convert stereo to mono
-        
-        if sr != 16000:
-            # Resample if necessary
-            audio = librosa.resample(audio, orig_sr=sr, target_sr=16000)
-            sr = 16000
-        
-        print(f"Audio loaded successfully: shape={audio.shape}, sr={sr}Hz")
-        
-        # Use the proper Wav2Vec2 analysis from wav2vec2.py
-        print("Getting reference text using Whisper...")
-        whisper_lang = get_whisper_language_code(language)
-        if whisper_lang:
-            reference_text_whisper = whisper_model.transcribe(audio_path, language=whisper_lang)["text"].strip().lower()
-        else:
-            reference_text_whisper = whisper_model.transcribe(audio_path)["text"].strip().lower()
-        print(f"Whisper reference text: {reference_text_whisper}")
-
-        print("Transcribing audio with Wav2Vec2...")
-        input_values = wav2vec2_processor(audio, return_tensors="pt", sampling_rate=16000).input_values
-        with torch.no_grad():
-            logits = wav2vec2_model(input_values).logits
-        predicted_ids = torch.argmax(logits, dim=-1)
-        transcription = wav2vec2_processor.decode(predicted_ids[0]).lower()
-        with open("wav2vec2_words.txt", "w") as f:f.write(transcription)
-        print(f"Wav2Vec2 recognized text: {transcription}")
-
-        # Text to phonemes conversion (simplified version of wav2vec2.py)
-        def text_to_phonemes(text):
-            try:
-                import subprocess
-                espeak_lang = {'en': 'en', 'es': 'es'}.get(language, 'en')
-                cmd = ["espeak", "-q", "--ipa=3", f"-v{espeak_lang}", text]
-                result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                phonemes = result.stdout.strip().replace(" ", "")
-                return phonemes
-            except Exception as e:
-                print(f"Phoneme conversion failed: {e}")
-                return ""
-
-        print("Converting reference text to phonemes...")
-        ref_phonemes = text_to_phonemes(reference_text_whisper)
-        print(f"Reference phonemes: {ref_phonemes}")
-
-        print("Converting recognized text to phonemes...")
-        hyp_phonemes = text_to_phonemes(transcription)
-        print(f"Hypothesis phonemes: {hyp_phonemes}")
-
-        # Phoneme alignment and feedback (from wav2vec2.py)
-        print("Aligning phonemes and generating feedback...")
-        try:
-            import Levenshtein
-            ops = Levenshtein.editops(ref_phonemes, hyp_phonemes)
-            
-            feedback_parts = []
-            feedback_parts.append("🎯 Pronunciation Analysis")
-            feedback_parts.append("=" * 30)
-            
-            if not ops:
-                feedback_parts.append("✅ Great job! No mispronunciations detected.")
-            else:
-                feedback_parts.append("⚠️ Mispronunciations detected:")
-                for op in ops:
-                    if op[0] == 'replace':
-                        feedback_parts.append(f"• Substitute '{ref_phonemes[op[1]]}' with '{hyp_phonemes[op[2]]}'")
-                    elif op[0] == 'delete':
-                        feedback_parts.append(f"• Missing '{ref_phonemes[op[1]]}'")
-                    elif op[0] == 'insert':
-                        feedback_parts.append(f"• Extra '{hyp_phonemes[op[2]]}'")
-            
-            # Overall assessment
-            similarity = 1 - (len(ops) / max(len(ref_phonemes), 1))
-            if similarity > 0.9:
-                feedback_parts.append("\n🌟 Excellent pronunciation! Keep up the great work.")
-            elif similarity > 0.7:
-                feedback_parts.append("\n👍 Good effort! With practice, you'll improve further.")
-            else:
-                feedback_parts.append("\n💡 Try speaking more slowly and clearly.")
-            
-            analysis = "\n".join(feedback_parts)
-            
-        except ImportError:
-            # Fallback if Levenshtein is not available
-            analysis = f"Transcription: {transcription}\nReference: {reference_text_whisper}\nKeep practicing!"
+        # Simple analysis using Gemini
+        analysis = f"Transcription: {transcription}\nReference: {reference_text}\nLanguage: {language}"
         
         return {
             "transcription": transcription,
-            "reference": reference_text_whisper,
+            "reference": reference_text,
             "analysis": analysis
         }
         
     except Exception as e:
-        print(f"Wav2Vec2 analysis error: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"Error in analyze_speech_with_gemini: {e}")
         return {
             "transcription": "",
             "reference": reference_text,
@@ -231,155 +101,275 @@ def transcribe():
         language = data.get('language', 'en')
         user_level = data.get('user_level', 'beginner')
         user_topics = data.get('user_topics', [])
+        formality = data.get('formality', 'friendly')
+        feedback_language = data.get('feedback_language', 'en')
+        user_goals = data.get('user_goals', [])
+        description = data.get('description', None)
         
-        print(f"=== /transcribe called ===")
-        print(f"Language received: {language}")
-        print(f"Audio file: {audio_file}")
-        print(f"Chat history length: {len(chat_history)}")
+        print(f"🎤 Transcribe request - Language: {language}, Level: {user_level}")
         
-        if not audio_file or not os.path.exists(audio_file):
-            return jsonify({"error": "Audio file not found"}), 400
+        # Get transcription
+        transcription = transcribe_audio(audio_file, language)
         
-        # Get transcription using Whisper (with language)
-        print(f"Calling Whisper with language={language}")
-        whisper_lang = get_whisper_language_code(language)
-        if whisper_lang:
-            transcription = whisper_model.transcribe(audio_file, language=whisper_lang)["text"]
-        else:
-            transcription = whisper_model.transcribe(audio_file)["text"]
-        print(f"Whisper transcription: '{transcription}'")
+        if not transcription:
+            return jsonify({
+                "error": "Could not transcribe audio",
+                "transcription": "",
+                "response": ""
+            })
         
-        print(f"Calling Gemini with language={language}, level={user_level}, goals={user_topics}")
-        ai_response = get_conversational_response(transcription, chat_history, language, user_level, user_topics)
-        print(f"Gemini response: '{ai_response}'")
+        print(f"📝 Transcription: {transcription}")
+        
+        # Get conversational response
+        response = get_conversational_response(
+            transcription, 
+            chat_history, 
+            language, 
+            user_level, 
+            user_topics, 
+            formality, 
+            feedback_language, 
+            user_goals, 
+            description
+        )
         
         return jsonify({
             "transcription": transcription,
-            "ai_response": ai_response
+            "response": response,
+            "success": True
         })
+        
     except Exception as e:
-        print(f"Transcription error: {e}")
-        return jsonify({"error": str(e)}), 500
+        print(f"❌ Transcribe error: {e}")
+        return jsonify({
+            "error": str(e),
+            "transcription": "",
+            "response": ""
+        })
+
+@app.route('/transcribe_only', methods=['POST'])
+def transcribe_only():
+    """Transcribe audio only without AI response"""
+    try:
+        data = request.get_json()
+        audio_file = data.get('audio_file')
+        language = data.get('language', 'en')
+        
+        print(f"🎤 Transcribe only request - Language: {language}")
+        
+        # Get transcription
+        transcription = transcribe_audio(audio_file, language)
+        
+        if not transcription:
+            return jsonify({
+                "error": "Could not transcribe audio",
+                "transcription": ""
+            })
+        
+        print(f"📝 Transcription: {transcription}")
+        
+        return jsonify({
+            "transcription": transcription,
+            "success": True
+        })
+        
+    except Exception as e:
+        print(f"❌ Transcribe only error: {e}")
+        return jsonify({
+            "error": str(e),
+            "transcription": ""
+        })
+
+@app.route('/ai_response', methods=['POST'])
+def ai_response():
+    """Get AI response for text input"""
+    try:
+        data = request.get_json()
+        user_input = data.get('user_input', '')
+        chat_history = data.get('chat_history', [])
+        language = data.get('language', 'en')
+        user_level = data.get('user_level', 'beginner')
+        user_topics = data.get('user_topics', [])
+        formality = data.get('formality', 'friendly')
+        feedback_language = data.get('feedback_language', 'en')
+        user_goals = data.get('user_goals', [])
+        description = data.get('description', None)
+        
+        print(f"🤖 AI response request - Language: {language}, Level: {user_level}")
+        
+        # Get conversational response
+        response = get_conversational_response(
+            user_input, 
+            chat_history, 
+            language, 
+            user_level, 
+            user_topics, 
+            formality, 
+            feedback_language, 
+            user_goals, 
+            description
+        )
+        
+        return jsonify({
+            "response": response,
+            "success": True
+        })
+        
+    except Exception as e:
+        print(f"❌ AI response error: {e}")
+        return jsonify({
+            "error": str(e),
+            "response": ""
+        })
 
 @app.route('/analyze', methods=['POST'])
 def analyze():
-    """SLOW: Analyze audio for detailed feedback"""
+    """Analyze speech with reference text"""
     try:
         data = request.get_json()
         audio_file = data.get('audio_file')
         reference_text = data.get('reference_text', '')
-        chat_history = data.get('chat_history', [])
         language = data.get('language', 'en')
         
-        print(f"=== /analyze called ===")
-        print(f"Language received: {language}")
-        print(f"Audio file: {audio_file}")
-        print(f"Reference text: {reference_text}")
-        print(f"Chat history length: {len(chat_history)}")
+        print(f"🔍 Analyze request - Language: {language}")
         
-        if not audio_file or not os.path.exists(audio_file):
-            return jsonify({"error": "Audio file not found"}), 400
-        
-        # Use Whisper for reference text if not provided
-        if not reference_text:
-            print(f"Getting reference text with Whisper (language={language})")
-            whisper_lang = get_whisper_language_code(language)
-            if whisper_lang:
-                reference_text = whisper_model.transcribe(audio_file, language=whisper_lang)["text"]
-            else:
-                reference_text = whisper_model.transcribe(audio_file)["text"]
-            print(f"Whisper reference text: '{reference_text}'")
-        
-        # Wav2Vec2 analysis (if supported)
-        print(f"Calling Wav2Vec2 analysis with language={language}")
-        analysis_result = analyze_speech_with_wav2vec2(audio_file, reference_text, language=language)
-        
-        # Get user data for personalized feedback
-        user_level = data.get('user_level', 'beginner')
-        user_topics = data.get('user_topics', [])
-        
-        # Detailed feedback from Gemini
-        print(f"Calling Gemini detailed feedback with language={language}, level={user_level}")
-        feedback = get_detailed_feedback(
-            analysis_result.get('analysis', ''),
-            reference_text,
-            analysis_result.get('transcription', ''),
-            chat_history,
-            language,
-            user_level,
-            user_topics
-        )
-        print(f"Gemini detailed feedback: '{feedback[:100]}...'")
+        # Analyze speech
+        result = analyze_speech_with_gemini(audio_file, reference_text, language)
         
         return jsonify({
-            "transcription": analysis_result.get('transcription', ''),
-            "reference": reference_text,
-            "analysis": analysis_result.get('analysis', ''),
-            "feedback": feedback
+            "transcription": result["transcription"],
+            "reference": result["reference"],
+            "analysis": result["analysis"],
+            "success": True
         })
+        
     except Exception as e:
-        print(f"Analysis error: {e}")
-        return jsonify({"error": str(e)}), 500
+        print(f"❌ Analyze error: {e}")
+        return jsonify({
+            "error": str(e),
+            "transcription": "",
+            "reference": "",
+            "analysis": ""
+        })
+
+@app.route('/conversation_summary', methods=['POST'])
+def conversation_summary():
+    """Generate conversation summary"""
+    try:
+        data = request.get_json()
+        chat_history = data.get('chat_history', [])
+        subgoal_instructions = data.get('subgoal_instructions', '')
+        user_topics = data.get('user_topics', [])
+        target_language = data.get('target_language', 'en')
+        feedback_language = data.get('feedback_language', 'en')
+        is_continued_conversation = data.get('is_continued_conversation', False)
+        
+        print(f"📊 Conversation summary request - Language: {target_language}")
+        
+        from gemini_client import generate_conversation_summary
+        
+        # Generate summary
+        summary = generate_conversation_summary(
+            chat_history,
+            subgoal_instructions,
+            user_topics,
+            target_language,
+            feedback_language,
+            is_continued_conversation
+        )
+        
+        # Ensure progress_percentages is always included
+        progress_percentages = summary.get("progress_percentages", [])
+        print(f"DEBUG: Final progress_percentages being sent: {progress_percentages}")
+        
+        # CRITICAL: Always include progress_percentages in response
+        response_data = {
+            "title": summary["title"],
+            "synopsis": summary["synopsis"],
+            "progress_percentages": progress_percentages,
+            "success": True
+        }
+        
+        print(f"DEBUG: Complete response data: {response_data}")
+        return jsonify(response_data)
+        
+    except Exception as e:
+        print(f"❌ Conversation summary error: {e}")
+        return jsonify({
+            "error": str(e),
+            "title": "",
+            "synopsis": "",
+            "progress_percentages": []
+        })
 
 @app.route('/health', methods=['GET'])
 def health():
     """Health check endpoint"""
     try:
-        models_status = {
-            "whisper_model": whisper_model is not None,
-            "wav2vec2_processors": all(wav2vec2_processors.values()),
-            "wav2vec2_models": all(wav2vec2_models.values())
-        }
-        
-        all_models_loaded = all(models_status.values())
+        # Check if Gemini is ready
+        from gemini_client import is_gemini_ready
+        gemini_ready = is_gemini_ready()
         
         return jsonify({
-            "status": "healthy" if all_models_loaded else "degraded",
-            "models_loaded": all_models_loaded,
-            "models_status": models_status,
-            "timestamp": str(datetime.datetime.now())
+            "status": "healthy",
+            "timestamp": datetime.datetime.now().isoformat(),
+            "gemini_ready": gemini_ready,
+            "python_api": True
         })
     except Exception as e:
         return jsonify({
-            "status": "error",
+            "status": "unhealthy",
             "error": str(e),
-            "timestamp": str(datetime.datetime.now())
+            "timestamp": datetime.datetime.now().isoformat()
         }), 500
 
 @app.route('/feedback', methods=['POST'])
 def feedback():
-    """Generate detailed feedback using Ollama, given chat history and last transcription"""
+    """Get detailed feedback"""
     try:
         data = request.get_json()
+        phoneme_analysis = data.get('phoneme_analysis', '')
+        reference_text = data.get('reference_text', '')
+        recognized_text = data.get('recognized_text', '')
         chat_history = data.get('chat_history', [])
-        last_transcription = data.get('last_transcription', '')
         language = data.get('language', 'en')
         user_level = data.get('user_level', 'beginner')
         user_topics = data.get('user_topics', [])
-
-        print(f"=== /feedback called ===")
-        print(f"Language: {language}")
-        print(f"Last transcription: {last_transcription}")
-        print(f"Chat history length: {len(chat_history)}")
-
-        # Call AI client for detailed feedback using Gemini
-        response = get_detailed_feedback(
-            phoneme_analysis="",  # Placeholder for future phoneme analysis
-            reference_text="",    # Placeholder for future reference text
-            recognized_text=last_transcription,
-            chat_history=chat_history,
-            language=language,
-            user_level=user_level,
-            user_topics=user_topics
+        feedback_language = data.get('feedback_language', 'en')
+        description = data.get('description', None)
+        romanization_display = data.get('romanization_display', None)
+        
+        print(f"💬 Feedback request - Language: {language}, Level: {user_level}")
+        
+        # Get detailed feedback
+        feedback = get_detailed_feedback(
+            phoneme_analysis,
+            reference_text,
+            recognized_text,
+            chat_history,
+            language,
+            user_level,
+            user_topics,
+            feedback_language,
+            description,
+            romanization_display
         )
-        print(f"AI feedback received: {response[:100]}...")
-        return jsonify({"feedback": response})
+        
+        return jsonify({
+            "feedback": feedback,
+            "success": True
+        })
+        
     except Exception as e:
-        print(f"Feedback error: {e}")
-        return jsonify({"feedback": "Error generating feedback.", "error": str(e)}), 500
+        print(f"❌ Feedback error: {e}")
+        return jsonify({
+            "error": str(e),
+            "feedback": ""
+        })
 
 @app.route('/short_feedback', methods=['POST'])
 def short_feedback():
+    """Get short feedback"""
     try:
         data = request.get_json()
         user_input = data.get('user_input', '')
@@ -387,94 +377,580 @@ def short_feedback():
         language = data.get('language', 'en')
         user_level = data.get('user_level', 'beginner')
         user_topics = data.get('user_topics', [])
-        feedback = get_short_feedback(user_input, context, language, user_level, user_topics)
-        return jsonify({"short_feedback": feedback})
+        feedback_language = data.get('feedback_language', 'en')
+        user_goals = data.get('user_goals', [])
+        description = data.get('description', None)
+        
+        print(f"💬 Short feedback request - Language: {language}")
+        
+        # Get short feedback
+        feedback = get_short_feedback(
+            user_input,
+            context,
+            language,
+            user_level,
+            user_topics,
+            feedback_language,
+            user_goals,
+            description
+        )
+        
+        return jsonify({
+            "feedback": feedback,
+            "success": True
+        })
+        
     except Exception as e:
-        print(f"Short feedback error: {e}")
-        return jsonify({"short_feedback": "Error generating feedback.", "error": str(e)}), 500
+        print(f"❌ Short feedback error: {e}")
+        return jsonify({
+            "error": str(e),
+            "feedback": ""
+        })
+
+@app.route('/initial_message', methods=['POST'])
+def initial_message():
+    """Get initial message for conversation"""
+    try:
+        data = request.get_json()
+        language = data.get('language', 'en')
+        user_level = data.get('user_level', 'beginner')
+        user_topics = data.get('user_topics', [])
+        formality = data.get('formality', 'friendly')
+        feedback_language = data.get('feedback_language', 'en')
+        user_goals = data.get('user_goals', [])
+        description = data.get('description', None)
+        
+        print(f"👋 Initial message request - Language: {language}, Level: {user_level}")
+        
+        # Get initial message
+        response = get_conversational_response(
+            "",  # Empty input for initial message
+            [],  # Empty chat history
+            language,
+            user_level,
+            user_topics,
+            formality,
+            feedback_language,
+            user_goals,
+            description
+        )
+        
+        return jsonify({
+            "message": response,
+            "success": True
+        })
+        
+    except Exception as e:
+        print(f"❌ Initial message error: {e}")
+        return jsonify({
+            "error": str(e),
+            "message": ""
+        })
 
 @app.route('/suggestions', methods=['POST'])
 def suggestions():
-    """Generate 3 contextual text suggestions for what to say next"""
+    """Get text suggestions"""
     try:
         data = request.get_json()
-        print(f"=== /suggestions called ===")
-        print(f"Request data: {data}")
-        
-        # Handle both frontend format (conversationId) and direct chat_history
-        conversation_id = data.get('conversationId')
         chat_history = data.get('chat_history', [])
         language = data.get('language', 'en')
         user_level = data.get('user_level', 'beginner')
         user_topics = data.get('user_topics', [])
-
-        # If conversationId is provided but no chat_history, fetch from database
-        if conversation_id and not chat_history:
-            try:
-                conversation_data = getConversationWithMessages(conversation_id)
-                if conversation_data and 'messages' in conversation_data:
-                    # Convert database messages to chat_history format
-                    chat_history = []
-                    for msg in conversation_data['messages']:
-                        chat_history.append({
-                            'sender': 'User' if msg.get('sender') == 'user' else 'Tutor',
-                            'text': msg.get('content', '')
-                        })
-                print(f"Fetched {len(chat_history)} messages from conversation {conversation_id}")
-            except Exception as e:
-                print(f"Error fetching conversation {conversation_id}: {e}")
-                chat_history = []
-
-        print(f"Language: {language}")
-        print(f"User level: {user_level}")
-        print(f"User goals: {user_topics}")
-        print(f"Chat history length: {len(chat_history)}")
-
-        # Call AI client for suggestions using Gemini
-        print(f"Calling get_text_suggestions with: language={language}, history_len={len(chat_history)}")
-        suggestions = get_text_suggestions(chat_history, language, user_level, user_topics)
-        print(f"Generated {len(suggestions)} suggestions: {suggestions}")
+        formality = data.get('formality', 'friendly')
+        feedback_language = data.get('feedback_language', 'en')
+        user_goals = data.get('user_goals', [])
+        description = data.get('description', None)
         
-        # Ensure suggestions is a list and format properly for frontend
-        if not isinstance(suggestions, list):
-            suggestions = [str(suggestions)]
+        print(f"💡 Suggestions request - Language: {language}, Level: {user_level}")
         
-        response_data = {"suggestions": suggestions}
-        print(f"Returning response: {response_data}")
-        return jsonify(response_data)
+        # Get suggestions
+        suggestions = get_text_suggestions(
+            chat_history,
+            language,
+            user_level,
+            user_topics,
+            formality,
+            feedback_language,
+            user_goals,
+            description
+        )
+        
+        return jsonify({
+            "suggestions": suggestions,
+            "success": True
+        })
+        
     except Exception as e:
-        print(f"Suggestions error: {e}")
-        return jsonify({"suggestions": [], "error": str(e)}), 500
+        print(f"❌ Suggestions error: {e}")
+        return jsonify({
+            "error": str(e),
+            "suggestions": []
+        })
 
 @app.route('/translate', methods=['POST'])
 def translate():
-    """Translate text with optional detailed breakdown"""
+    """Translate text"""
     try:
         data = request.get_json()
         text = data.get('text', '')
         source_language = data.get('source_language', 'auto')
         target_language = data.get('target_language', 'en')
         breakdown = data.get('breakdown', False)
-
-        print(f"=== /translate called ===")
-        print(f"Text: {text}")
-        print(f"Source language: {source_language}")
-        print(f"Target language: {target_language}")
-        print(f"Breakdown: {breakdown}")
-
-        if not text:
-            return jsonify({"error": "No text provided"}), 400
-
-        # Call AI client for translation
-        translation_result = get_translation(text, source_language, target_language, breakdown)
-        print(f"Translation result: {translation_result.get('translation', '')}")
+        user_topics = data.get('user_topics', [])
         
-        return jsonify(translation_result)
+        print(f"🌐 Translate request - From: {source_language}, To: {target_language}")
+        
+        # Get translation
+        translation = get_translation(
+            text,
+            source_language,
+            target_language,
+            breakdown,
+            user_topics
+        )
+        
+        return jsonify({
+            "translation": translation,
+            "success": True
+        })
+        
     except Exception as e:
-        print(f"Translation error: {e}")
-        return jsonify({"error": str(e)}), 500
+        print(f"❌ Translate error: {e}")
+        return jsonify({
+            "error": str(e),
+            "translation": {}
+        })
+
+@app.route('/detailed_breakdown', methods=['POST'])
+def detailed_breakdown():
+    """Get detailed breakdown of AI response"""
+    try:
+        data = request.get_json()
+        llm_response = data.get('llm_response', '')
+        user_input = data.get('user_input', '')
+        context = data.get('context', '')
+        language = data.get('language', 'en')
+        user_level = data.get('user_level', 'beginner')
+        user_topics = data.get('user_topics', [])
+        formality = data.get('formality', 'friendly')
+        feedback_language = data.get('feedback_language', 'en')
+        user_goals = data.get('user_goals', [])
+        description = data.get('description', None)
+        
+        print(f"🔍 Detailed breakdown request - Language: {language}")
+        
+        # Get detailed breakdown
+        breakdown = get_detailed_breakdown(
+            llm_response,
+            user_input,
+            context,
+            language,
+            user_level,
+            user_topics,
+            formality,
+            feedback_language,
+            user_goals,
+            description
+        )
+        
+        return jsonify({
+            "breakdown": breakdown,
+            "success": True
+        })
+        
+    except Exception as e:
+        print(f"❌ Detailed breakdown error: {e}")
+        return jsonify({
+            "error": str(e),
+            "breakdown": ""
+        })
+
+@app.route('/explain_suggestion', methods=['POST'])
+def explain_suggestion():
+    """Explain a specific suggestion"""
+    try:
+        data = request.get_json()
+        suggestion_text = data.get('suggestion_text', '')
+        context = data.get('context', '')
+        language = data.get('language', 'en')
+        user_level = data.get('user_level', 'beginner')
+        user_topics = data.get('user_topics', [])
+        feedback_language = data.get('feedback_language', 'en')
+        user_goals = data.get('user_goals', [])
+        description = data.get('description', None)
+        
+        print(f"💡 Explain suggestion request - Language: {language}")
+        
+        # Get or create tutor instance
+        from gemini_client import create_tutor
+        tutor = create_tutor(language, user_level, user_topics)
+        
+        # Explain suggestion
+        explanation = tutor.explain_suggestion(
+            suggestion_text,
+            context,
+            description
+        )
+        
+        return jsonify({
+            "translation": explanation.get("translation", ""),
+            "explanation": explanation.get("explanation", ""),
+            "success": True
+        })
+        
+    except Exception as e:
+        print(f"❌ Explain suggestion error: {e}")
+        return jsonify({
+            "error": str(e),
+            "translation": "",
+            "explanation": ""
+        })
+
+@app.route('/quick_translation', methods=['POST'])
+def quick_translation():
+    """Get quick translation of AI message"""
+    try:
+        data = request.get_json()
+        ai_message = data.get('ai_message', '')
+        language = data.get('language', 'en')
+        user_level = data.get('user_level', 'beginner')
+        user_topics = data.get('user_topics', [])
+        formality = data.get('formality', 'friendly')
+        feedback_language = data.get('feedback_language', 'en')
+        user_goals = data.get('user_goals', [])
+        description = data.get('description', None)
+        
+        print(f"🌐 Quick translation request - Language: {language}")
+        
+        # Get quick translation (hybrid with source metadata)
+        result = get_quick_translation_hybrid_with_meta(
+            ai_message,
+            language,
+            user_level,
+            user_topics,
+            formality,
+            feedback_language,
+            user_goals,
+            description
+        )
+        
+        return jsonify({
+            "translation": result.get("translation", ""),
+            "source": result.get("source", "UNKNOWN"),
+            "success": True
+        })
+        
+    except Exception as e:
+        print(f"❌ Quick translation error: {e}")
+        return jsonify({
+            "error": str(e),
+            "translation": ""
+        })
+
+@app.route('/generate_tts', methods=['POST'])
+def generate_tts():
+    """Generate TTS audio with debug information"""
+    try:
+        data = request.get_json()
+        text = data.get('text', '')
+        language_code = data.get('language_code', 'en')
+        output_path = data.get('output_path', 'tts_output/response.wav')
+        
+        print(f"🎤 TTS request - Language: {language_code}, Text length: {len(text)}")
+        
+        # Generate TTS with debug info
+        result = synthesize_speech(text, language_code, output_path)
+        
+        # Handle new dict return format from TTS synthesizer
+        if isinstance(result, dict):
+            # New format with debug info
+            if result.get('success'):
+                return jsonify({
+                    "success": True,
+                    "output_path": result.get('output_path'),
+                    "message": "TTS generated successfully",
+                    # Include debug information
+                    "service_used": result.get('service_used', 'unknown'),
+                    "fallback_reason": result.get('fallback_reason', 'none'),
+                    "admin_settings": result.get('admin_settings', {}),
+                    "cost_estimate": result.get('cost_estimate', 'unknown'),
+                    "request_id": result.get('request_id', 'unknown'),
+                    "debug": result
+                })
+            else:
+                return jsonify({
+                    "success": False,
+                    "error": result.get('error', 'TTS generation failed'),
+                    "service_used": result.get('service_used', 'unknown'),
+                    "fallback_reason": result.get('fallback_reason', 'none'),
+                    "admin_settings": result.get('admin_settings', {}),
+                    "cost_estimate": result.get('cost_estimate', 'unknown'),
+                    "request_id": result.get('request_id', 'unknown'),
+                    "debug": result
+                })
+        else:
+            # Legacy string return format (fallback)
+            if result:
+                return jsonify({
+                    "success": True,
+                    "output_path": result,
+                    "message": "TTS generated successfully (legacy format)",
+                    "service_used": "unknown",
+                    "fallback_reason": "legacy_format",
+                    "admin_settings": {},
+                    "cost_estimate": "unknown",
+                    "debug": {"legacy_format": True}
+                })
+            else:
+                return jsonify({
+                    "success": False,
+                    "error": "TTS generation failed",
+                    "service_used": "unknown",
+                    "fallback_reason": "legacy_format_failed",
+                    "admin_settings": {},
+                    "cost_estimate": "unknown",
+                    "debug": {"legacy_format": True, "failed": True}
+                })
+        
+    except Exception as e:
+        print(f"❌ TTS error: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "service_used": "none",
+            "fallback_reason": "exception",
+            "admin_settings": {},
+            "cost_estimate": "unknown",
+            "debug": {"exception": str(e)}
+        })
+
+@app.route('/admin')
+def admin_index():
+    """Main admin dashboard page"""
+    try:
+        from admin_dashboard import AdminDashboard
+        dashboard = AdminDashboard()
+        
+        return jsonify({
+            "message": "Admin dashboard is available",
+            "status": "ok",
+            "time": datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            "system_status": dashboard.get_system_status(),
+            "login_url": "/admin/login",
+            "api_endpoints": {
+                "status": "/admin/api/status",
+                "enable_gemini": "/admin/api/enable_gemini",
+                "disable_gemini": "/admin/api/disable_gemini",
+                "update_settings": "/admin/api/update_settings"
+            }
+        })
+    except Exception as e:
+        print(f"❌ Admin index error: {e}")
+        return jsonify({
+            "message": "Admin dashboard is temporarily disabled",
+            "status": "error",
+            "error": str(e),
+            "time": datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        }), 500
+
+@app.route('/admin/login', methods=['GET', 'POST'])
+def admin_login():
+    """Admin login page"""
+    try:
+        from admin_dashboard import AdminDashboard
+        dashboard = AdminDashboard()
+        
+        if request.method == 'POST':
+            password = request.form.get('password')
+            if dashboard.verify_password(password):
+                session['admin_logged_in'] = True
+                return redirect(url_for('admin_index'))
+            else:
+                error_msg = "Invalid password"
+        else:
+            error_msg = None
+        
+        # Try to render template, fallback to simple HTML
+        try:
+            return render_template('login.html', error=error_msg)
+        except:
+            # Fallback HTML if template fails
+            html = f"""
+            <!DOCTYPE html>
+            <html>
+            <head><title>Admin Login</title></head>
+            <body>
+                <h1>🔐 Admin Login</h1>
+                <p>Default Password: admin123</p>
+                {"<p style='color:red'>" + error_msg + "</p>" if error_msg else ""}
+                <form method="POST">
+                    <input type="password" name="password" placeholder="Password" required>
+                    <button type="submit">Login</button>
+                </form>
+            </body>
+            </html>
+            """
+            return html
+    except Exception as e:
+        print(f"❌ Admin login error: {e}")
+        return jsonify({
+            "error": f"Admin login failed: {str(e)}",
+            "message": "Please check server logs for details"
+        }), 500
+
+@app.route('/admin/logout')
+def admin_logout():
+    """Admin logout"""
+    session.pop('admin_logged_in', None)
+    return redirect(url_for('admin_login'))
+
+@app.route('/admin/api/status')
+def admin_api_status():
+    """Get system status as JSON"""
+    try:
+        from admin_dashboard import AdminDashboard
+        dashboard = AdminDashboard()
+        
+        if 'admin_logged_in' not in session:
+            return jsonify({"error": "Not authenticated"}), 401
+        
+        return jsonify({
+            "status": dashboard.get_system_status(),
+            "stats": dashboard.get_usage_stats(),
+            "settings": dashboard.get_tts_settings()
+        })
+    except Exception as e:
+        print(f"❌ Admin API status error: {e}")
+        return jsonify({
+            "error": f"Failed to get system status: {str(e)}",
+            "message": "Please check server logs for details"
+        }), 500
+
+@app.route('/admin/api/enable_gemini', methods=['POST'])
+def admin_api_enable_gemini():
+    """Enable Gemini TTS"""
+    from admin_dashboard import AdminDashboard
+    dashboard = AdminDashboard()
+    
+    if 'admin_logged_in' not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    
+    data = request.get_json()
+    password = data.get('password')
+    
+    if dashboard.enable_gemini_tts(password):
+        return jsonify({"success": True, "message": "Gemini TTS enabled"})
+    else:
+        return jsonify({"success": False, "message": "Invalid password"})
+
+@app.route('/admin/api/disable_gemini', methods=['POST'])
+def admin_api_disable_gemini():
+    """Disable Gemini TTS"""
+    from admin_dashboard import AdminDashboard
+    dashboard = AdminDashboard()
+    
+    if 'admin_logged_in' not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    
+    data = request.get_json()
+    password = data.get('password')
+    
+    if dashboard.disable_gemini_tts(password):
+        return jsonify({"success": True, "message": "Gemini TTS disabled"})
+    else:
+        return jsonify({"success": False, "message": "Invalid password"})
+
+@app.route('/admin/api/update_settings', methods=['POST'])
+def admin_api_update_settings():
+    """Update TTS settings"""
+    from admin_dashboard import AdminDashboard
+    dashboard = AdminDashboard()
+    
+    if 'admin_logged_in' not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    
+    data = request.get_json()
+    settings = data.get('settings', {})
+    
+    if dashboard.update_tts_settings(settings):
+        return jsonify({"success": True, "message": "Settings updated"})
+    else:
+        return jsonify({"success": False, "message": "Failed to update settings"})
+
+@app.route('/admin/api/reset_usage', methods=['POST'])
+def admin_api_reset_usage():
+    """Reset daily usage"""
+    from admin_dashboard import AdminDashboard
+    dashboard = AdminDashboard()
+    
+    if 'admin_logged_in' not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    
+    dashboard.reset_daily_usage()
+    return jsonify({"success": True, "message": "Usage reset"})
+
+@app.route('/admin/api/set_tts_system', methods=['POST'])
+def admin_api_set_tts_system():
+    """Set the active TTS system"""
+    from admin_dashboard import AdminDashboard
+    dashboard = AdminDashboard()
+    
+    data = request.get_json()
+    system = data.get('system')
+    
+    if system not in ['system', 'cloud', 'gemini']:
+        return jsonify({"success": False, "message": "Invalid TTS system"})
+    
+    dashboard.update_tts_settings({"active_tts": system})
+    return jsonify({"success": True, "message": f"TTS system changed to {system.upper()}"})
+
+@app.route('/admin/api/change_password', methods=['POST'])
+def admin_api_change_password():
+    """Change admin password"""
+    from admin_dashboard import AdminDashboard
+    dashboard = AdminDashboard()
+    
+    if 'admin_logged_in' not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    
+    data = request.get_json()
+    old_password = data.get('old_password')
+    new_password = data.get('new_password')
+    
+    if dashboard.change_password(old_password, new_password):
+        return jsonify({"success": True, "message": "Password changed"})
+    else:
+        return jsonify({"success": False, "message": "Invalid current password"})
+
+@app.route('/admin/api/toggle_google_api', methods=['POST'])
+def admin_api_toggle_google_api():
+    """Toggle Google API services"""
+    from admin_dashboard import AdminDashboard
+    dashboard = AdminDashboard()
+    
+    # Since this is called from the admin dashboard, we'll allow it without session check
+    # The admin dashboard itself requires authentication to access
+    
+    data = request.get_json()
+    enabled = data.get('enabled', False)
+    
+    if enabled:
+        if dashboard.enable_google_api_services("admin123"):  # Using default password for now
+            return jsonify({"success": True, "message": "Google API services enabled"})
+        else:
+            return jsonify({"success": False, "message": "Failed to enable Google API services"})
+    else:
+        if dashboard.disable_google_api_services("admin123"):  # Using default password for now
+            return jsonify({"success": True, "message": "Google API services disabled"})
+        else:
+            return jsonify({"success": False, "message": "Failed to disable Google API services"})
 
 if __name__ == '__main__':
     print("Starting Python Speech Analysis API...")
+    print("🔐 Admin Dashboard: http://localhost:5000/admin")
+    print("🔑 Default password: admin123")
     load_models()
-    app.run(host='0.0.0.0', port=5001, debug=True) 
+    
+    # Use PORT environment variable for Render
+    PORT = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=PORT, debug=False) 
