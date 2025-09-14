@@ -1297,7 +1297,8 @@ const AnalyzeContentInner = () => {
         const token = localStorage.getItem('jwt');
         
         // Call the Node.js server which will route to Python API with admin controls
-        const response = await axios.post('http://localhost:4000/api/tts', {
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
+        const response = await axios.post(`${backendUrl}/api/tts`, {
           text,
           language
         }, {
@@ -1337,7 +1338,8 @@ const AnalyzeContentInner = () => {
         const ttsUrl = await generateTTSForText(text, language, cacheKey);
         if (ttsUrl) {
           // Handle both relative and absolute URLs from backend
-          const audioUrl = ttsUrl.startsWith('http') ? ttsUrl : `http://localhost:4000${ttsUrl}`;
+          const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
+          const audioUrl = ttsUrl.startsWith('http') ? ttsUrl : `${backendUrl}${ttsUrl}`;
           const audio = new window.Audio(audioUrl);
           ttsAudioRef.current = audio;
           
@@ -1382,7 +1384,8 @@ const AnalyzeContentInner = () => {
       
       try {
         // Handle both relative and absolute URLs from backend
-        const audioUrl = ttsUrl.startsWith('http') ? ttsUrl : `http://localhost:4000${ttsUrl}`;
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
+        const audioUrl = ttsUrl.startsWith('http') ? ttsUrl : `${backendUrl}${ttsUrl}`;
         const audio = new window.Audio(audioUrl);
         ttsAudioRef.current = audio;
         
@@ -2659,7 +2662,8 @@ const AnalyzeContentInner = () => {
           console.log('[DEBUG] Playing initial AI message TTS:', (aiMessage as any).ttsUrl);
           // Handle both relative and absolute URLs from backend
           const ttsUrl = (aiMessage as any).ttsUrl;
-          const audioUrl = ttsUrl.startsWith('http') ? ttsUrl : `http://localhost:4000${ttsUrl}`;
+          const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
+          const audioUrl = ttsUrl.startsWith('http') ? ttsUrl : `${backendUrl}${ttsUrl}`;
           try {
             const headResponse = await fetch(audioUrl, { method: 'HEAD' });
             if (headResponse.ok) {
