@@ -7,7 +7,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     // Forward the onboarding request to your backend (correct path and headers)
-    const response = await axios.post('https://beyondwords-express.onrender.com/api/user/onboarding', req.body, {
+    const backendUrl = process.env.BACKEND_URL || 'https://beyondwords-express.onrender.com';
+    const response = await axios.post(`${backendUrl}/api/user/onboarding`, req.body, {
       headers: { Authorization: req.headers.authorization || '' }
     });
     res.status(response.status).json(response.data);

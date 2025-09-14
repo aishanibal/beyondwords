@@ -7,7 +7,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (req.method === 'GET') {
     try {
-      const response = await axios.get('https://beyondwords-express.onrender.com/api/user', {
+      const backendUrl = process.env.BACKEND_URL || 'https://beyondwords-express.onrender.com';
+      const response = await axios.get(`${backendUrl}/api/user`, {
         headers: { Authorization: authHeader }
       });
       // Forward backend status and data
@@ -31,7 +32,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       console.log('Next.js API proxy - Original request body:', req.body);
       console.log('Next.js API proxy - Transformed backend data:', backendData);
       
-      const response = await axios.put('https://beyondwords-express.onrender.com/api/user/profile', backendData, {
+      const backendUrl = process.env.BACKEND_URL || 'https://beyondwords-express.onrender.com';
+      const response = await axios.put(`${backendUrl}/api/user/profile`, backendData, {
         headers: { Authorization: authHeader }
       });
       // Forward backend status and data
@@ -45,7 +47,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (req.method === 'DELETE') {
     try {
-      const response = await axios.delete('https://beyondwords-express.onrender.com/api/user', {
+      const backendUrl = process.env.BACKEND_URL || 'https://beyondwords-express.onrender.com';
+      const response = await axios.delete(`${backendUrl}/api/user`, {
         headers: { Authorization: authHeader }
       });
       // Forward backend status and data

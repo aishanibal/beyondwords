@@ -87,6 +87,26 @@ const nextConfig: NextConfig = {
       {
         source: '/api/tts',
         destination: `${backendUrl}/api/tts`, // Express backend
+      },
+      {
+        source: '/api/transcribe_only',
+        destination: `${backendUrl}/api/transcribe_only`, // Express backend
+      },
+      {
+        source: '/api/ai_response',
+        destination: `${backendUrl}/api/ai_response`, // Express backend
+      },
+      {
+        source: '/api/conversation-summary',
+        destination: `${backendUrl}/api/conversation-summary`, // Express backend
+      },
+      {
+        source: '/api/personas',
+        destination: `${backendUrl}/api/personas`, // Express backend
+      },
+      {
+        source: '/api/contact',
+        destination: `${backendUrl}/api/contact`, // Express backend
       }
     ];
   },
