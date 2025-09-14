@@ -30,6 +30,30 @@ const API = axios.create({
   withCredentials: false 
 });
 
+// TTS helper functions
+const getTTSUrl = async (text, language = 'en') => {
+  try {
+    const response = await API.post('/api/tts', { text, language });
+    if (response.data.success && response.data.ttsUrl) {
+      return response.data.ttsUrl;
+    }
+    return null;
+  } catch (error) {
+    console.error('Error generating TTS:', error);
+    return null;
+  }
+};
+
+const playTTS = async (ttsUrl) => {
+  try {
+    const audioUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:4000'}${ttsUrl}`;
+    const audio = new window.Audio(audioUrl);
+    await audio.play();
+  } catch (error) {
+    console.error('Error playing TTS:', error);
+  }
+};
+
 // Add JWT token to requests
 API.interceptors.request.use(config => {
   const token = localStorage.getItem('jwt');
@@ -842,7 +866,7 @@ function Analyze() {
       }
       // Play AI response TTS if present
       if (response.data.ttsUrl) {
-        const audioUrl = `http://localhost:4000${response.data.ttsUrl}`;
+        const audioUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:4000'}${response.data.ttsUrl}`;
         try {
           const headResponse = await fetch(audioUrl, { method: 'HEAD' });
           if (headResponse.ok) {

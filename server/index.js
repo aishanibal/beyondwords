@@ -891,6 +891,74 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// TTS endpoint for generating speech from text
+app.post('/api/tts', async (req, res) => {
+  try {
+    const { text, language = 'en' } = req.body;
+    
+    if (!text) {
+      return res.status(400).json({ error: 'No text provided' });
+    }
+    
+    const ttsFileName = `tts_${Date.now()}.wav`;
+    const ttsFilePath = path.join(uploadsDir, ttsFileName);
+    
+    // Choose voice based on language with fallback
+    let ttsVoice = 'Karen'; // Default to English
+    if (language === 'es') ttsVoice = 'Mónica'; // Spanish voice
+    else if (language === 'hi') ttsVoice = 'Lekha'; // macOS Hindi voice
+    else if (language === 'ja') ttsVoice = 'Otoya'; // macOS Japanese voice
+    
+    // Check if voice is available
+    try {
+      const voiceCheck = await new Promise((resolve, reject) => {
+        exec(`say -v ${ttsVoice} "test"`, (error) => {
+          if (error) reject(error);
+          else resolve();
+        });
+      });
+    } catch (voiceError) {
+      console.log(`Voice ${ttsVoice} not available, using default`);
+      ttsVoice = 'Alex'; // Fallback to Alex
+    }
+    
+    const sayCmd = `say -v ${ttsVoice} -o "${ttsFilePath}" --data-format=LEI16@22050 "${text.replace(/\"/g, '\\"')}"`;
+    console.log('TTS voice:', ttsVoice);
+    console.log('TTS command:', sayCmd);
+    console.log('TTS text length:', text.length);
+    
+    await new Promise((resolve, reject) => {
+      exec(sayCmd, (error) => {
+        if (error) {
+          console.error('TTS command failed:', error);
+          reject(error);
+        } else {
+          console.log('TTS command completed successfully');
+          resolve();
+        }
+      });
+    });
+    
+    // Check if file was created
+    const fs = require('fs');
+    if (fs.existsSync(ttsFilePath)) {
+      const stats = fs.statSync(ttsFilePath);
+      console.log('TTS file created, size:', stats.size, 'bytes');
+      res.json({ 
+        success: true, 
+        ttsUrl: `/uploads/${ttsFileName}`,
+        fileSize: stats.size
+      });
+    } else {
+      console.error('TTS file was not created');
+      res.status(500).json({ error: 'TTS file was not created' });
+    }
+  } catch (error) {
+    console.error('TTS error:', error);
+    res.status(500).json({ error: 'TTS failed', details: error.message });
+  }
+});
+
 // Test TTS endpoint
 app.get('/api/test-tts', async (req, res) => {
   try {
