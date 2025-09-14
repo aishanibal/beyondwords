@@ -82,6 +82,11 @@ class AdminControlledTTSSynthesizer:
                 'windows': 'Microsoft Kalpana Desktop',
                 'linux': 'tamil'
             },
+            'tl': {
+                'macos': 'Eddy (English (US))',  # Fallback to English
+                'windows': 'Microsoft David Desktop',
+                'linux': 'english_rp'  # espeak doesn't have Tagalog, use English
+            },
             'ml': {
                 'macos': 'Lekha (Hindi (India))',  # Fallback to Hindi
                 'windows': 'Microsoft Kalpana Desktop',
@@ -217,8 +222,33 @@ class AdminControlledTTSSynthesizer:
                     **debug_info
                 }
             else:
-                print("❌ System TTS failed")
-                debug_info["fallback_reason"] = "System TTS failed"
+                print("❌ System TTS failed, falling back to Google Cloud TTS...")
+                debug_info["fallback_reason"] = "System TTS failed, trying Google Cloud TTS"
+                # Fall back to Google Cloud TTS when system TTS fails
+                if google_synthesize:
+                    print("☁️ Trying Google Cloud TTS (CHEAP) as fallback...")
+                    result = self._try_google_cloud_tts(text, language_code, output_path)
+                    if result:
+                        # Estimate cost: ~$0.004 per 1K characters
+                        estimated_cost = len(text) * 0.004 / 1000
+                        self.admin_dashboard.track_usage("google_cloud", estimated_cost)
+                        print(f"✅ Google Cloud TTS successful (CHEAP - ~${estimated_cost:.4f})")
+                        # Cache the result
+                        self.tts_cache[cache_key] = result
+                        debug_info.update({
+                            "service_used": "google_cloud",
+                            "success": True,
+                            "output_path": result,
+                            "cost_estimate": f"{estimated_cost:.4f}"
+                        })
+                        return {
+                            "success": True,
+                            "output_path": result,
+                            **debug_info
+                        }
+                    else:
+                        print("❌ Google Cloud TTS fallback also failed")
+                        debug_info["fallback_reason"] = "Both System TTS and Google Cloud TTS failed"
         
         # Try Google Cloud TTS (CHEAP)
         elif active_tts == "cloud":
@@ -437,11 +467,9 @@ class AdminControlledTTSSynthesizer:
                     return output_path
                     
             elif self.system == 'linux':
-                voice = self.voice_map.get(language_code, {}).get('linux', 'english_rp')
-                cmd = ['espeak', '-v', voice, '-w', output_path, text]
-                result = subprocess.run(cmd, capture_output=True, text=True)
-                if result.returncode == 0:
-                    return output_path
+                print("🖥️ Linux system TTS not available (espeak not installed)")
+                print("🖥️ Will fall back to Google Cloud TTS")
+                return None
                     
         except Exception as e:
             print(f"System TTS error: {e}")
