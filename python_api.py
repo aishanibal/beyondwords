@@ -26,7 +26,8 @@ app.secret_key = os.urandom(24)  # For session management
 CORS(app)
 
 # Check API key at startup
-api_key = os.getenv("GOOGLE_API_KEY")
+api_key = os.getenv("
+GOOGLE_API_KEY")
 if not api_key:
     print("⚠️ WARNING: GOOGLE_API_KEY environment variable is not set!")
     print("   The AI features will not work. Please set your API key:")

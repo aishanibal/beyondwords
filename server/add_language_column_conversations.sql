@@ -7,3 +7,6 @@ ADD COLUMN IF NOT EXISTS language TEXT;
 CREATE INDEX IF NOT EXISTS idx_conversations_language ON conversations(language);
 
 
+
+
+

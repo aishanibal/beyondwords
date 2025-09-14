@@ -25,7 +25,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
-    // Handle /api/user/language-dashboards - GET all, POST, PUT, DELETE
+    // Handle /api/user/language-dashboards - GET all, POST, PUT, DELETEimage.png
+
+    
     if (req.method === 'GET') {
       const response = await axios.get(BACKEND_URL, {
         headers: { Authorization: authHeader }

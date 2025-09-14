@@ -81,6 +81,10 @@ const nextConfig: NextConfig = {
       {
         source: '/api/explain_suggestion',
         destination: 'http://localhost:4000/api/explain_suggestion', // Express backend
+      },
+      {
+        source: '/api/tts',
+        destination: 'http://localhost:4000/api/tts', // Express backend
       }
     ];
   },
