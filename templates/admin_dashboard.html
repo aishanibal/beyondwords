@@ -3,85 +3,604 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Dashboard</title>
+    <title>BeyondWords Admin Dashboard</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        .container { max-width: 800px; margin: 0 auto; }
-        .section { margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 5px; }
-        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
-        .status { padding: 10px; margin: 10px 0; border-radius: 5px; }
-        .success { background-color: #d4edda; color: #155724; }
-        .error { background-color: #f8d7da; color: #721c24; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+        
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 30px;
+            padding: 30px;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 10px;
+            padding: 25px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            border: 1px solid #e0e0e0;
+        }
+        
+        .card h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.4em;
+            border-bottom: 2px solid #4facfe;
+            padding-bottom: 10px;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        
+        .status-online { background-color: #4caf50; }
+        .status-offline { background-color: #f44336; }
+        .status-warning { background-color: #ff9800; }
+        
+        .setting-group {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        
+        .setting-label {
+            font-weight: 600;
+            color: #555;
+            margin-bottom: 10px;
+            display: block;
+        }
+        
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 34px;
+        }
+        
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 34px;
+        }
+        
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        
+        input:checked + .slider {
+            background-color: #4facfe;
+        }
+        
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+        
+        .btn {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            margin: 5px;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(79, 172, 254, 0.4);
+        }
+        
+        .btn-danger {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+        }
+        
+        .btn-success {
+            background: linear-gradient(135deg, #51cf66 0%, #40c057 100%);
+        }
+        
+        .status-card {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+        
+        .status-success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status-error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f1b0b7;
+        }
+        
+        .status-info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #b8daff;
+        }
+        
+        .input-group {
+            margin-bottom: 15px;
+        }
+        
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #555;
+        }
+        
+        .input-group input, .input-group select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #4facfe;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .hidden {
+            display: none;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Admin Dashboard</h1>
-        
-        <div class="section">
-            <h2>System Status</h2>
-            <div id="status" class="status">Loading...</div>
-            <button onclick="loadStatus()">Refresh Status</button>
+        <div class="header">
+            <h1>🎙️ BeyondWords Admin Dashboard</h1>
+            <p>Manage TTS settings and system configuration</p>
         </div>
         
-        <div class="section">
-            <h2>TTS Settings</h2>
-            <button onclick="enableGemini()">Enable Gemini TTS</button>
-            <button onclick="disableGemini()">Disable Gemini TTS</button>
+        <!-- Login Form (shown when not authenticated) -->
+        <div id="login-section" class="dashboard-grid" style="display: none;">
+            <div class="card" style="grid-column: 1 / -1; max-width: 400px; margin: 0 auto;">
+                <h2>🔐 Admin Login</h2>
+                <div class="input-group">
+                    <label for="admin-password">Password</label>
+                    <input type="password" id="admin-password" placeholder="Enter admin password" onkeypress="handleLoginKeypress(event)">
+                </div>
+                <button class="btn btn-success" onclick="login()">Login</button>
+                <div id="login-status" class="status-card status-info hidden">
+                    Login status will appear here...
+                </div>
+            </div>
         </div>
         
-        <div class="section">
-            <h2>Google API Settings</h2>
-            <button onclick="toggleGoogleAPI()">Toggle Google API</button>
+        <!-- Main Dashboard (shown when authenticated) -->
+        <div id="dashboard-section" class="dashboard-grid" style="display: none;">
+            <!-- System Status -->
+            <div class="card">
+                <h2>📊 System Status</h2>
+                <div id="system-status" class="status-card status-info">
+                    <div class="loading"></div> Loading system status...
+                </div>
+                <button class="btn" onclick="loadStatus()">🔄 Refresh Status</button>
+            </div>
+            
+            <!-- TTS Settings -->
+            <div class="card">
+                <h2>🔊 TTS Settings</h2>
+                
+                <div class="setting-group">
+                    <label class="setting-label">Enable Gemini TTS</label>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="gemini-enabled" onchange="updateTTSSettings()">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                
+                <div class="setting-group">
+                    <label class="setting-label">Active TTS System</label>
+                    <select id="active-tts" onchange="updateTTSSettings()">
+                        <option value="system">System TTS (Free)</option>
+                        <option value="gemini">Gemini TTS</option>
+                        <option value="google_cloud">Google Cloud TTS</option>
+                    </select>
+                </div>
+                
+                <div class="setting-group">
+                    <label class="setting-label">Daily Cost Limit ($)</label>
+                    <input type="number" id="cost-limit" step="0.01" min="0" max="100" onchange="updateTTSSettings()">
+                </div>
+                
+                <div class="setting-group">
+                    <label class="setting-label">Usage Tracking</label>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="usage-tracking" onchange="updateTTSSettings()">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                
+                <div id="tts-status" class="status-card status-info hidden">
+                    Settings updated successfully!
+                </div>
+            </div>
+            
+            <!-- TTS Testing -->
+            <div class="card">
+                <h2>🧪 TTS Testing</h2>
+                
+                <div class="input-group">
+                    <label for="test-text">Test Text</label>
+                    <textarea id="test-text" rows="3" placeholder="Enter text to test TTS...">Hello! This is a test of the TTS system. How does it sound?</textarea>
+                </div>
+                
+                <div class="input-group">
+                    <label for="test-language">Language</label>
+                    <select id="test-language">
+                        <option value="en">English</option>
+                        <option value="es">Spanish</option>
+                        <option value="fr">French</option>
+                        <option value="de">German</option>
+                        <option value="it">Italian</option>
+                        <option value="ja">Japanese</option>
+                        <option value="ko">Korean</option>
+                        <option value="zh">Chinese</option>
+                    </select>
+                </div>
+                
+                <button class="btn btn-success" onclick="testTTS()">🎵 Test TTS</button>
+                
+                <div id="test-result" class="status-card status-info hidden">
+                    Test results will appear here...
+                </div>
+            </div>
+            
+            <!-- Usage Statistics -->
+            <div class="card">
+                <h2>📈 Usage Statistics</h2>
+                <div id="usage-stats" class="status-card status-info">
+                    <div class="loading"></div> Loading usage statistics...
+                </div>
+            </div>
+            
+            <!-- Logout Button -->
+            <div class="card" style="text-align: center;">
+                <button class="btn btn-danger" onclick="logout()">🚪 Logout</button>
+            </div>
         </div>
     </div>
 
     <script>
-        function loadStatus() {
-            fetch('/admin/api/status')
-                .then(response => response.json())
-                .then(data => {
-                    document.getElementById('status').innerHTML = 
-                        `<div class="success">System is running. Gemini: ${data.gemini_enabled ? 'Enabled' : 'Disabled'}</div>`;
-                })
-                .catch(error => {
-                    document.getElementById('status').innerHTML = 
-                        `<div class="error">Error loading status: ${error.message}</div>`;
+        let currentConfig = {};
+        let isAuthenticated = false;
+        
+        // Check authentication status on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            checkAuthAndLoadStatus();
+        });
+        
+        async function checkAuthAndLoadStatus() {
+            try {
+                const response = await fetch('/admin/dashboard/api/status');
+                const data = await response.json();
+                
+                if (response.status === 401) {
+                    // Not authenticated, show login form
+                    showLoginForm();
+                } else if (data.error) {
+                    showStatus('login-status', 'Error: ' + data.error, 'error');
+                    showLoginForm();
+                } else {
+                    // Authenticated, show dashboard
+                    isAuthenticated = true;
+                    showDashboard();
+                    updateStatusDisplay(data);
+                }
+            } catch (error) {
+                showStatus('login-status', 'Error connecting to server: ' + error.message, 'error');
+                showLoginForm();
+            }
+        }
+        
+        function showLoginForm() {
+            document.getElementById('login-section').style.display = 'grid';
+            document.getElementById('dashboard-section').style.display = 'none';
+            document.getElementById('admin-password').focus();
+        }
+        
+        function showDashboard() {
+            document.getElementById('login-section').style.display = 'none';
+            document.getElementById('dashboard-section').style.display = 'grid';
+        }
+        
+        function handleLoginKeypress(event) {
+            if (event.key === 'Enter') {
+                login();
+            }
+        }
+        
+        async function login() {
+            const password = document.getElementById('admin-password').value;
+            
+            if (!password) {
+                showStatus('login-status', 'Please enter a password.', 'error');
+                return;
+            }
+            
+            showStatus('login-status', '🔄 Logging in...', 'info');
+            
+            try {
+                const response = await fetch('/admin/dashboard/api/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ password })
                 });
-        }
-        
-        function enableGemini() {
-            fetch('/admin/api/enable_gemini', { method: 'POST' })
-                .then(response => response.json())
-                .then(data => {
-                    alert('Gemini TTS enabled');
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    isAuthenticated = true;
+                    showDashboard();
                     loadStatus();
-                })
-                .catch(error => alert('Error: ' + error.message));
+                } else {
+                    showStatus('login-status', 'Login failed: ' + (data.error || 'Invalid password'), 'error');
+                }
+            } catch (error) {
+                showStatus('login-status', 'Login error: ' + error.message, 'error');
+            }
         }
         
-        function disableGemini() {
-            fetch('/admin/api/disable_gemini', { method: 'POST' })
-                .then(response => response.json())
-                .then(data => {
-                    alert('Gemini TTS disabled');
-                    loadStatus();
-                })
-                .catch(error => alert('Error: ' + error.message));
+        async function logout() {
+            try {
+                await fetch('/admin/dashboard/api/logout', { method: 'POST' });
+                isAuthenticated = false;
+                document.getElementById('admin-password').value = '';
+                showLoginForm();
+            } catch (error) {
+                console.error('Logout error:', error);
+                // Still show login form even if logout request failed
+                isAuthenticated = false;
+                showLoginForm();
+            }
         }
         
-        function toggleGoogleAPI() {
-            fetch('/admin/api/toggle_google_api', { method: 'POST' })
-                .then(response => response.json())
-                .then(data => {
-                    alert('Google API toggled');
-                    loadStatus();
-                })
-                .catch(error => alert('Error: ' + error.message));
+        async function loadStatus() {
+            try {
+                const response = await fetch('/admin/dashboard/api/status');
+                const data = await response.json();
+                
+                if (response.status === 401) {
+                    // Session expired, show login
+                    isAuthenticated = false;
+                    showLoginForm();
+                    return;
+                }
+                
+                if (data.error) {
+                    showStatus('system-status', 'Error loading status: ' + data.error, 'error');
+                    return;
+                }
+                
+                updateStatusDisplay(data);
+                
+            } catch (error) {
+                showStatus('system-status', 'Error connecting to server: ' + error.message, 'error');
+            }
         }
         
-        // Load status on page load
-        loadStatus();
+        function updateStatusDisplay(data) {
+            currentConfig = data.config;
+            
+            // Update system status
+            const statusHtml = `
+                <div><span class="status-indicator ${data.gemini_ready ? 'status-online' : 'status-offline'}"></span>Gemini API: ${data.gemini_ready ? 'Online' : 'Offline'}</div>
+                <div><span class="status-indicator status-online"></span>Python API: Online</div>
+                <div><strong>Last Updated:</strong> ${new Date(data.timestamp).toLocaleString()}</div>
+            `;
+            document.getElementById('system-status').innerHTML = statusHtml;
+            document.getElementById('system-status').className = 'status-card status-success';
+            
+            // Update TTS settings UI
+            updateTTSUI();
+            
+            // Update usage stats
+            updateUsageStats(data.config.usage_stats || {});
+        }
+        
+        function updateTTSUI() {
+            const ttsSettings = currentConfig.tts_settings || {};
+            
+            document.getElementById('gemini-enabled').checked = ttsSettings.gemini_enabled || false;
+            document.getElementById('active-tts').value = ttsSettings.active_tts || 'system';
+            document.getElementById('cost-limit').value = ttsSettings.cost_limit_per_day || 1;
+            document.getElementById('usage-tracking').checked = ttsSettings.usage_tracking !== false;
+        }
+        
+        async function updateTTSSettings() {
+            const settings = {
+                gemini_enabled: document.getElementById('gemini-enabled').checked,
+                active_tts: document.getElementById('active-tts').value,
+                cost_limit_per_day: parseFloat(document.getElementById('cost-limit').value),
+                usage_tracking: document.getElementById('usage-tracking').checked
+            };
+            
+            try {
+                const response = await fetch('/admin/dashboard/api/update_tts_settings', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(settings)
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showStatus('tts-status', 'TTS settings updated successfully!', 'success');
+                    // Reload status to get updated config
+                    setTimeout(loadStatus, 1000);
+                } else {
+                    showStatus('tts-status', 'Error updating settings: ' + data.error, 'error');
+                }
+            } catch (error) {
+                showStatus('tts-status', 'Error connecting to server: ' + error.message, 'error');
+            }
+        }
+        
+        async function testTTS() {
+            const text = document.getElementById('test-text').value;
+            const language = document.getElementById('test-language').value;
+            
+            if (!text.trim()) {
+                showStatus('test-result', 'Please enter some text to test.', 'error');
+                return;
+            }
+            
+            showStatus('test-result', '🔄 Testing TTS... Please wait.', 'info');
+            
+            try {
+                const response = await fetch('/admin/dashboard/api/test_tts', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ text, language })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    const result = data.result;
+                    let message = '✅ TTS test completed successfully!<br>';
+                    if (result.service_used) {
+                        message += `Service used: ${result.service_used}<br>`;
+                    }
+                    if (result.cost_estimate) {
+                        message += `Cost estimate: $${result.cost_estimate}<br>`;
+                    }
+                    if (result.fallback_reason && result.fallback_reason !== 'none') {
+                        message += `⚠️ Fallback reason: ${result.fallback_reason}`;
+                    }
+                    showStatus('test-result', message, 'success');
+                } else {
+                    showStatus('test-result', 'TTS test failed: ' + data.error, 'error');
+                }
+            } catch (error) {
+                showStatus('test-result', 'Error testing TTS: ' + error.message, 'error');
+            }
+        }
+        
+        function updateUsageStats(stats) {
+            if (!stats.daily_usage) {
+                document.getElementById('usage-stats').innerHTML = 'No usage data available.';
+                return;
+            }
+            
+            const today = new Date().toISOString().split('T')[0];
+            const todayStats = stats.daily_usage[today] || {};
+            
+            const html = `
+                <div><strong>Today's Usage:</strong></div>
+                <div>System TTS: ${todayStats.system || 0} requests</div>
+                <div>Google Cloud TTS: ${todayStats.google_cloud || 0} requests</div>
+                <div>Gemini TTS: ${todayStats.gemini || 0} requests</div>
+                <div>Today's Cost: $${(todayStats.total_cost || 0).toFixed(4)}</div>
+                <div><strong>Total Cost:</strong> $${(stats.total_cost || 0).toFixed(4)}</div>
+            `;
+            
+            document.getElementById('usage-stats').innerHTML = html;
+            document.getElementById('usage-stats').className = 'status-card status-success';
+        }
+        
+        function showStatus(elementId, message, type) {
+            const element = document.getElementById(elementId);
+            element.innerHTML = message;
+            element.className = `status-card status-${type}`;
+            element.classList.remove('hidden');
+            
+            // Auto-hide success messages after 3 seconds
+            if (type === 'success') {
+                setTimeout(() => {
+                    element.classList.add('hidden');
+                }, 3000);
+            }
+        }
     </script>
 </body>
 </html>

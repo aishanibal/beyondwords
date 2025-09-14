@@ -6,6 +6,7 @@ Test script to verify TTS debug functionality
 import requests
 import json
 import time
+import os
 
 def test_tts_debug():
     """Test TTS debug functionality"""
@@ -39,8 +40,9 @@ def test_tts_debug():
         
         try:
             # Call the TTS endpoint
+            backend_url = os.getenv('BACKEND_URL', 'http://localhost:4000')
             response = requests.post(
-                'http://localhost:4000/api/tts-test',
+                f'{backend_url}/api/tts-test',
                 json={
                     'text': test_case['text'],
                     'language': test_case['language']

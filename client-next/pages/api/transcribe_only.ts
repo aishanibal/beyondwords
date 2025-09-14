@@ -2,7 +2,9 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import axios from 'axios';
 import fs from 'fs';
-import FormData from 'form-data';
+import path from 'path';
+import os from 'os';
+import busboy from 'busboy';
 
 export const config = {
   api: {
@@ -19,32 +21,85 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const formData = new FormData();
+    console.log('🎤 Transcribe API called, processing audio...');
     
-    // Add audio file
-    if (req.body.audio) {
-      formData.append('audio', req.body.audio);
+    // Parse multipart form data
+    const bb = busboy({ headers: req.headers });
+    const fields: { [key: string]: string } = {};
+    let audioBuffer: Buffer | null = null;
+    let audioFilename = 'recording.webm';
+
+    const parsePromise = new Promise<void>((resolve, reject) => {
+      bb.on('field', (name, val) => {
+        fields[name] = val;
+      });
+
+      bb.on('file', (name, file, info) => {
+        if (name === 'audio') {
+          audioFilename = info.filename || 'recording.webm';
+          const chunks: Buffer[] = [];
+          file.on('data', (data) => {
+            chunks.push(data);
+          });
+          file.on('end', () => {
+            audioBuffer = Buffer.concat(chunks);
+          });
+        } else {
+          file.resume(); // Drain other files
+        }
+      });
+
+      bb.on('finish', resolve);
+      bb.on('error', reject);
+    });
+
+    req.pipe(bb);
+    await parsePromise;
+
+    if (!audioBuffer) {
+      return res.status(400).json({ error: 'No audio file provided' });
     }
+
+    console.log(`📁 Received audio file: ${audioFilename}, size: ${audioBuffer.length} bytes`);
+
+    // Save audio to temporary file
+    const tempDir = os.tmpdir();
+    const tempFilename = `audio_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.webm`;
+    const tempFilePath = path.join(tempDir, tempFilename);
     
-    // Add other fields
-    Object.keys(req.body).forEach(key => {
-      if (key !== 'audio' && req.body[key] !== undefined) {
-        formData.append(key, req.body[key]);
-      }
-    });
+    fs.writeFileSync(tempFilePath, audioBuffer);
+    console.log(`💾 Saved audio to: ${tempFilePath}`);
 
-    const response = await axios.post(BACKEND_URL, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-        ...formData.getHeaders?.() || {}
-      }
-    });
+    try {
+      // Send JSON request to Python backend with file path
+      const response = await axios.post(BACKEND_URL, {
+        audio_file: tempFilePath,
+        language: fields.language || 'en'
+      }, {
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        timeout: 30000 // 30 second timeout
+      });
 
-    res.status(response.status).json(response.data);
+      console.log('✅ Python backend response:', response.status);
+      res.status(response.status).json(response.data);
+    } finally {
+      // Clean up temp file
+      try {
+        fs.unlinkSync(tempFilePath);
+        console.log(`🗑️ Cleaned up temp file: ${tempFilePath}`);
+      } catch (cleanupErr) {
+        console.warn('Warning: Could not clean up temp file:', cleanupErr);
+      }
+    }
+
   } catch (err: any) {
-    console.error('Transcribe API error:', err);
+    console.error('❌ Transcribe API error:', err.message);
+    console.error('Stack:', err.stack);
     
     if (err.response) {
+      console.error('Backend response:', err.response.status, err.response.data);
       res.status(err.response.status).json(err.response.data);
     } else {
       res.status(500).json({ 

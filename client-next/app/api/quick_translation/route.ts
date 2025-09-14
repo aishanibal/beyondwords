@@ -5,7 +5,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     
     // Proxy the request to the Express server
-    const response = await fetch('http://localhost:4000/api/quick_translation', {
+    const backendUrl = process.env.BACKEND_URL || 'http://localhost:4000';
+    const response = await fetch(`${backendUrl}/api/quick_translation`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
