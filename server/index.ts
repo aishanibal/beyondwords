@@ -1902,6 +1902,52 @@ app.use('/uploads', (req, res, next) => {
 // Also serve files from the current directory (where Python API might create files)
 app.use('/files', express.static(path.join(__dirname, '..')));
 
+// Proxy endpoint to serve TTS files from Python API
+app.get('/files/:filename', async (req: Request, res: Response) => {
+  try {
+    const filename = req.params.filename;
+    console.log(`🔍 [TTS_PROXY] Serving TTS file: ${filename}`);
+    
+    // First try to serve from local uploads directory
+    const localPath = path.join(uploadsDir, filename);
+    if (fs.existsSync(localPath)) {
+      console.log(`🔍 [TTS_PROXY] Serving from local path: ${localPath}`);
+      res.sendFile(localPath);
+      return;
+    }
+    
+    // If not found locally, try to fetch from Python API
+    const pythonApiUrl = (process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com').replace(/\/$/, '');
+    const pythonFileUrl = `${pythonApiUrl}/uploads/${filename}`;
+    
+    console.log(`🔍 [TTS_PROXY] File not found locally, trying Python API: ${pythonFileUrl}`);
+    
+    try {
+      const response = await axios.get(pythonFileUrl, {
+        responseType: 'stream',
+        timeout: 10000
+      });
+      
+      // Set appropriate headers
+      res.set({
+        'Content-Type': 'audio/wav',
+        'Cache-Control': 'public, max-age=3600'
+      });
+      
+      // Pipe the response from Python API to client
+      response.data.pipe(res);
+      
+    } catch (pythonError: any) {
+      console.error(`🔍 [TTS_PROXY] Failed to fetch from Python API: ${pythonError.message}`);
+      res.status(404).json({ error: 'TTS file not found' });
+    }
+    
+  } catch (error: any) {
+    console.error(`🔍 [TTS_PROXY] Error serving TTS file: ${error.message}`);
+    res.status(500).json({ error: 'Failed to serve TTS file' });
+  }
+});
+
 // Helper function to check Python API health
 async function checkPythonAPIHealth(): Promise<boolean> {
   try {

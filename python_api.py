@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template, redirect, url_for, session
+from flask import Flask, request, jsonify, render_template, redirect, url_for, session, send_from_directory
 from flask_cors import CORS
 import os
 import json
@@ -683,8 +683,9 @@ def generate_tts():
                 if actual_output_path:
                     import os
                     filename = os.path.basename(actual_output_path)
-                    # Return relative path that Node.js server can serve from /files endpoint
-                    relative_path = f"server/dist/uploads/{filename}"
+                    # Since Python API and Node.js server are on different servers,
+                    # we need to return the filename only, and let Node.js server handle the serving
+                    relative_path = filename
                     print(f"🎤 TTS file created: {actual_output_path}")
                     print(f"🎤 Serving as: {relative_path}")
                 else:
@@ -920,6 +921,31 @@ def admin_api_toggle_google_api():
             return jsonify({"success": True, "message": "Google API services disabled"})
         else:
             return jsonify({"success": False, "message": "Failed to disable Google API services"})
+
+# Serve TTS files
+@app.route('/uploads/<filename>')
+def serve_tts_file(filename):
+    """Serve TTS files created by the Python API"""
+    try:
+        # Try to find the file in common locations
+        possible_paths = [
+            os.path.join('server', 'dist', 'uploads', filename),
+            os.path.join('uploads', filename),
+            os.path.join('tts_output', filename),
+            filename  # Direct filename
+        ]
+        
+        for file_path in possible_paths:
+            if os.path.exists(file_path):
+                print(f"🔍 [PYTHON_API] Serving TTS file: {file_path}")
+                return send_from_directory(os.path.dirname(file_path), os.path.basename(file_path))
+        
+        print(f"🔍 [PYTHON_API] TTS file not found: {filename}")
+        return jsonify({"error": "File not found"}), 404
+        
+    except Exception as e:
+        print(f"🔍 [PYTHON_API] Error serving TTS file: {e}")
+        return jsonify({"error": "Failed to serve file"}), 500
 
 if __name__ == '__main__':
     print("Starting Python Speech Analysis API...")
