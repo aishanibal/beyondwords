@@ -1895,11 +1895,11 @@ const AnalyzeContentInner = () => {
           feedback_language: userPreferences.feedbackLanguage
         };
 
-        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://beyondwords-express.onrender.com';
         console.log('🔍 [FRONTEND] sessionLanguage before AI call:', language);
         console.log('🔍 [FRONTEND] Calling AI response API with data:', aiResponseData);
         
-        const aiResponseResponse = await axios.post(`${backendUrl}/api/ai_response`, aiResponseData, {
+        // Use internal Next.js API route to proxy to backend, avoiding env/base URL mismatches
+        const aiResponseResponse = await axios.post('/api/ai_response', aiResponseData, {
           headers: {
             'Content-Type': 'application/json',
             ...(token ? { Authorization: `Bearer ${token}` } : {})
@@ -2041,9 +2041,8 @@ const AnalyzeContentInner = () => {
       setIsLoadingSuggestions(true);
       try {
         const token = localStorage.getItem('jwt');
-        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://beyondwords-express.onrender.com';
         const response = await axios.post(
-          `${backendUrl}/api/suggestions`,
+          '/api/suggestions',
           {
             conversationId: conversationId,
             language: language,
@@ -2104,9 +2103,8 @@ const AnalyzeContentInner = () => {
       setIsLoadingSuggestions(true);
       try {
         const token = localStorage.getItem('jwt');
-        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://beyondwords-express.onrender.com';
         const response = await axios.post(
-          `${backendUrl}/api/suggestions`,
+          '/api/suggestions',
           {
             conversationId: conversationId,
             language: language,
@@ -4177,10 +4175,10 @@ const AnalyzeContentInner = () => {
           description: conversationDescription
         };
   
-        console.log('[DEBUG] quickTranslation() calling backend with:', { url: `${backendUrl}/api/quick_translation`, requestData });
+        console.log('[DEBUG] quickTranslation() calling backend with:', { url: `/api/quick_translation`, requestData });
         
         const response = await axios.post(
-          `${backendUrl}/api/quick_translation`,
+          `/api/quick_translation`,
           requestData,
           token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
         );
