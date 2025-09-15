@@ -2,8 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest) {
   try {
+    console.log('[API] GET /api/user/language-dashboards called');
+    console.log('[API] Authorization header:', request.headers.get('Authorization') ? 'Present' : 'Missing');
+    
     // Proxy the request to the Express server
     const backendUrl = process.env.BACKEND_URL || 'https://heirloom-express-backend.onrender.com';
+    console.log('[API] Backend URL:', backendUrl);
+    
     const response = await fetch(`${backendUrl}/api/user/language-dashboards`, {
       method: 'GET',
       headers: {
@@ -11,13 +16,15 @@ export async function GET(request: NextRequest) {
       },
     });
 
+    console.log('[API] Backend response status:', response.status);
     const data = await response.json();
+    console.log('[API] Backend response data:', data);
     
     return NextResponse.json(data, { status: response.status });
   } catch (error) {
-    console.error('Get language dashboards proxy error:', error);
+    console.error('[API] Get language dashboards proxy error:', error);
     return NextResponse.json(
-      { error: 'Language dashboards service unavailable' },
+      { error: 'Language dashboards service unavailable', details: error.message },
       { status: 500 }
     );
   }
