@@ -1897,6 +1897,8 @@ const AnalyzeContentInner = () => {
         };
         
   
+        console.log('🔍 [FRONTEND] Calling AI response API with data:', aiResponseData);
+        
         const aiResponseResponse = await axios.post('/api/ai_response', aiResponseData, {
           headers: {
             'Content-Type': 'application/json',
@@ -1904,7 +1906,13 @@ const AnalyzeContentInner = () => {
           }
         });
         
+        console.log('🔍 [FRONTEND] AI response API response:', {
+          status: aiResponseResponse.status,
+          data: aiResponseResponse.data
+        });
+        
         const aiResponse = aiResponseResponse.data.response;
+        console.log('🔍 [FRONTEND] Extracted AI response:', aiResponse);
         
                 // Add AI response if present
           if (aiResponse) {
