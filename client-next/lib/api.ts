@@ -2,7 +2,7 @@
 // API client for server communication
 import axios from 'axios';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://heirloom-express-backend.onrender.com';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '';
 
 // Helper function to get auth token
 const getAuthToken = (): string | null => {
