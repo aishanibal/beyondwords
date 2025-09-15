@@ -29,9 +29,9 @@ services:
   # Python API Backend (Port 5000) - with espeak installation
   - type: web
     name: heirloom-python-api
-    env: docker
+    env: python
     plan: starter
-    dockerfilePath: ./Dockerfile
+    buildCommand: bash install_espeak.sh
     envVars:
       - key: PORT
         value: 5000
