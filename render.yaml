@@ -26,12 +26,12 @@ services:
       - key: GOOGLE_CLOUD_PROJECT
         sync: false
 
-  # Python API Backend (Port 5000) - with espeak installation
+  # Python API Backend (Port 5000) - with pure Python TTS
   - type: web
     name: heirloom-python-api
     env: python
     plan: starter
-    buildCommand: bash install_espeak.sh
+    buildCommand: pip install -r requirements.txt
     envVars:
       - key: PORT
         value: 5000

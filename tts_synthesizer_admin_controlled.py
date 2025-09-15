@@ -472,6 +472,23 @@ class AdminControlledTTSSynthesizer:
                     return output_path
                     
             elif self.system == 'linux':
+                print("🖥️ Linux system TTS: Trying pure Python TTS first...")
+                
+                # Try pure Python TTS first (no system dependencies)
+                try:
+                    from python_tts import synthesize_speech_python
+                    result = synthesize_speech_python(text, language_code, output_path)
+                    if result and os.path.exists(result):
+                        print("✅ Pure Python TTS successful!")
+                        return result
+                    else:
+                        print("⚠️ Pure Python TTS failed, trying espeak...")
+                except ImportError as e:
+                    print(f"⚠️ Pure Python TTS not available: {e}, trying espeak...")
+                except Exception as e:
+                    print(f"⚠️ Pure Python TTS error: {e}, trying espeak...")
+                
+                # Fallback to espeak if pure Python TTS fails
                 print("🖥️ Linux system TTS: Attempting to use espeak...")
                 print(f"🖥️ Current working directory: {os.getcwd()}")
                 print(f"🖥️ PATH environment: {os.environ.get('PATH', 'Not set')}")
@@ -581,7 +598,24 @@ class AdminControlledTTSSynthesizer:
                 except Exception as e:
                     print(f"⚠️ festival error: {e}")
                 
-                print("🖥️ No Linux TTS engines available, will use fallback services")
+                print("🖥️ No Linux TTS engines available, trying simple TTS fallback...")
+                
+                # Try simple TTS as last resort
+                try:
+                    from simple_tts import synthesize_speech as simple_synthesize
+                    print("🖥️ Trying simple TTS fallback...")
+                    result = simple_synthesize(text, language_code, output_path)
+                    if result and os.path.exists(result):
+                        print(f"✅ Simple TTS fallback successful: {result}")
+                        return result
+                    else:
+                        print("⚠️ Simple TTS fallback failed")
+                except ImportError:
+                    print("⚠️ Simple TTS module not available")
+                except Exception as e:
+                    print(f"⚠️ Simple TTS error: {e}")
+                
+                print("🖥️ All Linux TTS methods failed, will use fallback services")
                 return None
                     
         except Exception as e:
