@@ -1868,8 +1868,15 @@ app.post('/api/quick_translation', authenticateJWT, async (req: Request, res: Re
   }
 });
 
-// Serve uploads directory statically for TTS audio
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// Serve uploads directory statically for TTS audio with proper CORS headers
+app.use('/uploads', (req, res, next) => {
+  // Set CORS headers for audio files
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+  res.header('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
+  next();
+}, express.static(path.join(__dirname, 'uploads')));
 
 // Also serve files from the current directory (where Python API might create files)
 app.use('/files', express.static(path.join(__dirname, '..')));

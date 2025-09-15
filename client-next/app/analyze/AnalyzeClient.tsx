@@ -2663,21 +2663,40 @@ const AnalyzeContentInner = () => {
           const ttsUrl = (aiMessage as any).ttsUrl;
           const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://beyondwords-express.onrender.com';
           const audioUrl = ttsUrl.startsWith('http') ? ttsUrl : `${backendUrl}${ttsUrl}`;
+          
+          console.log('[DEBUG] TTS URL details:', {
+            originalTtsUrl: ttsUrl,
+            backendUrl: backendUrl,
+            finalAudioUrl: audioUrl
+          });
+          
           try {
+            console.log('[DEBUG] Checking audio file availability:', audioUrl);
             const headResponse = await fetch(audioUrl, { method: 'HEAD' });
+            console.log('[DEBUG] HEAD response status:', headResponse.status);
+            console.log('[DEBUG] HEAD response headers:', Object.fromEntries(headResponse.headers.entries()));
+            
             if (headResponse.ok) {
+              console.log('[DEBUG] Audio file is accessible, creating Audio object');
               const audio = new window.Audio(audioUrl);
               ttsAudioRef.current = audio;
+              
+              audio.addEventListener('loadstart', () => console.log('[DEBUG] Audio loading started'));
+              audio.addEventListener('canplay', () => console.log('[DEBUG] Audio can play'));
+              audio.addEventListener('error', (e) => console.error('[DEBUG] Audio error event:', e));
+              
               audio.onended = () => {
                 ttsAudioRef.current = null;
                 console.log('[DEBUG] Initial AI TTS finished playing');
               };
+              
+              console.log('[DEBUG] Attempting to play audio');
               audio.play().catch(error => {
                 console.error('Failed to play initial TTS audio:', error);
                 ttsAudioRef.current = null;
               });
             } else {
-              console.log('[DEBUG] Initial TTS file not found, skipping TTS playback');
+              console.log('[DEBUG] Initial TTS file not found (status:', headResponse.status, '), skipping TTS playback');
             }
           } catch (fetchError: unknown) {
             console.error('Error checking initial TTS audio file:', fetchError);
