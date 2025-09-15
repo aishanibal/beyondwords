@@ -8,7 +8,7 @@ export async function DELETE(
     const { id } = params;
     
     // Proxy the request to the Express server
-    const backendUrl = process.env.BACKEND_URL || 'https://heirloom-express-backend.onrender.com';
+    const backendUrl = process.env.BACKEND_URL || 'https://beyondwords-express.onrender.com';
     const response = await fetch(`${backendUrl}/api/personas/${id}`, {
       method: 'DELETE',
       headers: {

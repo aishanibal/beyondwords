@@ -9,7 +9,7 @@ export async function POST(
     const body = await request.json();
     
     // Proxy the request to the Express server
-    const backendUrl = process.env.BACKEND_URL || 'https://heirloom-express-backend.onrender.com';
+    const backendUrl = process.env.BACKEND_URL || 'https://beyondwords-express.onrender.com';
     const response = await fetch(`${backendUrl}/api/conversations/${id}/messages`, {
       method: 'POST',
       headers: {

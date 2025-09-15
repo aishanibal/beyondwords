@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 export async function GET(request: NextRequest) {
   try {
     // Proxy the request to the Express server
-    const backendUrl = process.env.BACKEND_URL || 'https://heirloom-express-backend.onrender.com';
+    const backendUrl = process.env.BACKEND_URL || 'https://beyondwords-express.onrender.com';
     const response = await fetch(`${backendUrl}/api/user`, {
       method: 'GET',
       headers: {
@@ -28,7 +28,7 @@ export async function PUT(request: NextRequest) {
     const body = await request.json();
     
     // Proxy the request to the Express server
-    const backendUrl = process.env.BACKEND_URL || 'https://heirloom-express-backend.onrender.com';
+    const backendUrl = process.env.BACKEND_URL || 'https://beyondwords-express.onrender.com';
     const response = await fetch(`${backendUrl}/api/user/profile`, {
       method: 'PUT',
       headers: {

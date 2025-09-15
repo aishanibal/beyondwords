@@ -6,7 +6,7 @@ export async function GET(request: NextRequest) {
     console.log('[API] Authorization header:', request.headers.get('Authorization') ? 'Present' : 'Missing');
     
     // Proxy the request to the Express server
-    const backendUrl = process.env.BACKEND_URL || 'https://heirloom-express-backend.onrender.com';
+    const backendUrl = process.env.BACKEND_URL || 'https://beyondwords-express.onrender.com';
     console.log('[API] Backend URL:', backendUrl);
     
     const response = await fetch(`${backendUrl}/api/personas`, {
@@ -17,6 +17,16 @@ export async function GET(request: NextRequest) {
     });
 
     console.log('[API] Backend response status:', response.status);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.log('[API] Backend error response:', errorText);
+      return NextResponse.json(
+        { error: 'Backend service unavailable', status: response.status, details: errorText },
+        { status: 500 }
+      );
+    }
+    
     const data = await response.json();
     console.log('[API] Backend response data:', data);
     
@@ -35,7 +45,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     
     // Proxy the request to the Express server
-    const backendUrl = process.env.BACKEND_URL || 'https://heirloom-express-backend.onrender.com';
+    const backendUrl = process.env.BACKEND_URL || 'https://beyondwords-express.onrender.com';
     const response = await fetch(`${backendUrl}/api/personas`, {
       method: 'POST',
       headers: {
@@ -45,6 +55,15 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify(body),
     });
 
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.log('[API] Backend error response:', errorText);
+      return NextResponse.json(
+        { error: 'Backend service unavailable', status: response.status, details: errorText },
+        { status: 500 }
+      );
+    }
+    
     const data = await response.json();
     
     return NextResponse.json(data, { status: response.status });

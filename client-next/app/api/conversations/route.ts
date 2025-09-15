@@ -6,7 +6,7 @@ export async function GET(request: NextRequest) {
     const language = searchParams.get('language');
     
     // Proxy the request to the Express server
-    const backendUrl = process.env.BACKEND_URL || 'https://heirloom-express-backend.onrender.com';
+    const backendUrl = process.env.BACKEND_URL || 'https://beyondwords-express.onrender.com';
     const url = language ? `${backendUrl}/api/conversations?language=${language}` : `${backendUrl}/api/conversations`;
     
     const response = await fetch(url, {
@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     
     // Proxy the request to the Express server
-    const backendUrl = process.env.BACKEND_URL || 'https://heirloom-express-backend.onrender.com';
+    const backendUrl = process.env.BACKEND_URL || 'https://beyondwords-express.onrender.com';
     const response = await fetch(`${backendUrl}/api/conversations`, {
       method: 'POST',
       headers: {
