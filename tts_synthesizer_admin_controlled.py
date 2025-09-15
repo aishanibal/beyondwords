@@ -473,11 +473,16 @@ class AdminControlledTTSSynthesizer:
                     
             elif self.system == 'linux':
                 print("🖥️ Linux system TTS: Attempting to use espeak...")
+                print(f"🖥️ Current working directory: {os.getcwd()}")
+                print(f"🖥️ PATH environment: {os.environ.get('PATH', 'Not set')}")
                 
                 # Try espeak with proper voice mapping
                 try:
                     # Check if espeak is available
+                    print("🖥️ Checking for espeak...")
                     result = subprocess.run(['which', 'espeak'], capture_output=True, text=True)
+                    print(f"🖥️ which espeak result: returncode={result.returncode}, stdout='{result.stdout.strip()}', stderr='{result.stderr.strip()}'")
+                    
                     if result.returncode == 0:
                         print("🖥️ espeak found, attempting to use it...")
                         
