@@ -1296,7 +1296,7 @@ const AnalyzeContentInner = () => {
       try {
         const token = localStorage.getItem('jwt');
         
-        // Call the Node.js server which will route to Python API with admin controls
+        // Call the TTS API (will be routed to Node.js server via Next.js rewrites)
         const response = await axios.post('/api/tts', {
           text,
           language

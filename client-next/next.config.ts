@@ -48,6 +48,10 @@ const nextConfig: NextConfig = {
         destination: `${backendUrl}/api/quick_translation`, // Express backend
       },
       {
+        source: '/api/tts',
+        destination: `${backendUrl}/api/tts-test`, // Express backend
+      },
+      {
         source: '/api/user/:path*',
         destination: `${backendUrl}/api/user/:path*`, // Express backend
       },
