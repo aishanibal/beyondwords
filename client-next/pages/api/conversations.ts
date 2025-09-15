@@ -3,7 +3,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import axios from 'axios';
 
 // Build backend URL from a known base. Avoid using a misconfigured BACKEND_URL that could be '/'
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://beyondwords-express.onrender.com';
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://heirloom-express-backend.onrender.com';
 const BACKEND_URL = `${API_BASE}/api/conversations`;
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
