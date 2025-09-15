@@ -783,7 +783,6 @@ const AnalyzeContentInner = () => {
         return null;
       }
     };
-  
     const loadExistingConversation = async (convId: string | null) => {
       if (!user || !convId) {
         return;
@@ -1422,7 +1421,6 @@ const AnalyzeContentInner = () => {
         setIsPlayingAnyTTS(false);
       }
     };
-  
     const getTTSUrl = async (text: string, language: string) => null;
     const playTTS = async (url: string) => {};
     // Enhanced Japanese romanization with comprehensive debug information
@@ -1809,8 +1807,8 @@ const AnalyzeContentInner = () => {
         // Step 1: Get transcription first with language detection
         const formData = new FormData();
         formData.append('audio', audioBlob, 'recording.webm');
-        // Don't specify language - let the backend detect it automatically
-        // formData.append('language', language);
+        // Explicitly pass the selected language to guide transcription (e.g., 'tl' for Tagalog)
+        formData.append('language', language);
         
         // Add JWT token to headers
         const token = localStorage.getItem('jwt');
@@ -1888,7 +1886,7 @@ const AnalyzeContentInner = () => {
         const aiResponseData = {
           transcription: transcription,
           chat_history: updatedChatHistory,
-          language: detectedLanguage, // Use detected language for AI processing
+          language: language, // Use session-selected language for consistency
           user_level: userPreferences.userLevel,
           user_topics: userPreferences.topics,
           user_goals: user?.learning_goals ? (typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : user.learning_goals) : [],
@@ -2041,8 +2039,9 @@ const AnalyzeContentInner = () => {
       setIsLoadingSuggestions(true);
       try {
         const token = localStorage.getItem('jwt');
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://beyondwords-express.onrender.com';
         const response = await axios.post(
-          '/api/suggestions',
+          `${backendUrl}/api/suggestions`,
           {
             conversationId: conversationId,
             language: language,
@@ -2103,8 +2102,9 @@ const AnalyzeContentInner = () => {
       setIsLoadingSuggestions(true);
       try {
         const token = localStorage.getItem('jwt');
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://beyondwords-express.onrender.com';
         const response = await axios.post(
-          '/api/suggestions',
+          `${backendUrl}/api/suggestions`,
           {
             conversationId: conversationId,
             language: language,
@@ -3673,7 +3673,6 @@ const AnalyzeContentInner = () => {
         return { mainText: message.text, romanizedText: romanizedText };
       }
     };
-  
     // Helper function to get the appropriate text for TTS based on romanization display preference
     const getTTSText = (message: ChatMessage, romanizationDisplay: string | undefined, language: string): string => {
       console.log('[DEBUG] getTTSText called with:', { 
@@ -4163,6 +4162,7 @@ const AnalyzeContentInner = () => {
       
       try {
         const token = localStorage.getItem('jwt');
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://beyondwords-express.onrender.com';
         const requestData = {
           ai_message: text,
           language: language,
@@ -4174,10 +4174,10 @@ const AnalyzeContentInner = () => {
           description: conversationDescription
         };
   
-        console.log('[DEBUG] quickTranslation() calling /api/quick_translation with:', requestData);
+        console.log('[DEBUG] quickTranslation() calling backend with:', { url: `${backendUrl}/api/quick_translation`, requestData });
         
         const response = await axios.post(
-          '/api/quick_translation',
+          `${backendUrl}/api/quick_translation`,
           requestData,
           token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
         );
@@ -4791,7 +4791,6 @@ const AnalyzeContentInner = () => {
       }
     };
     // --- END PAGINATION LOGIC ---
-    
     return (
       <div className="analyze-page" style={{ 
         display: 'flex', 
