@@ -793,7 +793,8 @@ const AnalyzeContentInner = () => {
         
         const conversation = response.data.conversation;
         setConversationId(conversation.id);
-        setLanguage(conversation.language);
+        // Preserve the user's current session language if already chosen
+        setLanguage((prev) => prev || conversation.language);
         
         // Extract user preferences from conversation
         const formality = conversation.formality || 'friendly';
