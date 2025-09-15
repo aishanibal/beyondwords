@@ -418,16 +418,12 @@ app.post('/api/analyze', authenticateJWT, upload.single('audio'), async (req: Re
       });
       
       if (ttsResponse.data.success && ttsResponse.data.output_path) {
-        // Check if file was created
-        if (fs.existsSync(ttsFilePath)) {
-          const stats = fs.statSync(ttsFilePath);
-          console.log('TTS file created, size:', stats.size, 'bytes');
-          ttsUrl = `/uploads/${ttsFileName}`;
-          console.log('TTS audio generated at:', ttsUrl);
-        } else {
-          console.error('TTS file was not created');
-          ttsUrl = null;
-        }
+        // Use the relative path returned by Python API for serving
+        const relativePath = ttsResponse.data.output_path;
+        const fileName = path.basename(relativePath);
+        ttsUrl = `/files/${fileName}`;
+        console.log('TTS audio generated at:', ttsUrl);
+        console.log('TTS relative path:', relativePath);
       } else {
         console.error('TTS generation failed:', ttsResponse.data.error);
         ttsUrl = null;
@@ -1951,41 +1947,33 @@ async function generateTTSWithDebug(text: string, language: string): Promise<{ t
     console.log(`🎯 [TTS DEBUG] Extracted debug info:`, debugInfo);
     
     if (ttsResponse.data.success && ttsResponse.data.output_path) {
-      // Use the actual file path returned by Python API
-      const actualFilePath = ttsResponse.data.output_path;
-      console.log(`🎯 [TTS DEBUG] Actual file path from Python API: ${actualFilePath}`);
+      // Use the relative path returned by Python API for serving
+      const relativePath = ttsResponse.data.output_path;
+      const actualPath = ttsResponse.data.actual_path;
       
-      // Check if file was created
-      if (fs.existsSync(actualFilePath)) {
-        const stats = fs.statSync(actualFilePath);
-        console.log('🎯 [TTS DEBUG] TTS file created, size:', stats.size, 'bytes');
-        
-        // Get the filename from the path
-        const fileName = path.basename(actualFilePath);
-        
-        // Check if file is in uploads directory or root directory
-        const isInUploads = actualFilePath.includes('uploads');
-        const ttsUrl = isInUploads ? `/uploads/${fileName}` : `/files/${fileName}`;
-        
-        console.log('🎯 [TTS DEBUG] TTS audio generated at:', ttsUrl);
-        console.log('🎯 [TTS DEBUG] File location:', isInUploads ? 'uploads directory' : 'root directory');
-        console.log('🎯 [TTS DEBUG] File extension:', path.extname(actualFilePath));
-        
-        return {
-          ttsUrl: ttsUrl,
-          debug: debugInfo
-        };
-      } else {
-        console.error('🎯 [TTS DEBUG] TTS file was not created at expected path');
-        return {
-          ttsUrl: null,
-          debug: {
-            ...debugInfo,
-            fallback_reason: 'File not created',
-            error: 'TTS file was not created at expected path'
-          }
-        };
-      }
+      console.log(`🎯 [TTS DEBUG] Relative path from Python API: ${relativePath}`);
+      console.log(`🎯 [TTS DEBUG] Actual path from Python API: ${actualPath}`);
+      
+      // The Python API now returns a relative path that we can serve directly
+      // Convert to the correct URL path for serving
+      const fileName = path.basename(relativePath);
+      const ttsUrl = `/files/${fileName}`;
+      
+      console.log('🎯 [TTS DEBUG] TTS audio will be served at:', ttsUrl);
+      console.log('🎯 [TTS DEBUG] File extension:', path.extname(relativePath));
+      
+      // Note: We don't check if the file exists locally because the Python API
+      // creates the file on its server, and we serve it via the /files endpoint
+      
+      return {
+        ttsUrl: ttsUrl,
+        debug: {
+          ...debugInfo,
+          relative_path: relativePath,
+          actual_path: actualPath,
+          serving_url: ttsUrl
+        }
+      };
     } else {
       console.error('🎯 [TTS DEBUG] TTS generation failed:', ttsResponse.data.error);
       return {

@@ -657,6 +657,12 @@ def generate_tts():
         
         print(f"🎤 TTS request - Language: {language_code}, Text length: {len(text)}")
         
+        # Ensure the output directory exists
+        import os
+        output_dir = os.path.dirname(output_path)
+        if output_dir:
+            os.makedirs(output_dir, exist_ok=True)
+        
         # Generate TTS with debug info
         result = synthesize_speech(text, language_code, output_path)
         
@@ -664,9 +670,24 @@ def generate_tts():
         if isinstance(result, dict):
             # New format with debug info
             if result.get('success'):
+                # Get the actual file path from the result
+                actual_output_path = result.get('output_path')
+                
+                # Convert absolute path to relative path for serving
+                if actual_output_path:
+                    import os
+                    filename = os.path.basename(actual_output_path)
+                    # Return relative path that Node.js server can serve from /files endpoint
+                    relative_path = f"server/dist/uploads/{filename}"
+                    print(f"🎤 TTS file created: {actual_output_path}")
+                    print(f"🎤 Serving as: {relative_path}")
+                else:
+                    relative_path = None
+                
                 return jsonify({
                     "success": True,
-                    "output_path": result.get('output_path'),
+                    "output_path": relative_path,  # Return relative path for serving
+                    "actual_path": actual_output_path,  # Keep actual path for debugging
                     "message": "TTS generated successfully",
                     # Include debug information
                     "service_used": result.get('service_used', 'unknown'),
