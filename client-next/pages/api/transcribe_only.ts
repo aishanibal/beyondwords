@@ -73,14 +73,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     try {
       console.log('🔍 [TRANSCRIBE_API] Calling Python backend:', {
         url: BACKEND_URL,
-        audio_file: tempFilePath,
+        audio_data: `base64_${audioBuffer.length}_bytes`,
         language: fields.language || 'en',
         audio_size: audioBuffer.length
       });
 
-      // Send JSON request to Python backend with file path
+      // Send audio data directly as base64 instead of file path
       const response = await axios.post(BACKEND_URL, {
-        audio_file: tempFilePath,
+        audio_data: audioBuffer.toString('base64'),
+        audio_filename: audioFilename,
         language: fields.language || 'en'
       }, {
         headers: {

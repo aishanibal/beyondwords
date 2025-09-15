@@ -152,42 +152,70 @@ def transcribe_only():
     """Transcribe audio only without AI response"""
     try:
         data = request.get_json()
-        audio_file = data.get('audio_file')
+        audio_data = data.get('audio_data')
+        audio_filename = data.get('audio_filename', 'recording.webm')
         language = data.get('language', 'en')
         
         print(f"🔍 [PYTHON_API] Transcribe only request - Language: {language}")
-        print(f"🔍 [PYTHON_API] Audio file path: {audio_file}")
+        print(f"🔍 [PYTHON_API] Audio filename: {audio_filename}")
         
-        # Check if audio file exists
+        if not audio_data:
+            print(f"🔍 [PYTHON_API] No audio data provided")
+            return jsonify({
+                "error": "No audio data provided",
+                "transcription": ""
+            })
+        
+        # Decode base64 audio data
+        import base64
+        import tempfile
         import os
-        if not os.path.exists(audio_file):
-            print(f"🔍 [PYTHON_API] Audio file not found: {audio_file}")
+        
+        try:
+            audio_bytes = base64.b64decode(audio_data)
+            print(f"🔍 [PYTHON_API] Decoded audio data, size: {len(audio_bytes)} bytes")
+        except Exception as e:
+            print(f"🔍 [PYTHON_API] Failed to decode base64 audio data: {e}")
             return jsonify({
-                "error": "Audio file not found",
+                "error": "Invalid audio data format",
                 "transcription": ""
             })
         
-        print(f"🔍 [PYTHON_API] Audio file exists, size: {os.path.getsize(audio_file)} bytes")
+        # Save audio data to temporary file
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.webm') as temp_file:
+            temp_file.write(audio_bytes)
+            temp_audio_path = temp_file.name
         
-        # Get transcription
-        print(f"🔍 [PYTHON_API] Calling transcribe_audio function...")
-        transcription = transcribe_audio(audio_file, language)
+        print(f"🔍 [PYTHON_API] Saved audio to temporary file: {temp_audio_path}")
         
-        print(f"🔍 [PYTHON_API] Transcription result: '{transcription}'")
-        
-        if not transcription:
-            print(f"🔍 [PYTHON_API] No transcription returned")
+        try:
+            # Get transcription
+            print(f"🔍 [PYTHON_API] Calling transcribe_audio function...")
+            transcription = transcribe_audio(temp_audio_path, language)
+            
+            print(f"🔍 [PYTHON_API] Transcription result: '{transcription}'")
+            
+            if not transcription:
+                print(f"🔍 [PYTHON_API] No transcription returned")
+                return jsonify({
+                    "error": "Could not transcribe audio",
+                    "transcription": ""
+                })
+            
+            print(f"📝 Transcription: {transcription}")
+            
             return jsonify({
-                "error": "Could not transcribe audio",
-                "transcription": ""
+                "transcription": transcription,
+                "success": True
             })
-        
-        print(f"📝 Transcription: {transcription}")
-        
-        return jsonify({
-            "transcription": transcription,
-            "success": True
-        })
+            
+        finally:
+            # Clean up temporary file
+            try:
+                os.unlink(temp_audio_path)
+                print(f"🔍 [PYTHON_API] Cleaned up temporary file: {temp_audio_path}")
+            except Exception as cleanup_error:
+                print(f"🔍 [PYTHON_API] Warning: Could not clean up temporary file: {cleanup_error}")
         
     except Exception as e:
         print(f"❌ Transcribe only error: {e}")
