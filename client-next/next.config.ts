@@ -12,7 +12,7 @@ const nextConfig: NextConfig = {
     typedRoutes: false,
   },
   async rewrites() {
-    const backendUrl = process.env.BACKEND_URL || 'http://localhost:4000';
+    const backendUrl = process.env.BACKEND_URL || 'https://beyondwords-express.onrender.com';
     
     return [
       {
@@ -78,8 +78,7 @@ const nextConfig: NextConfig = {
       {
         source: '/api/messages/feedback',
         destination: `${backendUrl}/api/messages/feedback`, // Express backend
-      }
-      ,
+      },
       {
         source: '/api/explain_suggestion',
         destination: `${backendUrl}/api/explain_suggestion`, // Express backend
@@ -87,6 +86,10 @@ const nextConfig: NextConfig = {
       {
         source: '/api/tts',
         destination: `${backendUrl}/api/tts`, // Express backend
+      },
+      {
+        source: '/api/personas',
+        destination: `${backendUrl}/api/personas`, // Express backend
       }
     ];
   },

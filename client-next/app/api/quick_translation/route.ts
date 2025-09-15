@@ -5,7 +5,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     
     // Proxy the request to the Express server
-    const backendUrl = process.env.BACKEND_URL || 'http://localhost:4000';
+    const backendUrl = process.env.BACKEND_URL || 'https://beyondwords-express.onrender.com';
     const response = await fetch(`${backendUrl}/api/quick_translation`, {
       method: 'POST',
       headers: {

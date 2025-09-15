@@ -1337,7 +1337,7 @@ const AnalyzeContentInner = () => {
         const ttsUrl = await generateTTSForText(text, language, cacheKey);
         if (ttsUrl) {
           // Handle both relative and absolute URLs from backend
-          const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
+          const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://beyondwords-express.onrender.com';
           const audioUrl = ttsUrl.startsWith('http') ? ttsUrl : `${backendUrl}${ttsUrl}`;
           const audio = new window.Audio(audioUrl);
           ttsAudioRef.current = audio;
@@ -2661,7 +2661,7 @@ const AnalyzeContentInner = () => {
           console.log('[DEBUG] Playing initial AI message TTS:', (aiMessage as any).ttsUrl);
           // Handle both relative and absolute URLs from backend
           const ttsUrl = (aiMessage as any).ttsUrl;
-          const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
+          const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://beyondwords-express.onrender.com';
           const audioUrl = ttsUrl.startsWith('http') ? ttsUrl : `${backendUrl}${ttsUrl}`;
           try {
             const headResponse = await fetch(audioUrl, { method: 'HEAD' });
