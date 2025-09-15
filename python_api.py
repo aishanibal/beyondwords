@@ -155,12 +155,28 @@ def transcribe_only():
         audio_file = data.get('audio_file')
         language = data.get('language', 'en')
         
-        print(f"🎤 Transcribe only request - Language: {language}")
+        print(f"🔍 [PYTHON_API] Transcribe only request - Language: {language}")
+        print(f"🔍 [PYTHON_API] Audio file path: {audio_file}")
+        
+        # Check if audio file exists
+        import os
+        if not os.path.exists(audio_file):
+            print(f"🔍 [PYTHON_API] Audio file not found: {audio_file}")
+            return jsonify({
+                "error": "Audio file not found",
+                "transcription": ""
+            })
+        
+        print(f"🔍 [PYTHON_API] Audio file exists, size: {os.path.getsize(audio_file)} bytes")
         
         # Get transcription
+        print(f"🔍 [PYTHON_API] Calling transcribe_audio function...")
         transcription = transcribe_audio(audio_file, language)
         
+        print(f"🔍 [PYTHON_API] Transcription result: '{transcription}'")
+        
         if not transcription:
+            print(f"🔍 [PYTHON_API] No transcription returned")
             return jsonify({
                 "error": "Could not transcribe audio",
                 "transcription": ""
@@ -175,6 +191,8 @@ def transcribe_only():
         
     except Exception as e:
         print(f"❌ Transcribe only error: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
             "error": str(e),
             "transcription": ""
