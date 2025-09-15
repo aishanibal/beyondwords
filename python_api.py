@@ -8,7 +8,7 @@ import shutil
 from werkzeug.utils import secure_filename
 import numpy as np
 import datetime
-from gemini_client import get_conversational_response, get_detailed_feedback, get_text_suggestions, get_translation, is_gemini_ready, get_short_feedback, get_detailed_breakdown, create_tutor, get_quick_translation, get_quick_translation_hybrid_with_meta
+from gemini_client import get_conversational_response, get_detailed_feedback, get_text_suggestions, get_translation, is_gemini_ready, get_short_feedback, get_detailed_breakdown, create_tutor, get_quick_translation
 from tts_synthesizer_admin_controlled import synthesize_speech
 
 # Use Gemini for transcription
@@ -26,8 +26,7 @@ app.secret_key = os.urandom(24)  # For session management
 CORS(app)
 
 # Check API key at startup
-api_key = os.getenv("
-GOOGLE_API_KEY")
+api_key = os.getenv("GOOGLE_API_KEY")
 if not api_key:
     print("⚠️ WARNING: GOOGLE_API_KEY environment variable is not set!")
     print("   The AI features will not work. Please set your API key:")
@@ -623,8 +622,8 @@ def quick_translation():
         
         print(f"🌐 Quick translation request - Language: {language}")
         
-        # Get quick translation (hybrid with source metadata)
-        result = get_quick_translation_hybrid_with_meta(
+        # Get quick translation
+        translation = get_quick_translation(
             ai_message,
             language,
             user_level,
@@ -636,8 +635,7 @@ def quick_translation():
         )
         
         return jsonify({
-            "translation": result.get("translation", ""),
-            "source": result.get("source", "UNKNOWN"),
+            "translation": translation,
             "success": True
         })
         
@@ -728,76 +726,33 @@ def generate_tts():
 @app.route('/admin')
 def admin_index():
     """Main admin dashboard page"""
-    try:
-        from admin_dashboard import AdminDashboard
-        dashboard = AdminDashboard()
-        
-        return jsonify({
-            "message": "Admin dashboard is available",
-            "status": "ok",
-            "time": datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            "system_status": dashboard.get_system_status(),
-            "login_url": "/admin/login",
-            "api_endpoints": {
-                "status": "/admin/api/status",
-                "enable_gemini": "/admin/api/enable_gemini",
-                "disable_gemini": "/admin/api/disable_gemini",
-                "update_settings": "/admin/api/update_settings"
-            }
-        })
-    except Exception as e:
-        print(f"❌ Admin index error: {e}")
-        return jsonify({
-            "message": "Admin dashboard is temporarily disabled",
-            "status": "error",
-            "error": str(e),
-            "time": datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        }), 500
+    from admin_dashboard import AdminDashboard
+    dashboard = AdminDashboard()
+    
+    settings = dashboard.get_tts_settings()
+    usage_stats = dashboard.get_usage_stats()
+    google_api_settings = dashboard.get_google_api_settings()
+    
+    return render_template('admin_dashboard.html', 
+                         settings=settings,
+                         usage_stats=usage_stats,
+                         google_api_settings=google_api_settings)
 
 @app.route('/admin/login', methods=['GET', 'POST'])
 def admin_login():
     """Admin login page"""
-    try:
-        from admin_dashboard import AdminDashboard
-        dashboard = AdminDashboard()
-        
-        if request.method == 'POST':
-            password = request.form.get('password')
-            if dashboard.verify_password(password):
-                session['admin_logged_in'] = True
-                return redirect(url_for('admin_index'))
-            else:
-                error_msg = "Invalid password"
+    from admin_dashboard import AdminDashboard
+    dashboard = AdminDashboard()
+    
+    if request.method == 'POST':
+        password = request.form.get('password')
+        if dashboard.verify_password(password):
+            session['admin_logged_in'] = True
+            return redirect(url_for('admin_index'))
         else:
-            error_msg = None
-        
-        # Try to render template, fallback to simple HTML
-        try:
-            return render_template('login.html', error=error_msg)
-        except:
-            # Fallback HTML if template fails
-            html = f"""
-            <!DOCTYPE html>
-            <html>
-            <head><title>Admin Login</title></head>
-            <body>
-                <h1>🔐 Admin Login</h1>
-                <p>Default Password: admin123</p>
-                {"<p style='color:red'>" + error_msg + "</p>" if error_msg else ""}
-                <form method="POST">
-                    <input type="password" name="password" placeholder="Password" required>
-                    <button type="submit">Login</button>
-                </form>
-            </body>
-            </html>
-            """
-            return html
-    except Exception as e:
-        print(f"❌ Admin login error: {e}")
-        return jsonify({
-            "error": f"Admin login failed: {str(e)}",
-            "message": "Please check server logs for details"
-        }), 500
+            return render_template('login.html', error="Invalid password")
+    
+    return render_template('login.html')
 
 @app.route('/admin/logout')
 def admin_logout():
@@ -808,24 +763,17 @@ def admin_logout():
 @app.route('/admin/api/status')
 def admin_api_status():
     """Get system status as JSON"""
-    try:
-        from admin_dashboard import AdminDashboard
-        dashboard = AdminDashboard()
-        
-        if 'admin_logged_in' not in session:
-            return jsonify({"error": "Not authenticated"}), 401
-        
-        return jsonify({
-            "status": dashboard.get_system_status(),
-            "stats": dashboard.get_usage_stats(),
-            "settings": dashboard.get_tts_settings()
-        })
-    except Exception as e:
-        print(f"❌ Admin API status error: {e}")
-        return jsonify({
-            "error": f"Failed to get system status: {str(e)}",
-            "message": "Please check server logs for details"
-        }), 500
+    from admin_dashboard import AdminDashboard
+    dashboard = AdminDashboard()
+    
+    if 'admin_logged_in' not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    
+    return jsonify({
+        "status": dashboard.get_system_status(),
+        "stats": dashboard.get_usage_stats(),
+        "settings": dashboard.get_tts_settings()
+    })
 
 @app.route('/admin/api/enable_gemini', methods=['POST'])
 def admin_api_enable_gemini():
@@ -945,155 +893,6 @@ def admin_api_toggle_google_api():
             return jsonify({"success": True, "message": "Google API services disabled"})
         else:
             return jsonify({"success": False, "message": "Failed to disable Google API services"})
-
-# New Admin Dashboard Routes (avoid conflicts with existing routes)
-@app.route('/admin/dashboard')
-def admin_dashboard():
-    """Serve the admin dashboard"""
-    return render_template('admin_dashboard.html')
-
-@app.route('/admin/dashboard/api/login', methods=['POST'])
-def admin_dashboard_login():
-    """Admin login endpoint"""
-    try:
-        data = request.get_json()
-        password = data.get('password')
-        
-        if not password:
-            return jsonify({"error": "Password required"}), 400
-        
-        # Load admin config to get password hash
-        config_file = "admin_config.json"
-        if os.path.exists(config_file):
-            with open(config_file, 'r') as f:
-                config = json.load(f)
-        else:
-            return jsonify({"error": "Admin config not found"}), 500
-        
-        # Check password hash
-        import hashlib
-        password_hash = hashlib.sha256(password.encode()).hexdigest()
-        stored_hash = config.get('admin_password_hash')
-        
-        if password_hash == stored_hash:
-            session['admin_logged_in'] = True
-            return jsonify({"success": True, "message": "Login successful"})
-        else:
-            return jsonify({"error": "Invalid password"}), 401
-            
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/admin/dashboard/api/logout', methods=['POST'])
-def admin_dashboard_logout():
-    """Admin logout endpoint"""
-    session.pop('admin_logged_in', None)
-    return jsonify({"success": True, "message": "Logged out"})
-
-@app.route('/admin/dashboard/api/status', methods=['GET'])
-def admin_dashboard_status():
-    """Get current admin settings and status"""
-    if 'admin_logged_in' not in session:
-        return jsonify({"error": "Not authenticated"}), 401
-    try:
-        config_file = "admin_config.json"
-        if os.path.exists(config_file):
-            with open(config_file, 'r') as f:
-                config = json.load(f)
-        else:
-            config = {
-                "tts_settings": {
-                    "default_tts": "system",
-                    "gemini_enabled": False,
-                    "cost_limit_per_day": 1,
-                    "usage_tracking": True,
-                    "active_tts": "system"
-                },
-                "google_api_settings": {
-                    "services_enabled": True,
-                    "gemini_enabled": False,
-                    "google_cloud_tts_enabled": True
-                }
-            }
-        
-        # Add system status
-        status = {
-            "config": config,
-            "gemini_ready": is_gemini_ready(),
-            "python_api": True,
-            "timestamp": datetime.datetime.now().isoformat()
-        }
-        
-        return jsonify(status)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/admin/dashboard/api/update_tts_settings', methods=['POST'])
-def admin_dashboard_update_tts_settings():
-    """Update TTS settings"""
-    if 'admin_logged_in' not in session:
-        return jsonify({"error": "Not authenticated"}), 401
-    try:
-        data = request.get_json()
-        config_file = "admin_config.json"
-        
-        # Load current config
-        if os.path.exists(config_file):
-            with open(config_file, 'r') as f:
-                config = json.load(f)
-        else:
-            config = {}
-        
-        # Initialize tts_settings if not exists
-        if 'tts_settings' not in config:
-            config['tts_settings'] = {}
-        
-        # Update TTS settings
-        if 'gemini_enabled' in data:
-            config['tts_settings']['gemini_enabled'] = data['gemini_enabled']
-        if 'active_tts' in data:
-            config['tts_settings']['active_tts'] = data['active_tts']
-        if 'cost_limit_per_day' in data:
-            config['tts_settings']['cost_limit_per_day'] = float(data['cost_limit_per_day'])
-        if 'usage_tracking' in data:
-            config['tts_settings']['usage_tracking'] = data['usage_tracking']
-        
-        # Save config
-        with open(config_file, 'w') as f:
-            json.dump(config, f, indent=2)
-        
-        print(f"✅ TTS settings updated: {data}")
-        
-        return jsonify({
-            "success": True,
-            "message": "TTS settings updated successfully",
-            "settings": config['tts_settings']
-        })
-    except Exception as e:
-        print(f"❌ Error updating TTS settings: {e}")
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/admin/dashboard/api/test_tts', methods=['POST'])
-def admin_dashboard_test_tts():
-    """Test TTS with current settings"""
-    if 'admin_logged_in' not in session:
-        return jsonify({"error": "Not authenticated"}), 401
-    try:
-        data = request.get_json()
-        text = data.get('text', 'Hello, this is a test of the TTS system.')
-        language = data.get('language', 'en')
-        
-        # Generate a test TTS file
-        test_file = f"tts_output/admin_test_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.aiff"
-        result = synthesize_speech(text, language, test_file)
-        
-        return jsonify({
-            "success": True,
-            "message": "TTS test completed",
-            "result": result if isinstance(result, dict) else {"output_path": result}
-        })
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     print("Starting Python Speech Analysis API...")
