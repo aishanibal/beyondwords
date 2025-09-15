@@ -6,6 +6,7 @@ import { useUser } from '../ClientLayout';
 import { useDarkMode } from '../contexts/DarkModeContext';
 import axios from 'axios';
 import { useRouter } from 'next/navigation';
+import { supabase } from '../../lib/supabase';
 import { motion } from 'framer-motion';
 import TopicSelectionModal from './TopicSelectionModal';
 import PersonaModal from './PersonaModal';
@@ -237,24 +238,23 @@ const AnalyzeContentInner = () => {
     const { isDarkMode } = useDarkMode();
   
     // Helper to get JWT token
-    const getAuthHeaders = () => {
+    const getAuthHeaders = async () => {
       if (typeof window === 'undefined') return {};
       
-      // Try custom JWT first, then Supabase token
+      // Try custom JWT first
       const customJwt = localStorage.getItem('jwt');
       if (customJwt) {
         return { Authorization: `Bearer ${customJwt}` };
       }
       
-      // Fallback to Supabase token
-      const supabaseToken = localStorage.getItem('supabase.auth.token');
-      if (supabaseToken) {
-        try {
-          const tokenData = JSON.parse(supabaseToken);
-          return { Authorization: `Bearer ${tokenData.access_token}` };
-        } catch (e) {
-          console.error('Failed to parse Supabase token:', e);
+      // Get Supabase session token
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          return { Authorization: `Bearer ${session.access_token}` };
         }
+      } catch (e) {
+        console.error('Failed to get Supabase session:', e);
       }
       
       return {};
@@ -790,7 +790,7 @@ const AnalyzeContentInner = () => {
       }
       setIsLoadingConversation(true);
       try {
-        const response = await axios.get(`/api/conversations/${convId}`, { headers: getAuthHeaders() });
+        const response = await axios.get(`/api/conversations/${convId}`, { headers: await getAuthHeaders() });
         
         const conversation = response.data.conversation;
         setConversationId(conversation.id);
@@ -909,7 +909,7 @@ const AnalyzeContentInner = () => {
     ) => {
       if (user && urlConversationId) {
         try {
-          const response = await axios.get(`/api/conversations/${urlConversationId}`, { headers: getAuthHeaders() });
+          const response = await axios.get(`/api/conversations/${urlConversationId}`, { headers: await getAuthHeaders() });
           if (!response.data.conversation) {
             removeConversationParam();
           }
@@ -3344,7 +3344,7 @@ const AnalyzeContentInner = () => {
   
         // Save persona to database
         const response = await axios.post('/api/personas', personaData, {
-          headers: getAuthHeaders()
+          headers: await getAuthHeaders()
         });
   
         if (response.status === 201) {
@@ -3355,7 +3355,7 @@ const AnalyzeContentInner = () => {
                 usesPersona: true,
                 personaId: response.data.persona.id
               }, {
-                headers: getAuthHeaders()
+                headers: await getAuthHeaders()
               });
             } catch (error) {
               console.error('Error updating conversation with persona info:', error);
@@ -4727,7 +4727,7 @@ const AnalyzeContentInner = () => {
         const limit = Math.min(MESSAGES_PER_PAGE, messageCount - currentCount);
 
         const response = await axios.get(`/api/conversations/${conversationId}?limit=${limit}&offset=${offset}`, {
-          headers: getAuthHeaders()
+          headers: await getAuthHeaders()
         });
 
         const conversation = response.data.conversation;

@@ -11,11 +11,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
+    // Handle authentication - if no token provided, try without auth
+    const authHeader = req.headers.authorization;
+    const headers: any = {
+      'Content-Type': 'application/json',
+    };
+    
+    if (authHeader && authHeader !== '') {
+      headers['Authorization'] = authHeader;
+    }
+    
     const response = await axios.post(`${BACKEND_URL}/api/explain_suggestion`, req.body, {
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': req.headers.authorization || '',
-      },
+      headers,
       timeout: 30000
     });
     

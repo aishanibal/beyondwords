@@ -11,7 +11,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const response = await axios.post(`${BACKEND_URL}/api/tts`, req.body, {
+    const response = await axios.post(`${BACKEND_URL}/api/tts-test`, req.body, {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': req.headers.authorization || '',

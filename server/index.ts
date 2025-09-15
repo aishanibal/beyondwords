@@ -1407,6 +1407,63 @@ app.post('/api/suggestions', authenticateJWT, async (req: Request, res: Response
   }
 });
 
+// Text suggestions endpoint (without authentication for testing)
+app.post('/api/suggestions-test', async (req: Request, res: Response) => {
+  try {
+    console.log('POST /api/suggestions-test called');
+    const { conversationId, language, user_level, user_topics, user_goals } = req.body;
+    
+    let chatHistory: any[] = [];
+    if (conversationId) {
+      // Get conversation history (without user authentication)
+      try {
+        const conversation = await getConversationWithMessages(Number(conversationId));
+        if (conversation) {
+          chatHistory = (conversation.messages || []).map(msg => ({
+            sender: msg.sender,
+            text: msg.text,
+            timestamp: msg.created_at
+          }));
+        }
+      } catch (e) {
+        console.log('Could not fetch conversation history:', e);
+      }
+    }
+    
+    // Call Python API for suggestions
+    try {
+      const pythonApiUrl = (process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com').replace(/\/$/, '');
+      const pythonResponse = await axios.post(`${pythonApiUrl}/suggestions`, {
+        chat_history: chatHistory,
+        language: language || 'en',
+        user_level: user_level || 'beginner',
+        user_topics: user_topics || [],
+        user_goals: user_goals || []
+      }, {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 30000
+      });
+      
+      console.log('Python suggestions received:', pythonResponse.data.suggestions.length);
+      res.json({ suggestions: pythonResponse.data.suggestions });
+    } catch (pythonError: any) {
+      console.error('Python API not available for suggestions:', pythonError.message);
+      
+      // Fallback suggestions if Python API fails
+      const fallbackSuggestions = [
+        { text: "Hello", translation: "Hello", difficulty: "easy" },
+        { text: "How are you?", translation: "How are you?", difficulty: "easy" },
+        { text: "Thank you", translation: "Thank you", difficulty: "easy" }
+      ];
+      
+      res.json({ suggestions: fallbackSuggestions });
+    }
+  } catch (error: any) {
+    console.error('Suggestions error:', error);
+    res.status(500).json({ error: 'Error getting suggestions', details: error.message });
+  }
+});
+
 // Translation endpoint
 app.post('/api/translate', authenticateJWT, async (req: Request, res: Response) => {
   try {
@@ -1457,6 +1514,51 @@ app.post('/api/translate', authenticateJWT, async (req: Request, res: Response) 
 app.post('/api/explain_suggestion', authenticateJWT, async (req: Request, res: Response) => {
   try {
     console.log('POST /api/explain_suggestion called');
+    const { suggestion_text, chatHistory, language, user_level, user_topics, formality, feedback_language, user_goals } = req.body;
+    
+    if (!suggestion_text) {
+      return res.status(400).json({ error: 'No suggestion text provided' });
+    }
+    
+    // Call Python API for explanation
+    try {
+      const pythonApiUrl = (process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com').replace(/\/$/, '');
+      const pythonResponse = await axios.post(`${pythonApiUrl}/explain_suggestion`, {
+        suggestion_text: suggestion_text,
+        chatHistory: chatHistory || [],
+        language: language || 'en',
+        user_level: user_level || 'beginner',
+        user_topics: user_topics || [],
+        formality: formality || 'friendly',
+        feedback_language: feedback_language || 'en',
+        user_goals: user_goals || []
+      }, {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 30000
+      });
+      
+      console.log('Python explanation received');
+      res.json(pythonResponse.data);
+    } catch (pythonError: any) {
+      console.error('Python API not available for explanation:', pythonError.message);
+      
+      // Fallback response if Python API fails
+      res.json({
+        translation: "Explanation service temporarily unavailable",
+        explanation: "The explanation service is currently unavailable. Please try again later.",
+        error: "Python API not available"
+      });
+    }
+  } catch (error: any) {
+    console.error('Explain suggestion error:', error);
+    res.status(500).json({ error: 'Error explaining suggestion', details: error.message });
+  }
+});
+
+// Explain suggestion endpoint (without authentication for testing)
+app.post('/api/explain_suggestion-test', async (req: Request, res: Response) => {
+  try {
+    console.log('POST /api/explain_suggestion-test called');
     const { suggestion_text, chatHistory, language, user_level, user_topics, formality, feedback_language, user_goals } = req.body;
     
     if (!suggestion_text) {

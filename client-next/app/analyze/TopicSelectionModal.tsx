@@ -15,22 +15,21 @@ interface TopicSelectionModalProps {
   currentLanguage?: string;
 }
 
-function getAuthHeaders() {
-  // Try custom JWT first, then Supabase token
+async function getAuthHeaders() {
+  // Try custom JWT first
   const customJwt = localStorage.getItem('jwt');
   if (customJwt) {
     return { Authorization: `Bearer ${customJwt}` };
   }
   
-  // Fallback to Supabase token
-  const supabaseToken = localStorage.getItem('supabase.auth.token');
-  if (supabaseToken) {
-    try {
-      const tokenData = JSON.parse(supabaseToken);
-      return { Authorization: `Bearer ${tokenData.access_token}` };
-    } catch (e) {
-      console.error('Failed to parse Supabase token:', e);
+  // Get Supabase session token
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token) {
+      return { Authorization: `Bearer ${session.access_token}` };
     }
+  } catch (e) {
+    console.error('Failed to get Supabase session:', e);
   }
   
   return {};
@@ -360,7 +359,7 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
       const accessToken = (session as any)?.access_token;
       const authHeaders = accessToken
         ? { Authorization: `Bearer ${accessToken}` }
-        : getAuthHeaders(); // Fallback to legacy/localStorage if present
+        : await getAuthHeaders(); // Fallback to legacy/localStorage if present
       if (!authHeaders.Authorization) {
         setError('Authentication token missing. Please log in again.');
         setIsLoading(false);

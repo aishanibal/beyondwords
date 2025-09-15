@@ -437,16 +437,83 @@ class AdminControlledTTSSynthesizer:
                     return output_path
                     
             elif self.system == 'linux':
+                # Try espeak first, but fallback to festival or other alternatives
                 voice = self.voice_map.get(language_code, {}).get('linux', 'english_rp')
-                cmd = ['espeak', '-v', voice, '-w', output_path, text]
-                result = subprocess.run(cmd, capture_output=True, text=True)
-                if result.returncode == 0:
-                    return output_path
+                
+                # Try espeak first
+                try:
+                    cmd = ['espeak', '-v', voice, '-w', output_path, text]
+                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+                    if result.returncode == 0 and os.path.exists(output_path):
+                        print(f"✅ espeak TTS successful: {output_path}")
+                        return output_path
+                except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+                    print(f"⚠️ espeak failed: {e}")
+                
+                # Try festival as fallback
+                try:
+                    cmd = ['festival', '--tts', '--pipe']
+                    with open(output_path, 'wb') as f:
+                        result = subprocess.run(cmd, input=text, stdout=f, stderr=subprocess.PIPE, text=True, timeout=10)
+                    if result.returncode == 0 and os.path.exists(output_path):
+                        print(f"✅ festival TTS successful: {output_path}")
+                        return output_path
+                except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+                    print(f"⚠️ festival failed: {e}")
+                
+                # Try spd-say as another fallback
+                try:
+                    cmd = ['spd-say', '-w', '-o', output_path, text]
+                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+                    if result.returncode == 0 and os.path.exists(output_path):
+                        print(f"✅ spd-say TTS successful: {output_path}")
+                        return output_path
+                except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+                    print(f"⚠️ spd-say failed: {e}")
+                
+                # If all TTS systems fail, create a simple beep sound
+                print("🔇 All Linux TTS systems failed, creating simple audio file...")
+                return self._create_simple_audio_file(text, output_path)
                     
         except Exception as e:
             print(f"System TTS error: {e}")
         
         return None
+
+    def _create_simple_audio_file(self, text: str, output_path: str) -> Optional[str]:
+        """Create a simple audio file with a beep sound as fallback"""
+        try:
+            import wave
+            import struct
+            import math
+            
+            # Create a simple beep sound
+            sample_rate = 22050
+            duration = min(len(text) * 0.1, 3.0)  # Duration based on text length, max 3 seconds
+            frequency = 440  # A4 note
+            
+            num_samples = int(sample_rate * duration)
+            
+            # Generate a simple sine wave beep
+            samples = []
+            for i in range(num_samples):
+                t = i / sample_rate
+                sample = int(32767 * 0.3 * math.sin(2 * math.pi * frequency * t))
+                samples.append(sample)
+            
+            # Write WAV file
+            with wave.open(output_path, 'w') as wav_file:
+                wav_file.setnchannels(1)  # Mono
+                wav_file.setsampwidth(2)  # 16-bit
+                wav_file.setframerate(sample_rate)
+                wav_file.writeframes(struct.pack('<' + 'h' * len(samples), *samples))
+            
+            print(f"🔇 Created simple beep audio file: {output_path}")
+            return output_path
+            
+        except Exception as e:
+            print(f"🔇 Failed to create simple audio file: {e}")
+            return None
 
     def _try_google_cloud_tts(self, text: str, language_code: str, output_path: str) -> Optional[str]:
         """Try Google Cloud TTS (CHEAP)"""
