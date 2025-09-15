@@ -1379,7 +1379,11 @@ app.post('/api/suggestions', authenticateJWT, async (req: Request, res: Response
         language: language || user?.target_language || 'en',
         user_level: userLevel,
         user_topics: userTopics,
-        user_goals: userGoals
+        // Include optional fields so Python routes can fully personalize output
+        formality: req.body.formality || 'friendly',
+        feedback_language: req.body.feedback_language || 'en',
+        user_goals: userGoals,
+        description: req.body.description || null
       };
       
       console.log('🔍 [NODE_SERVER] Calling Python API for suggestions:', {
@@ -1400,6 +1404,12 @@ app.post('/api/suggestions', authenticateJWT, async (req: Request, res: Response
       res.json({ suggestions: pythonResponse.data.suggestions });
     } catch (pythonError: any) {
       console.error('Python API not available for suggestions:', pythonError.message);
+      if (pythonError.response) {
+        console.error('🔍 [NODE_SERVER] Python error response:', {
+          status: pythonError.response.status,
+          data: pythonError.response.data
+        });
+      }
       
       // Fallback suggestions if Python API fails
       const fallbackSuggestions = [
