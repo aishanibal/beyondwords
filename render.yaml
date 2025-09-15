@@ -1,6 +1,34 @@
 services:
+  # Express Backend (Port 4000)
   - type: web
-    name: beyondwords-python-api
+    name: heirloom-express-backend
+    env: node
+    plan: starter
+    buildCommand: cd server && npm install && npm run build
+    startCommand: cd server && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 4000
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_API_KEY
+        sync: false
+      - key: GOOGLE_CLOUD_PROJECT
+        sync: false
+
+  # Python API Backend (Port 5000) - with espeak installation
+  - type: web
+    name: heirloom-python-api
     env: python
     plan: starter
     buildCommand: |
