@@ -7,7 +7,7 @@ export async function GET(request: NextRequest) {
     console.log('[API] Authorization header:', request.headers.get('Authorization') ? 'Present' : 'Missing');
     
     // Proxy the request to the Express server
-    const backendUrl = process.env.BACKEND_URL || 'https://beyondwords-express.onrender.com';
+    const backendUrl = 'https://beyondwords-express.onrender.com';
     console.log('[API] Backend URL:', backendUrl);
     console.log('[API] Making request to:', `${backendUrl}/api/personas`);
     
@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     
     // Proxy the request to the Express server
-    const backendUrl = process.env.BACKEND_URL || 'https://beyondwords-express.onrender.com';
+    const backendUrl = 'https://beyondwords-express.onrender.com';
     const response = await fetch(`${backendUrl}/api/personas`, {
       method: 'POST',
       headers: {

@@ -1,22 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest) {
+  console.log('[API] GET /api/user/language-dashboards called');
+  
   try {
-    console.log('[API] GET /api/user/language-dashboards called');
     console.log('[API] Authorization header:', request.headers.get('Authorization') ? 'Present' : 'Missing');
     
     // Proxy the request to the Express server
-    const backendUrl = process.env.BACKEND_URL || 'https://beyondwords-express.onrender.com';
+    const backendUrl = 'https://beyondwords-express.onrender.com';
     console.log('[API] Backend URL:', backendUrl);
+    console.log('[API] Making request to:', `${backendUrl}/api/user/language-dashboards`);
     
     const response = await fetch(`${backendUrl}/api/user/language-dashboards`, {
       method: 'GET',
       headers: {
         'Authorization': request.headers.get('Authorization') || '',
+        'Content-Type': 'application/json',
       },
     });
 
     console.log('[API] Backend response status:', response.status);
+    console.log('[API] Backend response headers:', Object.fromEntries(response.headers.entries()));
     
     if (!response.ok) {
       const errorText = await response.text();
@@ -31,8 +35,13 @@ export async function GET(request: NextRequest) {
     console.log('[API] Backend response data:', data);
     
     return NextResponse.json(data, { status: response.status });
-  } catch (error) {
+  } catch (error: any) {
     console.error('[API] Get language dashboards proxy error:', error);
+    console.error('[API] Error details:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
     return NextResponse.json(
       { error: 'Language dashboards service unavailable', details: error.message },
       { status: 500 }
@@ -45,7 +54,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     
     // Proxy the request to the Express server
-    const backendUrl = process.env.BACKEND_URL || 'https://beyondwords-express.onrender.com';
+    const backendUrl = 'https://beyondwords-express.onrender.com';
     const response = await fetch(`${backendUrl}/api/user/language-dashboards`, {
       method: 'POST',
       headers: {
