@@ -1928,10 +1928,13 @@ app.get('/files/:filename', async (req: Request, res: Response) => {
         timeout: 10000
       });
       
+      console.log(`🔍 [TTS_PROXY] Python API response status: ${response.status}`);
+      
       // Set appropriate headers
       res.set({
         'Content-Type': 'audio/wav',
-        'Cache-Control': 'public, max-age=3600'
+        'Cache-Control': 'public, max-age=3600',
+        'Access-Control-Allow-Origin': '*'
       });
       
       // Pipe the response from Python API to client
@@ -1939,6 +1942,7 @@ app.get('/files/:filename', async (req: Request, res: Response) => {
       
     } catch (pythonError: any) {
       console.error(`🔍 [TTS_PROXY] Failed to fetch from Python API: ${pythonError.message}`);
+      console.error(`🔍 [TTS_PROXY] Python API error details:`, pythonError.response?.status, pythonError.response?.data);
       res.status(404).json({ error: 'TTS file not found' });
     }
     

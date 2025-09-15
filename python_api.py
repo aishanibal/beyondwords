@@ -927,6 +927,8 @@ def admin_api_toggle_google_api():
 def serve_tts_file(filename):
     """Serve TTS files created by the Python API"""
     try:
+        print(f"🔍 [PYTHON_API] Request to serve TTS file: {filename}")
+        
         # Try to find the file in common locations
         possible_paths = [
             os.path.join('server', 'dist', 'uploads', filename),
@@ -935,16 +937,20 @@ def serve_tts_file(filename):
             filename  # Direct filename
         ]
         
+        print(f"🔍 [PYTHON_API] Checking possible paths:")
         for file_path in possible_paths:
+            print(f"🔍 [PYTHON_API]   - {file_path}: {'EXISTS' if os.path.exists(file_path) else 'NOT FOUND'}")
             if os.path.exists(file_path):
                 print(f"🔍 [PYTHON_API] Serving TTS file: {file_path}")
                 return send_from_directory(os.path.dirname(file_path), os.path.basename(file_path))
         
-        print(f"🔍 [PYTHON_API] TTS file not found: {filename}")
+        print(f"🔍 [PYTHON_API] TTS file not found in any location: {filename}")
         return jsonify({"error": "File not found"}), 404
         
     except Exception as e:
         print(f"🔍 [PYTHON_API] Error serving TTS file: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": "Failed to serve file"}), 500
 
 if __name__ == '__main__':
