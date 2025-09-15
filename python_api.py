@@ -228,6 +228,9 @@ def ai_response():
             description
         )
         
+        print(f"🔍 [PYTHON_API] AI response generated: '{response}'")
+        print(f"🔍 [PYTHON_API] Returning JSON: {{'response': '{response}', 'success': True}}")
+        
         return jsonify({
             "response": response,
             "success": True
