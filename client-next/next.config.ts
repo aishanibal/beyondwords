@@ -12,7 +12,7 @@ const nextConfig: NextConfig = {
     typedRoutes: false,
   },
   async rewrites() {
-    const backendUrl = process.env.BACKEND_URL || 'http://localhost:4000';
+    const backendUrl = process.env.BACKEND_URL || 'https://heirloom-express-backend.onrender.com';
     
     return [
       {

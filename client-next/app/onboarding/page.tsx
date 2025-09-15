@@ -468,7 +468,7 @@ export default function OnboardingPage() {
       }
 
       // Create language dashboard using Express server API
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || 'https://beyondwords-express.onrender.com'}/api/user/onboarding`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || 'https://heirloom-express-backend.onrender.com'}/api/user/onboarding`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
