@@ -1347,7 +1347,9 @@ app.patch('/api/conversations/:id', authenticateJWT, async (req: Request, res: R
 // Text suggestions endpoint
 app.post('/api/suggestions', authenticateJWT, async (req: Request, res: Response) => {
   try {
-    console.log('POST /api/suggestions called');
+    console.log('🔍 [NODE_SERVER] POST /api/suggestions called');
+    console.log('🔍 [NODE_SERVER] Request body:', req.body);
+    console.log('🔍 [NODE_SERVER] User ID:', req.user?.userId);
     const { conversationId, language } = req.body;
     
     // Get user data for personalized suggestions
@@ -1372,18 +1374,29 @@ app.post('/api/suggestions', authenticateJWT, async (req: Request, res: Response
     // Call Python API for suggestions
     try {
       const pythonApiUrl = (process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com').replace(/\/$/, '');
-      const pythonResponse = await axios.post(`${pythonApiUrl}/suggestions`, {
+      const pythonRequestData = {
         chat_history: chatHistory,
         language: language || user?.target_language || 'en',
         user_level: userLevel,
         user_topics: userTopics,
         user_goals: userGoals
-      }, {
+      };
+      
+      console.log('🔍 [NODE_SERVER] Calling Python API for suggestions:', {
+        url: `${pythonApiUrl}/suggestions`,
+        data: pythonRequestData
+      });
+      
+      const pythonResponse = await axios.post(`${pythonApiUrl}/suggestions`, pythonRequestData, {
         headers: { 'Content-Type': 'application/json' },
         timeout: 30000
       });
       
-      console.log('Python suggestions received:', pythonResponse.data.suggestions.length);
+      console.log('🔍 [NODE_SERVER] Python suggestions response:', {
+        status: pythonResponse.status,
+        suggestionsCount: pythonResponse.data.suggestions?.length || 0,
+        data: pythonResponse.data
+      });
       res.json({ suggestions: pythonResponse.data.suggestions });
     } catch (pythonError: any) {
       console.error('Python API not available for suggestions:', pythonError.message);
@@ -1823,7 +1836,9 @@ app.post('/api/tts', authenticateJWT, async (req: Request, res: Response) => {
 // Quick translation endpoint
 app.post('/api/quick_translation', authenticateJWT, async (req: Request, res: Response) => {
   try {
-    console.log('POST /api/quick_translation called');
+    console.log('🔍 [NODE_SERVER] POST /api/quick_translation called');
+    console.log('🔍 [NODE_SERVER] Request body:', req.body);
+    console.log('🔍 [NODE_SERVER] User ID:', req.user?.userId);
     const { ai_message, language, user_level, user_topics, formality, feedback_language, user_goals, description } = req.body;
     
     if (!ai_message) {
@@ -1833,7 +1848,7 @@ app.post('/api/quick_translation', authenticateJWT, async (req: Request, res: Re
     // Call Python API for quick translation
     try {
       const pythonApiUrl = (process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com').replace(/\/$/, '');
-      const pythonResponse = await axios.post(`${pythonApiUrl}/quick_translation`, {
+      const pythonRequestData = {
         ai_message: ai_message,
         language: language || 'en',
         user_level: user_level || 'beginner',
@@ -1842,12 +1857,22 @@ app.post('/api/quick_translation', authenticateJWT, async (req: Request, res: Re
         feedback_language: feedback_language || 'en',
         user_goals: user_goals || [],
         description: description || null
-      }, {
+      };
+      
+      console.log('🔍 [NODE_SERVER] Calling Python API:', {
+        url: `${pythonApiUrl}/quick_translation`,
+        data: pythonRequestData
+      });
+      
+      const pythonResponse = await axios.post(`${pythonApiUrl}/quick_translation`, pythonRequestData, {
         headers: { 'Content-Type': 'application/json' },
         timeout: 30000
       });
       
-      console.log('Python quick translation received');
+      console.log('🔍 [NODE_SERVER] Python quick translation response:', {
+        status: pythonResponse.status,
+        data: pythonResponse.data
+      });
       res.json(pythonResponse.data);
     } catch (pythonError: any) {
       console.error('Python API not available for quick translation:', pythonError.message);

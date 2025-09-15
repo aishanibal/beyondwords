@@ -11,7 +11,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    console.log('🔍 [SUGGESTIONS_API] Request received:', {
+    console.log('🔍 [QUICK_TRANSLATION_API] Request received:', {
       method: req.method,
       body: req.body,
       headers: req.headers
@@ -27,35 +27,35 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       headers['Authorization'] = authHeader;
     }
     
-    console.log('🔍 [SUGGESTIONS_API] Calling backend:', {
-      url: `${BACKEND_URL}/api/suggestions`,
+    console.log('🔍 [QUICK_TRANSLATION_API] Calling backend:', {
+      url: `${BACKEND_URL}/api/quick_translation`,
       headers: headers
     });
     
-    const response = await axios.post(`${BACKEND_URL}/api/suggestions`, req.body, {
+    const response = await axios.post(`${BACKEND_URL}/api/quick_translation`, req.body, {
       headers,
       timeout: 30000
     });
     
-    console.log('🔍 [SUGGESTIONS_API] Backend response:', {
+    console.log('🔍 [QUICK_TRANSLATION_API] Backend response:', {
       status: response.status,
       data: response.data
     });
     
     res.status(response.status).json(response.data);
   } catch (err: any) {
-    console.error('🔍 [SUGGESTIONS_API] Error:', err);
+    console.error('🔍 [QUICK_TRANSLATION_API] Error:', err);
     
     if (err.response) {
-      console.error('🔍 [SUGGESTIONS_API] Backend error response:', {
+      console.error('🔍 [QUICK_TRANSLATION_API] Backend error response:', {
         status: err.response.status,
         data: err.response.data
       });
       res.status(err.response.status).json(err.response.data);
     } else {
-      console.error('🔍 [SUGGESTIONS_API] Network/other error:', err.message);
+      console.error('🔍 [QUICK_TRANSLATION_API] Network/other error:', err.message);
       res.status(500).json({ 
-        error: 'Failed to get suggestions', 
+        error: 'Failed to get quick translation', 
         details: err.message 
       });
     }

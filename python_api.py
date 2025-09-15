@@ -451,7 +451,10 @@ def initial_message():
 def suggestions():
     """Get text suggestions"""
     try:
+        print("🔍 [PYTHON_API] /suggestions endpoint called")
         data = request.get_json()
+        print(f"🔍 [PYTHON_API] /suggestions request data: {data}")
+        
         chat_history = data.get('chat_history', [])
         language = data.get('language', 'en')
         user_level = data.get('user_level', 'beginner')
@@ -461,7 +464,7 @@ def suggestions():
         user_goals = data.get('user_goals', [])
         description = data.get('description', None)
         
-        print(f"💡 Suggestions request - Language: {language}, Level: {user_level}")
+        print(f"🔍 [PYTHON_API] /suggestions parsed data - Language: {language}, Level: {user_level}, Topics: {user_topics}")
         
         # Get suggestions
         suggestions = get_text_suggestions(
@@ -610,7 +613,10 @@ def explain_suggestion():
 def quick_translation():
     """Get quick translation of AI message"""
     try:
+        print("🔍 [PYTHON_API] /quick_translation endpoint called")
         data = request.get_json()
+        print(f"🔍 [PYTHON_API] /quick_translation request data: {data}")
+        
         ai_message = data.get('ai_message', '')
         language = data.get('language', 'en')
         user_level = data.get('user_level', 'beginner')
@@ -620,7 +626,7 @@ def quick_translation():
         user_goals = data.get('user_goals', [])
         description = data.get('description', None)
         
-        print(f"🌐 Quick translation request - Language: {language}")
+        print(f"🔍 [PYTHON_API] /quick_translation parsed data - Language: {language}, Message: {ai_message[:50]}...")
         
         # Get quick translation
         translation = get_quick_translation(
