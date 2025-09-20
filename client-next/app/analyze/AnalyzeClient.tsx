@@ -288,6 +288,13 @@ const AnalyzeContentInner = () => {
     const urlTopics = urlParams.topics;
     const urlFormality = urlParams.formality;
     const usePersona = urlParams.usePersona;
+
+    // Update language when urlLang becomes available
+    React.useEffect(() => {
+      if (urlLang) {
+        setLanguage(urlLang);
+      }
+    }, [urlLang]);
   
     // Flag to skip validation right after creating a conversation
     const [skipValidation, setSkipValidation] = useState(false);
@@ -461,7 +468,7 @@ const AnalyzeContentInner = () => {
     const autoSpeakRef = useRef<boolean>(false);
     const [showSavePrompt, setShowSavePrompt] = useState<boolean>(false);
     const [chatHistory, setChatHistory] = usePersistentChatHistory(user);
-    const [language, setLanguage] = useState<string>(urlLang || user?.target_language || 'en');
+    const [language, setLanguage] = useState<string>(user?.target_language || 'en');
     const [conversationId, setConversationId] = useState<string | null>(null);
     const [isLoadingConversation, setIsLoadingConversation] = useState<boolean>(false);
     const [suggestions, setSuggestions] = useState<unknown[]>([]); // TODO: type this
@@ -610,45 +617,6 @@ const AnalyzeContentInner = () => {
       }
     }, [language]);
 
-    // Reload user preferences when language changes
-    useEffect(() => {
-      const loadPreferencesForLanguage = async () => {
-        if (!user?.id || !language) return;
-        
-        console.log('[DEBUG] Language changed to:', language, '- reloading preferences');
-        
-        try {
-          const dashboardPrefs = await fetchUserDashboardPreferences(language);
-          if (dashboardPrefs) {
-            console.log('[DEBUG] Loaded preferences for', language, ':', dashboardPrefs);
-            setUserPreferences(prev => ({
-              ...prev,
-              userLevel: dashboardPrefs.proficiency_level,
-              topics: dashboardPrefs.talk_topics,
-              user_goals: dashboardPrefs.learning_goals,
-              romanizationDisplay: dashboardPrefs.romanization_display,
-              // Keep existing formality and feedbackLanguage unless we want to change them
-              formality: prev.formality,
-              feedbackLanguage: prev.feedbackLanguage
-            }));
-          } else {
-            console.log('[DEBUG] No dashboard found for language:', language, '- using defaults');
-            // Reset to defaults if no dashboard exists for this language
-            setUserPreferences(prev => ({
-              ...prev,
-              userLevel: 'beginner',
-              topics: [],
-              user_goals: [],
-              romanizationDisplay: 'both'
-            }));
-          }
-        } catch (error) {
-          console.error('[DEBUG] Error loading preferences for language:', language, error);
-        }
-      };
-
-      loadPreferencesForLanguage();
-    }, [language, user?.id, fetchUserDashboardPreferences]);
   
     // Add global click handler for word clicks
     useEffect(() => {
@@ -791,21 +759,21 @@ const AnalyzeContentInner = () => {
     useEffect(() => {
       // Chat history monitoring removed for performance
     }, [chatHistory]);
-  
+
     // Function to fetch user's dashboard preferences
     const fetchUserDashboardPreferences = async (languageCode: string) => {
       try {
         if (!user?.id) {
           return null;
         }
-  
+
         const { success, data: dashboards } = await getUserLanguageDashboards(user.id);
         
         if (!success) {
           console.error('Failed to fetch language dashboards');
           return null;
         }
-  
+
         const dashboard = (dashboards || []).find((d: any) => d.language === languageCode);
         
         if (dashboard) {
@@ -823,6 +791,47 @@ const AnalyzeContentInner = () => {
         return null;
       }
     };
+
+    // Reload user preferences when language changes
+    useEffect(() => {
+      const loadPreferencesForLanguage = async () => {
+        if (!user?.id || !language) return;
+        
+        console.log('[DEBUG] Language changed to:', language, '- reloading preferences');
+        
+        try {
+          const dashboardPrefs = await fetchUserDashboardPreferences(language);
+          if (dashboardPrefs) {
+            console.log('[DEBUG] Loaded preferences for', language, ':', dashboardPrefs);
+            setUserPreferences(prev => ({
+              ...prev,
+              userLevel: dashboardPrefs.proficiency_level,
+              topics: dashboardPrefs.talk_topics,
+              user_goals: dashboardPrefs.learning_goals,
+              romanizationDisplay: dashboardPrefs.romanization_display,
+              // Keep existing formality and feedbackLanguage unless we want to change them
+              formality: prev.formality,
+              feedbackLanguage: prev.feedbackLanguage
+            }));
+          } else {
+            console.log('[DEBUG] No dashboard found for language:', language, '- using defaults');
+            // Reset to defaults if no dashboard exists for this language
+            setUserPreferences(prev => ({
+              ...prev,
+              userLevel: 'beginner',
+              topics: [],
+              user_goals: [],
+              romanizationDisplay: 'both'
+            }));
+          }
+        } catch (error) {
+          console.error('[DEBUG] Error loading preferences for language:', language, error);
+        }
+      };
+
+      loadPreferencesForLanguage();
+    }, [language, user?.id, fetchUserDashboardPreferences]);
+  
     const loadExistingConversation = async (convId: string | null) => {
       if (!user || !convId) {
         return;
