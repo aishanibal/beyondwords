@@ -24,10 +24,6 @@ const nextConfig: NextConfig = {
         destination: `${backendUrl}/api/conversations/:id/messages`, // Express backend
       },
       {
-        source: '/api/suggestions',
-        destination: `${backendUrl}/api/suggestions`, // Express backend
-      },
-      {
         source: '/api/short_feedback',
         destination: `${backendUrl}/api/short_feedback`, // Express backend
       },
@@ -44,10 +40,6 @@ const nextConfig: NextConfig = {
         destination: `${backendUrl}/api/translate`, // Express backend
       },
       {
-        source: '/api/quick_translation',
-        destination: `${backendUrl}/api/quick_translation`, // Express backend
-      },
-      {
         source: '/api/user/:path*',
         destination: `${backendUrl}/api/user/:path*`, // Express backend
       },
@@ -56,24 +48,12 @@ const nextConfig: NextConfig = {
         destination: `${backendUrl}/api/auth/:path*`, // Express backend
       },
       {
-        source: '/api/conversations/:path*',            
-        destination: `${backendUrl}/api/conversations/:path*`, // Express backend
-      },
-      {
         source: '/api/messages/:path*',
         destination: `${backendUrl}/api/messages/:path*`, // Express backend
       },
       {
         source: '/api/health',
         destination: `${backendUrl}/api/health`, // Express backend
-      },
-      {
-        source: '/api/conversations',
-        destination: `${backendUrl}/api/conversations`, // Express backend
-      },
-      {
-        source: '/api/conversations/:id',
-        destination: `${backendUrl}/api/conversations/:id`, // Express backend
       },
       {
         source: '/api/messages/feedback',

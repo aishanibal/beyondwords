@@ -13,6 +13,9 @@
   "functions": {
     "app/api/**/*.ts": {
       "maxDuration": 30
+    },
+    "pages/api/**/*.ts": {
+      "maxDuration": 30
     }
   },
   "headers": [
