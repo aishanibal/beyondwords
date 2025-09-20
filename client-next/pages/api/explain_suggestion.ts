@@ -2,7 +2,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import axios from 'axios';
 
-const BACKEND_URL = process.env.BACKEND_URL || 'https://beyondwords-express.onrender.com';
+const BACKEND_URL = process.env.AI_BACKEND_URL || 'https://beyondwords.onrender.com';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -21,7 +21,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       headers['Authorization'] = authHeader;
     }
     
-    const response = await axios.post(`${BACKEND_URL}/api/explain_suggestion`, req.body, {
+    const response = await axios.post(`${BACKEND_URL}/explain_suggestion`, req.body, {
       headers,
       timeout: 30000
     });

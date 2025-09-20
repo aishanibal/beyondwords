@@ -2905,7 +2905,7 @@ const AnalyzeContentInner = () => {
         const token = localStorage.getItem('jwt');
         const requestData = {
           suggestion_text: text,
-          chat_history: chatHistory,
+          chatHistory: chatHistory,
           language: language,
           user_level: userPreferences.userLevel,
           user_topics: userPreferences.topics,
