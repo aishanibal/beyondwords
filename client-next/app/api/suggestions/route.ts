@@ -6,7 +6,7 @@ export async function POST(request: NextRequest) {
     
     // Proxy the request to the Express server
     const backendUrl = process.env.BACKEND_URL || 'https://beyondwords-express.onrender.com';
-    const response = await fetch(`${backendUrl}/api/quick_translation`, {
+    const response = await fetch(`${backendUrl}/api/suggestions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -19,10 +19,10 @@ export async function POST(request: NextRequest) {
     
     return NextResponse.json(data, { status: response.status });
   } catch (error) {
-    console.error('Quick translation proxy error:', error);
+    console.error('Suggestions proxy error:', error);
     return NextResponse.json(
-      { error: 'Quick translation service unavailable' },
+      { error: 'Suggestions service unavailable' },
       { status: 500 }
     );
   }
-} 
+}
