@@ -12,7 +12,7 @@ import TopicSelectionModal from './TopicSelectionModal';
 import PersonaModal from './PersonaModal';
 import LoadingScreen from '../components/LoadingScreen';
 import { LEARNING_GOALS, LearningGoal, getProgressiveSubgoalDescription, getSubgoalLevel, updateSubgoalProgress, SubgoalProgress, LevelUpEvent } from '../../lib/preferences';
-import { getUserLanguageDashboards } from '../../lib/api';
+import { getUserLanguageDashboards, getAuthHeaders } from '../../lib/api';
 import ChatMessageItem from './ChatMessageItem';
 import unidecode from 'unidecode';
 import Kuroshiro from 'kuroshiro';
@@ -2114,7 +2114,12 @@ const AnalyzeContentInner = () => {
             formality: userPreferences.formality,
             feedback_language: userPreferences.feedbackLanguage
           },
-          token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              ...(token ? { Authorization: `Bearer ${token}` } : {})
+            }
+          }
         );
         
         const suggestions = response.data.suggestions || [];
@@ -4181,7 +4186,12 @@ const AnalyzeContentInner = () => {
         const response = await axios.post(
           `/api/quick_translation`,
           requestData,
-          token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              ...(token ? { Authorization: `Bearer ${token}` } : {})
+            }
+          }
         );
         
         const result = response.data;

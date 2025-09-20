@@ -38,9 +38,25 @@ const getAuthToken = (): string | null => {
 };
 
 // Helper function to create auth headers
-const getAuthHeaders = () => {
-  const token = getAuthToken();
-  return token ? { Authorization: `Bearer ${token}` } : {};
+export const getAuthHeaders = async () => {
+  // Try custom JWT first
+  const customJwt = typeof window !== 'undefined' ? localStorage.getItem('jwt') : null;
+  if (customJwt) {
+    return { Authorization: `Bearer ${customJwt}` };
+  }
+  
+  // Get Supabase session token
+  try {
+    const { supabase } = await import('./supabase');
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token) {
+      return { Authorization: `Bearer ${session.access_token}` };
+    }
+  } catch (e) {
+    console.error('Failed to get Supabase session:', e);
+  }
+  
+  return {};
 };
 
 // Language Dashboard API functions
@@ -48,7 +64,7 @@ export const getUserLanguageDashboards = async (userId: string) => {
   try {
     console.log('[API] Getting language dashboards for user:', userId);
     const response = await axios.get(`${API_BASE_URL}/api/user/language-dashboards`, {
-      headers: getAuthHeaders()
+      headers: await getAuthHeaders()
     });
     
     console.log('[API] Language dashboards response:', response.data);
@@ -87,7 +103,7 @@ export const createLanguageDashboard = async (dashboardData: {
       practicePreference: dashboardData.practice_preference,
       feedbackLanguage: dashboardData.feedback_language
     }, {
-      headers: getAuthHeaders()
+      headers: await getAuthHeaders()
     });
     
     console.log('[API] Language dashboard created:', response.data);
@@ -110,7 +126,7 @@ export const updateLanguageDashboard = async (language: string, updates: any) =>
   try {
     console.log('[API] Updating language dashboard:', language, updates);
     const response = await axios.put(`${API_BASE_URL}/api/user/language-dashboards/${language}`, updates, {
-      headers: getAuthHeaders()
+      headers: await getAuthHeaders()
     });
     
     console.log('[API] Language dashboard updated:', response.data);
@@ -133,7 +149,7 @@ export const deleteLanguageDashboard = async (language: string) => {
   try {
     console.log('[API] Deleting language dashboard:', language);
     await axios.delete(`${API_BASE_URL}/api/user/language-dashboards/${language}`, {
-      headers: getAuthHeaders()
+      headers: await getAuthHeaders()
     });
     
     console.log('[API] Language dashboard deleted');
@@ -157,7 +173,7 @@ export const getUserPersonas = async (userId: string) => {
   try {
     console.log('[API] Getting personas for user:', userId);
     const response = await axios.get(`${API_BASE_URL}/api/personas`, {
-      headers: getAuthHeaders()
+      headers: await getAuthHeaders()
     });
     
     console.log('[API] Personas response:', response.data);
@@ -180,7 +196,7 @@ export const getUserConversations = async (userId: string) => {
   try {
     console.log('[API] Getting conversations for user:', userId);
     const response = await axios.get(`${API_BASE_URL}/api/conversations`, {
-      headers: getAuthHeaders()
+      headers: await getAuthHeaders()
     });
     
     console.log('[API] Conversations response:', response.data);
