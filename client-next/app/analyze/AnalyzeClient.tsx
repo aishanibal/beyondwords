@@ -609,6 +609,46 @@ const AnalyzeContentInner = () => {
         recognitionRef.current.lang = language || 'en-US';
       }
     }, [language]);
+
+    // Reload user preferences when language changes
+    useEffect(() => {
+      const loadPreferencesForLanguage = async () => {
+        if (!user?.id || !language) return;
+        
+        console.log('[DEBUG] Language changed to:', language, '- reloading preferences');
+        
+        try {
+          const dashboardPrefs = await fetchUserDashboardPreferences(language);
+          if (dashboardPrefs) {
+            console.log('[DEBUG] Loaded preferences for', language, ':', dashboardPrefs);
+            setUserPreferences(prev => ({
+              ...prev,
+              userLevel: dashboardPrefs.proficiency_level,
+              topics: dashboardPrefs.talk_topics,
+              user_goals: dashboardPrefs.learning_goals,
+              romanizationDisplay: dashboardPrefs.romanization_display,
+              // Keep existing formality and feedbackLanguage unless we want to change them
+              formality: prev.formality,
+              feedbackLanguage: prev.feedbackLanguage
+            }));
+          } else {
+            console.log('[DEBUG] No dashboard found for language:', language, '- using defaults');
+            // Reset to defaults if no dashboard exists for this language
+            setUserPreferences(prev => ({
+              ...prev,
+              userLevel: 'beginner',
+              topics: [],
+              user_goals: [],
+              romanizationDisplay: 'both'
+            }));
+          }
+        } catch (error) {
+          console.error('[DEBUG] Error loading preferences for language:', language, error);
+        }
+      };
+
+      loadPreferencesForLanguage();
+    }, [language, user?.id, fetchUserDashboardPreferences]);
   
     // Add global click handler for word clicks
     useEffect(() => {
@@ -2104,6 +2144,8 @@ const AnalyzeContentInner = () => {
       setIsLoadingSuggestions(true);
       try {
         const token = localStorage.getItem('jwt');
+        console.log('[DEBUG] Suggestions request - language:', language);
+        console.log('[DEBUG] Suggestions request - userPreferences:', userPreferences);
         const response = await axios.post(
           '/api/suggestions',
           {
@@ -4182,6 +4224,8 @@ const AnalyzeContentInner = () => {
         };
   
         console.log('[DEBUG] quickTranslation() calling backend with:', { url: `/api/quick_translation`, requestData });
+        console.log('[DEBUG] Current language:', language);
+        console.log('[DEBUG] Current userPreferences:', userPreferences);
         
         const response = await axios.post(
           `/api/quick_translation`,
