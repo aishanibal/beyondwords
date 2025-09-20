@@ -2,7 +2,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import axios from 'axios';
 
-const BACKEND_URL = process.env.AI_BACKEND_URL || 'https://beyondwords.onrender.com/ai_response';
+const BACKEND_URL = process.env.BACKEND_URL || 'https://beyondwords-express.onrender.com';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -11,43 +11,49 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    console.log('🔍 [AI_RESPONSE_API] Request received:', {
+    console.log('🔍 [TTS_API] Request received:', {
       method: req.method,
       body: req.body,
       headers: req.headers
     });
 
-    console.log('🔍 [AI_RESPONSE_API] Calling backend:', {
-      url: BACKEND_URL,
+    console.log('🔍 [TTS_API] Calling backend:', {
+      url: `${BACKEND_URL}/api/tts-test`,
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': req.headers.authorization || '',
       }
     });
 
-    const response = await axios.post(BACKEND_URL, req.body, {
+    const response = await axios.post(`${BACKEND_URL}/api/tts-test`, req.body, {
       headers: {
         'Content-Type': 'application/json',
-      }
+        'Authorization': req.headers.authorization || '',
+      },
+      timeout: 30000
     });
-
-    console.log('🔍 [AI_RESPONSE_API] Backend response:', {
+    
+    console.log('🔍 [TTS_API] Backend response:', {
       status: response.status,
       data: response.data
     });
-
+    
     res.status(response.status).json(response.data);
   } catch (err: any) {
-    console.error('🔍 [AI_RESPONSE_API] Error:', err);
+    console.error('🔍 [TTS_API] Error:', err);
     
     if (err.response) {
-      console.error('🔍 [AI_RESPONSE_API] Backend error response:', {
+      console.error('🔍 [TTS_API] Backend error response:', {
         status: err.response.status,
         data: err.response.data
       });
       res.status(err.response.status).json(err.response.data);
     } else {
-      console.error('🔍 [AI_RESPONSE_API] Network/other error:', err.message);
-      res.status(500).json({ error: 'Proxy error', details: err.message });
+      console.error('🔍 [TTS_API] Network/other error:', err.message);
+      res.status(500).json({ 
+        error: 'TTS generation failed', 
+        details: err.message 
+      });
     }
   }
-} 
+}

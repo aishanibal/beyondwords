@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template, redirect, url_for, session
+from flask import Flask, request, jsonify, render_template, redirect, url_for, session, send_from_directory
 from flask_cors import CORS
 import os
 import json
@@ -8,7 +8,7 @@ import shutil
 from werkzeug.utils import secure_filename
 import numpy as np
 import datetime
-from gemini_client import get_conversational_response, get_detailed_feedback, get_text_suggestions, get_translation, is_gemini_ready, get_short_feedback, get_detailed_breakdown, create_tutor, get_quick_translation, get_quick_translation_hybrid_with_meta
+from gemini_client import get_conversational_response, get_detailed_feedback, get_text_suggestions, get_translation, is_gemini_ready, get_short_feedback, get_detailed_breakdown, create_tutor, get_quick_translation
 from tts_synthesizer_admin_controlled import synthesize_speech
 
 # Use Gemini for transcription
@@ -152,29 +152,75 @@ def transcribe_only():
     """Transcribe audio only without AI response"""
     try:
         data = request.get_json()
-        audio_file = data.get('audio_file')
+        audio_data = data.get('audio_data')
+        audio_filename = data.get('audio_filename', 'recording.webm')
         language = data.get('language', 'en')
         
-        print(f"🎤 Transcribe only request - Language: {language}")
+        print(f"🔍 [PYTHON_API] Transcribe only request - Language: {language}")
+        print(f"🔍 [PYTHON_API] Audio filename: {audio_filename}")
         
-        # Get transcription
-        transcription = transcribe_audio(audio_file, language)
-        
-        if not transcription:
+        if not audio_data:
+            print(f"🔍 [PYTHON_API] No audio data provided")
             return jsonify({
-                "error": "Could not transcribe audio",
+                "error": "No audio data provided",
                 "transcription": ""
             })
         
-        print(f"📝 Transcription: {transcription}")
+        # Decode base64 audio data
+        import base64
+        import tempfile
+        import os
         
-        return jsonify({
-            "transcription": transcription,
-            "success": True
-        })
+        try:
+            audio_bytes = base64.b64decode(audio_data)
+            print(f"🔍 [PYTHON_API] Decoded audio data, size: {len(audio_bytes)} bytes")
+        except Exception as e:
+            print(f"🔍 [PYTHON_API] Failed to decode base64 audio data: {e}")
+            return jsonify({
+                "error": "Invalid audio data format",
+                "transcription": ""
+            })
+        
+        # Save audio data to temporary file
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.webm') as temp_file:
+            temp_file.write(audio_bytes)
+            temp_audio_path = temp_file.name
+        
+        print(f"🔍 [PYTHON_API] Saved audio to temporary file: {temp_audio_path}")
+        
+        try:
+            # Get transcription
+            print(f"🔍 [PYTHON_API] Calling transcribe_audio function...")
+            transcription = transcribe_audio(temp_audio_path, language)
+            
+            print(f"🔍 [PYTHON_API] Transcription result: '{transcription}'")
+            
+            if not transcription:
+                print(f"🔍 [PYTHON_API] No transcription returned")
+                return jsonify({
+                    "error": "Could not transcribe audio",
+                    "transcription": ""
+                })
+            
+            print(f"📝 Transcription: {transcription}")
+            
+            return jsonify({
+                "transcription": transcription,
+                "success": True
+            })
+            
+        finally:
+            # Clean up temporary file
+            try:
+                os.unlink(temp_audio_path)
+                print(f"🔍 [PYTHON_API] Cleaned up temporary file: {temp_audio_path}")
+            except Exception as cleanup_error:
+                print(f"🔍 [PYTHON_API] Warning: Could not clean up temporary file: {cleanup_error}")
         
     except Exception as e:
         print(f"❌ Transcribe only error: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
             "error": str(e),
             "transcription": ""
@@ -209,6 +255,9 @@ def ai_response():
             user_goals, 
             description
         )
+        
+        print(f"🔍 [PYTHON_API] AI response generated: '{response}'")
+        print(f"🔍 [PYTHON_API] Returning JSON: {{'response': '{response}', 'success': True}}")
         
         return jsonify({
             "response": response,
@@ -451,7 +500,10 @@ def initial_message():
 def suggestions():
     """Get text suggestions"""
     try:
+        print("🔍 [PYTHON_API] /suggestions endpoint called")
         data = request.get_json()
+        print(f"🔍 [PYTHON_API] /suggestions request data: {data}")
+        
         chat_history = data.get('chat_history', [])
         language = data.get('language', 'en')
         user_level = data.get('user_level', 'beginner')
@@ -461,7 +513,7 @@ def suggestions():
         user_goals = data.get('user_goals', [])
         description = data.get('description', None)
         
-        print(f"💡 Suggestions request - Language: {language}, Level: {user_level}")
+        print(f"🔍 [PYTHON_API] /suggestions parsed data - Language: {language}, Level: {user_level}, Topics: {user_topics}")
         
         # Get suggestions
         suggestions = get_text_suggestions(
@@ -610,7 +662,10 @@ def explain_suggestion():
 def quick_translation():
     """Get quick translation of AI message"""
     try:
+        print("🔍 [PYTHON_API] /quick_translation endpoint called")
         data = request.get_json()
+        print(f"🔍 [PYTHON_API] /quick_translation request data: {data}")
+        
         ai_message = data.get('ai_message', '')
         language = data.get('language', 'en')
         user_level = data.get('user_level', 'beginner')
@@ -620,10 +675,10 @@ def quick_translation():
         user_goals = data.get('user_goals', [])
         description = data.get('description', None)
         
-        print(f"🌐 Quick translation request - Language: {language}")
+        print(f"🔍 [PYTHON_API] /quick_translation parsed data - Language: {language}, Message: {ai_message[:50]}...")
         
-        # Get quick translation (hybrid with source metadata)
-        result = get_quick_translation_hybrid_with_meta(
+        # Get quick translation
+        translation = get_quick_translation(
             ai_message,
             language,
             user_level,
@@ -635,8 +690,7 @@ def quick_translation():
         )
         
         return jsonify({
-            "translation": result.get("translation", ""),
-            "source": result.get("source", "UNKNOWN"),
+            "translation": translation,
             "success": True
         })
         
@@ -658,6 +712,12 @@ def generate_tts():
         
         print(f"🎤 TTS request - Language: {language_code}, Text length: {len(text)}")
         
+        # Ensure the output directory exists
+        import os
+        output_dir = os.path.dirname(output_path)
+        if output_dir:
+            os.makedirs(output_dir, exist_ok=True)
+        
         # Generate TTS with debug info
         result = synthesize_speech(text, language_code, output_path)
         
@@ -665,9 +725,25 @@ def generate_tts():
         if isinstance(result, dict):
             # New format with debug info
             if result.get('success'):
+                # Get the actual file path from the result
+                actual_output_path = result.get('output_path')
+                
+                # Convert absolute path to relative path for serving
+                if actual_output_path:
+                    import os
+                    filename = os.path.basename(actual_output_path)
+                    # Since Python API and Node.js server are on different servers,
+                    # we need to return the filename only, and let Node.js server handle the serving
+                    relative_path = filename
+                    print(f"🎤 TTS file created: {actual_output_path}")
+                    print(f"🎤 Serving as: {relative_path}")
+                else:
+                    relative_path = None
+                
                 return jsonify({
                     "success": True,
-                    "output_path": result.get('output_path'),
+                    "output_path": relative_path,  # Return relative path for serving
+                    "actual_path": actual_output_path,  # Keep actual path for debugging
                     "message": "TTS generated successfully",
                     # Include debug information
                     "service_used": result.get('service_used', 'unknown'),
@@ -727,76 +803,33 @@ def generate_tts():
 @app.route('/admin')
 def admin_index():
     """Main admin dashboard page"""
-    try:
-        from admin_dashboard import AdminDashboard
-        dashboard = AdminDashboard()
-        
-        return jsonify({
-            "message": "Admin dashboard is available",
-            "status": "ok",
-            "time": datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            "system_status": dashboard.get_system_status(),
-            "login_url": "/admin/login",
-            "api_endpoints": {
-                "status": "/admin/api/status",
-                "enable_gemini": "/admin/api/enable_gemini",
-                "disable_gemini": "/admin/api/disable_gemini",
-                "update_settings": "/admin/api/update_settings"
-            }
-        })
-    except Exception as e:
-        print(f"❌ Admin index error: {e}")
-        return jsonify({
-            "message": "Admin dashboard is temporarily disabled",
-            "status": "error",
-            "error": str(e),
-            "time": datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        }), 500
+    from admin_dashboard import AdminDashboard
+    dashboard = AdminDashboard()
+    
+    settings = dashboard.get_tts_settings()
+    usage_stats = dashboard.get_usage_stats()
+    google_api_settings = dashboard.get_google_api_settings()
+    
+    return render_template('admin_dashboard.html', 
+                         settings=settings,
+                         usage_stats=usage_stats,
+                         google_api_settings=google_api_settings)
 
 @app.route('/admin/login', methods=['GET', 'POST'])
 def admin_login():
     """Admin login page"""
-    try:
-        from admin_dashboard import AdminDashboard
-        dashboard = AdminDashboard()
-        
-        if request.method == 'POST':
-            password = request.form.get('password')
-            if dashboard.verify_password(password):
-                session['admin_logged_in'] = True
-                return redirect(url_for('admin_index'))
-            else:
-                error_msg = "Invalid password"
+    from admin_dashboard import AdminDashboard
+    dashboard = AdminDashboard()
+    
+    if request.method == 'POST':
+        password = request.form.get('password')
+        if dashboard.verify_password(password):
+            session['admin_logged_in'] = True
+            return redirect(url_for('admin_index'))
         else:
-            error_msg = None
-        
-        # Try to render template, fallback to simple HTML
-        try:
-            return render_template('login.html', error=error_msg)
-        except:
-            # Fallback HTML if template fails
-            html = f"""
-            <!DOCTYPE html>
-            <html>
-            <head><title>Admin Login</title></head>
-            <body>
-                <h1>🔐 Admin Login</h1>
-                <p>Default Password: admin123</p>
-                {"<p style='color:red'>" + error_msg + "</p>" if error_msg else ""}
-                <form method="POST">
-                    <input type="password" name="password" placeholder="Password" required>
-                    <button type="submit">Login</button>
-                </form>
-            </body>
-            </html>
-            """
-            return html
-    except Exception as e:
-        print(f"❌ Admin login error: {e}")
-        return jsonify({
-            "error": f"Admin login failed: {str(e)}",
-            "message": "Please check server logs for details"
-        }), 500
+            return render_template('login.html', error="Invalid password")
+    
+    return render_template('login.html')
 
 @app.route('/admin/logout')
 def admin_logout():
@@ -807,24 +840,17 @@ def admin_logout():
 @app.route('/admin/api/status')
 def admin_api_status():
     """Get system status as JSON"""
-    try:
-        from admin_dashboard import AdminDashboard
-        dashboard = AdminDashboard()
-        
-        if 'admin_logged_in' not in session:
-            return jsonify({"error": "Not authenticated"}), 401
-        
-        return jsonify({
-            "status": dashboard.get_system_status(),
-            "stats": dashboard.get_usage_stats(),
-            "settings": dashboard.get_tts_settings()
-        })
-    except Exception as e:
-        print(f"❌ Admin API status error: {e}")
-        return jsonify({
-            "error": f"Failed to get system status: {str(e)}",
-            "message": "Please check server logs for details"
-        }), 500
+    from admin_dashboard import AdminDashboard
+    dashboard = AdminDashboard()
+    
+    if 'admin_logged_in' not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    
+    return jsonify({
+        "status": dashboard.get_system_status(),
+        "stats": dashboard.get_usage_stats(),
+        "settings": dashboard.get_tts_settings()
+    })
 
 @app.route('/admin/api/enable_gemini', methods=['POST'])
 def admin_api_enable_gemini():
@@ -945,154 +971,36 @@ def admin_api_toggle_google_api():
         else:
             return jsonify({"success": False, "message": "Failed to disable Google API services"})
 
-# New Admin Dashboard Routes (avoid conflicts with existing routes)
-@app.route('/admin/dashboard')
-def admin_dashboard():
-    """Serve the admin dashboard"""
-    return render_template('admin_dashboard.html')
-
-@app.route('/admin/dashboard/api/login', methods=['POST'])
-def admin_dashboard_login():
-    """Admin login endpoint"""
+# Serve TTS files
+@app.route('/uploads/<filename>')
+def serve_tts_file(filename):
+    """Serve TTS files created by the Python API"""
     try:
-        data = request.get_json()
-        password = data.get('password')
+        print(f"🔍 [PYTHON_API] Request to serve TTS file: {filename}")
         
-        if not password:
-            return jsonify({"error": "Password required"}), 400
+        # Try to find the file in common locations
+        possible_paths = [
+            os.path.join('server', 'dist', 'uploads', filename),
+            os.path.join('uploads', filename),
+            os.path.join('tts_output', filename),
+            filename  # Direct filename
+        ]
         
-        # Load admin config to get password hash
-        config_file = "admin_config.json"
-        if os.path.exists(config_file):
-            with open(config_file, 'r') as f:
-                config = json.load(f)
-        else:
-            return jsonify({"error": "Admin config not found"}), 500
+        print(f"🔍 [PYTHON_API] Checking possible paths:")
+        for file_path in possible_paths:
+            print(f"🔍 [PYTHON_API]   - {file_path}: {'EXISTS' if os.path.exists(file_path) else 'NOT FOUND'}")
+            if os.path.exists(file_path):
+                print(f"🔍 [PYTHON_API] Serving TTS file: {file_path}")
+                return send_from_directory(os.path.dirname(file_path), os.path.basename(file_path))
         
-        # Check password hash
-        import hashlib
-        password_hash = hashlib.sha256(password.encode()).hexdigest()
-        stored_hash = config.get('admin_password_hash')
+        print(f"🔍 [PYTHON_API] TTS file not found in any location: {filename}")
+        return jsonify({"error": "File not found"}), 404
         
-        if password_hash == stored_hash:
-            session['admin_logged_in'] = True
-            return jsonify({"success": True, "message": "Login successful"})
-        else:
-            return jsonify({"error": "Invalid password"}), 401
-            
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/admin/dashboard/api/logout', methods=['POST'])
-def admin_dashboard_logout():
-    """Admin logout endpoint"""
-    session.pop('admin_logged_in', None)
-    return jsonify({"success": True, "message": "Logged out"})
-
-@app.route('/admin/dashboard/api/status', methods=['GET'])
-def admin_dashboard_status():
-    """Get current admin settings and status"""
-    if 'admin_logged_in' not in session:
-        return jsonify({"error": "Not authenticated"}), 401
-    try:
-        config_file = "admin_config.json"
-        if os.path.exists(config_file):
-            with open(config_file, 'r') as f:
-                config = json.load(f)
-        else:
-            config = {
-                "tts_settings": {
-                    "default_tts": "system",
-                    "gemini_enabled": False,
-                    "cost_limit_per_day": 1,
-                    "usage_tracking": True,
-                    "active_tts": "system"
-                },
-                "google_api_settings": {
-                    "services_enabled": True,
-                    "gemini_enabled": False,
-                    "google_cloud_tts_enabled": True
-                }
-            }
-        
-        # Add system status
-        status = {
-            "config": config,
-            "gemini_ready": is_gemini_ready(),
-            "python_api": True,
-            "timestamp": datetime.datetime.now().isoformat()
-        }
-        
-        return jsonify(status)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/admin/dashboard/api/update_tts_settings', methods=['POST'])
-def admin_dashboard_update_tts_settings():
-    """Update TTS settings"""
-    if 'admin_logged_in' not in session:
-        return jsonify({"error": "Not authenticated"}), 401
-    try:
-        data = request.get_json()
-        config_file = "admin_config.json"
-        
-        # Load current config
-        if os.path.exists(config_file):
-            with open(config_file, 'r') as f:
-                config = json.load(f)
-        else:
-            config = {}
-        
-        # Initialize tts_settings if not exists
-        if 'tts_settings' not in config:
-            config['tts_settings'] = {}
-        
-        # Update TTS settings
-        if 'gemini_enabled' in data:
-            config['tts_settings']['gemini_enabled'] = data['gemini_enabled']
-        if 'active_tts' in data:
-            config['tts_settings']['active_tts'] = data['active_tts']
-        if 'cost_limit_per_day' in data:
-            config['tts_settings']['cost_limit_per_day'] = float(data['cost_limit_per_day'])
-        if 'usage_tracking' in data:
-            config['tts_settings']['usage_tracking'] = data['usage_tracking']
-        
-        # Save config
-        with open(config_file, 'w') as f:
-            json.dump(config, f, indent=2)
-        
-        print(f"✅ TTS settings updated: {data}")
-        
-        return jsonify({
-            "success": True,
-            "message": "TTS settings updated successfully",
-            "settings": config['tts_settings']
-        })
-    except Exception as e:
-        print(f"❌ Error updating TTS settings: {e}")
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/admin/dashboard/api/test_tts', methods=['POST'])
-def admin_dashboard_test_tts():
-    """Test TTS with current settings"""
-    if 'admin_logged_in' not in session:
-        return jsonify({"error": "Not authenticated"}), 401
-    try:
-        data = request.get_json()
-        text = data.get('text', 'Hello, this is a test of the TTS system.')
-        language = data.get('language', 'en')
-        
-        # Generate a test TTS file
-        test_file = f"tts_output/admin_test_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.aiff"
-        result = synthesize_speech(text, language, test_file)
-        
-        return jsonify({
-            "success": True,
-            "message": "TTS test completed",
-            "result": result if isinstance(result, dict) else {"output_path": result}
-        })
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        print(f"🔍 [PYTHON_API] Error serving TTS file: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": "Failed to serve file"}), 500
 
 if __name__ == '__main__':
     print("Starting Python Speech Analysis API...")

@@ -418,16 +418,12 @@ app.post('/api/analyze', authenticateJWT, upload.single('audio'), async (req: Re
       });
       
       if (ttsResponse.data.success && ttsResponse.data.output_path) {
-        // Check if file was created
-        if (fs.existsSync(ttsFilePath)) {
-          const stats = fs.statSync(ttsFilePath);
-          console.log('TTS file created, size:', stats.size, 'bytes');
-          ttsUrl = `/uploads/${ttsFileName}`;
-          console.log('TTS audio generated at:', ttsUrl);
-        } else {
-          console.error('TTS file was not created');
-          ttsUrl = null;
-        }
+        // Use the relative path returned by Python API for serving
+        const relativePath = ttsResponse.data.output_path;
+        const fileName = path.basename(relativePath);
+        ttsUrl = `/files/${fileName}`;
+        console.log('TTS audio generated at:', ttsUrl);
+        console.log('TTS relative path:', relativePath);
       } else {
         console.error('TTS generation failed:', ttsResponse.data.error);
         ttsUrl = null;
@@ -1351,7 +1347,9 @@ app.patch('/api/conversations/:id', authenticateJWT, async (req: Request, res: R
 // Text suggestions endpoint
 app.post('/api/suggestions', authenticateJWT, async (req: Request, res: Response) => {
   try {
-    console.log('POST /api/suggestions called');
+    console.log('🔍 [NODE_SERVER] POST /api/suggestions called');
+    console.log('🔍 [NODE_SERVER] Request body:', req.body);
+    console.log('🔍 [NODE_SERVER] User ID:', req.user?.userId);
     const { conversationId, language } = req.body;
     
     // Get user data for personalized suggestions
@@ -1376,12 +1374,90 @@ app.post('/api/suggestions', authenticateJWT, async (req: Request, res: Response
     // Call Python API for suggestions
     try {
       const pythonApiUrl = (process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com').replace(/\/$/, '');
-      const pythonResponse = await axios.post(`${pythonApiUrl}/suggestions`, {
+      const pythonRequestData = {
         chat_history: chatHistory,
         language: language || user?.target_language || 'en',
         user_level: userLevel,
         user_topics: userTopics,
-        user_goals: userGoals
+        // Include optional fields so Python routes can fully personalize output
+        formality: req.body.formality || 'friendly',
+        feedback_language: req.body.feedback_language || 'en',
+        user_goals: userGoals,
+        description: req.body.description || null
+      };
+      
+      console.log('🔍 [NODE_SERVER] Calling Python API for suggestions:', {
+        url: `${pythonApiUrl}/suggestions`,
+        data: pythonRequestData
+      });
+      
+      const pythonResponse = await axios.post(`${pythonApiUrl}/suggestions`, pythonRequestData, {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 30000
+      });
+      
+      console.log('🔍 [NODE_SERVER] Python suggestions response:', {
+        status: pythonResponse.status,
+        suggestionsCount: pythonResponse.data.suggestions?.length || 0,
+        data: pythonResponse.data
+      });
+      res.json({ suggestions: pythonResponse.data.suggestions });
+    } catch (pythonError: any) {
+      console.error('Python API not available for suggestions:', pythonError.message);
+      if (pythonError.response) {
+        console.error('🔍 [NODE_SERVER] Python error response:', {
+          status: pythonError.response.status,
+          data: pythonError.response.data
+        });
+      }
+      
+      // Fallback suggestions if Python API fails
+      const fallbackSuggestions = [
+        { text: "Hello", translation: "Hello", difficulty: "easy" },
+        { text: "How are you?", translation: "How are you?", difficulty: "easy" },
+        { text: "Thank you", translation: "Thank you", difficulty: "easy" }
+      ];
+      
+      res.json({ suggestions: fallbackSuggestions });
+    }
+  } catch (error: any) {
+    console.error('Suggestions error:', error);
+    res.status(500).json({ error: 'Error getting suggestions', details: error.message });
+  }
+});
+
+// Text suggestions endpoint (without authentication for testing)
+app.post('/api/suggestions-test', async (req: Request, res: Response) => {
+  try {
+    console.log('POST /api/suggestions-test called');
+    const { conversationId, language, user_level, user_topics, user_goals } = req.body;
+    
+    let chatHistory: any[] = [];
+    if (conversationId) {
+      // Get conversation history (without user authentication)
+      try {
+        const conversation = await getConversationWithMessages(Number(conversationId));
+        if (conversation) {
+          chatHistory = (conversation.messages || []).map(msg => ({
+            sender: msg.sender,
+            text: msg.text,
+            timestamp: msg.created_at
+          }));
+        }
+      } catch (e) {
+        console.log('Could not fetch conversation history:', e);
+      }
+    }
+    
+    // Call Python API for suggestions
+    try {
+      const pythonApiUrl = (process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com').replace(/\/$/, '');
+      const pythonResponse = await axios.post(`${pythonApiUrl}/suggestions`, {
+        chat_history: chatHistory,
+        language: language || 'en',
+        user_level: user_level || 'beginner',
+        user_topics: user_topics || [],
+        user_goals: user_goals || []
       }, {
         headers: { 'Content-Type': 'application/json' },
         timeout: 30000
@@ -1457,6 +1533,51 @@ app.post('/api/translate', authenticateJWT, async (req: Request, res: Response) 
 app.post('/api/explain_suggestion', authenticateJWT, async (req: Request, res: Response) => {
   try {
     console.log('POST /api/explain_suggestion called');
+    const { suggestion_text, chatHistory, language, user_level, user_topics, formality, feedback_language, user_goals } = req.body;
+    
+    if (!suggestion_text) {
+      return res.status(400).json({ error: 'No suggestion text provided' });
+    }
+    
+    // Call Python API for explanation
+    try {
+      const pythonApiUrl = (process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com').replace(/\/$/, '');
+      const pythonResponse = await axios.post(`${pythonApiUrl}/explain_suggestion`, {
+        suggestion_text: suggestion_text,
+        chatHistory: chatHistory || [],
+        language: language || 'en',
+        user_level: user_level || 'beginner',
+        user_topics: user_topics || [],
+        formality: formality || 'friendly',
+        feedback_language: feedback_language || 'en',
+        user_goals: user_goals || []
+      }, {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 30000
+      });
+      
+      console.log('Python explanation received');
+      res.json(pythonResponse.data);
+    } catch (pythonError: any) {
+      console.error('Python API not available for explanation:', pythonError.message);
+      
+      // Fallback response if Python API fails
+      res.json({
+        translation: "Explanation service temporarily unavailable",
+        explanation: "The explanation service is currently unavailable. Please try again later.",
+        error: "Python API not available"
+      });
+    }
+  } catch (error: any) {
+    console.error('Explain suggestion error:', error);
+    res.status(500).json({ error: 'Error explaining suggestion', details: error.message });
+  }
+});
+
+// Explain suggestion endpoint (without authentication for testing)
+app.post('/api/explain_suggestion-test', async (req: Request, res: Response) => {
+  try {
+    console.log('POST /api/explain_suggestion-test called');
     const { suggestion_text, chatHistory, language, user_level, user_topics, formality, feedback_language, user_goals } = req.body;
     
     if (!suggestion_text) {
@@ -1725,7 +1846,9 @@ app.post('/api/tts', authenticateJWT, async (req: Request, res: Response) => {
 // Quick translation endpoint
 app.post('/api/quick_translation', authenticateJWT, async (req: Request, res: Response) => {
   try {
-    console.log('POST /api/quick_translation called');
+    console.log('🔍 [NODE_SERVER] POST /api/quick_translation called');
+    console.log('🔍 [NODE_SERVER] Request body:', req.body);
+    console.log('🔍 [NODE_SERVER] User ID:', req.user?.userId);
     const { ai_message, language, user_level, user_topics, formality, feedback_language, user_goals, description } = req.body;
     
     if (!ai_message) {
@@ -1735,7 +1858,7 @@ app.post('/api/quick_translation', authenticateJWT, async (req: Request, res: Re
     // Call Python API for quick translation
     try {
       const pythonApiUrl = (process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com').replace(/\/$/, '');
-      const pythonResponse = await axios.post(`${pythonApiUrl}/quick_translation`, {
+      const pythonRequestData = {
         ai_message: ai_message,
         language: language || 'en',
         user_level: user_level || 'beginner',
@@ -1744,12 +1867,22 @@ app.post('/api/quick_translation', authenticateJWT, async (req: Request, res: Re
         feedback_language: feedback_language || 'en',
         user_goals: user_goals || [],
         description: description || null
-      }, {
+      };
+      
+      console.log('🔍 [NODE_SERVER] Calling Python API:', {
+        url: `${pythonApiUrl}/quick_translation`,
+        data: pythonRequestData
+      });
+      
+      const pythonResponse = await axios.post(`${pythonApiUrl}/quick_translation`, pythonRequestData, {
         headers: { 'Content-Type': 'application/json' },
         timeout: 30000
       });
       
-      console.log('Python quick translation received');
+      console.log('🔍 [NODE_SERVER] Python quick translation response:', {
+        status: pythonResponse.status,
+        data: pythonResponse.data
+      });
       res.json(pythonResponse.data);
     } catch (pythonError: any) {
       console.error('Python API not available for quick translation:', pythonError.message);
@@ -1766,11 +1899,68 @@ app.post('/api/quick_translation', authenticateJWT, async (req: Request, res: Re
   }
 });
 
-// Serve uploads directory statically for TTS audio
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// Serve uploads directory statically for TTS audio with proper CORS headers
+app.use('/uploads', (req, res, next) => {
+  // Set CORS headers for audio files
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+  res.header('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
+  next();
+}, express.static(path.join(__dirname, 'uploads')));
 
 // Also serve files from the current directory (where Python API might create files)
 app.use('/files', express.static(path.join(__dirname, '..')));
+
+// Proxy endpoint to serve TTS files from Python API
+app.get('/files/:filename', async (req: Request, res: Response) => {
+  try {
+    const filename = req.params.filename;
+    console.log(`🔍 [TTS_PROXY] Serving TTS file: ${filename}`);
+    
+    // First try to serve from local uploads directory
+    const localPath = path.join(uploadsDir, filename);
+    if (fs.existsSync(localPath)) {
+      console.log(`🔍 [TTS_PROXY] Serving from local path: ${localPath}`);
+      res.sendFile(localPath);
+      return;
+    }
+    
+    // If not found locally, try to fetch from Python API
+    const pythonApiUrl = (process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com').replace(/\/$/, '');
+    const pythonFileUrl = `${pythonApiUrl}/uploads/${filename}`;
+    
+    console.log(`🔍 [TTS_PROXY] File not found locally, trying Python API: ${pythonFileUrl}`);
+    
+    try {
+      const response = await axios.get(pythonFileUrl, {
+        responseType: 'stream',
+        timeout: 10000
+      });
+      
+      console.log(`🔍 [TTS_PROXY] Python API response status: ${response.status}`);
+      
+      // Set appropriate headers
+      res.set({
+        'Content-Type': 'audio/wav',
+        'Cache-Control': 'public, max-age=3600',
+        'Access-Control-Allow-Origin': '*'
+      });
+      
+      // Pipe the response from Python API to client
+      response.data.pipe(res);
+      
+    } catch (pythonError: any) {
+      console.error(`🔍 [TTS_PROXY] Failed to fetch from Python API: ${pythonError.message}`);
+      console.error(`🔍 [TTS_PROXY] Python API error details:`, pythonError.response?.status, pythonError.response?.data);
+      res.status(404).json({ error: 'TTS file not found' });
+    }
+    
+  } catch (error: any) {
+    console.error(`🔍 [TTS_PROXY] Error serving TTS file: ${error.message}`);
+    res.status(500).json({ error: 'Failed to serve TTS file' });
+  }
+});
 
 // Helper function to check Python API health
 async function checkPythonAPIHealth(): Promise<boolean> {
@@ -1842,41 +2032,33 @@ async function generateTTSWithDebug(text: string, language: string): Promise<{ t
     console.log(`🎯 [TTS DEBUG] Extracted debug info:`, debugInfo);
     
     if (ttsResponse.data.success && ttsResponse.data.output_path) {
-      // Use the actual file path returned by Python API
-      const actualFilePath = ttsResponse.data.output_path;
-      console.log(`🎯 [TTS DEBUG] Actual file path from Python API: ${actualFilePath}`);
+      // Use the relative path returned by Python API for serving
+      const relativePath = ttsResponse.data.output_path;
+      const actualPath = ttsResponse.data.actual_path;
       
-      // Check if file was created
-      if (fs.existsSync(actualFilePath)) {
-        const stats = fs.statSync(actualFilePath);
-        console.log('🎯 [TTS DEBUG] TTS file created, size:', stats.size, 'bytes');
-        
-        // Get the filename from the path
-        const fileName = path.basename(actualFilePath);
-        
-        // Check if file is in uploads directory or root directory
-        const isInUploads = actualFilePath.includes('uploads');
-        const ttsUrl = isInUploads ? `/uploads/${fileName}` : `/files/${fileName}`;
-        
-        console.log('🎯 [TTS DEBUG] TTS audio generated at:', ttsUrl);
-        console.log('🎯 [TTS DEBUG] File location:', isInUploads ? 'uploads directory' : 'root directory');
-        console.log('🎯 [TTS DEBUG] File extension:', path.extname(actualFilePath));
-        
-        return {
-          ttsUrl: ttsUrl,
-          debug: debugInfo
-        };
-      } else {
-        console.error('🎯 [TTS DEBUG] TTS file was not created at expected path');
-        return {
-          ttsUrl: null,
-          debug: {
-            ...debugInfo,
-            fallback_reason: 'File not created',
-            error: 'TTS file was not created at expected path'
-          }
-        };
-      }
+      console.log(`🎯 [TTS DEBUG] Relative path from Python API: ${relativePath}`);
+      console.log(`🎯 [TTS DEBUG] Actual path from Python API: ${actualPath}`);
+      
+      // The Python API now returns a relative path that we can serve directly
+      // Convert to the correct URL path for serving
+      const fileName = path.basename(relativePath);
+      const ttsUrl = `/files/${fileName}`;
+      
+      console.log('🎯 [TTS DEBUG] TTS audio will be served at:', ttsUrl);
+      console.log('🎯 [TTS DEBUG] File extension:', path.extname(relativePath));
+      
+      // Note: We don't check if the file exists locally because the Python API
+      // creates the file on its server, and we serve it via the /files endpoint
+      
+      return {
+        ttsUrl: ttsUrl,
+        debug: {
+          ...debugInfo,
+          relative_path: relativePath,
+          actual_path: actualPath,
+          serving_url: ttsUrl
+        }
+      };
     } else {
       console.error('🎯 [TTS DEBUG] TTS generation failed:', ttsResponse.data.error);
       return {

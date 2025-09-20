@@ -71,9 +71,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.log(`💾 Saved audio to: ${tempFilePath}`);
 
     try {
-      // Send JSON request to Python backend with file path
+      console.log('🔍 [TRANSCRIBE_API] Calling Python backend:', {
+        url: BACKEND_URL,
+        audio_data: `base64_${audioBuffer.length}_bytes`,
+        language: fields.language || 'en',
+        audio_size: audioBuffer.length
+      });
+
+      // Send audio data directly as base64 instead of file path
       const response = await axios.post(BACKEND_URL, {
-        audio_file: tempFilePath,
+        audio_data: audioBuffer.toString('base64'),
+        audio_filename: audioFilename,
         language: fields.language || 'en'
       }, {
         headers: {
@@ -82,7 +90,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         timeout: 30000 // 30 second timeout
       });
 
-      console.log('✅ Python backend response:', response.status);
+      console.log('🔍 [TRANSCRIBE_API] Python backend response:', {
+        status: response.status,
+        data: response.data
+      });
+      
       res.status(response.status).json(response.data);
     } finally {
       // Clean up temp file

@@ -6,6 +6,7 @@ import { useUser } from '../ClientLayout';
 import { useDarkMode } from '../contexts/DarkModeContext';
 import axios from 'axios';
 import { useRouter } from 'next/navigation';
+import { supabase } from '../../lib/supabase';
 import { motion } from 'framer-motion';
 import TopicSelectionModal from './TopicSelectionModal';
 import PersonaModal from './PersonaModal';
@@ -237,24 +238,23 @@ const AnalyzeContentInner = () => {
     const { isDarkMode } = useDarkMode();
   
     // Helper to get JWT token
-    const getAuthHeaders = () => {
+    const getAuthHeaders = async () => {
       if (typeof window === 'undefined') return {};
       
-      // Try custom JWT first, then Supabase token
+      // Try custom JWT first
       const customJwt = localStorage.getItem('jwt');
       if (customJwt) {
         return { Authorization: `Bearer ${customJwt}` };
       }
       
-      // Fallback to Supabase token
-      const supabaseToken = localStorage.getItem('supabase.auth.token');
-      if (supabaseToken) {
-        try {
-          const tokenData = JSON.parse(supabaseToken);
-          return { Authorization: `Bearer ${tokenData.access_token}` };
-        } catch (e) {
-          console.error('Failed to parse Supabase token:', e);
+      // Get Supabase session token
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          return { Authorization: `Bearer ${session.access_token}` };
         }
+      } catch (e) {
+        console.error('Failed to get Supabase session:', e);
       }
       
       return {};
@@ -783,18 +783,18 @@ const AnalyzeContentInner = () => {
         return null;
       }
     };
-  
     const loadExistingConversation = async (convId: string | null) => {
       if (!user || !convId) {
         return;
       }
       setIsLoadingConversation(true);
       try {
-        const response = await axios.get(`/api/conversations/${convId}`, { headers: getAuthHeaders() });
+        const response = await axios.get(`/api/conversations/${convId}`, { headers: await getAuthHeaders() });
         
         const conversation = response.data.conversation;
         setConversationId(conversation.id);
-        setLanguage(conversation.language);
+        // Preserve the user's current session language if already chosen
+        setLanguage((prev) => prev || conversation.language);
         
         // Extract user preferences from conversation
         const formality = conversation.formality || 'friendly';
@@ -909,7 +909,7 @@ const AnalyzeContentInner = () => {
     ) => {
       if (user && urlConversationId) {
         try {
-          const response = await axios.get(`/api/conversations/${urlConversationId}`, { headers: getAuthHeaders() });
+          const response = await axios.get(`/api/conversations/${urlConversationId}`, { headers: await getAuthHeaders() });
           if (!response.data.conversation) {
             removeConversationParam();
           }
@@ -962,13 +962,14 @@ const AnalyzeContentInner = () => {
         // 2. Add each message in chatHistory as a message in the conversation, with correct order
         for (let i = 0; i < chatHistory.length; i++) {
           const msg = chatHistory[i];
+          const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://beyondwords-express.onrender.com';
           await axios.post(
-            `/api/conversations/${newConversationId}/messages`,
+            `${backendUrl}/api/conversations/${newConversationId}/messages`,
             {
               sender: msg.sender,
               text: msg.text,
               messageType: 'text',
-              message_order: i + 1, // Ensure correct order
+              message_order: i + 1,
             },
             token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
           );
@@ -1198,7 +1199,7 @@ const AnalyzeContentInner = () => {
           {
             user_input: transcription,
             context,
-            language: detectedLanguage || language, // Use detected language if available
+            language: language,
             user_level: userPreferences.userLevel,
             user_topics: userPreferences.topics,
             formality: userPreferences.formality,
@@ -1227,7 +1228,7 @@ const AnalyzeContentInner = () => {
           console.log('[DEBUG] Playing short feedback TTS immediately');
           setIsPlayingShortFeedbackTTS(true);
           try {
-            await playTTSAudio(shortFeedback, detectedLanguage || language, cacheKey);
+            await playTTSAudio(shortFeedback, language, cacheKey);
             console.log('[DEBUG] Short feedback TTS finished');
           } catch (error) {
             console.error('[DEBUG] Error playing short feedback TTS:', error);
@@ -1296,7 +1297,7 @@ const AnalyzeContentInner = () => {
       try {
         const token = localStorage.getItem('jwt');
         
-        // Call the Node.js server which will route to Python API with admin controls
+        // Call the TTS API (will be routed to Node.js server via Next.js rewrites)
         const response = await axios.post('/api/tts', {
           text,
           language
@@ -1337,7 +1338,7 @@ const AnalyzeContentInner = () => {
         const ttsUrl = await generateTTSForText(text, language, cacheKey);
         if (ttsUrl) {
           // Handle both relative and absolute URLs from backend
-          const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
+          const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://beyondwords-express.onrender.com';
           const audioUrl = ttsUrl.startsWith('http') ? ttsUrl : `${backendUrl}${ttsUrl}`;
           const audio = new window.Audio(audioUrl);
           ttsAudioRef.current = audio;
@@ -1422,7 +1423,6 @@ const AnalyzeContentInner = () => {
         setIsPlayingAnyTTS(false);
       }
     };
-  
     const getTTSUrl = async (text: string, language: string) => null;
     const playTTS = async (url: string) => {};
     // Enhanced Japanese romanization with comprehensive debug information
@@ -1809,8 +1809,8 @@ const AnalyzeContentInner = () => {
         // Step 1: Get transcription first with language detection
         const formData = new FormData();
         formData.append('audio', audioBlob, 'recording.webm');
-        // Don't specify language - let the backend detect it automatically
-        // formData.append('language', language);
+        // Explicitly pass the selected language to guide transcription (e.g., 'tl' for Tagalog)
+        formData.append('language', language);
         
         // Add JWT token to headers
         const token = localStorage.getItem('jwt');
@@ -1822,13 +1822,13 @@ const AnalyzeContentInner = () => {
         });
         
         const transcription = transcriptionResponse.data.transcription || 'Speech recorded';
-        const detectedLanguage = transcriptionResponse.data.detected_language || language; // Fallback to selected language
+        const detectedLanguage = language; // Persist session language; ignore detection
         
         // Generate romanized text for user messages in script languages
         // Use detected language for romanization, not the selected language
         let userRomanizedText = '';
-        if (isScriptLanguage(detectedLanguage) && transcription !== 'Speech recorded') {
-          userRomanizedText = await generateRomanizedText(transcription, detectedLanguage);
+        if (isScriptLanguage(language) && transcription !== 'Speech recorded') {
+          userRomanizedText = await generateRomanizedText(transcription, language);
         }
         
         // Replace the placeholder message with the actual transcript
@@ -1858,7 +1858,7 @@ const AnalyzeContentInner = () => {
         // Step 1.5: Get short feedback first for autospeak mode
         if (autoSpeak && enableShortFeedback && transcription !== 'Speech recorded') {
           console.log('[DEBUG] Step 1.5: Getting short feedback for autospeak mode...');
-          await fetchAndShowShortFeedback(transcription, detectedLanguage); // Pass detected language
+          await fetchAndShowShortFeedback(transcription, language);
           console.log('[DEBUG] Short feedback completed, now starting AI processing...');
         }
         
@@ -1888,15 +1888,18 @@ const AnalyzeContentInner = () => {
         const aiResponseData = {
           transcription: transcription,
           chat_history: updatedChatHistory,
-          language: detectedLanguage, // Use detected language for AI processing
+          language: language,
           user_level: userPreferences.userLevel,
           user_topics: userPreferences.topics,
           user_goals: user?.learning_goals ? (typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : user.learning_goals) : [],
           formality: userPreferences.formality,
           feedback_language: userPreferences.feedbackLanguage
         };
+
+        console.log('🔍 [FRONTEND] sessionLanguage before AI call:', language);
+        console.log('🔍 [FRONTEND] Calling AI response API with data:', aiResponseData);
         
-  
+        // Use internal Next.js API route to proxy to backend, avoiding env/base URL mismatches
         const aiResponseResponse = await axios.post('/api/ai_response', aiResponseData, {
           headers: {
             'Content-Type': 'application/json',
@@ -1904,7 +1907,13 @@ const AnalyzeContentInner = () => {
           }
         });
         
-        const aiResponse = aiResponseResponse.data.response;
+        console.log('🔍 [FRONTEND] AI response API response:', {
+          status: aiResponseResponse.status,
+          data: aiResponseResponse.data
+        });
+        
+        const aiResponse = aiResponseResponse.data?.response || aiResponseResponse.data?.ai_response || aiResponseResponse.data?.message;
+        console.log('🔍 [FRONTEND] Extracted AI response:', aiResponse);
         
                 // Add AI response if present
           if (aiResponse) {
@@ -2661,23 +2670,42 @@ const AnalyzeContentInner = () => {
           console.log('[DEBUG] Playing initial AI message TTS:', (aiMessage as any).ttsUrl);
           // Handle both relative and absolute URLs from backend
           const ttsUrl = (aiMessage as any).ttsUrl;
-          const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
+          const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://beyondwords-express.onrender.com';
           const audioUrl = ttsUrl.startsWith('http') ? ttsUrl : `${backendUrl}${ttsUrl}`;
+          
+          console.log('[DEBUG] TTS URL details:', {
+            originalTtsUrl: ttsUrl,
+            backendUrl: backendUrl,
+            finalAudioUrl: audioUrl
+          });
+          
           try {
+            console.log('[DEBUG] Checking audio file availability:', audioUrl);
             const headResponse = await fetch(audioUrl, { method: 'HEAD' });
+            console.log('[DEBUG] HEAD response status:', headResponse.status);
+            console.log('[DEBUG] HEAD response headers:', Object.fromEntries(headResponse.headers.entries()));
+            
             if (headResponse.ok) {
+              console.log('[DEBUG] Audio file is accessible, creating Audio object');
               const audio = new window.Audio(audioUrl);
               ttsAudioRef.current = audio;
+              
+              audio.addEventListener('loadstart', () => console.log('[DEBUG] Audio loading started'));
+              audio.addEventListener('canplay', () => console.log('[DEBUG] Audio can play'));
+              audio.addEventListener('error', (e) => console.error('[DEBUG] Audio error event:', e));
+              
               audio.onended = () => {
                 ttsAudioRef.current = null;
                 console.log('[DEBUG] Initial AI TTS finished playing');
               };
+              
+              console.log('[DEBUG] Attempting to play audio');
               audio.play().catch(error => {
                 console.error('Failed to play initial TTS audio:', error);
                 ttsAudioRef.current = null;
               });
             } else {
-              console.log('[DEBUG] Initial TTS file not found, skipping TTS playback');
+              console.log('[DEBUG] Initial TTS file not found (status:', headResponse.status, '), skipping TTS playback');
             }
           } catch (fetchError: unknown) {
             console.error('Error checking initial TTS audio file:', fetchError);
@@ -2722,8 +2750,9 @@ const AnalyzeContentInner = () => {
       }
       try {
         const token = localStorage.getItem('jwt');
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://beyondwords-express.onrender.com';
         const response = await axios.post(
-          `/api/conversations/${useConversationId}/messages`,
+          `${backendUrl}/api/conversations/${useConversationId}/messages`,
           {
             sender,
             text,
@@ -3344,7 +3373,7 @@ const AnalyzeContentInner = () => {
   
         // Save persona to database
         const response = await axios.post('/api/personas', personaData, {
-          headers: getAuthHeaders()
+          headers: await getAuthHeaders()
         });
   
         if (response.status === 201) {
@@ -3355,7 +3384,7 @@ const AnalyzeContentInner = () => {
                 usesPersona: true,
                 personaId: response.data.persona.id
               }, {
-                headers: getAuthHeaders()
+                headers: await getAuthHeaders()
               });
             } catch (error) {
               console.error('Error updating conversation with persona info:', error);
@@ -3646,7 +3675,6 @@ const AnalyzeContentInner = () => {
         return { mainText: message.text, romanizedText: romanizedText };
       }
     };
-  
     // Helper function to get the appropriate text for TTS based on romanization display preference
     const getTTSText = (message: ChatMessage, romanizationDisplay: string | undefined, language: string): string => {
       console.log('[DEBUG] getTTSText called with:', { 
@@ -4136,6 +4164,7 @@ const AnalyzeContentInner = () => {
       
       try {
         const token = localStorage.getItem('jwt');
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://beyondwords-express.onrender.com';
         const requestData = {
           ai_message: text,
           language: language,
@@ -4147,10 +4176,10 @@ const AnalyzeContentInner = () => {
           description: conversationDescription
         };
   
-        console.log('[DEBUG] quickTranslation() calling /api/quick_translation with:', requestData);
+        console.log('[DEBUG] quickTranslation() calling backend with:', { url: `/api/quick_translation`, requestData });
         
         const response = await axios.post(
-          '/api/quick_translation',
+          `/api/quick_translation`,
           requestData,
           token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
         );
@@ -4727,7 +4756,7 @@ const AnalyzeContentInner = () => {
         const limit = Math.min(MESSAGES_PER_PAGE, messageCount - currentCount);
 
         const response = await axios.get(`/api/conversations/${conversationId}?limit=${limit}&offset=${offset}`, {
-          headers: getAuthHeaders()
+          headers: await getAuthHeaders()
         });
 
         const conversation = response.data.conversation;
@@ -4764,7 +4793,6 @@ const AnalyzeContentInner = () => {
       }
     };
     // --- END PAGINATION LOGIC ---
-    
     return (
       <div className="analyze-page" style={{ 
         display: 'flex', 

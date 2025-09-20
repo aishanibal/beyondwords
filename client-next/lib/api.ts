@@ -1,17 +1,18 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // API client for server communication
 import axios from 'axios';
+import { supabase } from './supabase';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://beyondwords-express.onrender.com';
 
-// Helper function to get auth token
+// Helper function to get auth token synchronously
 const getAuthToken = (): string | null => {
   if (typeof window !== 'undefined') {
     // First try to get the custom JWT token
     const customJwt = localStorage.getItem('jwt');
     if (customJwt) return customJwt;
     
-    // Fallback to Supabase token
+    // Try to get Supabase token from localStorage
     const supabaseToken = localStorage.getItem('supabase.auth.token');
     if (supabaseToken) {
       try {
@@ -19,6 +20,17 @@ const getAuthToken = (): string | null => {
         return tokenData.access_token;
       } catch (e) {
         console.error('Failed to parse Supabase token:', e);
+      }
+    }
+    
+    // Try to get from Supabase session storage
+    const sessionData = localStorage.getItem('sb-' + process.env.NEXT_PUBLIC_SUPABASE_URL?.split('//')[1]?.split('.')[0] + '-auth-token');
+    if (sessionData) {
+      try {
+        const session = JSON.parse(sessionData);
+        return session.access_token;
+      } catch (e) {
+        console.error('Failed to parse Supabase session:', e);
       }
     }
   }

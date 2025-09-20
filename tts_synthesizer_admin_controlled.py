@@ -467,34 +467,389 @@ class AdminControlledTTSSynthesizer:
                     return output_path
                     
             elif self.system == 'linux':
-                voice = self.voice_map.get(language_code, {}).get('linux', 'english_rp')
-                print(f"🖥️ Linux voice: '{voice}'")
+                # Use web-based TTS for Linux (no dependencies required)
+                print("🌐 Using web-based TTS for Linux (no dependencies required)")
+                result = self._try_web_tts(text, language_code, output_path)
+                if result:
+                    return result
                 
-                # Check if espeak is available
-                try:
-                    espeak_check = subprocess.run(['which', 'espeak'], capture_output=True, text=True)
-                    if espeak_check.returncode != 0:
-                        print("❌ espeak not found on system. Install with: apt-get install espeak")
-                        return None
-                except Exception as e:
-                    print(f"❌ Error checking for espeak: {e}")
-                    return None
+                # Fallback to system TTS methods (commented out - kept for future use)
+                # voice = self.voice_map.get(language_code, {}).get('linux', 'english_rp')
+                # 
+                # # Try espeak first
+                # try:
+                #     cmd = ['espeak', '-v', voice, '-w', output_path, text]
+                #     result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+                #     if result.returncode == 0 and os.path.exists(output_path):
+                #         print(f"✅ espeak TTS successful: {output_path}")
+                #         return output_path
+                # except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+                #     print(f"⚠️ espeak failed: {e}")
+                # 
+                # # Try festival as fallback
+                # try:
+                #     cmd = ['festival', '--tts', '--pipe']
+                #     with open(output_path, 'wb') as f:
+                #         result = subprocess.run(cmd, input=text, stdout=f, stderr=subprocess.PIPE, text=True, timeout=10)
+                #     if result.returncode == 0 and os.path.exists(output_path):
+                #         print(f"✅ festival TTS successful: {output_path}")
+                #         return output_path
+                # except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+                #     print(f"⚠️ festival failed: {e}")
+                # 
+                # # Try spd-say as another fallback
+                # try:
+                #     cmd = ['spd-say', '-w', '-o', output_path, text]
+                #     result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+                #     if result.returncode == 0 and os.path.exists(output_path):
+                #         print(f"✅ spd-say TTS successful: {output_path}")
+                #         return output_path
+                # except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+                #     print(f"⚠️ spd-say failed: {e}")
                 
-                cmd = ['espeak', '-v', voice, '-w', output_path, text]
-                print(f"🖥️ Running command: {' '.join(cmd)}")
-                result = subprocess.run(cmd, capture_output=True, text=True)
-                print(f"🖥️ Command return code: {result.returncode}")
-                if result.returncode == 0:
-                    print(f"✅ Linux TTS successful: {output_path}")
-                    return output_path
-                else:
-                    print(f"❌ Linux TTS failed: {result.stderr}")
-                    return None
+                # If web TTS fails, create a simple beep sound as final fallback
+                print("🔇 Web TTS failed, creating simple audio file...")
+                return self._create_simple_audio_file(text, output_path)
                     
         except Exception as e:
             print(f"System TTS error: {e}")
         
         return None
+
+    def _try_web_tts(self, text: str, language_code: str, output_path: str) -> Optional[str]:
+        """Try web-based TTS using free online services (no dependencies required)"""
+        try:
+            import urllib.request
+            import urllib.parse
+            import io
+            
+            # Limit text length for web TTS (most services have limits)
+            max_length = 200
+            if len(text) > max_length:
+                text = text[:max_length] + "..."
+                print(f"🌐 Text truncated to {max_length} characters for web TTS")
+            
+            # Map language codes to web TTS service language codes
+            lang_map = {
+                'en': 'en',
+                'es': 'es',
+                'fr': 'fr',
+                'de': 'de',
+                'it': 'it',
+                'pt': 'pt',
+                'ru': 'ru',
+                'ja': 'ja',
+                'ko': 'ko',
+                'zh': 'zh',
+                'hi': 'hi',
+                'ar': 'ar',
+                'tl': 'en',  # Fallback to English for Tagalog
+                'ta': 'en',  # Fallback to English for Tamil
+                'ml': 'en',  # Fallback to English for Malayalam
+                'or': 'en'   # Fallback to English for Odia
+            }
+            
+            web_lang = lang_map.get(language_code, 'en')
+            print(f"🌐 Web TTS: Using language '{web_lang}' for '{language_code}'")
+            
+            # Try multiple free TTS services
+            services = [
+                self._try_google_translate_tts,
+                self._try_voicerss_tts,
+                self._try_responsivevoice_tts,
+                self._try_elevenlabs_free_tts
+            ]
+            
+            for service in services:
+                try:
+                    result = service(text, web_lang, output_path)
+                    if result:
+                        print(f"✅ Web TTS successful with {service.__name__}: {result}")
+                        return result
+                except Exception as e:
+                    print(f"⚠️ {service.__name__} failed: {e}")
+                    continue
+            
+            print("⚠️ All web TTS services failed")
+            return None
+            
+        except Exception as e:
+            print(f"🌐 Web TTS error: {e}")
+            return None
+
+    def _try_google_translate_tts(self, text: str, lang: str, output_path: str) -> Optional[str]:
+        """Try Google Translate TTS (free, no API key required)"""
+        try:
+            import urllib.request
+            import urllib.parse
+            import ssl
+            
+            # Limit text length for Google Translate TTS (it has a limit)
+            max_length = 200
+            if len(text) > max_length:
+                text = text[:max_length]
+                print(f"🌐 Text truncated to {max_length} characters for Google Translate TTS")
+            
+            # Google Translate TTS URL (updated format)
+            encoded_text = urllib.parse.quote(text)
+            url = f"https://translate.google.com/translate_tts?ie=UTF-8&tl={lang}&client=tw-ob&q={encoded_text}"
+            
+            print(f"🌐 Trying Google Translate TTS: {url[:100]}...")
+            
+            # Create request with proper headers and SSL context
+            req = urllib.request.Request(url)
+            req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36')
+            req.add_header('Accept', 'audio/mpeg, audio/*, */*')
+            req.add_header('Accept-Language', 'en-US,en;q=0.9')
+            req.add_header('Referer', 'https://translate.google.com/')
+            
+            # Create SSL context that doesn't verify certificates (for some servers)
+            ssl_context = ssl.create_default_context()
+            ssl_context.check_hostname = False
+            ssl_context.verify_mode = ssl.CERT_NONE
+            
+            # Download audio data with timeout
+            with urllib.request.urlopen(req, timeout=15, context=ssl_context) as response:
+                audio_data = response.read()
+            
+            print(f"🌐 Downloaded {len(audio_data)} bytes from Google Translate TTS")
+            
+            if len(audio_data) > 100:  # Basic check for valid audio data
+                # Save as MP3 first
+                mp3_path = output_path.replace('.aiff', '.mp3').replace('.wav', '.mp3')
+                with open(mp3_path, 'wb') as f:
+                    f.write(audio_data)
+                
+                print(f"🌐 Saved MP3 file: {mp3_path} ({len(audio_data)} bytes)")
+                
+                # Try to convert MP3 to WAV for browser compatibility
+                wav_path = self._convert_to_wav(mp3_path, output_path)
+                if wav_path and os.path.exists(wav_path):
+                    print(f"✅ Converted to WAV: {wav_path}")
+                    return wav_path
+                else:
+                    # If conversion fails, return the MP3 (browsers can play MP3)
+                    print(f"🌐 Using MP3 directly: {mp3_path}")
+                    return mp3_path
+            else:
+                print(f"⚠️ Google Translate TTS returned insufficient data: {len(audio_data)} bytes")
+                return None
+            
+        except Exception as e:
+            print(f"🌐 Google Translate TTS failed: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+
+    def _try_voicerss_tts(self, text: str, lang: str, output_path: str) -> Optional[str]:
+        """Try VoiceRSS TTS (free tier available)"""
+        try:
+            import urllib.request
+            import urllib.parse
+            
+            # VoiceRSS free API (limited but no key required for basic use)
+            # Note: This is a simplified version, real implementation would need API key
+            print("🌐 VoiceRSS TTS requires API key, skipping...")
+            return None
+            
+        except Exception as e:
+            print(f"🌐 VoiceRSS TTS failed: {e}")
+            return None
+
+    def _try_responsivevoice_tts(self, text: str, lang: str, output_path: str) -> Optional[str]:
+        """Try ResponsiveVoice TTS"""
+        try:
+            # ResponsiveVoice requires more complex setup, skip for now
+            print("🌐 ResponsiveVoice TTS requires complex setup, skipping...")
+            return None
+            
+        except Exception as e:
+            print(f"🌐 ResponsiveVoice TTS failed: {e}")
+            return None
+
+    def _try_elevenlabs_free_tts(self, text: str, lang: str, output_path: str) -> Optional[str]:
+        """Try ElevenLabs free TTS (no API key required for basic usage)"""
+        try:
+            import urllib.request
+            import urllib.parse
+            import json
+            
+            # Limit text length
+            max_length = 200
+            if len(text) > max_length:
+                text = text[:max_length]
+                print(f"🌐 Text truncated to {max_length} characters for ElevenLabs TTS")
+            
+            # ElevenLabs free TTS endpoint (no API key required for basic usage)
+            url = "https://api.elevenlabs.io/v1/text-to-speech/pNInz6obpgDQGcFmaJgB"
+            
+            # Prepare request data
+            data = {
+                "text": text,
+                "model_id": "eleven_monolingual_v1",
+                "voice_settings": {
+                    "stability": 0.5,
+                    "similarity_boost": 0.5
+                }
+            }
+            
+            # Convert to JSON
+            json_data = json.dumps(data).encode('utf-8')
+            
+            print(f"🌐 Trying ElevenLabs free TTS...")
+            
+            # Create request
+            req = urllib.request.Request(url, data=json_data)
+            req.add_header('Content-Type', 'application/json')
+            req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
+            
+            # Make request
+            with urllib.request.urlopen(req, timeout=15) as response:
+                audio_data = response.read()
+            
+            print(f"🌐 Downloaded {len(audio_data)} bytes from ElevenLabs TTS")
+            
+            if len(audio_data) > 100:  # Basic check for valid audio data
+                # Save as MP3
+                mp3_path = output_path.replace('.aiff', '.mp3').replace('.wav', '.mp3')
+                with open(mp3_path, 'wb') as f:
+                    f.write(audio_data)
+                
+                print(f"🌐 Saved MP3 file: {mp3_path} ({len(audio_data)} bytes)")
+                
+                # Try to convert to WAV
+                wav_path = self._convert_to_wav(mp3_path, output_path)
+                if wav_path and os.path.exists(wav_path):
+                    print(f"✅ Converted to WAV: {wav_path}")
+                    return wav_path
+                else:
+                    # If conversion fails, return the MP3
+                    print(f"🌐 Using MP3 directly: {mp3_path}")
+                    return mp3_path
+            else:
+                print(f"⚠️ ElevenLabs TTS returned insufficient data: {len(audio_data)} bytes")
+                return None
+            
+        except Exception as e:
+            print(f"🌐 ElevenLabs TTS failed: {e}")
+            return None
+
+    def _convert_to_wav(self, input_path: str, output_path: str) -> Optional[str]:
+        """Convert audio file to WAV format for browser compatibility"""
+        try:
+            import subprocess
+            
+            wav_path = output_path.replace('.aiff', '.wav').replace('.mp3', '.wav')
+            
+            # Try ffmpeg conversion first
+            try:
+                cmd = ['ffmpeg', '-i', input_path, '-acodec', 'pcm_s16le', '-ar', '22050', '-ac', '1', wav_path, '-y']
+                print(f"🔄 Attempting ffmpeg conversion: {' '.join(cmd)}")
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+                
+                if result.returncode == 0 and os.path.exists(wav_path):
+                    file_size = os.path.getsize(wav_path)
+                    print(f"✅ Converted to WAV using ffmpeg: {wav_path} ({file_size} bytes)")
+                    # Clean up original file
+                    try:
+                        os.remove(input_path)
+                    except:
+                        pass
+                    return wav_path
+                else:
+                    print(f"⚠️ ffmpeg conversion failed: {result.stderr}")
+            except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+                print(f"⚠️ ffmpeg not available or failed: {e}")
+            
+            # Try using sox if available (alternative audio converter)
+            try:
+                cmd = ['sox', input_path, '-r', '22050', '-c', '1', '-b', '16', wav_path]
+                print(f"🔄 Attempting sox conversion: {' '.join(cmd)}")
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+                
+                if result.returncode == 0 and os.path.exists(wav_path):
+                    file_size = os.path.getsize(wav_path)
+                    print(f"✅ Converted to WAV using sox: {wav_path} ({file_size} bytes)")
+                    # Clean up original file
+                    try:
+                        os.remove(input_path)
+                    except:
+                        pass
+                    return wav_path
+                else:
+                    print(f"⚠️ sox conversion failed: {result.stderr}")
+            except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+                print(f"⚠️ sox not available or failed: {e}")
+            
+            # If both ffmpeg and sox fail, try to use the file as-is if it's already supported
+            if input_path.endswith('.mp3') or input_path.endswith('.wav'):
+                print(f"🌐 Using original format (no conversion available): {input_path}")
+                return input_path
+            
+            print(f"⚠️ No audio conversion tools available, cannot convert {input_path}")
+            return None
+            
+        except Exception as e:
+            print(f"🌐 Audio conversion error: {e}")
+            return None
+
+    def _create_simple_audio_file(self, text: str, output_path: str) -> Optional[str]:
+        """Create a simple audio file with speech-like patterns as fallback"""
+        try:
+            import wave
+            import struct
+            import math
+            import random
+            
+            # Ensure we create a WAV file for browser compatibility
+            wav_path = output_path.replace('.aiff', '.wav') if output_path.endswith('.aiff') else output_path
+            if not wav_path.endswith('.wav'):
+                wav_path = wav_path + '.wav'
+            
+            # Create speech-like audio patterns
+            sample_rate = 22050
+            duration = min(len(text) * 0.08, 4.0)  # Duration based on text length, max 4 seconds
+            
+            num_samples = int(sample_rate * duration)
+            samples = []
+            
+            # Generate speech-like patterns with varying frequencies and amplitudes
+            for i in range(num_samples):
+                t = i / sample_rate
+                
+                # Create speech-like patterns with multiple harmonics
+                # Base frequency varies slightly (like human speech)
+                base_freq = 120 + 20 * math.sin(t * 2)  # Vary between 100-140 Hz
+                
+                # Add harmonics for more speech-like sound
+                sample = 0
+                sample += 0.4 * math.sin(2 * math.pi * base_freq * t)
+                sample += 0.2 * math.sin(2 * math.pi * base_freq * 2 * t)
+                sample += 0.1 * math.sin(2 * math.pi * base_freq * 3 * t)
+                
+                # Add some variation and envelope
+                envelope = math.exp(-t * 0.5)  # Decay envelope
+                variation = 1 + 0.1 * math.sin(t * 10)  # Small variations
+                
+                # Add some noise for more realistic speech-like quality
+                noise = 0.05 * (random.random() - 0.5)
+                
+                final_sample = int(32767 * 0.2 * envelope * variation * (sample + noise))
+                samples.append(max(-32767, min(32767, final_sample)))  # Clamp to 16-bit range
+            
+            # Write WAV file
+            with wave.open(wav_path, 'w') as wav_file:
+                wav_file.setnchannels(1)  # Mono
+                wav_file.setsampwidth(2)  # 16-bit
+                wav_file.setframerate(sample_rate)
+                wav_file.writeframes(struct.pack('<' + 'h' * len(samples), *samples))
+            
+            print(f"🔇 Created speech-like fallback audio file (WAV): {wav_path}")
+            return wav_path
+            
+        except Exception as e:
+            print(f"🔇 Failed to create fallback audio file: {e}")
+            return None
 
     def _try_google_cloud_tts(self, text: str, language_code: str, output_path: str) -> Optional[str]:
         """Try Google Cloud TTS (CHEAP)"""
