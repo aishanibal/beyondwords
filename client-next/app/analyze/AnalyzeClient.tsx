@@ -830,7 +830,7 @@ const AnalyzeContentInner = () => {
       };
 
       loadPreferencesForLanguage();
-    }, [language, user?.id, fetchUserDashboardPreferences]);
+    }, [language, user?.id]);
   
     const loadExistingConversation = async (convId: string | null) => {
       if (!user || !convId) {
@@ -2833,21 +2833,22 @@ const AnalyzeContentInner = () => {
         
         if (breakdown) {
           // Call detailed breakdown API
-          const response = await axios.post(
-            '/api/detailed_breakdown',
-            {
-              llm_response: text,
-              user_input: '', // We don't have the user input for this message
-              context: chatHistory.slice(-4).map(msg => `${msg.sender}: ${msg.text}`).join('\n'),
-              language: language,
-              user_level: userPreferences.userLevel,
-              user_topics: userPreferences.topics,
-              user_goals: userPreferences.user_goals,
-              formality: userPreferences.formality,
-              feedback_language: userPreferences.feedbackLanguage
-            },
-            token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
-          );
+          const response = await axios.post('/api/detailed_breakdown', {
+            llm_response: text,
+            user_input: '', // We don't have the user input for this message
+            context: chatHistory.slice(-4).map(msg => `${msg.sender}: ${msg.text}`).join('\n'),
+            language: language,
+            user_level: userPreferences.userLevel,
+            user_topics: userPreferences.topics,
+            user_goals: user?.learning_goals ? (typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : user.learning_goals) : [],
+            formality: userPreferences.formality,
+            feedback_language: userPreferences.feedbackLanguage
+          }, {
+            headers: {
+              'Content-Type': 'application/json',
+              ...(token ? { Authorization: `Bearer ${token}` } : {})
+            }
+          });
           
           setTranslations(prev => ({ 
             ...prev, 
@@ -2904,20 +2905,21 @@ const AnalyzeContentInner = () => {
         const token = localStorage.getItem('jwt');
         const requestData = {
           suggestion_text: text,
-          chatHistory: chatHistory,
+          chat_history: chatHistory,
           language: language,
           user_level: userPreferences.userLevel,
           user_topics: userPreferences.topics,
           formality: userPreferences.formality,
           feedback_language: userPreferences.feedbackLanguage,
-          user_goals: userPreferences.user_goals
+          user_goals: user?.learning_goals ? (typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : user.learning_goals) : []
         };
         
-        const response = await axios.post(
-          '/api/explain_suggestion',
-          requestData,
-          token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
-        );
+        const response = await axios.post('/api/explain_suggestion', requestData, {
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          }
+        });
         
         const result = response.data;
   
@@ -3228,20 +3230,18 @@ const AnalyzeContentInner = () => {
           language: language,
           user_level: userPreferences.userLevel,
           user_topics: userPreferences.topics,
-          user_goals: userPreferences.user_goals,
+          user_goals: user?.learning_goals ? (typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : user.learning_goals) : [],
           formality: userPreferences.formality,
           feedback_language: userPreferences.feedbackLanguage
         };
   
-        console.log('[DEBUG] Request data for detailed breakdown:', requestData);
-        console.log('[DEBUG] Making request to /api/detailed_breakdown');
-  
         // Call Gemini client's get_detailed_breakdown function through Python API
-        const response = await axios.post(
-          '/api/detailed_breakdown',
-          requestData,
-          token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
-        );
+        const response = await axios.post('/api/detailed_breakdown', requestData, {
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          }
+        });
   
         console.log('[DEBUG] Detailed breakdown response received:', response);
         console.log('[DEBUG] Response data:', response.data);
@@ -4328,17 +4328,16 @@ const AnalyzeContentInner = () => {
           user_topics: userPreferences.topics,
           formality: userPreferences.formality,
           feedback_language: userPreferences.feedbackLanguage,
-          user_goals: userPreferences.user_goals,
+          user_goals: user?.learning_goals ? (typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : user.learning_goals) : [],
           description: conversationDescription
         };
-  
-        console.log('[DEBUG] explainLLMResponse() calling /api/detailed_breakdown with:', requestData);
         
-        const response = await axios.post(
-          '/api/detailed_breakdown',
-          requestData,
-          token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
-        );
+        const response = await axios.post('/api/detailed_breakdown', requestData, {
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          }
+        });
         
         const result = response.data;
         console.log('[DEBUG] explainLLMResponse() received response:', result);
