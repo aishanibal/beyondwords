@@ -731,10 +731,22 @@ const AnalyzeContentInner = () => {
   
     // Show topic modal automatically when accessing analyze page without conversation ID
     useEffect(() => {
-      if (user && !urlConversationId && !conversationId && chatHistory.length === 0) {
+      // Only show topic modal if:
+      // 1. User is logged in
+      // 2. No conversation ID in URL
+      // 3. No conversation ID in state
+      // 4. Chat history is empty
+      // 5. Not currently loading a conversation
+      // 6. Not in the middle of loading an existing conversation
+      if (user && !urlConversationId && !conversationId && chatHistory.length === 0 && !isLoadingConversation) {
+        console.log('[TOPIC_MODAL] Showing topic modal - no existing conversation');
         setShowTopicModal(true);
+      } else if (conversationId && chatHistory.length > 0) {
+        // If we have a conversation ID and chat history, ensure topic modal is closed
+        console.log('[TOPIC_MODAL] Hiding topic modal - conversation loaded with messages');
+        setShowTopicModal(false);
       }
-    }, [user, urlConversationId, conversationId, chatHistory.length]);
+    }, [user, urlConversationId, conversationId, chatHistory.length, isLoadingConversation]);
   
     useEffect(() => {
       if (user && localStorage.getItem('chatHistory')) {
@@ -836,11 +848,16 @@ const AnalyzeContentInner = () => {
       if (!user || !convId) {
         return;
       }
+      console.log('[CONVERSATION_LOAD] Starting to load conversation:', convId);
       setIsLoadingConversation(true);
+      // Ensure topic modal is closed while loading
+      setShowTopicModal(false);
+      
       try {
         const response = await axios.get(`/api/conversations/${convId}`, { headers: await getAuthHeaders() });
         
         const conversation = response.data.conversation;
+        console.log('[CONVERSATION_LOAD] Conversation loaded successfully:', conversation.id);
         setConversationId(conversation.id);
         // Preserve the user's current session language if already chosen
         setLanguage((prev) => prev || conversation.language);
@@ -925,9 +942,12 @@ const AnalyzeContentInner = () => {
         
         // Store user preferences for use in API calls
         setUserPreferences({ formality, topics, user_goals, userLevel, feedbackLanguage, romanizationDisplay });
+        console.log('[CONVERSATION_LOAD] Conversation loading completed successfully');
       } catch (error: unknown) {
-        console.error('[DEBUG] Error loading conversation:', error);
-        console.error('[DEBUG] Error details:', (error as any).response?.data || (error as any).message);
+        console.error('[CONVERSATION_LOAD] Error loading conversation:', error);
+        console.error('[CONVERSATION_LOAD] Error details:', (error as any).response?.data || (error as any).message);
+        // Reset conversation state on error
+        setConversationId(null);
         // Don't show error to user, just log it
       } finally {
         setIsLoadingConversation(false);
@@ -1333,20 +1353,26 @@ const AnalyzeContentInner = () => {
   
     // TTS functions with caching - now integrated with admin-controlled backend
     const generateTTSForText = async (text: string, language: string, cacheKey: string): Promise<string | null> => {
+      console.log('🎵 [GENERATE_TTS] Called with:', { text, language, cacheKey });
+      
       // Check cache first (cache for 5 minutes)
       const cached = ttsCache.get(cacheKey);
       const now = Date.now();
       if (cached && (now - cached.timestamp) < 5 * 60 * 1000) {
+        console.log('🎵 [GENERATE_TTS] Using cached URL:', cached.url);
         return cached.url;
       }
       
       // Set generating state
+      console.log('🎵 [GENERATE_TTS] Setting generating state');
       setIsGeneratingTTS(prev => ({ ...prev, [cacheKey]: true }));
       
       try {
         const token = localStorage.getItem('jwt');
+        console.log('🎵 [GENERATE_TTS] JWT token:', token ? 'present' : 'missing');
         
         // Call the TTS API (will be routed to Node.js server via Next.js rewrites)
+        console.log('🎵 [GENERATE_TTS] Calling /api/tts with:', { text, language });
         const response = await axios.post('/api/tts', {
           text,
           language
@@ -1356,6 +1382,8 @@ const AnalyzeContentInner = () => {
             ...(token ? { Authorization: `Bearer ${token}` } : {})
           }
         });
+        
+        console.log('🎵 [GENERATE_TTS] TTS API response:', response);
         
         const ttsUrl = response.data.ttsUrl;
         if (ttsUrl) {
@@ -1373,18 +1401,25 @@ const AnalyzeContentInner = () => {
     };
   
     const playTTSAudio = async (text: string, language: string, cacheKey: string) => {
+      console.log('🎵 [PLAY_TTS_AUDIO] Called with:', { text, language, cacheKey });
+      
       // Stop any currently playing audio
       if (ttsAudioRef.current) {
+        console.log('🎵 [PLAY_TTS_AUDIO] Stopping current audio');
         ttsAudioRef.current.pause();
         ttsAudioRef.current = null;
       }
       
       // Set playing state
+      console.log('🎵 [PLAY_TTS_AUDIO] Setting playing state');
       setIsPlayingTTS(prev => ({ ...prev, [cacheKey]: true }));
       setIsPlayingAnyTTS(true);
       
       try {
+        console.log('🎵 [PLAY_TTS_AUDIO] Calling generateTTSForText...');
         const ttsUrl = await generateTTSForText(text, language, cacheKey);
+        console.log('🎵 [PLAY_TTS_AUDIO] Generated TTS URL:', ttsUrl);
+        
         if (ttsUrl) {
           // Handle both relative and absolute URLs from backend
           const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://beyondwords-express.onrender.com';
@@ -1899,7 +1934,10 @@ const AnalyzeContentInner = () => {
         
         // Save user message to backend
         if (conversationId) {
+          console.log('[MESSAGE_SAVE] Saving user message to conversation:', conversationId);
           await saveMessageToBackend('User', transcription, 'text', null, null, userRomanizedText);
+        } else {
+          console.warn('[MESSAGE_SAVE] No conversation ID available for user message');
         }
         
         // Note: User messages don't need TTS playback - only AI responses get TTS
@@ -1984,7 +2022,10 @@ const AnalyzeContentInner = () => {
               return updated;
             });
             if (conversationId) {
+              console.log('[MESSAGE_SAVE] Saving AI message to conversation:', conversationId);
               await saveMessageToBackend('AI', formattedResponse.mainText, 'text', null, null, formattedResponse.romanizedText);
+            } else {
+              console.warn('[MESSAGE_SAVE] No conversation ID available for AI message');
             }
             
             // Play TTS for AI response immediately
@@ -2674,6 +2715,15 @@ const AnalyzeContentInner = () => {
       }
     };
     const handleModalConversationStart = async (newConversationId: string, topics: string[], aiMessage: unknown, formality: string, learningGoals: string[], description?: string, isUsingExistingPersona?: boolean) => {
+      console.log('[CONVERSATION_START] Starting new conversation:', {
+        conversationId: newConversationId,
+        topics,
+        formality,
+        learningGoals,
+        description,
+        isUsingExistingPersona
+      });
+      
       setConversationId(newConversationId);
       setChatHistory([]);
       setShowTopicModal(false);
@@ -2802,6 +2852,7 @@ const AnalyzeContentInner = () => {
     const saveMessageToBackend = async (sender: string, text: string, messageType = 'text', audioFilePath = null, targetConversationId = null, romanizedText: string | null = null) => {
       const useConversationId = targetConversationId || conversationId;
       if (!useConversationId) {
+        console.warn('[SAVE_MESSAGE] No conversation ID available, skipping message save');
         return;
       }
       try {
@@ -2818,8 +2869,11 @@ const AnalyzeContentInner = () => {
           },
           token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
         );
+        console.log(`[SAVE_MESSAGE] Successfully saved ${sender} message to conversation ${useConversationId}`);
       } catch (error: unknown) {
-        // Error handling removed for performance
+        console.error('[SAVE_MESSAGE] Failed to save message to backend:', error);
+        // Don't throw - we don't want to break the UI if message saving fails
+        // The message is still in the local chat history
       }
     };
   
@@ -3622,6 +3676,7 @@ const AnalyzeContentInner = () => {
     // Add this useEffect to load chat history from backend if conversationIdParam is present and chatHistory is empty
     useEffect(() => {
       if (user && urlConversationId && chatHistory.length === 0) {
+        console.log('[CONVERSATION_LOAD] Loading existing conversation:', urlConversationId);
         loadExistingConversation(urlConversationId);
       }
       // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -6388,12 +6443,53 @@ const AnalyzeContentInner = () => {
                                 </button>
                                 
                                 <button
-                                  onClick={() => {
+                                  onClick={async () => {
                                     const suggestion = suggestionMessages[currentSuggestionIndex];
-                                    if (suggestion) {
+                                    console.log('🎵 [SUGGESTION_TTS] Button clicked, suggestion:', suggestion);
+                                    console.log('🎵 [SUGGESTION_TTS] Current index:', currentSuggestionIndex);
+                                    console.log('🎵 [SUGGESTION_TTS] All suggestions:', suggestionMessages);
+                                    
+                                    if (!suggestion) {
+                                      console.error('🎵 [SUGGESTION_TTS] No suggestion found at index:', currentSuggestionIndex);
+                                      return;
+                                    }
+                                    
+                                    if (!suggestion.text) {
+                                      console.error('🎵 [SUGGESTION_TTS] Suggestion has no text:', suggestion);
+                                      return;
+                                    }
+                                    
+                                    console.log('🎵 [SUGGESTION_TTS] User preferences:', userPreferences);
+                                    console.log('🎵 [SUGGESTION_TTS] Language:', language);
+                                    
+                                    try {
                                       const ttsText = getTTSText(suggestion, userPreferences.romanizationDisplay, language);
+                                      console.log('🎵 [SUGGESTION_TTS] Generated TTS text:', ttsText);
+                                      
+                                      if (!ttsText || ttsText.trim().length === 0) {
+                                        console.error('🎵 [SUGGESTION_TTS] Empty TTS text generated');
+                                        return;
+                                      }
+                                      
                                       const cacheKey = `suggestion_${currentSuggestionIndex}`;
-                                      playTTSAudio(ttsText, language, cacheKey);
+                                      console.log('🎵 [SUGGESTION_TTS] Using cache key:', cacheKey);
+                                      
+                                      // Check TTS states before calling
+                                      console.log('🎵 [SUGGESTION_TTS] TTS states before call:', {
+                                        isGenerating: isGeneratingTTS[cacheKey],
+                                        isPlaying: isPlayingTTS[cacheKey]
+                                      });
+                                      
+                                      await playTTSAudio(ttsText, language, cacheKey);
+                                      console.log('🎵 [SUGGESTION_TTS] TTS call completed successfully');
+                                      
+                                    } catch (error) {
+                                      console.error('🎵 [SUGGESTION_TTS] TTS error:', error);
+                                      console.error('🎵 [SUGGESTION_TTS] Error details:', {
+                                        message: error.message,
+                                        stack: error.stack,
+                                        name: error.name
+                                      });
                                     }
                                   }}
                                   disabled={isGeneratingTTS[`suggestion_${currentSuggestionIndex}`] || isPlayingTTS[`suggestion_${currentSuggestionIndex}`]}
