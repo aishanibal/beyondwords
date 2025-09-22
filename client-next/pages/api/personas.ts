@@ -3,10 +3,10 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import axios from 'axios';
 
 const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
   process.env.BACKEND_URL ||
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
   process.env.AI_BACKEND_URL ||
-  'https://beyondwords.onrender.com';
+  'https://beyondwords-express.onrender.com';
 const BACKEND_URL = `${API_BASE}/api/personas`;
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {

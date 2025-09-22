@@ -1,8 +1,12 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import axios from 'axios';
 
-// Build backend URL from a known base
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://beyondwords-express.onrender.com';
+// Build backend URL from envs (prefer server BACKEND_URL)
+const API_BASE =
+  process.env.BACKEND_URL ||
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  process.env.AI_BACKEND_URL ||
+  'https://beyondwords-express.onrender.com';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { id, limit, offset } = req.query;
