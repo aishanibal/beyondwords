@@ -1391,15 +1391,41 @@ const AnalyzeContentInner = () => {
           ...(token ? { Authorization: `Bearer ${token}` } : {})
         });
         
-        const response = await axios.post('/api/tts', {
-          text,
-          language
-        }, {
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {})
+        let response;
+        try {
+          response = await axios.post('/api/tts', { text, language }, {
+            headers: {
+              'Content-Type': 'application/json',
+              ...(token ? { Authorization: `Bearer ${token}` } : {})
+            }
+          });
+        } catch (primaryErr: any) {
+          const status = primaryErr?.response?.status;
+          console.warn('🎵 [GENERATE_TTS] /api/tts failed:', status, primaryErr?.response?.data);
+          // Client-side fallback: call Express directly to bypass any Vercel route issues
+          const backendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL || 'https://beyondwords-express.onrender.com').replace(/\/$/, '');
+          const primaryUrl = `${backendUrl}/api/tts`;
+          const fallbackUrl = `${backendUrl}/api/tts-test`;
+          try {
+            if (token) {
+              console.log('🎵 [GENERATE_TTS] Retrying direct Express /api/tts');
+              response = await axios.post(primaryUrl, { text, language }, {
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${token}`
+                }
+              });
+            } else {
+              console.log('🎵 [GENERATE_TTS] Retrying direct Express /api/tts-test (no token)');
+              response = await axios.post(fallbackUrl, { text, language }, {
+                headers: { 'Content-Type': 'application/json' }
+              });
+            }
+          } catch (directErr) {
+            console.error('🎵 [GENERATE_TTS] Direct Express fallback failed:', directErr);
+            throw primaryErr; // surface the original
           }
-        });
+        }
         
         console.log('🎵 [GENERATE_TTS] TTS API response status:', response.status);
         console.log('🎵 [GENERATE_TTS] TTS API response data:', response.data);
