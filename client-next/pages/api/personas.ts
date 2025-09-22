@@ -2,14 +2,15 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import axios from 'axios';
 
-const PRIMARY_BASE =
+const PRIMARY_BASE = (
   process.env.BACKEND_URL ||
   process.env.NEXT_PUBLIC_API_BASE_URL ||
   process.env.AI_BACKEND_URL ||
-  'https://beyondwords-express.onrender.com';
+  'https://beyondwords-express.onrender.com'
+).replace(/\/$/, '');
 const FALLBACK_BASE = 'https://beyondwords.onrender.com';
 const PRIMARY_URL = `${PRIMARY_BASE}/api/personas`;
-const FALLBACK_URL = `${FALLBACK_BASE}/api/personas`;
+const FALLBACK_URL = `${FALLBACK_BASE.replace(/\/$/, '')}/api/personas`;
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const authHeader = req.headers.authorization || '';
