@@ -3042,7 +3042,9 @@ const AnalyzeContentInner = () => {
             text,
             messageType,
             audioFilePath,
-            romanized_text: romanizedText
+            romanized_text: romanizedText,
+            // Ensure backend receives a valid NOT NULL order
+            message_order: Math.max(1, (chatHistory?.length || 0))
           },
           { headers: authHeaders as any }
         );
@@ -3653,11 +3655,14 @@ const AnalyzeContentInner = () => {
         console.log('[MESSAGE_SYNC] Persisting unsaved messages:', unsaved.length);
         for (const msg of unsaved) {
           try {
+            const globalIndex = Math.max(0, chatHistory.indexOf(msg));
+            const order = globalIndex + 1;
             await axios.post(`/api/conversations/${conversationId}/messages`, {
               sender: msg.sender,
               text: msg.text,
               messageType: 'text',
               romanized_text: msg.romanizedText || null,
+              message_order: order,
               timestamp: (msg.timestamp instanceof Date ? msg.timestamp : new Date()).toISOString()
             }, { headers: authHeaders as any });
           } catch (e) {

@@ -34,6 +34,7 @@ import {
   createPersona,
   getUserPersonas,
   deletePersona,
+  supabase,
   User,
   LanguageDashboard,
   Session,
@@ -1294,7 +1295,25 @@ app.post('/api/conversations/:id/messages', optionalAuthenticateJWT as any, asyn
   try {
     console.log('🔄 SERVER: Adding message to conversation:', req.params.id);
     const { sender, text, messageType, audioFilePath, detailedFeedback, message_order, romanized_text } = req.body;
-    console.log('📝 SERVER: Message details:', { sender, text: text.substring(0, 50) + '...', messageType, message_order, romanized_text: romanized_text ? 'present' : 'none' });
+    console.log('📝 SERVER: Message details:', { sender, text: (text||'').substring(0, 50) + '...', messageType, message_order, romanized_text: romanized_text ? 'present' : 'none' });
+
+    // Compute a safe message order if missing
+    let finalOrder: number | undefined = typeof message_order === 'number' ? message_order : undefined;
+    if (finalOrder === undefined || Number.isNaN(finalOrder)) {
+      const { data: maxRows, error: maxErr } = await supabase
+        .from('messages')
+        .select('message_order')
+        .eq('conversation_id', Number(req.params.id))
+        .order('message_order', { ascending: false })
+        .limit(1);
+      if (maxErr) {
+        console.warn('⚠️ SERVER: Could not fetch max message_order, defaulting to 1:', maxErr.message);
+        finalOrder = 1;
+      } else {
+        const currentMax = (maxRows && maxRows.length > 0 && typeof maxRows[0].message_order === 'number') ? maxRows[0].message_order : 0;
+        finalOrder = currentMax + 1;
+      }
+    }
 
     const message = await addMessage(
       Number(req.params.id),
@@ -1303,7 +1322,7 @@ app.post('/api/conversations/:id/messages', optionalAuthenticateJWT as any, asyn
       messageType,
       audioFilePath,
       detailedFeedback,
-      message_order,
+      finalOrder,
       romanized_text
     );
 
