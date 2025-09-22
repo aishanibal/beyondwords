@@ -908,9 +908,10 @@ const AnalyzeContentInner = () => {
         console.log('[CONVERSATION_LOAD] Found messages:', messages.length);
         console.log('[CONVERSATION_LOAD] Messages data:', messages);
         
-        // Set pagination state
+        // Set pagination state (only enable banner when there's actually more to load)
         setMessageCount(messages.length);
-        setHasMoreMessages(messages.length > MESSAGES_PER_PAGE);
+        const initialLoaded = Math.min(messages.length, MESSAGES_PER_PAGE);
+        setHasMoreMessages(messages.length > initialLoaded);
         
         // Load only the most recent messages for performance
         const recentMessages = messages.slice(-MESSAGES_PER_PAGE);
@@ -3603,6 +3604,37 @@ const AnalyzeContentInner = () => {
     };
   
     // Persona-related functions
+    const syncUnsavedMessagesToBackend = async () => {
+      try {
+        if (!conversationId) return;
+        const token = localStorage.getItem('jwt');
+        // Messages that were created this session but may not have been persisted (network hiccup, etc.)
+        const unsaved = chatHistory.filter(m => m && m.isFromOriginalConversation === false);
+        if (unsaved.length === 0) return;
+        console.log('[MESSAGE_SYNC] Persisting unsaved messages:', unsaved.length);
+        for (const msg of unsaved) {
+          try {
+            await axios.post(`/api/conversations/${conversationId}/messages`, {
+              sender: msg.sender,
+              text: msg.text,
+              messageType: 'text',
+              romanized_text: msg.romanizedText || null,
+              timestamp: (msg.timestamp instanceof Date ? msg.timestamp : new Date()).toISOString()
+            }, token ? { headers: { Authorization: `Bearer ${token}` } } : undefined);
+          } catch (e) {
+            console.error('[MESSAGE_SYNC] Failed to persist message:', e);
+          }
+        }
+        // Mark as saved locally to keep flags consistent after sync
+        setChatHistory(prev => prev.map(m => m && m.isFromOriginalConversation === false ? { ...m, isFromOriginalConversation: true } : m));
+        // Align pagination counters to the full set now present in DB
+        setMessageCount(prev => Math.max(prev, chatHistory.length));
+        setHasMoreMessages(false);
+        console.log('[MESSAGE_SYNC] Sync complete');
+      } catch (err) {
+        console.error('[MESSAGE_SYNC] Unexpected error during sync:', err);
+      }
+    };
     const handleEndChat = async () => {
       console.log('🏁 [END_CHAT] End chat initiated');
       console.log('🏁 [END_CHAT] isNewPersona:', isNewPersona);
@@ -3623,6 +3655,9 @@ const AnalyzeContentInner = () => {
         return;
       }
       
+      // Ensure all locally-created messages are persisted before closing
+      await syncUnsavedMessagesToBackend();
+
       // Show persona modal for new conversations (not using existing persona)
       if (isNewPersona) {
         console.log('🏁 [END_CHAT] Showing persona modal for new conversation');
@@ -6414,7 +6449,7 @@ const AnalyzeContentInner = () => {
                             </div>
                           )}
                           
-                          {messageCount > 0 && (
+                          {hasMoreMessages && messageCount > chatHistory.length && (
                             <div style={{
                               position: 'absolute',
                               top: isLoadingMoreMessages ? '60px' : '0',
