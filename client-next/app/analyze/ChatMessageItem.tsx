@@ -134,8 +134,18 @@ const ChatMessageItem: React.FC<ChatMessageItemProps> = React.memo(({
   }), [isUserMessage, isDarkMode]);
 
   const handleListenClick = useCallback(() => {
+    console.log('🔊 [LISTEN_BUTTON] Clicked on message:', index);
+    console.log('🔊 [LISTEN_BUTTON] Message:', message);
+    console.log('🔊 [LISTEN_BUTTON] User preferences:', userPreferences);
+    console.log('🔊 [LISTEN_BUTTON] Language:', language);
+    
     const ttsText = getTTSText(message, userPreferences.romanizationDisplay);
+    console.log('🔊 [LISTEN_BUTTON] Generated TTS text:', ttsText);
+    
     const cacheKey = `message_${index}`;
+    console.log('🔊 [LISTEN_BUTTON] Cache key:', cacheKey);
+    
+    console.log('🔊 [LISTEN_BUTTON] Calling playTTS...');
     playTTS(ttsText, language, cacheKey);
   }, [message, userPreferences, index, language, playTTS, getTTSText]);
   

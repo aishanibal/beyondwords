@@ -1385,6 +1385,11 @@ const AnalyzeContentInner = () => {
         
         // Call the TTS API (will be routed to Node.js server via Next.js rewrites)
         console.log('🎵 [GENERATE_TTS] Calling /api/tts with:', { text, language });
+        console.log('🎵 [GENERATE_TTS] Request headers:', {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        });
+        
         const response = await axios.post('/api/tts', {
           text,
           language
@@ -1395,7 +1400,8 @@ const AnalyzeContentInner = () => {
           }
         });
         
-        console.log('🎵 [GENERATE_TTS] TTS API response:', response);
+        console.log('🎵 [GENERATE_TTS] TTS API response status:', response.status);
+        console.log('🎵 [GENERATE_TTS] TTS API response data:', response.data);
         
         const ttsUrl = response.data.ttsUrl;
         if (ttsUrl) {
@@ -1414,14 +1420,17 @@ const AnalyzeContentInner = () => {
   
     const playTTSAudio = async (text: string, language: string, cacheKey: string) => {
       console.log('🎵 [PLAY_TTS_AUDIO] Called with:', { text, language, cacheKey });
-      
+      console.log('🎵 [PLAY_TTS_AUDIO] Text length:', text.length);
+      console.log('🎵 [PLAY_TTS_AUDIO] Language:', language);
+      console.log('🎵 [PLAY_TTS_AUDIO] Cache key:', cacheKey);
+
       // Stop any currently playing audio
       if (ttsAudioRef.current) {
         console.log('🎵 [PLAY_TTS_AUDIO] Stopping current audio');
         ttsAudioRef.current.pause();
         ttsAudioRef.current = null;
       }
-      
+
       // Set playing state
       console.log('🎵 [PLAY_TTS_AUDIO] Setting playing state');
       setIsPlayingTTS(prev => ({ ...prev, [cacheKey]: true }));
