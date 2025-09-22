@@ -2202,10 +2202,20 @@ const AnalyzeContentInner = () => {
       setIsLoadingSuggestions(true);
       try {
         const token = localStorage.getItem('jwt');
+        // Prepare chat history for suggestions
+        const chatHistoryForSuggestions = chatHistory.map(msg => ({
+          sender: msg.sender,
+          text: msg.text,
+          timestamp: msg.timestamp
+        }));
+        
+        console.log('🔍 [FRONTEND] Sending chat history to suggestions:', chatHistoryForSuggestions.length, 'messages');
+        
         const response = await axios.post(
           '/api/suggestions',
           {
             conversationId: conversationId,
+            chat_history: chatHistoryForSuggestions, // Send chat history directly
             language: language,
             user_level: userPreferences.userLevel,
             user_topics: userPreferences.topics,
@@ -2266,10 +2276,21 @@ const AnalyzeContentInner = () => {
         const token = localStorage.getItem('jwt');
         console.log('[DEBUG] Suggestions request - language:', language);
         console.log('[DEBUG] Suggestions request - userPreferences:', userPreferences);
+        
+        // Prepare chat history for suggestions
+        const chatHistoryForSuggestions = chatHistory.map(msg => ({
+          sender: msg.sender,
+          text: msg.text,
+          timestamp: msg.timestamp
+        }));
+        
+        console.log('🔍 [FRONTEND] Sending chat history to suggestions (button click):', chatHistoryForSuggestions.length, 'messages');
+        
         const response = await axios.post(
           '/api/suggestions',
           {
             conversationId: conversationId,
+            chat_history: chatHistoryForSuggestions, // Send chat history directly
             language: language,
             user_level: userPreferences.userLevel,
             user_topics: userPreferences.topics,

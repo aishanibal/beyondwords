@@ -1359,16 +1359,27 @@ app.post('/api/suggestions', authenticateJWT, async (req: Request, res: Response
     const userGoals = req.body.user_goals || (user?.learning_goals && typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : Array.isArray(user?.learning_goals) ? user.learning_goals : []);
     
     let chatHistory: any[] = [];
-    if (conversationId) {
-      // Get conversation history
+    
+    // First, try to use chat history from frontend if provided
+    if (req.body.chat_history && Array.isArray(req.body.chat_history)) {
+      chatHistory = req.body.chat_history;
+      console.log('🔍 [NODE_SERVER] Using chat history from frontend:', chatHistory.length, 'messages');
+    } else if (conversationId) {
+      console.log('🔍 [NODE_SERVER] Getting conversation history for ID:', conversationId);
+      // Get conversation history from database as fallback
       const conversation = await getConversationWithMessages(Number(conversationId));
+      console.log('🔍 [NODE_SERVER] Conversation data:', conversation ? 'found' : 'not found');
       if (conversation) {
+        console.log('🔍 [NODE_SERVER] Messages count:', conversation.messages?.length || 0);
         chatHistory = (conversation.messages || []).map(msg => ({
           sender: msg.sender,
           text: msg.text,
           timestamp: msg.created_at
         }));
+        console.log('🔍 [NODE_SERVER] Mapped chat history from database:', chatHistory.length, 'messages');
       }
+    } else {
+      console.log('🔍 [NODE_SERVER] No conversationId or chat_history provided, using empty chat history');
     }
     
     // Call Python API for suggestions
