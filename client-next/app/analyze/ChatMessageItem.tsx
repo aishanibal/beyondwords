@@ -62,6 +62,7 @@ interface ChatMessageItemProps {
   isDarkMode: boolean;
   index: number;
   isLastMessage: boolean;
+  isLastAIMessage?: boolean;
   toggleShortFeedback: (index: number) => void;
   toggleDetailedFeedback: (index: number) => void;
   generateTTSForText: (text: string, language: string, cacheKey: string) => void;
@@ -89,6 +90,7 @@ const ChatMessageItem: React.FC<ChatMessageItemProps> = React.memo(({
   isDarkMode,
   index,
   isLastMessage,
+  isLastAIMessage,
   toggleShortFeedback,
   toggleDetailedFeedback,
   generateTTSForText,
@@ -352,7 +354,7 @@ const ChatMessageItem: React.FC<ChatMessageItemProps> = React.memo(({
             >
               {isGeneratingTTS[`message_${index}`] ? '🔄' : isPlayingTTS[`message_${index}`] ? '🔊 Playing' : '🔊 Listen'}
             </button>
-            {isLastMessage && message.sender === 'User' && (
+            {(isLastAIMessage || isLastMessage) && (
                 <button
                     onClick={handleSuggestionButtonClick}
                     disabled={isLoadingSuggestions || isProcessing}

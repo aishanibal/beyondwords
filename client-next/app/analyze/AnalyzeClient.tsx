@@ -6435,7 +6435,16 @@ const AnalyzeContentInner = () => {
                             </div>
                           )}
                           
-                {virtualItems.map(({ index, start }) => {
+                {(() => {
+                  // Compute last AI message index once for this render batch
+                  const lastAIIndex = (() => {
+                    for (let i = chatHistory.length - 1; i >= 0; i--) {
+                      if (chatHistory[i]?.sender === 'AI') return i;
+                    }
+                    return -1;
+                  })();
+
+                  return virtualItems.map(({ index, start }) => {
                   const message = chatHistory[index];
                   if (!message) return null;
   
@@ -6455,6 +6464,7 @@ const AnalyzeContentInner = () => {
                         isDarkMode={isDarkMode}
                         index={index}
                         isLastMessage={index === chatHistory.length - 1}
+                        isLastAIMessage={index === lastAIIndex}
                         toggleShortFeedback={toggleShortFeedback}
                         toggleDetailedFeedback={toggleDetailedFeedback}
                         generateTTSForText={generateTTSForText}
@@ -6739,7 +6749,8 @@ const AnalyzeContentInner = () => {
                       )}
                     </div>
                   );
-                })}
+                  });
+                })()}
               </div>
               
   
