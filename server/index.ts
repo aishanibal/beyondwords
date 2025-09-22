@@ -243,6 +243,19 @@ function authenticateJWT(req: ExpressRequest, res: Response, next: NextFunction)
 }
 
 // Routes
+
+// Optional auth middleware: if Authorization header is present, enforce JWT; otherwise allow through
+function optionalAuthenticateJWT(req: ExpressRequest, res: Response, next: NextFunction) {
+  try {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.trim() !== '') {
+      return authenticateJWT(req, res, next);
+    }
+    return next();
+  } catch (e) {
+    return next();
+  }
+}
 app.get('/api/user', authenticateJWT, async (req: Request, res: Response) => {
   try {
     let user = await findUserById(req.user.userId);
@@ -1276,7 +1289,7 @@ app.get('/api/conversations/:id', authenticateJWT, async (req: Request, res: Res
   }
 });
 
-app.post('/api/conversations/:id/messages', authenticateJWT, async (req: Request, res: Response) => {
+app.post('/api/conversations/:id/messages', optionalAuthenticateJWT as any, async (req: Request, res: Response) => {
   try {
     console.log('🔄 SERVER: Adding message to conversation:', req.params.id);
     const { sender, text, messageType, audioFilePath, detailedFeedback, message_order, romanized_text } = req.body;
@@ -1761,7 +1774,7 @@ app.delete('/api/personas/:id', authenticateJWT, async (req: Request, res: Respo
 });
 
 // TTS endpoint for generating audio for any text (with authentication)
-app.post('/api/tts', authenticateJWT, async (req: Request, res: Response) => {
+app.post('/api/tts', optionalAuthenticateJWT as any, async (req: Request, res: Response) => {
   try {
     const { text, language } = req.body;
     
