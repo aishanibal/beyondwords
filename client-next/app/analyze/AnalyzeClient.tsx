@@ -1424,28 +1424,98 @@ const AnalyzeContentInner = () => {
           // Handle both relative and absolute URLs from backend
           const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://beyondwords-express.onrender.com';
           const audioUrl = ttsUrl.startsWith('http') ? ttsUrl : `${backendUrl}${ttsUrl}`;
+          console.log('🎵 [PLAY_TTS_AUDIO] Constructed audio URL:', audioUrl);
+          
+          // Check if the audio file exists before creating Audio object
+          try {
+            const headResponse = await fetch(audioUrl, { method: 'HEAD' });
+            if (!headResponse.ok) {
+              console.error('🎵 [PLAY_TTS_AUDIO] Audio file not accessible:', headResponse.status, headResponse.statusText);
+              setIsPlayingTTS(prev => ({ ...prev, [cacheKey]: false }));
+              setIsPlayingAnyTTS(false);
+              return;
+            }
+            console.log('🎵 [PLAY_TTS_AUDIO] Audio file is accessible');
+          } catch (fetchError) {
+            console.error('🎵 [PLAY_TTS_AUDIO] Error checking audio file accessibility:', fetchError);
+            setIsPlayingTTS(prev => ({ ...prev, [cacheKey]: false }));
+            setIsPlayingAnyTTS(false);
+            return;
+          }
+          
           const audio = new window.Audio(audioUrl);
           ttsAudioRef.current = audio;
           
+          // Add more detailed event listeners for debugging
+          audio.addEventListener('loadstart', () => console.log('🎵 [PLAY_TTS_AUDIO] Audio loading started'));
+          audio.addEventListener('canplay', () => console.log('🎵 [PLAY_TTS_AUDIO] Audio can play'));
+          audio.addEventListener('canplaythrough', () => console.log('🎵 [PLAY_TTS_AUDIO] Audio can play through'));
+          audio.addEventListener('error', (e) => {
+            console.error('🎵 [PLAY_TTS_AUDIO] Audio error event:', e);
+            console.error('🎵 [PLAY_TTS_AUDIO] Audio error details:', audio.error);
+          });
+          
           // Return a promise that resolves when audio finishes
           return new Promise<void>((resolve, reject) => {
+            let timeoutId: NodeJS.Timeout;
+            let resolved = false;
+            
+            const cleanup = () => {
+              if (timeoutId) clearTimeout(timeoutId);
+              resolved = true;
+            };
+            
+            // Set a timeout to prevent infinite "playing" state
+            timeoutId = setTimeout(() => {
+              if (!resolved) {
+                console.error('🎵 [PLAY_TTS_AUDIO] Audio playback timeout after 30 seconds');
+                ttsAudioRef.current = null;
+                setIsPlayingTTS(prev => ({ ...prev, [cacheKey]: false }));
+                setIsPlayingAnyTTS(false);
+                cleanup();
+                reject(new Error('TTS audio playback timeout'));
+              }
+            }, 30000);
+            
             audio.onended = () => {
-              ttsAudioRef.current = null;
-              setIsPlayingTTS(prev => ({ ...prev, [cacheKey]: false }));
-              setIsPlayingAnyTTS(false);
-              resolve();
+              if (!resolved) {
+                console.log('🎵 [PLAY_TTS_AUDIO] Audio playback ended');
+                ttsAudioRef.current = null;
+                setIsPlayingTTS(prev => ({ ...prev, [cacheKey]: false }));
+                setIsPlayingAnyTTS(false);
+                cleanup();
+                resolve();
+              }
             };
             
-            audio.onerror = () => {
-              console.error('Error playing TTS audio');
-              ttsAudioRef.current = null;
-              setIsPlayingTTS(prev => ({ ...prev, [cacheKey]: false }));
-              setIsPlayingAnyTTS(false);
-              reject(new Error('TTS audio playback failed'));
+            audio.onerror = (e) => {
+              if (!resolved) {
+                console.error('🎵 [PLAY_TTS_AUDIO] Audio error:', e);
+                console.error('🎵 [PLAY_TTS_AUDIO] Audio error details:', audio.error);
+                ttsAudioRef.current = null;
+                setIsPlayingTTS(prev => ({ ...prev, [cacheKey]: false }));
+                setIsPlayingAnyTTS(false);
+                cleanup();
+                reject(new Error('TTS audio playback failed'));
+              }
             };
             
-            audio.play().catch(reject);
+            console.log('🎵 [PLAY_TTS_AUDIO] Attempting to play audio...');
+            audio.play().catch((playError) => {
+              if (!resolved) {
+                console.error('🎵 [PLAY_TTS_AUDIO] Audio play() failed:', playError);
+                ttsAudioRef.current = null;
+                setIsPlayingTTS(prev => ({ ...prev, [cacheKey]: false }));
+                setIsPlayingAnyTTS(false);
+                cleanup();
+                reject(playError);
+              }
+            });
           });
+        } else {
+          console.error('🎵 [PLAY_TTS_AUDIO] No TTS URL generated');
+          setIsPlayingTTS(prev => ({ ...prev, [cacheKey]: false }));
+          setIsPlayingAnyTTS(false);
         }
       } catch (error) {
         console.error('Error playing TTS:', error);
