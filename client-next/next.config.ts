@@ -16,10 +16,6 @@ const nextConfig: NextConfig = {
     
     return [
       {
-        source: '/api/feedback',
-        destination: `${backendUrl}/api/feedback`, // Express backend
-      },
-      {
         source: '/api/translate',
         destination: `${backendUrl}/api/translate`, // Express backend
       },
@@ -38,10 +34,6 @@ const nextConfig: NextConfig = {
       {
         source: '/api/health',
         destination: `${backendUrl}/api/health`, // Express backend
-      },
-      {
-        source: '/api/messages/feedback',
-        destination: `${backendUrl}/api/messages/feedback`, // Express backend
       },
       {
         source: '/api/contact',
