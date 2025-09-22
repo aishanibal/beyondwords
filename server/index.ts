@@ -24,6 +24,7 @@ import {
   updateConversationSynopsis,
   deleteConversation,
   updateConversationPersona,
+  updateConversationDescription,
   createLanguageDashboard,
   getUserLanguageDashboards,
   getLanguageDashboard,
@@ -1323,23 +1324,39 @@ app.delete('/api/conversations/:id', authenticateJWT, async (req: Request, res: 
 app.patch('/api/conversations/:id', authenticateJWT, async (req: Request, res: Response) => {
   try {
     const conversationId = parseInt(req.params.id);
-    const { usesPersona, personaId, synopsis, progress_data } = req.body;
+    const { usesPersona, personaId, synopsis, progress_data, description } = req.body;
     
+    console.log('🔄 [CONVERSATION_UPDATE] Updating conversation:', {
+      conversationId,
+      usesPersona,
+      personaId,
+      synopsis: synopsis ? synopsis.substring(0, 100) + '...' : undefined,
+      progress_data,
+      description
+    });
+    
+    // Update conversation with synopsis and progress data
     if (synopsis !== undefined) {
-      // Update conversation with synopsis and progress data
-      console.log('Updating conversation synopsis and progress:', { conversationId, synopsis: synopsis.substring(0, 100) + '...', progress_data });
+      console.log('🔄 [CONVERSATION_UPDATE] Updating synopsis and progress data');
       await updateConversationSynopsis(conversationId, synopsis, progress_data);
-      console.log('Conversation synopsis and progress updated successfully');
-      res.json({ message: 'Conversation synopsis and progress updated successfully' });
-    } else if (usesPersona !== undefined) {
-      // Update conversation with persona information
-      await updateConversationPersona(conversationId, usesPersona, personaId);
-      res.json({ message: 'Conversation updated successfully' });
-    } else {
-      res.status(400).json({ error: 'No valid update fields provided' });
     }
+    
+    // Update conversation with persona information
+    if (usesPersona !== undefined) {
+      console.log('🔄 [CONVERSATION_UPDATE] Updating persona information');
+      await updateConversationPersona(conversationId, usesPersona, personaId);
+    }
+    
+    // Update conversation description if provided
+    if (description !== undefined) {
+      console.log('🔄 [CONVERSATION_UPDATE] Updating conversation description');
+      await updateConversationDescription(conversationId, description);
+    }
+    
+    console.log('🔄 [CONVERSATION_UPDATE] Conversation updated successfully');
+    res.json({ message: 'Conversation updated successfully' });
   } catch (error: any) {
-    console.error('Error updating conversation:', error);
+    console.error('🔄 [CONVERSATION_UPDATE] Error updating conversation:', error);
     res.status(500).json({ error: 'Failed to update conversation' });
   }
 });

@@ -2516,6 +2516,8 @@ const AnalyzeContentInner = () => {
         
         // Update the existing conversation with the Gemini-generated title and synopsis
         if (conversationId) {
+          console.log('📊 [CONVERSATION_SUMMARY] Updating conversation:', conversationId);
+          console.log('📊 [CONVERSATION_SUMMARY] Response data:', response.data);
           try {
             // Check if the conversation already has a title before updating
             let shouldUpdateTitle = true;
@@ -2571,14 +2573,36 @@ const AnalyzeContentInner = () => {
             
                         // console.log('Progress data to save:', progressDataToSave);
             
-            await axios.patch(`/api/conversations/${conversationId}`, {
+            console.log('📊 [CONVERSATION_SUMMARY] Saving synopsis and progress data:', {
               synopsis: response.data.synopsis,
               progress_data: progressDataToSave
-            }, {
+            });
+            
+            // Prepare conversation update data
+            const conversationUpdateData: any = {
+              synopsis: response.data.synopsis,
+              progress_data: progressDataToSave
+            };
+            
+            // Include persona information if available
+            if (isUsingPersona && conversationDescription) {
+              conversationUpdateData.usesPersona = true;
+              conversationUpdateData.description = conversationDescription;
+              console.log('📊 [CONVERSATION_SUMMARY] Including persona data:', {
+                usesPersona: true,
+                description: conversationDescription
+              });
+            }
+            
+            console.log('📊 [CONVERSATION_SUMMARY] Saving conversation data:', conversationUpdateData);
+            
+            await axios.patch(`/api/conversations/${conversationId}`, conversationUpdateData, {
               headers: {
                 ...(token ? { Authorization: `Bearer ${token}` } : {})
               }
             });
+            
+            console.log('📊 [CONVERSATION_SUMMARY] Successfully saved synopsis and progress data');
             
             // console.log('Successfully saved synopsis and progress data');
             
@@ -3569,36 +3593,42 @@ const AnalyzeContentInner = () => {
   
     // Persona-related functions
     const handleEndChat = async () => {
-              // End chat initiated
+      console.log('🏁 [END_CHAT] End chat initiated');
+      console.log('🏁 [END_CHAT] isNewPersona:', isNewPersona);
+      console.log('🏁 [END_CHAT] isUsingPersona:', isUsingPersona);
+      console.log('🏁 [END_CHAT] conversationDescription:', conversationDescription);
       
       // Check if there are any session messages before proceeding
       const sessionMessages = getSessionMessages();
       const userSessionMessages = sessionMessages.filter(msg => msg.sender === 'User');
       
-      
+      console.log('🏁 [END_CHAT] Session messages:', sessionMessages.length);
+      console.log('🏁 [END_CHAT] User session messages:', userSessionMessages.length);
       
       // If no user messages in session, just navigate to dashboard without evaluation
       if (userSessionMessages.length === 0) {
-        console.log('No user messages in session, navigating to dashboard without evaluation');
+        console.log('🏁 [END_CHAT] No user messages in session, navigating to dashboard without evaluation');
         router.push('/dashboard');
         return;
       }
       
-      // Only show persona modal if this is a new persona (not using an existing one)
+      // Show persona modal for new conversations (not using existing persona)
       if (isNewPersona) {
-        console.log('Showing persona modal');
+        console.log('🏁 [END_CHAT] Showing persona modal for new conversation');
         setShowPersonaModal(true);
       } else {
-        console.log('Skipping persona modal, generating summary directly');
+        console.log('🏁 [END_CHAT] Skipping persona modal, generating summary directly');
         // Generate conversation summary (progress modal will handle navigation if needed)
         try {
           if (chatHistory.length > 0) {
+            console.log('🏁 [END_CHAT] Calling generateConversationSummary...');
             await generateConversationSummary();
           } else {
+            console.log('🏁 [END_CHAT] No chat history, navigating to dashboard');
             router.push('/dashboard');
           }
         } catch (error) {
-          console.error('Error generating conversation summary:', error);
+          console.error('🏁 [END_CHAT] Error generating conversation summary:', error);
           router.push('/dashboard');
         }
       }

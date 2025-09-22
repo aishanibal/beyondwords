@@ -504,6 +504,18 @@ export const updateConversationPersona = async (conversationId: number, usesPers
   return { changes: 1 };
 };
 
+export const updateConversationDescription = async (conversationId: number, description: string): Promise<{ changes: number }> => {
+  const { error } = await supabase
+    .from('conversations')
+    .update({ 
+      description: description
+    })
+    .eq('id', conversationId);
+  
+  if (error) throw error;
+  return { changes: 1 };
+};
+
 // Message functions
 export const addMessage = async (
   conversationId: number,
