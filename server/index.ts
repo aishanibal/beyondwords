@@ -1262,7 +1262,7 @@ app.get('/api/conversations', authenticateJWT, async (req: Request, res: Respons
   }
 });
 
-app.get('/api/conversations/:id', authenticateJWT, async (req: Request, res: Response) => {
+app.get('/api/conversations/:id', optionalAuthenticateJWT as any, async (req: Request, res: Response) => {
   try {
     console.log('🔄 SERVER: Getting conversation:', req.params.id);
     const conversation = await getConversationWithMessages(Number(req.params.id));
@@ -1313,7 +1313,7 @@ app.post('/api/conversations/:id/messages', optionalAuthenticateJWT as any, asyn
   }
 });
 
-app.put('/api/conversations/:id/title', authenticateJWT, async (req: Request, res: Response) => {
+app.put('/api/conversations/:id/title', optionalAuthenticateJWT as any, async (req: Request, res: Response) => {
   try {
     const { title } = req.body;
     const result = await updateConversationTitle(Number(req.params.id), title);
@@ -1334,7 +1334,7 @@ app.delete('/api/conversations/:id', authenticateJWT, async (req: Request, res: 
   }
 });
 
-app.patch('/api/conversations/:id', authenticateJWT, async (req: Request, res: Response) => {
+app.patch('/api/conversations/:id', optionalAuthenticateJWT as any, async (req: Request, res: Response) => {
   try {
     const conversationId = parseInt(req.params.id);
     const { usesPersona, personaId, synopsis, progress_data, description } = req.body;
