@@ -758,6 +758,40 @@ app.post('/auth/login', async (req: Request, res: Response) => {
   }
 });
 
+// Alias under /api so frontend can call /api/auth/exchange without rewrites
+app.post('/api/auth/exchange', async (req: Request, res: Response) => {
+  try {
+    const { email, name } = req.body || {};
+    if (!email) return res.status(400).json({ error: 'Email required' });
+
+    // Find or create user by email
+    let user = await findUserByEmail(email);
+    if (!user) {
+      user = await createUser({ email, name: name || email.split('@')[0], role: 'user', onboarding_complete: false });
+    }
+
+    const token = jwt.sign(
+      { userId: user.id, email: user.email, name: user.name },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.json({ 
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        onboarding_complete: Boolean(user.onboarding_complete)
+      }
+    });
+  } catch (error: any) {
+    console.error('Auth exchange alias error:', error);
+    res.status(500).json({ error: 'Failed to exchange identity' });
+  }
+});
+
 // Onboarding route (protected) - Creates first language dashboard
 app.post('/api/user/onboarding', authenticateJWT, async (req: Request, res: Response) => {
   try {
