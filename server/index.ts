@@ -478,11 +478,12 @@ app.post('/api/analyze', authenticateJWT, upload.single('audio'), async (req: Re
   }
 });
 
-// Detailed feedback endpoint
-app.post('/api/feedback', authenticateJWT, async (req: Request, res: Response) => {
+// Detailed feedback endpoint (optional auth)
+app.post('/api/feedback', optionalAuthenticateJWT as any, async (req: Request, res: Response) => {
   try {
     console.log('POST /api/feedback called');
-    console.log('Request body:', req.body);
+    console.log('Auth present:', !!req.headers.authorization);
+    console.log('Request body keys:', Object.keys(req.body || {}));
     const { user_input, context, language, user_level, user_topics, romanization_display } = req.body;
     
     if (!user_input || !context) {
@@ -490,7 +491,7 @@ app.post('/api/feedback', authenticateJWT, async (req: Request, res: Response) =
       return res.status(400).json({ error: 'Missing user_input or context' });
     }
     
-    console.log('Parsed parameters:', { user_input, context: context.substring(0, 100) + '...', language, user_level, user_topics });
+    console.log('Parsed parameters:', { user_input_len: (user_input||'').length, context_len: (context||'').length, language, user_level, user_topics_count: Array.isArray(user_topics) ? user_topics.length : 0 });
     
     // Parse context string into chat_history array
     const chat_history = context
