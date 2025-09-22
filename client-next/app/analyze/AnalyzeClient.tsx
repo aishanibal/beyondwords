@@ -905,6 +905,8 @@ const AnalyzeContentInner = () => {
         setConversationDescription(personaDescription);
         
                 const messages = conversation.messages || [];
+        console.log('[CONVERSATION_LOAD] Found messages:', messages.length);
+        console.log('[CONVERSATION_LOAD] Messages data:', messages);
         
         // Set pagination state
         setMessageCount(messages.length);
@@ -912,6 +914,7 @@ const AnalyzeContentInner = () => {
         
         // Load only the most recent messages for performance
         const recentMessages = messages.slice(-MESSAGES_PER_PAGE);
+        console.log('[CONVERSATION_LOAD] Loading recent messages:', recentMessages.length);
         const history = recentMessages.map((msg: unknown) => {
           // If the database already has romanized_text stored separately, use it
           if ((msg as any).romanized_text) {
@@ -936,6 +939,7 @@ const AnalyzeContentInner = () => {
         });
 
         setChatHistory(history);
+        console.log('[CONVERSATION_LOAD] Set chat history:', history.length, 'messages');
         
         // Don't set session start time here - it will be set when the conversation is actually continued
         // Session start time should be set when user clicks "Continue" button, not when conversation is loaded
@@ -2005,6 +2009,8 @@ const AnalyzeContentInner = () => {
         // Save user message to backend
         if (conversationId) {
           console.log('[MESSAGE_SAVE] Saving user message to conversation:', conversationId);
+          console.log('[MESSAGE_SAVE] User message text:', transcription);
+          console.log('[MESSAGE_SAVE] User romanized text:', userRomanizedText);
           await saveMessageToBackend('User', transcription, 'text', null, null, userRomanizedText);
         } else {
           console.warn('[MESSAGE_SAVE] No conversation ID available for user message');
@@ -2093,6 +2099,8 @@ const AnalyzeContentInner = () => {
             });
             if (conversationId) {
               console.log('[MESSAGE_SAVE] Saving AI message to conversation:', conversationId);
+              console.log('[MESSAGE_SAVE] AI message text:', formattedResponse.mainText);
+              console.log('[MESSAGE_SAVE] AI romanized text:', formattedResponse.romanizedText);
               await saveMessageToBackend('AI', formattedResponse.mainText, 'text', null, null, formattedResponse.romanizedText);
             } else {
               console.warn('[MESSAGE_SAVE] No conversation ID available for AI message');
