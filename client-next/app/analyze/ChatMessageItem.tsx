@@ -342,7 +342,7 @@ const ChatMessageItem: React.FC<ChatMessageItemProps> = React.memo(({
             >
               {isGeneratingTTS[`message_${index}`] ? '🔄' : isPlayingTTS[`message_${index}`] ? '🔊 Playing' : '🔊 Listen'}
             </button>
-            {isLastMessage && (
+            {isLastMessage && message.sender === 'User' && (
                 <button
                     onClick={handleSuggestionButtonClick}
                     disabled={isLoadingSuggestions || isProcessing}

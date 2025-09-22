@@ -1801,6 +1801,10 @@ def get_text_suggestions(chat_history: List[Dict], language: str = 'en', user_le
     # Build context from chat history
     context = "\n".join([f"{msg['sender']}: {msg['text']}" for msg in chat_history[-4:]]) if chat_history else ""
     
+    print(f"[SUGGESTIONS] Chat history received: {len(chat_history)} messages")
+    print(f"[SUGGESTIONS] Chat history details: {chat_history}")
+    print(f"[SUGGESTIONS] Built context: {context}")
+    
     # Make separate Gemini call for suggestions
     return tutor.get_suggestions(context, description)
 

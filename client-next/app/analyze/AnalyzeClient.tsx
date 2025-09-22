@@ -2218,7 +2218,7 @@ const AnalyzeContentInner = () => {
       setIsLoadingSuggestions(true);
       try {
         const token = localStorage.getItem('jwt');
-        // Prepare chat history for suggestions
+        // Prepare chat history for suggestions - include all messages including the most recent user message
         const chatHistoryForSuggestions = chatHistory.map(msg => ({
           sender: msg.sender,
           text: msg.text,
@@ -2226,6 +2226,7 @@ const AnalyzeContentInner = () => {
         }));
         
         console.log('🔍 [FRONTEND] Sending chat history to suggestions:', chatHistoryForSuggestions.length, 'messages');
+        console.log('🔍 [FRONTEND] Chat history details:', chatHistoryForSuggestions);
         
         const response = await axios.post(
           '/api/suggestions',
@@ -2293,7 +2294,7 @@ const AnalyzeContentInner = () => {
         console.log('[DEBUG] Suggestions request - language:', language);
         console.log('[DEBUG] Suggestions request - userPreferences:', userPreferences);
         
-        // Prepare chat history for suggestions
+        // Prepare chat history for suggestions - include all messages including the most recent user message
         const chatHistoryForSuggestions = chatHistory.map(msg => ({
           sender: msg.sender,
           text: msg.text,
@@ -2301,6 +2302,7 @@ const AnalyzeContentInner = () => {
         }));
         
         console.log('🔍 [FRONTEND] Sending chat history to suggestions (button click):', chatHistoryForSuggestions.length, 'messages');
+        console.log('🔍 [FRONTEND] Chat history details (button click):', chatHistoryForSuggestions);
         
         const response = await axios.post(
           '/api/suggestions',
