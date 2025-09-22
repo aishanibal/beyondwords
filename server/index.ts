@@ -1429,15 +1429,16 @@ app.patch('/api/conversations/:id', optionalAuthenticateJWT as any, async (req: 
 });
 
 // Text suggestions endpoint
-app.post('/api/suggestions', authenticateJWT, async (req: Request, res: Response) => {
+app.post('/api/suggestions', optionalAuthenticateJWT as any, async (req: Request, res: Response) => {
   try {
     console.log('🔍 [NODE_SERVER] POST /api/suggestions called');
     console.log('🔍 [NODE_SERVER] Request body:', req.body);
-    console.log('🔍 [NODE_SERVER] User ID:', req.user?.userId);
+    console.log('🔍 [NODE_SERVER] User ID:', req.user?.userId || '(none - fallback)');
     const { conversationId, language } = req.body;
     
     // Get user data for personalized suggestions
-    const user = await findUserById(req.user.userId);
+    let user = null as any;
+    try { if (req.user?.userId) user = await findUserById(req.user.userId); } catch {}
     const userLevel = req.body.user_level || user?.proficiency_level || 'beginner';
     const userTopics = req.body.user_topics || (user?.talk_topics && typeof user.talk_topics === 'string' ? JSON.parse(user.talk_topics) : Array.isArray(user?.talk_topics) ? user.talk_topics : []);
     const userGoals = req.body.user_goals || (user?.learning_goals && typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : Array.isArray(user?.learning_goals) ? user.learning_goals : []);
@@ -1579,7 +1580,7 @@ app.post('/api/suggestions-test', async (req: Request, res: Response) => {
 });
 
 // Translation endpoint
-app.post('/api/translate', authenticateJWT, async (req: Request, res: Response) => {
+app.post('/api/translate', optionalAuthenticateJWT as any, async (req: Request, res: Response) => {
   try {
     console.log('POST /api/translate called');
     const { text, source_language, target_language, breakdown } = req.body;
@@ -1625,7 +1626,7 @@ app.post('/api/translate', authenticateJWT, async (req: Request, res: Response) 
 });
 
 // Explain suggestion endpoint
-app.post('/api/explain_suggestion', authenticateJWT, async (req: Request, res: Response) => {
+app.post('/api/explain_suggestion', optionalAuthenticateJWT as any, async (req: Request, res: Response) => {
   try {
     console.log('POST /api/explain_suggestion called');
     const { suggestion_text, chatHistory, language, user_level, user_topics, formality, feedback_language, user_goals } = req.body;
