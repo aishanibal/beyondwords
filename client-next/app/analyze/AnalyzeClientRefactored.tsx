@@ -158,6 +158,11 @@ const AnalyzeContentInner = () => {
   const [sessionStartTime, setSessionStartTime] = useState<Date | null>(null);
   const [isLoadingConversation, setIsLoadingConversation] = useState(false);
   const [isSavingPersona, setIsSavingPersona] = useState(false);
+  
+  // Additional state variables from original
+  const [skipValidation, setSkipValidation] = useState(false);
+  const [isUsingPersona, setIsUsingPersona] = useState<boolean>(false);
+  const [isNewPersona, setIsNewPersona] = useState(false);
 
   // Suggestions state
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -700,40 +705,95 @@ const AnalyzeContentInner = () => {
   };
 
   // Handle modal conversation start - from original
-  const handleModalConversationStart = async (id: string, topics: string[], aiMessage: any, formality: string, learningGoals: string[], description?: string, isUsingExistingPersona?: boolean) => {
+  const handleModalConversationStart = async (newConversationId: string, topics: string[], aiMessage: unknown, formality: string, learningGoals: string[], description?: string, isUsingExistingPersona?: boolean) => {
+    console.log('[CONVERSATION_START] Starting new conversation:', {
+      conversationId: newConversationId,
+      topics,
+      formality,
+      learningGoals,
+      description,
+      isUsingExistingPersona
+    });
+    
+    setConversationId(newConversationId);
+    setChatHistory([]);
     setShowTopicModal(false);
+    setSkipValidation(true);
+    setTimeout(() => setSkipValidation(false), 2000); // Skip validation for 2 seconds
     
-    // Initialize new conversation
-    setConversationId(id);
+    // For new conversations, sessionStartTime should be null initially
+    setSessionStartTime(null);
+    
+    // Set the conversation description
     setConversationDescription(description || '');
-    setSessionStartTime(new Date());
-    setChatHistory([aiMessage]);
     
-    // Set user preferences
+    // Check if this is a persona-based conversation (has a description)
+    const isPersonaConversation = !!(description && description.trim());
+    setIsUsingPersona(isPersonaConversation);
+    
+    // Mark this as a new persona only if it's not using an existing persona
+    setIsNewPersona(!isUsingExistingPersona);
+    
+    // Fetch user's dashboard preferences for this language
+    const dashboardPrefs = await fetchUserDashboardPreferences(language);
+    const romanizationDisplay = dashboardPrefs?.romanization_display || 'both';
+    
+    // Update user preferences with the selected formality, topics, and learning goals
     setUserPreferences(prev => ({
       ...prev,
-      topics: topics,
-      formality: formality,
-      learningGoals: learningGoals
+      formality,
+      topics,
+      user_goals: learningGoals,
+      romanizationDisplay
     }));
     
-    // Update URL
-    const newUrl = new URL(window.location.href);
-    newUrl.searchParams.delete('conversation');
-    newUrl.searchParams.set('conversation', id);
-    newUrl.searchParams.set('topics', topics.join(','));
-    newUrl.searchParams.set('formality', formality);
-    window.history.replaceState({}, '', newUrl.toString());
+    // Use Next.js router to update the URL
+    router.replace(`/analyze?conversation=${newConversationId}&topics=${encodeURIComponent(topics.join(','))}`);
     
-    // Play TTS for initial message if autoSpeak is enabled
-    if (autoSpeak && aiMessage?.text) {
-      try {
-        const cleanText = cleanTextForTTS(aiMessage.text);
-        // TODO: Implement TTS playback using the TTS hook
-        console.log('Initial TTS playback requested:', cleanText, language);
-      } catch (error) {
-        console.error('Error playing initial TTS:', error);
+    // Set the initial AI message from the backend response
+    if (aiMessage && (aiMessage as any).text && (aiMessage as any).text.trim()) {
+      const formattedMessage = formatScriptLanguageText((aiMessage as any).text, language);
+      setChatHistory([{ 
+        sender: 'AI', 
+        text: formattedMessage.mainText, 
+        romanizedText: formattedMessage.romanizedText,
+        ttsUrl: (aiMessage as any).ttsUrl || null,
+        timestamp: new Date(),
+        isFromOriginalConversation: false // New conversation message
+      }]);
+      
+      // Play TTS for the initial AI message if available
+      if ((aiMessage as any).ttsUrl && (aiMessage as any).ttsUrl !== null) {
+        console.log('[DEBUG] Playing initial AI message TTS:', (aiMessage as any).ttsUrl);
+        // Handle both relative and absolute URLs from backend
+        const ttsUrl = (aiMessage as any).ttsUrl;
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://beyondwords-express.onrender.com';
+        const audioUrl = ttsUrl.startsWith('http') ? ttsUrl : `${backendUrl}${ttsUrl}`;
+        
+        try {
+          const headResponse = await fetch(audioUrl, { method: 'HEAD' });
+          if (headResponse.ok) {
+            const audio = new window.Audio(audioUrl);
+            ttsAudioRef.current = audio;
+            
+            audio.onended = () => {
+              ttsAudioRef.current = null;
+              console.log('[DEBUG] Initial AI TTS finished playing');
+            };
+            
+            audio.play().catch(error => {
+              console.error('Failed to play initial TTS audio:', error);
+              ttsAudioRef.current = null;
+            });
+          }
+        } catch (fetchError: unknown) {
+          console.error('[DEBUG] Error checking TTS file availability:', fetchError);
+        }
       }
+    } else {
+      console.log('[DEBUG] No AI message or empty text, setting default message');
+      // Fallback: set a default AI message if none provided
+      setChatHistory([{ sender: 'AI', text: 'Hello! What would you like to talk about today?', timestamp: new Date(), isFromOriginalConversation: false }]);
     }
   };
 
@@ -905,6 +965,14 @@ const AnalyzeContentInner = () => {
     }
   }, [urlConversationId, conversationId]);
 
+  // Add this useEffect to load chat history from backend if conversationIdParam is present and chatHistory is empty
+  useEffect(() => {
+    if (user && urlConversationId && chatHistory.length === 0) {
+      console.log('[CONVERSATION_LOAD] Loading existing conversation:', urlConversationId);
+      loadExistingConversation(urlConversationId);
+    }
+  }, [user, urlConversationId, chatHistory.length]);
+
   // Load user preferences on mount - from original
   useEffect(() => {
     if (user && language) {
@@ -1041,6 +1109,7 @@ const AnalyzeContentInner = () => {
           isOpen={showTopicModal}
           onClose={() => setShowTopicModal(false)}
           onStartConversation={handleModalConversationStart}
+          currentLanguage={language}
         />
       )}
 
