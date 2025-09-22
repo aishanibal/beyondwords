@@ -16,24 +16,8 @@ const nextConfig: NextConfig = {
     
     return [
       {
-        source: '/api/analyze',
-        destination: `${backendUrl}/api/analyze`, // Express backend
-      },
-      {
-        source: '/api/conversations/:id/messages',
-        destination: `${backendUrl}/api/conversations/:id/messages`, // Express backend
-      },
-      {
-        source: '/api/short_feedback',
-        destination: `${backendUrl}/api/short_feedback`, // Express backend
-      },
-      {
         source: '/api/feedback',
         destination: `${backendUrl}/api/feedback`, // Express backend
-      },
-      {
-        source: '/api/detailed_breakdown',
-        destination: `${backendUrl}/api/detailed_breakdown`, // Express backend
       },
       {
         source: '/api/translate',
@@ -58,30 +42,6 @@ const nextConfig: NextConfig = {
       {
         source: '/api/messages/feedback',
         destination: `${backendUrl}/api/messages/feedback`, // Express backend
-      },
-      {
-        source: '/api/explain_suggestion',
-        destination: `${backendUrl}/api/explain_suggestion`, // Express backend
-      },
-      {
-        source: '/api/tts',
-        destination: `${backendUrl}/api/tts`, // Express backend
-      },
-      {
-        source: '/api/transcribe_only',
-        destination: `${backendUrl}/api/transcribe_only`, // Express backend
-      },
-      {
-        source: '/api/ai_response',
-        destination: `${backendUrl}/api/ai_response`, // Express backend
-      },
-      {
-        source: '/api/conversation-summary',
-        destination: `${backendUrl}/api/conversation-summary`, // Express backend
-      },
-      {
-        source: '/api/personas',
-        destination: `${backendUrl}/api/personas`, // Express backend
       },
       {
         source: '/api/contact',
