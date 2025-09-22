@@ -172,6 +172,7 @@ Reply naturally in {self.language_name}."""
         
         try:
             print(f"[GET RESPONSE] Prompt sent to AI:\n{prompt}")
+            print(f"[GET RESPONSE] Prompt length: {len(prompt)} characters")
             response = self.model.generate_content(prompt)
             if response and response.text:
                 return response.text.strip()
@@ -269,8 +270,11 @@ Always use {self.feedback_language} for explanations.
 """
         
         try:
+            print(f"[DETAILED_FEEDBACK] Prompt sent to AI:\n{prompt}")
+            print(f"[DETAILED_FEEDBACK] Prompt length: {len(prompt)} characters")
             response = self.model.generate_content(prompt)
             if response and response.text:
+                print(f"[DETAILED_FEEDBACK] AI response: {response.text[:200]}...")
                 return response.text.strip()
             else:
                 return "No corrections needed - great job!"
@@ -364,8 +368,11 @@ Use this exact format for each suggestion:
 """
 
         try:
+            print(f"[SUGGESTIONS] Prompt sent to AI:\n{prompt}")
+            print(f"[SUGGESTIONS] Prompt length: {len(prompt)} characters")
             response = self.model.generate_content(prompt)
             if response and response.text:
+                print(f"[SUGGESTIONS] AI response: {response.text[:300]}...")
                 return self._parse_suggestions(response.text)
             else:
                 return self._get_fallback_suggestions()
@@ -432,12 +439,13 @@ Explanation: [Very brief explanation in {self.feedback_language} covering:
 IMPORTANT: Do not refer to the AI as "AI, Bot, or anything else. Just focus on explaining the phrase.
 """
         
-        print(f"[DEBUG] Sending prompt to AI:\n{prompt}")
+        print(f"[EXPLAIN_SUGGESTION] Prompt sent to AI:\n{prompt}")
+        print(f"[EXPLAIN_SUGGESTION] Prompt length: {len(prompt)} characters")
 
         try:
             response = self.model.generate_content(prompt)
             if response and response.text:
-                print(f"[DEBUG] Raw AI response:\n{response.text}")
+                print(f"[EXPLAIN_SUGGESTION] AI response: {response.text[:200]}...")
                 
                 # Parse the response to extract translation and explanation
                 full_text = response.text.strip()
@@ -1836,9 +1844,12 @@ def get_short_feedback(user_input: str, context: str = "", language: str = 'en',
         f"Respond in {feedback_language}."
     )
     try:
+        print(f"[SHORT_FEEDBACK] Prompt sent to AI:\n{prompt}")
+        print(f"[SHORT_FEEDBACK] Prompt length: {len(prompt)} characters")
         model = genai.GenerativeModel("gemini-1.5-flash")
         response = model.generate_content(prompt)
         if response and response.text:
+            print(f"[SHORT_FEEDBACK] AI response: {response.text[:200]}...")
             return response.text.strip()
         else:
             return "Great job!"
@@ -2426,9 +2437,12 @@ CRITICAL INSTRUCTIONS:
 - Keep the AI message exactly the same. Do not add or change any words or punctuation.
 """
     
+        print(f"[QUICK_TRANSLATION] Prompt sent to AI:\n{prompt}")
+        print(f"[QUICK_TRANSLATION] Prompt length: {len(prompt)} characters")
         response = model.generate_content(prompt)
         
         if response and response.text:
+            print(f"[QUICK_TRANSLATION] AI response: {response.text[:200]}...")
             return response.text.strip()
         else:
             return "Translation failed"
