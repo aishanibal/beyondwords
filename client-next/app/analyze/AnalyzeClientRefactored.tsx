@@ -182,6 +182,13 @@ const AnalyzeContentInner = () => {
   const [showRightPanel, setShowRightPanel] = useState(false);
   const [leftPanelWidth, setLeftPanelWidth] = useState(300);
   const [rightPanelWidth, setRightPanelWidth] = useState(300);
+  
+  // Left panel content state - all from original
+  const [shortFeedback, setShortFeedback] = useState<string>('');
+  const [shortFeedbacks, setShortFeedbacks] = useState<Record<number, string>>({});
+  const [showQuickTranslation, setShowQuickTranslation] = useState<boolean>(true);
+  const [llmBreakdown, setLlmBreakdown] = useState<string>('');
+  const [showLlmBreakdown, setShowLlmBreakdown] = useState<boolean>(false);
 
   // Modals state
   const [showTopicModal, setShowTopicModal] = useState(false);
@@ -211,6 +218,7 @@ const AnalyzeContentInner = () => {
   const [feedbackExplanations, setFeedbackExplanations] = useState<Record<number, Record<string, string>>>({});
   const [activePopup, setActivePopup] = useState<{ messageIndex: number; wordKey: string; position: { x: number; y: number } } | null>(null);
   const [showCorrectedVersions, setShowCorrectedVersions] = useState<Record<number, boolean>>({});
+  const [isLoadingMessageFeedback, setIsLoadingMessageFeedback] = useState<Record<number, boolean>>({});
 
   // Quick translations state
   const [quickTranslations, setQuickTranslations] = useState<Record<number, any>>({});
@@ -358,40 +366,76 @@ const AnalyzeContentInner = () => {
   }, [(user as any)?.selectedLanguage, language]);
 
   // Fetch user dashboard preferences - from original
-  const fetchUserDashboardPreferences = async () => {
-    if (!user) return;
-
+  const fetchUserDashboardPreferences = async (languageCode: string) => {
     try {
-      const headers = await getAuthHeaders();
-      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/user/dashboard-preferences`, { headers });
-      
-      if (response.data.success) {
-        const preferences = response.data.preferences;
-        setUserPreferences(preferences);
-        
-        // Set language from preferences if not already set
-        if (preferences.language && !language) {
-          setLanguage(preferences.language);
-        }
+      if (!(user as any)?.id) {
+        return null;
       }
+
+      const { success, data: dashboards } = await getUserLanguageDashboards((user as any).id);
+      
+      if (!success) {
+        console.error('Failed to fetch language dashboards');
+        return null;
+      }
+
+      const dashboard = (dashboards || []).find((d: any) => d.language === languageCode);
+      
+      if (dashboard) {
+        return {
+          formality: dashboard.formality || 'friendly',
+          topics: dashboard.talk_topics || [],
+          user_goals: dashboard.learning_goals || [],
+          userLevel: dashboard.proficiency_level || 'beginner',
+          feedbackLanguage: dashboard.feedback_language || 'en',
+          romanization_display: dashboard.romanization_display || 'both',
+          proficiency_level: dashboard.proficiency_level || 'beginner',
+          talk_topics: dashboard.talk_topics || [],
+          learning_goals: dashboard.learning_goals || [],
+          speak_speed: dashboard.speak_speed || 1.0
+        };
+      }
+      
+      return null;
     } catch (error) {
-      console.error('Error fetching user preferences:', error);
+      console.error('Error fetching user dashboard preferences:', error);
+      return null;
     }
   };
 
   // Load preferences for current language - from original
   const loadPreferencesForLanguage = async () => {
-    if (!user || !language) return;
-
+    if (!(user as any)?.id || !language) return;
+    
+    console.log('[DEBUG] Language changed to:', language, '- reloading preferences');
+    
     try {
-      const headers = await getAuthHeaders();
-      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/user/preferences/${language}`, { headers });
-      
-      if (response.data.success) {
-        setUserPreferences(response.data.preferences);
+      const dashboardPrefs = await fetchUserDashboardPreferences(language);
+      if (dashboardPrefs) {
+        console.log('[DEBUG] Loaded preferences for', language, ':', dashboardPrefs);
+        setUserPreferences(prev => ({
+          ...prev,
+          userLevel: dashboardPrefs.proficiency_level,
+          topics: dashboardPrefs.talk_topics,
+          user_goals: dashboardPrefs.learning_goals,
+          romanizationDisplay: dashboardPrefs.romanization_display,
+          // Keep existing formality and feedbackLanguage unless we want to change them
+          formality: prev?.formality || 'friendly',
+          feedbackLanguage: prev?.feedbackLanguage || 'en'
+        }));
+      } else {
+        console.log('[DEBUG] No dashboard found for language:', language, '- using defaults');
+        // Reset to defaults if no dashboard exists for this language
+        setUserPreferences(prev => ({
+          ...prev,
+          userLevel: 'beginner',
+          topics: [],
+          user_goals: [],
+          romanizationDisplay: 'both'
+        }));
       }
     } catch (error) {
-      console.error('Error loading preferences for language:', error);
+      console.error('[DEBUG] Error loading preferences for language:', language, error);
     }
   };
 
@@ -401,26 +445,38 @@ const AnalyzeContentInner = () => {
 
     try {
       const headers = await getAuthHeaders();
-      const response = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/api/conversations`, {
-        userId: (user as any).id,
-        language: language,
-        description: description,
-        topics: topics,
-        formality: formality,
-        messages: messages
+      const response = await axios.post(`/api/conversations`, {
+        language,
+        title: description || 'New Conversation',
+        topics,
+        formality
       }, { headers });
 
-      if (response.data.success) {
-        const conversationId = response.data.conversationId;
-        setConversationId(conversationId);
-        
-        // Update URL with conversation ID
-        const newUrl = new URL(window.location.href);
-        newUrl.searchParams.set('conversation', conversationId);
-        window.history.replaceState({}, '', newUrl.toString());
-        
-        return conversationId;
+      const newConversationId = response.data.conversation.id;
+      setConversationId(newConversationId);
+      
+      // Add each message in chatHistory as a message in the conversation, with correct order
+      for (let i = 0; i < messages.length; i++) {
+        const msg = messages[i];
+        const msgHeaders = await getAuthHeaders();
+        await axios.post(
+          `/api/conversations/${newConversationId}/messages`,
+          {
+            sender: msg.sender,
+            text: msg.text,
+            messageType: 'text',
+            message_order: i + 1,
+          },
+          { headers: msgHeaders }
+        );
       }
+        
+      // Update URL with conversation ID
+      const newUrl = new URL(window.location.href);
+      newUrl.searchParams.set('conversation', newConversationId);
+      window.history.replaceState({}, '', newUrl.toString());
+      
+      return newConversationId;
     } catch (error) {
       console.error('Error saving session to backend:', error);
     }
@@ -434,7 +490,7 @@ const AnalyzeContentInner = () => {
     setIsLoadingConversation(true);
     try {
       const headers = await getAuthHeaders();
-      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/conversations/${conversationId}`, { headers });
+      const response = await axios.get(`/api/conversations/${conversationId}`, { headers });
 
       if (response.data.success) {
         const conversation = response.data.conversation;
@@ -475,7 +531,7 @@ const AnalyzeContentInner = () => {
     setIsLoadingSuggestions(true);
     try {
       const headers = await getAuthHeaders();
-      const response = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/api/suggestions`, {
+      const response = await axios.post(`/api/suggestions`, {
         userId: (user as any).id,
         language: language,
         conversationHistory: chatHistory.slice(-10), // Last 10 messages for context
@@ -519,7 +575,7 @@ const AnalyzeContentInner = () => {
     setIsLoadingSuggestions(true);
     try {
       const headers = await getAuthHeaders();
-      const response = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/api/suggestions`, {
+      const response = await axios.post(`/api/suggestions`, {
         userId: (user as any).id,
         language: language,
         conversationHistory: chatHistory.slice(-10),
@@ -581,7 +637,7 @@ const AnalyzeContentInner = () => {
       const sessionMessages = getSessionMessages();
       const headers = await getAuthHeaders();
       
-      const response = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/api/conversations/${conversationId}/summary`, {
+      const response = await axios.post(`/api/conversation-summary`, {
         messages: sessionMessages,
         language: language,
         topics: userPreferences?.topics || [],
@@ -592,7 +648,7 @@ const AnalyzeContentInner = () => {
         const summary = response.data.summary;
         
         // Update conversation title and synopsis
-        await axios.patch(`${process.env.NEXT_PUBLIC_API_URL}/api/conversations/${conversationId}`, {
+        await axios.put(`/api/conversations/${conversationId}/title`, {
           title: summary.title,
           synopsis: summary.synopsis
         }, { headers });
@@ -687,7 +743,7 @@ const AnalyzeContentInner = () => {
 
     try {
       const headers = await getAuthHeaders();
-      await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/api/conversations/${conversationId}/messages`, {
+      await axios.post(`/api/conversations/${conversationId}/messages`, {
         message: message
       }, { headers });
     } catch (error) {
@@ -707,7 +763,7 @@ const AnalyzeContentInner = () => {
     }));
     try {
       const headers = await getAuthHeaders();
-      const response = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/api/translate`, {
+      const response = await axios.post(`/api/translate`, {
         text: text,
         fromLanguage: language,
         toLanguage: 'en'
@@ -796,7 +852,7 @@ const AnalyzeContentInner = () => {
 
     try {
       const headers = await getAuthHeaders();
-      const response = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/api/explain_suggestion`, {
+      const response = await axios.post(`/api/explain_suggestion`, {
         text: text,
         language: language
       }, { headers });
@@ -851,15 +907,27 @@ const AnalyzeContentInner = () => {
 
   // Load user preferences on mount - from original
   useEffect(() => {
-    if (user) {
-      fetchUserDashboardPreferences();
+    if (user && language) {
+      loadPreferencesForLanguage();
     }
-  }, [user]);
+  }, [user, language]);
 
   // Load preferences when language changes - from original
   useEffect(() => {
     loadPreferencesForLanguage();
   }, [language]);
+
+  // Placeholder functions for left panel - need to implement from original
+  const explainLLMResponse = (messageIndex: number, text: string) => {
+    console.log('explainLLMResponse called:', messageIndex, text);
+    // TODO: Implement from original
+  };
+
+  const renderClickableMessage = (message: any, messageIndex: number, translation: any) => {
+    console.log('renderClickableMessage called:', message, messageIndex, translation);
+    // TODO: Implement from original
+    return <div>Clickable message placeholder</div>;
+  };
 
   return (
     <>
@@ -882,6 +950,18 @@ const AnalyzeContentInner = () => {
         showDetailedBreakdown={showDetailedBreakdown}
         parsedBreakdown={parsedBreakdown}
         activePopup={activePopup}
+        // Left panel content props
+        shortFeedback={shortFeedback}
+        quickTranslations={quickTranslations}
+        showQuickTranslation={showQuickTranslation}
+        setShowQuickTranslation={setShowQuickTranslation}
+        llmBreakdown={llmBreakdown}
+        showLlmBreakdown={showLlmBreakdown}
+        setShowLlmBreakdown={setShowLlmBreakdown}
+        chatHistory={chatHistory}
+        isLoadingMessageFeedback={isLoadingMessageFeedback}
+        explainLLMResponse={explainLLMResponse}
+        renderClickableMessage={renderClickableMessage}
       >
         <MainContentArea isDarkMode={isDarkMode}>
           <ChatMessagesContainer

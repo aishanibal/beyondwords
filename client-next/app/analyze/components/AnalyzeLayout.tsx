@@ -20,6 +20,18 @@ interface AnalyzeLayoutProps {
   showDetailedBreakdown: Record<number, boolean>;
   parsedBreakdown: any[];
   activePopup: { messageIndex: number; wordKey: string; position: { x: number; y: number } } | null;
+  // Left panel content props
+  shortFeedback: string;
+  quickTranslations: Record<number, { fullTranslation: string; wordTranslations: Record<string, string>; romanized: string; error: boolean; generatedWords?: string[]; generatedScriptWords?: string[] }>;
+  showQuickTranslation: boolean;
+  setShowQuickTranslation: (show: boolean) => void;
+  llmBreakdown: string;
+  showLlmBreakdown: boolean;
+  setShowLlmBreakdown: (show: boolean) => void;
+  chatHistory: any[];
+  isLoadingMessageFeedback: Record<number, boolean>;
+  explainLLMResponse: (messageIndex: number, text: string) => void;
+  renderClickableMessage: (message: any, messageIndex: number, translation: any) => React.ReactNode;
   children: React.ReactNode;
 }
 
@@ -42,6 +54,18 @@ const AnalyzeLayout: React.FC<AnalyzeLayoutProps> = ({
   showDetailedBreakdown,
   parsedBreakdown,
   activePopup,
+  // Left panel content props
+  shortFeedback,
+  quickTranslations,
+  showQuickTranslation,
+  setShowQuickTranslation,
+  llmBreakdown,
+  showLlmBreakdown,
+  setShowLlmBreakdown,
+  chatHistory,
+  isLoadingMessageFeedback,
+  explainLLMResponse,
+  renderClickableMessage,
   children
 }) => {
   return (
@@ -450,23 +474,258 @@ const AnalyzeLayout: React.FC<AnalyzeLayoutProps> = ({
               }}
             />
             
-            {/* Panel Content - Placeholder */}
-            <div style={{
-              flex: 1,
-              padding: '1rem',
+            {/* Short Feedback Content */}
+            <div style={{ 
+              flex: 1, 
               display: 'flex',
               flexDirection: 'column',
-              overflow: 'hidden'
+              minHeight: 0
             }}>
-              <div style={{
-                color: isDarkMode ? '#94a3b8' : '#666',
-                fontSize: '0.85rem',
-                textAlign: 'center',
-                fontStyle: 'italic',
-                marginTop: '2rem'
-              }}>
-                Short feedback panel content will be added here...
-              </div>
+              
+              {/* Quick Translation Section */}
+              {Object.keys(quickTranslations).length > 0 && (
+                <div style={{
+                  background: isDarkMode 
+                    ? 'linear-gradient(135deg, rgba(132,84,109,0.15) 0%, rgba(132,84,109,0.08) 100%)'
+                    : 'linear-gradient(135deg, rgba(132,84,109,0.12) 0%, rgba(132,84,109,0.06) 100%)',
+                  color: isDarkMode ? 'var(--foreground)' : '#3e3e3e',
+                  padding: '1rem',
+                  borderBottom: isDarkMode ? '1px solid rgba(195,141,148,0.3)' : '1px solid #c38d94',
+                  fontSize: '0.85rem',
+                  lineHeight: 1.5,
+                  fontFamily: 'AR One Sans, Arial, sans-serif',
+                  fontWeight: 400,
+                  transition: 'background 0.3s ease, color 0.3s ease'
+                }}>
+                  <div style={{
+                    fontWeight: 600,
+                    fontSize: '1.1rem',
+                    marginBottom: showQuickTranslation ? '1rem' : '0',
+                    color: isDarkMode ? '#84546d' : '#84546d',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span>Quick Translation</span>
+                      {showLlmBreakdown && (
+                        <button
+                          onClick={() => setShowQuickTranslation(!showQuickTranslation)}
+                          style={{
+                            padding: '0.15rem 0.4rem',
+                            borderRadius: 3,
+                            border: '1px solid #666',
+                            background: 'rgba(102,102,102,0.1)',
+                            color: '#666',
+                            fontSize: '0.6rem',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease'
+                          }}
+                          title={showQuickTranslation ? 'Collapse' : 'Expand'}
+                        >
+                          {showQuickTranslation ? '▼' : '▶'}
+                        </button>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => {
+                        // Find the AI message that has the quick translation
+                        const messageIndex = Object.keys(quickTranslations)[0];
+                        if (messageIndex) {
+                          const message = chatHistory[parseInt(messageIndex)];
+                          if (message) {
+                            explainLLMResponse(parseInt(messageIndex), message.text);
+                          }
+                        }
+                      }}
+                      disabled={isLoadingMessageFeedback[Object.keys(quickTranslations)[0] || '0']}
+                      style={{
+                        padding: '0.35rem 0.7rem',
+                        borderRadius: 6,
+                        border: `1px solid ${isDarkMode ? 'rgba(139,163,217,0.6)' : '#3b5377'}`,
+                        background: isDarkMode 
+                          ? 'rgba(139,163,217,0.15)' 
+                          : 'rgba(59,83,119,0.08)',
+                        color: isDarkMode ? '#8ba3d9' : '#3b5377',
+                        fontSize: '0.7rem',
+                        cursor: isLoadingMessageFeedback[Object.keys(quickTranslations)[0] || '0'] ? 'not-allowed' : 'pointer',
+                        transition: 'all 0.2s ease',
+                        opacity: isLoadingMessageFeedback[Object.keys(quickTranslations)[0] || '0'] ? 0.6 : 1,
+                        fontWeight: 500,
+                        boxShadow: isDarkMode 
+                          ? '0 1px 3px rgba(139,163,217,0.10)' 
+                          : '0 1px 3px rgba(59,83,119,0.10)'
+                      }}
+                      title="Get detailed LLM breakdown"
+                    >
+                      {isLoadingMessageFeedback[Object.keys(quickTranslations)[0] || '0'] ? '🔄' : '📝 Detailed Explanation'}
+                    </button>
+                  </div>
+                  {showQuickTranslation && (
+                    <div style={{
+                      maxHeight: showLlmBreakdown ? '200px' : 'none',
+                      overflowY: showLlmBreakdown ? 'auto' : 'visible'
+                    }}>
+                      {Object.entries(quickTranslations).map(([messageIndex, translation]) => (
+                        <div key={messageIndex} style={{ marginBottom: '1rem' }}>
+                          {translation.error ? (
+                            <div style={{ color: '#dc3545', fontStyle: 'italic' }}>
+                              {translation.fullTranslation}
+                            </div>
+                          ) : (
+                            <div>
+                              {/* Word by word breakdown with clickable words */}
+                              <div style={{ marginBottom: '0.5rem' }}>
+                                <strong>Word by Word Breakdown:</strong>
+                                <div style={{
+                                  background: isDarkMode ? '#334155' : '#f8f9fa',
+                                  padding: '0.75rem',
+                                  borderRadius: 8,
+                                  marginTop: '0.5rem',
+                                  fontSize: '0.95rem',
+                                  lineHeight: '1.6',
+                                  maxHeight: showLlmBreakdown ? '120px' : 'none',
+                                  overflowY: showLlmBreakdown ? 'auto' : 'visible'
+                                }}>
+                                  {renderClickableMessage(chatHistory[parseInt(messageIndex)], parseInt(messageIndex), translation)}
+                                </div>
+                              </div>
+                              
+                              {/* Full translation */}
+                              {translation.fullTranslation && (
+                                <div style={{ marginBottom: '0.5rem' }}>
+                                  <strong>Translation:</strong>
+                                  <div style={{
+                                    background: isDarkMode ? '#334155' : '#f8f9fa',
+                                    padding: '0.75rem',
+                                    borderRadius: 8,
+                                    marginTop: '0.5rem',
+                                    fontSize: '0.85rem',
+                                    lineHeight: '1.6'
+                                  }}>
+                                    {translation.fullTranslation}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {/* LLM Response Breakdown Section */}
+              {showLlmBreakdown && llmBreakdown && (
+                <div style={{
+                  background: isDarkMode 
+                    ? 'linear-gradient(135deg, rgba(60,76,115,0.15) 0%, rgba(60,76,115,0.08) 100%)'
+                    : 'linear-gradient(135deg, rgba(60,76,115,0.12) 0%, rgba(60,76,115,0.06) 100%)',
+                  color: isDarkMode ? 'var(--foreground)' : '#3e3e3e',
+                  padding: '1rem',
+                  borderBottom: isDarkMode ? '1px solid rgba(139,163,217,0.3)' : '1px solid #3b5377',
+                  fontSize: '0.85rem',
+                  lineHeight: 1.5,
+                  fontFamily: 'AR One Sans, Arial, sans-serif',
+                  fontWeight: 400,
+                  transition: 'background 0.3s ease, color 0.3s ease'
+                }}>
+                  <div style={{
+                    fontWeight: 600,
+                    fontSize: '1.1rem',
+                    marginBottom: '1rem',
+                    color: isDarkMode ? '#3b5377' : '#3b5377',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
+                  }}>
+                    <span>LLM Response Breakdown</span>
+                    <button
+                      onClick={() => setShowLlmBreakdown(false)}
+                      style={{
+                        padding: '0.15rem 0.4rem',
+                        borderRadius: 3,
+                        border: '1px solid #666',
+                        background: 'rgba(102,102,102,0.1)',
+                        color: '#666',
+                        fontSize: '0.6rem',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease'
+                      }}
+                      title="Hide breakdown"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <div style={{
+                    background: isDarkMode ? '#334155' : '#f8f9fa',
+                    padding: '0.75rem',
+                    borderRadius: 8,
+                    fontSize: '0.85rem',
+                    lineHeight: '1.6',
+                    whiteSpace: 'pre-wrap'
+                  }}>
+                    {llmBreakdown}
+                  </div>
+                </div>
+              )}
+              
+              {/* Short Feedback Display */}
+              {shortFeedback && (
+                <div style={{
+                  background: isDarkMode 
+                    ? 'linear-gradient(135deg, rgba(195,141,148,0.15) 0%, rgba(195,141,148,0.08) 100%)'
+                    : 'linear-gradient(135deg, rgba(195,141,148,0.12) 0%, rgba(195,141,148,0.06) 100%)',
+                  color: isDarkMode ? 'var(--foreground)' : '#3e3e3e',
+                  padding: '1rem',
+                  fontSize: '0.85rem',
+                  lineHeight: 1.5,
+                  fontFamily: 'AR One Sans, Arial, sans-serif',
+                  fontWeight: 400,
+                  transition: 'background 0.3s ease, color 0.3s ease',
+                  flex: 1,
+                  overflowY: 'auto'
+                }}>
+                  <div style={{
+                    fontWeight: 600,
+                    fontSize: '1.1rem',
+                    marginBottom: '1rem',
+                    color: isDarkMode ? '#c38d94' : '#c38d94'
+                  }}>
+                    💡 AI Feedback
+                  </div>
+                  <div style={{
+                    background: isDarkMode ? '#334155' : '#f8f9fa',
+                    padding: '0.75rem',
+                    borderRadius: 8,
+                    fontSize: '0.85rem',
+                    lineHeight: '1.6',
+                    whiteSpace: 'pre-wrap'
+                  }}>
+                    {shortFeedback}
+                  </div>
+                </div>
+              )}
+              
+              {/* Default message when no content */}
+              {!shortFeedback && Object.keys(quickTranslations).length === 0 && !showLlmBreakdown && (
+                <div style={{
+                  flex: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '2rem',
+                  color: isDarkMode ? '#94a3b8' : '#666',
+                  fontSize: '0.85rem',
+                  textAlign: 'center',
+                  fontStyle: 'italic'
+                }}>
+                  <div>
+                    💡 Click on any AI message to see explanations and feedback here
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -503,36 +762,66 @@ const AnalyzeLayout: React.FC<AnalyzeLayoutProps> = ({
           activePopup={activePopup}
         />
 
-        {/* Floating Panel Toggle Buttons */}
-        {!showRightPanel && (
-          <button
-            onClick={() => setShowRightPanel(true)}
-            style={{
-              position: 'fixed',
-              right: '1rem',
-              top: '6.7rem',
-              background: 'var(--blue-secondary)',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '0 12px 12px 0',
-              padding: '1.1rem 0.75rem',
-              fontSize: '1.2rem',
-              cursor: 'pointer',
-              fontWeight: 600,
-              transition: 'all 0.3s ease',
-              boxShadow: '0 4px 16px rgba(60,76,115,0.25)',
-              zIndex: 1000,
-              fontFamily: 'Montserrat, Arial, sans-serif',
-              height: '60px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}
-            title="Show Translations & Feedback Panel"
-          >
-            📚
-          </button>
-        )}
+      {/* Floating Panel Toggle Buttons */}
+      {!showShortFeedbackPanel && (
+        <button
+          onClick={() => setShowShortFeedbackPanel(true)}
+          style={{
+            position: 'fixed',
+            left: '1rem',
+            top: '6.7rem',
+            background: 'var(--blue-secondary)',
+            color: '#fff',
+            border: 'none',
+            borderRadius: '12px 0 0 12px',
+            padding: '1.1rem 0.75rem',
+            fontSize: '1.2rem',
+            cursor: 'pointer',
+            fontWeight: 600,
+            transition: 'all 0.3s ease',
+            boxShadow: '0 4px 16px rgba(60,76,115,0.25)',
+            zIndex: 1000,
+            fontFamily: 'Montserrat, Arial, sans-serif',
+            height: '60px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+          title="Show Short Feedback Panel"
+        >
+          💡
+        </button>
+      )}
+
+      {!showRightPanel && (
+        <button
+          onClick={() => setShowRightPanel(true)}
+          style={{
+            position: 'fixed',
+            right: '1rem',
+            top: '6.7rem',
+            background: 'var(--blue-secondary)',
+            color: '#fff',
+            border: 'none',
+            borderRadius: '0 12px 12px 0',
+            padding: '1.1rem 0.75rem',
+            fontSize: '1.2rem',
+            cursor: 'pointer',
+            fontWeight: 600,
+            transition: 'all 0.3s ease',
+            boxShadow: '0 4px 16px rgba(60,76,115,0.25)',
+            zIndex: 1000,
+            fontFamily: 'Montserrat, Arial, sans-serif',
+            height: '60px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+          title="Show Translations & Feedback Panel"
+        >
+          📚
+        </button>
+      )}
       </div>
     </div>
   );
