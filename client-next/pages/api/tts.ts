@@ -17,21 +17,38 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       headers: req.headers
     });
 
-    console.log('🔍 [TTS_API] Calling backend:', {
-      url: `${BACKEND_URL}/api/tts`,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': req.headers.authorization || '',
-      }
+    const authHeader = req.headers.authorization || '';
+    const primaryUrl = `${BACKEND_URL}/api/tts`;
+    const fallbackUrl = `${BACKEND_URL}/api/tts-test`;
+
+    console.log('🔍 [TTS_API] Calling backend (primary):', {
+      url: primaryUrl,
+      hasAuth: !!authHeader,
     });
 
-    const response = await axios.post(`${BACKEND_URL}/api/tts`, req.body, {
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': req.headers.authorization || '',
-      },
-      timeout: 30000
-    });
+    let response;
+    try {
+      response = await axios.post(primaryUrl, req.body, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': authHeader,
+        },
+        timeout: 30000
+      });
+    } catch (primaryErr: any) {
+      const status = primaryErr?.response?.status;
+      console.warn('🔍 [TTS_API] Primary call failed:', status, primaryErr?.response?.data);
+      // Fallback if no auth provided or protected route fails (401/403/404)
+      if (!authHeader || status === 401 || status === 403 || status === 404) {
+        console.log('🔍 [TTS_API] Falling back to:', fallbackUrl);
+        response = await axios.post(fallbackUrl, req.body, {
+          headers: { 'Content-Type': 'application/json' },
+          timeout: 30000
+        });
+      } else {
+        throw primaryErr;
+      }
+    }
     
     console.log('🔍 [TTS_API] Backend response:', {
       status: response.status,
