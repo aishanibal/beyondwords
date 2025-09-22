@@ -355,11 +355,8 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
         return;
       }
 
-      // Build auth headers from active Supabase session (v2 stores token internally)
-      const accessToken = (session as any)?.access_token;
-      const authHeaders = accessToken
-        ? { Authorization: `Bearer ${accessToken}` }
-        : await getAuthHeaders(); // Fallback to legacy/localStorage if present
+      // Always prefer our app JWT (localStorage) for consistency across environments
+      const authHeaders = await getAuthHeaders();
       if (!authHeaders.Authorization) {
         setError('Authentication token missing. Please log in again.');
         setIsLoading(false);
