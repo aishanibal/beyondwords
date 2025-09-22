@@ -1035,16 +1035,16 @@ const AnalyzeContentInner = () => {
         // 2. Add each message in chatHistory as a message in the conversation, with correct order
         for (let i = 0; i < chatHistory.length; i++) {
           const msg = chatHistory[i];
-          const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://beyondwords-express.onrender.com';
+          const headers = await getAuthHeaders();
           await axios.post(
-            `${backendUrl}/api/conversations/${newConversationId}/messages`,
+            `/api/conversations/${newConversationId}/messages`,
             {
               sender: msg.sender,
               text: msg.text,
               messageType: 'text',
               message_order: i + 1,
             },
-            token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
+            { headers: headers as any }
           );
         }
   

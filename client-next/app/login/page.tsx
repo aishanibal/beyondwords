@@ -49,8 +49,20 @@ export default function LoginPage() {
       }
 
       if (data.user) {
-        // User will be set automatically by the auth state change listener
-        // No need to manually set user here
+        // Exchange Supabase identity for app JWT and store it
+        try {
+          const email = data.user.email || formData.email;
+          const name = data.user.user_metadata?.full_name || data.user.user_metadata?.name || '';
+          const res = await fetch('/api/auth/exchange', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, name })
+          });
+          const json = await res.json();
+          if (json?.token) {
+            localStorage.setItem('jwt', json.token);
+          }
+        } catch (_e) {}
         router.push('/dashboard');
       }
     } catch (err: any) {
@@ -88,7 +100,22 @@ export default function LoginPage() {
         throw error;
       }
 
-      // User will be set automatically by the auth state change listener
+      // After Supabase Google login, also exchange for app JWT
+      try {
+        const email = data.user?.email;
+        const name = data.user?.user_metadata?.full_name || data.user?.user_metadata?.name || '';
+        if (email) {
+          const res = await fetch('/api/auth/exchange', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, name })
+          });
+          const json = await res.json();
+          if (json?.token) {
+            localStorage.setItem('jwt', json.token);
+          }
+        }
+      } catch (_e) {}
       router.push('/dashboard');
       
     } catch (err: any) {
