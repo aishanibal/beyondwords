@@ -115,6 +115,23 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                     setUser(null);
                   }
                 }
+
+                // Ensure our app JWT is available for backend calls
+                try {
+                  const email = newSession.user.email || '';
+                  const name = newSession.user.user_metadata?.full_name || newSession.user.user_metadata?.name || '';
+                  const res = await fetch('/api/auth/exchange', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, name })
+                  });
+                  const json = await res.json();
+                  if (json?.token) {
+                    localStorage.setItem('jwt', json.token);
+                  }
+                } catch (e) {
+                  console.warn('[AUTH] JWT exchange failed', e);
+                }
               } catch (err) {
                 console.error('[AUTH] Profile error:', err);
                 setUser(null);
