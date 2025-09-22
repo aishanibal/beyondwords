@@ -126,6 +126,13 @@ class AdminControlledTTSSynthesizer:
         import time
         request_id = f"{int(time.time() * 1000)}_{hash(text)}_{hash(language_code)}"
         
+        print(f"🎯 [TTS_DEBUG] AdminControlledTTSSynthesizer.synthesize_speech called:")
+        print(f"🎯 [TTS_DEBUG]   text: '{text}' (length: {len(text)})")
+        print(f"🎯 [TTS_DEBUG]   language_code: '{language_code}'")
+        print(f"🎯 [TTS_DEBUG]   output_path: '{output_path}'")
+        print(f"🎯 [TTS_DEBUG]   request_id: '{request_id}'")
+        print(f"🎯 [TTS_DEBUG]   timestamp: {__import__('datetime').datetime.now()}")
+        
         # Initialize debug info
         debug_info = {
             "request_id": request_id,

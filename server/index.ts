@@ -1765,11 +1765,19 @@ app.post('/api/tts', authenticateJWT, async (req: Request, res: Response) => {
   try {
     const { text, language } = req.body;
     
+    console.log('🎯 [EXPRESS_TTS] TTS request received:');
+    console.log('🎯 [EXPRESS_TTS]   text:', text);
+    console.log('🎯 [EXPRESS_TTS]   language:', language);
+    console.log('🎯 [EXPRESS_TTS]   request body:', req.body);
+    console.log('🎯 [EXPRESS_TTS]   user ID:', req.user?.userId);
+    
     if (!text || !text.trim()) {
+      console.log('🎯 [EXPRESS_TTS] Error: Text is required');
       return res.status(400).json({ error: 'Text is required' });
     }
     
     const lang = language || 'en';
+    console.log('🎯 [EXPRESS_TTS] Using language:', lang);
     
     // Check Python API health first
     const isHealthy = await checkPythonAPIHealth();
@@ -1781,11 +1789,15 @@ app.post('/api/tts', authenticateJWT, async (req: Request, res: Response) => {
     }
     
     // Generate TTS for the text
+    console.log('🎯 [EXPRESS_TTS] Calling generateTTS...');
     const ttsUrl = await generateTTS(text, lang);
+    console.log('🎯 [EXPRESS_TTS] generateTTS result:', ttsUrl);
     
     if (ttsUrl) {
+      console.log('🎯 [EXPRESS_TTS] TTS generation successful, returning URL:', ttsUrl);
       res.json({ ttsUrl });
     } else {
+      console.log('🎯 [EXPRESS_TTS] TTS generation failed, returning error');
       res.status(500).json({ error: 'Failed to generate TTS' });
     }
   } catch (error: any) {

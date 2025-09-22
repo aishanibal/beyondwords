@@ -710,7 +710,12 @@ def generate_tts():
         language_code = data.get('language_code', 'en')
         output_path = data.get('output_path', 'tts_output/response.wav')
         
-        print(f"🎤 TTS request - Language: {language_code}, Text length: {len(text)}")
+        print(f"🎤 [PYTHON_API] TTS request received:")
+        print(f"🎤 [PYTHON_API]   text: '{text}' (length: {len(text)})")
+        print(f"🎤 [PYTHON_API]   language_code: '{language_code}'")
+        print(f"🎤 [PYTHON_API]   output_path: '{output_path}'")
+        print(f"🎤 [PYTHON_API]   request data: {data}")
+        print(f"🎤 [PYTHON_API]   timestamp: {__import__('datetime').datetime.now()}")
         
         # Ensure the output directory exists
         import os
