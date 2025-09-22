@@ -2,7 +2,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import axios from 'axios';
 
-const BACKEND_URL = process.env.AI_BACKEND_URL || 'https://beyondwords.onrender.com/conversation_summary';
+const BACKEND_URL = process.env.AI_BACKEND_URL || 'https://beyondwords.onrender.com';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -11,15 +11,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const response = await axios.post(BACKEND_URL, {
-      conversation_id: req.body.conversation_id,
-      messages: req.body.messages,
-      language: req.body.language
-    }, {
+    console.log('🔍 [CONVERSATION_SUMMARY_API] Request received:', {
+      method: req.method,
+      body: req.body,
+      headers: req.headers
+    });
+
+    console.log('🔍 [CONVERSATION_SUMMARY_API] Calling backend:', {
+      url: BACKEND_URL,
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': req.headers.authorization || '',
       }
     });
+
+    const response = await axios.post(`${BACKEND_URL}/conversation_summary`, req.body, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': req.headers.authorization || '',
+      },
+      timeout: 30000
+    });
+    
+    console.log('🔍 [CONVERSATION_SUMMARY_API] Backend response:', {
+      status: response.status,
+      data: response.data
+    });
+    
     res.status(response.status).json(response.data);
   } catch (err: any) {
     if (err.response) {

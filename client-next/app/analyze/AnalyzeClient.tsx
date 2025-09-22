@@ -2948,9 +2948,9 @@ const AnalyzeContentInner = () => {
       }
       try {
         const token = localStorage.getItem('jwt');
-        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://beyondwords-express.onrender.com';
+        console.log(`[SAVE_MESSAGE] Saving ${sender} message to conversation ${useConversationId}`);
         const response = await axios.post(
-          `${backendUrl}/api/conversations/${useConversationId}/messages`,
+          `/api/conversations/${useConversationId}/messages`,
           {
             sender,
             text,
