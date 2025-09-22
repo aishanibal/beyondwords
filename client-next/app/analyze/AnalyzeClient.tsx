@@ -1395,7 +1395,7 @@ const AnalyzeContentInner = () => {
           response = await axios.post('/api/tts', { text, language }, {
             headers: {
               'Content-Type': 'application/json',
-              ...(token ? { Authorization: `Bearer ${token}` } } : {})
+              ...(token ? { Authorization: `Bearer ${token}` } : {})
             }
           });
         } catch (primaryErr: any) {
