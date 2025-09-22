@@ -1263,7 +1263,15 @@ const AnalyzeContentInner = () => {
       setIsProcessingShortFeedback(true);
       
       // Prepare context (last 4 messages)
-      const context = chatHistory.slice(-4).map(msg => `${msg.sender}: ${msg.text}`).join('\n');
+      // Prepare chat history for short feedback
+      const chatHistoryForShortFeedback = chatHistory.map(msg => ({
+        sender: msg.sender,
+        text: msg.text,
+        timestamp: msg.timestamp
+      }));
+      
+      console.log('🔍 [FRONTEND] Sending chat history to short feedback:', chatHistoryForShortFeedback.length, 'messages');
+      
       try {
         // Call the Express proxy endpoint instead of Python directly
         const token = localStorage.getItem('jwt');
@@ -1271,7 +1279,7 @@ const AnalyzeContentInner = () => {
           '/api/short_feedback',
           {
             user_input: transcription,
-            context,
+            chat_history: chatHistoryForShortFeedback, // Send full chat history for context
             language: language,
             user_level: userPreferences.userLevel,
             user_topics: userPreferences.topics,
@@ -2985,11 +2993,20 @@ const AnalyzeContentInner = () => {
         const token = localStorage.getItem('jwt');
         
         if (breakdown) {
+          // Prepare chat history for detailed breakdown
+          const chatHistoryForBreakdown = chatHistory.map(msg => ({
+            sender: msg.sender,
+            text: msg.text,
+            timestamp: msg.timestamp
+          }));
+          
+          console.log('🔍 [FRONTEND] Sending chat history to detailed breakdown:', chatHistoryForBreakdown.length, 'messages');
+          
           // Call detailed breakdown API
           const response = await axios.post('/api/detailed_breakdown', {
             llm_response: text,
             user_input: '', // We don't have the user input for this message
-            context: chatHistory.slice(-4).map(msg => `${msg.sender}: ${msg.text}`).join('\n'),
+            chat_history: chatHistoryForBreakdown, // Send full chat history for context
             language: language,
             user_level: userPreferences.userLevel,
             user_topics: userPreferences.topics,
@@ -3257,8 +3274,18 @@ const AnalyzeContentInner = () => {
   
       try {
         const token = localStorage.getItem('jwt');
+        // Prepare chat history for short feedback
+        const chatHistoryForShortFeedback = chatHistory.map(msg => ({
+          sender: msg.sender,
+          text: msg.text,
+          timestamp: msg.timestamp
+        }));
+        
+        console.log('🔍 [FRONTEND] Sending chat history to short feedback (message):', chatHistoryForShortFeedback.length, 'messages');
+        
         const requestData = {
           text: message.text,
+          chat_history: chatHistoryForShortFeedback, // Send full chat history for context
           user_level: userPreferences.userLevel,
           user_topics: userPreferences.topics,
           user_goals: userPreferences.user_goals,
@@ -3376,10 +3403,19 @@ const AnalyzeContentInner = () => {
   
       try {
         const token = localStorage.getItem('jwt');
+        // Prepare chat history for detailed breakdown
+        const chatHistoryForBreakdown = chatHistory.map(msg => ({
+          sender: msg.sender,
+          text: msg.text,
+          timestamp: msg.timestamp
+        }));
+        
+        console.log('🔍 [FRONTEND] Sending chat history to detailed breakdown (message):', chatHistoryForBreakdown.length, 'messages');
+        
         const requestData = {
           llm_response: message.text,
           user_input: "", // AI message doesn't have user input
-          context: "",
+          chat_history: chatHistoryForBreakdown, // Send full chat history for context
           language: language,
           user_level: userPreferences.userLevel,
           user_topics: userPreferences.topics,
@@ -4375,8 +4411,18 @@ const AnalyzeContentInner = () => {
       try {
         const token = localStorage.getItem('jwt');
         const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://beyondwords-express.onrender.com';
+        // Prepare chat history for quick translation
+        const chatHistoryForQuickTranslation = chatHistory.map(msg => ({
+          sender: msg.sender,
+          text: msg.text,
+          timestamp: msg.timestamp
+        }));
+        
+        console.log('🔍 [FRONTEND] Sending chat history to quick translation:', chatHistoryForQuickTranslation.length, 'messages');
+        
         const requestData = {
           ai_message: text,
+          chat_history: chatHistoryForQuickTranslation, // Send chat history for context
           language: language,
           user_level: userPreferences.userLevel,
           user_topics: userPreferences.topics,

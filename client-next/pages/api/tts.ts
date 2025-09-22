@@ -18,14 +18,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
 
     console.log('🔍 [TTS_API] Calling backend:', {
-      url: `${BACKEND_URL}/api/tts-test`,
+      url: `${BACKEND_URL}/api/tts`,
       headers: {
         'Content-Type': 'application/json',
         'Authorization': req.headers.authorization || '',
       }
     });
 
-    const response = await axios.post(`${BACKEND_URL}/api/tts-test`, req.body, {
+    const response = await axios.post(`${BACKEND_URL}/api/tts`, req.body, {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': req.headers.authorization || '',

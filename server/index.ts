@@ -1860,7 +1860,7 @@ app.post('/api/quick_translation', authenticateJWT, async (req: Request, res: Re
     console.log('🔍 [NODE_SERVER] POST /api/quick_translation called');
     console.log('🔍 [NODE_SERVER] Request body:', req.body);
     console.log('🔍 [NODE_SERVER] User ID:', req.user?.userId);
-    const { ai_message, language, user_level, user_topics, formality, feedback_language, user_goals, description } = req.body;
+    const { ai_message, chat_history, language, user_level, user_topics, formality, feedback_language, user_goals, description } = req.body;
     
     if (!ai_message) {
       return res.status(400).json({ error: 'No AI message provided' });
@@ -1871,6 +1871,7 @@ app.post('/api/quick_translation', authenticateJWT, async (req: Request, res: Re
       const pythonApiUrl = (process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com').replace(/\/$/, '');
       const pythonRequestData = {
         ai_message: ai_message,
+        chat_history: chat_history || [], // Forward chat history for context
         language: language || 'en',
         user_level: user_level || 'beginner',
         user_topics: user_topics || [],
