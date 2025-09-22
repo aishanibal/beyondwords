@@ -771,7 +771,6 @@ const AnalyzeContentInner = () => {
     useEffect(() => {
       // Chat history monitoring removed for performance
     }, [chatHistory]);
-
     // Function to fetch user's dashboard preferences
     const fetchUserDashboardPreferences = async (languageCode: string) => {
       try {
@@ -1396,7 +1395,7 @@ const AnalyzeContentInner = () => {
           response = await axios.post('/api/tts', { text, language }, {
             headers: {
               'Content-Type': 'application/json',
-              ...(token ? { Authorization: `Bearer ${token}` } : {})
+              ...(token ? { Authorization: `Bearer ${token}` } } : {})
             }
           });
         } catch (primaryErr: any) {
@@ -1444,7 +1443,6 @@ const AnalyzeContentInner = () => {
         setIsGeneratingTTS(prev => ({ ...prev, [cacheKey]: false }));
       }
     };
-  
     const playTTSAudio = async (text: string, language: string, cacheKey: string) => {
       console.log('🎵 [PLAY_TTS_AUDIO] Called with:', { text, language, cacheKey });
       console.log('🎵 [PLAY_TTS_AUDIO] Text length:', text.length);
@@ -1474,22 +1472,29 @@ const AnalyzeContentInner = () => {
           const audioUrl = ttsUrl.startsWith('http') ? ttsUrl : `${backendUrl}${ttsUrl}`;
           console.log('🎵 [PLAY_TTS_AUDIO] Constructed audio URL:', audioUrl);
           
-          // Check if the audio file exists before creating Audio object
-          try {
-            const headResponse = await fetch(audioUrl, { method: 'HEAD' });
-            if (!headResponse.ok) {
-              console.error('🎵 [PLAY_TTS_AUDIO] Audio file not accessible:', headResponse.status, headResponse.statusText);
-              setIsPlayingTTS(prev => ({ ...prev, [cacheKey]: false }));
-              setIsPlayingAnyTTS(false);
-              return;
+          // Check if the audio file exists before creating Audio object (with retry)
+          const waitForUrlAccessible = async (url: string, attempts = 6, delayMs = 300): Promise<boolean> => {
+            for (let i = 0; i < attempts; i++) {
+              try {
+                const head = await fetch(url, { method: 'HEAD', cache: 'no-store' as RequestCache });
+                if (head.ok) return true;
+                console.warn(`🎵 [PLAY_TTS_AUDIO] HEAD ${head.status} retry ${i + 1}/${attempts}`);
+              } catch (e) {
+                console.warn(`🎵 [PLAY_TTS_AUDIO] HEAD error retry ${i + 1}/${attempts}:`, e);
+              }
+              await new Promise(r => setTimeout(r, delayMs));
             }
-            console.log('🎵 [PLAY_TTS_AUDIO] Audio file is accessible');
-          } catch (fetchError) {
-            console.error('🎵 [PLAY_TTS_AUDIO] Error checking audio file accessibility:', fetchError);
+            return false;
+          };
+
+          const accessible = await waitForUrlAccessible(audioUrl, 6, 300);
+          if (!accessible) {
+            console.error('🎵 [PLAY_TTS_AUDIO] Audio file not accessible after retries');
             setIsPlayingTTS(prev => ({ ...prev, [cacheKey]: false }));
             setIsPlayingAnyTTS(false);
             return;
           }
+          console.log('🎵 [PLAY_TTS_AUDIO] Audio file is accessible');
           
           const audio = new window.Audio(audioUrl);
           ttsAudioRef.current = audio;
@@ -2188,7 +2193,6 @@ const AnalyzeContentInner = () => {
         setIsProcessing(false);
       }
     };
-  
     const requestDetailedFeedback = async () => {
       // Get the last 3 messages as context
       const contextMessages = chatHistory.slice(-3);
@@ -3025,7 +3029,11 @@ const AnalyzeContentInner = () => {
         return;
       }
       try {
-        const token = localStorage.getItem('jwt');
+        const authHeaders = await getAuthHeaders();
+        if (!authHeaders || !(authHeaders as any).Authorization) {
+          console.warn('[SAVE_MESSAGE] Missing Authorization, skipping backend save');
+          return;
+        }
         console.log(`[SAVE_MESSAGE] Saving ${sender} message to conversation ${useConversationId}`);
         const response = await axios.post(
           `/api/conversations/${useConversationId}/messages`,
@@ -3036,7 +3044,7 @@ const AnalyzeContentInner = () => {
             audioFilePath,
             romanized_text: romanizedText
           },
-          token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
+          { headers: authHeaders as any }
         );
         console.log(`[SAVE_MESSAGE] Successfully saved ${sender} message to conversation ${useConversationId}`);
       } catch (error: unknown) {
@@ -3633,7 +3641,12 @@ const AnalyzeContentInner = () => {
     const syncUnsavedMessagesToBackend = async () => {
       try {
         if (!conversationId) return;
-        const token = localStorage.getItem('jwt');
+        const authHeaders = await getAuthHeaders();
+        const hasAuth = !!(authHeaders && (authHeaders as any).Authorization);
+        if (!hasAuth) {
+          console.warn('[MESSAGE_SYNC] Skipping sync: missing Authorization');
+          return;
+        }
         // Messages that were created this session but may not have been persisted (network hiccup, etc.)
         const unsaved = chatHistory.filter(m => m && m.isFromOriginalConversation === false);
         if (unsaved.length === 0) return;
@@ -3646,7 +3659,7 @@ const AnalyzeContentInner = () => {
               messageType: 'text',
               romanized_text: msg.romanizedText || null,
               timestamp: (msg.timestamp instanceof Date ? msg.timestamp : new Date()).toISOString()
-            }, token ? { headers: { Authorization: `Bearer ${token}` } } : undefined);
+            }, { headers: authHeaders as any });
           } catch (e) {
             console.error('[MESSAGE_SYNC] Failed to persist message:', e);
           }
@@ -4385,9 +4398,7 @@ const AnalyzeContentInner = () => {
       
       return result;
     };
-  
     // Note: Quick Translation uses AI-provided romanization; no normalization applied
-  
     // Helper function to render feedback text with formatting and headers
     const renderFeedbackText = (text: string) => {
       if (!text) return null;
