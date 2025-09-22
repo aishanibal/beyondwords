@@ -120,14 +120,27 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 try {
                   const email = newSession.user.email || '';
                   const name = newSession.user.user_metadata?.full_name || newSession.user.user_metadata?.name || '';
-                  const res = await fetch('/api/auth/exchange', {
+                  // Try Next API first, then fallback to backend directly
+                  const primary = '/api/auth/exchange';
+                  const backendBase = (process.env.NEXT_PUBLIC_API_BASE_URL || 'https://beyondwords-express.onrender.com').replace(/\/$/, '');
+                  const fallback = `${backendBase}/api/auth/exchange`;
+                  let res = await fetch(primary, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ email, name })
                   });
-                  const json = await res.json();
-                  if (json?.token) {
-                    localStorage.setItem('jwt', json.token);
+                  if (!res.ok) {
+                    res = await fetch(fallback, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ email, name })
+                    });
+                  }
+                  if (res.ok) {
+                    const json = await res.json();
+                    if (json?.token) {
+                      localStorage.setItem('jwt', json.token);
+                    }
                   }
                 } catch (e) {
                   console.warn('[AUTH] JWT exchange failed', e);
