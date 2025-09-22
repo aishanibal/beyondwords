@@ -1721,10 +1721,10 @@ app.post('/api/detailed_breakdown', authenticateJWT, async (req: Request, res: R
 });
 
 // Personas endpoints
-app.post('/api/personas', authenticateJWT, async (req: Request, res: Response) => {
+app.post('/api/personas', optionalAuthenticateJWT as any, async (req: Request, res: Response) => {
   try {
     const { name, description, topics, formality, language, conversationId } = req.body;
-    const userId = req.user.userId;
+    const userId = (req.user as any)?.userId || null;
 
     if (!name) {
       return res.status(400).json({ error: 'Name is required' });
@@ -1746,9 +1746,9 @@ app.post('/api/personas', authenticateJWT, async (req: Request, res: Response) =
   }
 });
 
-app.get('/api/personas', authenticateJWT, async (req: Request, res: Response) => {
+app.get('/api/personas', optionalAuthenticateJWT as any, async (req: Request, res: Response) => {
   try {
-    const userId = req.user.userId;
+    const userId = (req.user as any)?.userId || null;
     const personas = await getUserPersonas(userId);
     res.json({ personas });
   } catch (error: any) {
