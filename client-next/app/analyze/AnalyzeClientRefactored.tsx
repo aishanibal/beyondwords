@@ -559,6 +559,7 @@ const AnalyzeContentInner = () => {
             userPreferences={userPreferences}
             handleSuggestionButtonClick={suggestions.handleSuggestionButtonClick}
             isLoadingSuggestions={suggestions.isLoadingSuggestions}
+            isLoadingMessageFeedback={messageInteractions.isLoadingMessageFeedback}
           />
           
           {/* Suggestion Carousel */}

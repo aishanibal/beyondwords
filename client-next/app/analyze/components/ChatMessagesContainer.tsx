@@ -31,6 +31,7 @@ interface ChatMessagesContainerProps {
   ttsCache: Map<string, { url: string; timestamp: number }>;
   isGeneratingTTS: {[key: string]: boolean};
   isPlayingTTS: {[key: string]: boolean};
+  isLoadingMessageFeedback: Record<number, boolean>; // Loading state for message feedback
   romanizationDisplay: string;
   language: string;
   messageCount: number;
@@ -73,6 +74,7 @@ const ChatMessagesContainer: React.FC<ChatMessagesContainerProps> = ({
   ttsCache,
   isGeneratingTTS,
   isPlayingTTS,
+  isLoadingMessageFeedback,
   romanizationDisplay,
   language,
   messageCount,
