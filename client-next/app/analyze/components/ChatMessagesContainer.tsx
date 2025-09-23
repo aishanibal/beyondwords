@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { ChatMessage } from '../types/analyze';
+import ChatMessageItem from '../ChatMessageItem';
 
 interface ChatMessagesContainerProps {
   chatHistory: ChatMessage[];
@@ -37,6 +38,8 @@ interface ChatMessagesContainerProps {
   isLoadingMoreMessages: boolean;
   loadMoreMessages: () => void;
   userPreferences: any;
+  handleSuggestionButtonClick: () => void;
+  isLoadingSuggestions: boolean;
 }
 
 const ESTIMATED_MESSAGE_HEIGHT = 200; // Estimated height per message
@@ -76,7 +79,9 @@ const ChatMessagesContainer: React.FC<ChatMessagesContainerProps> = ({
   hasMoreMessages,
   isLoadingMoreMessages,
   loadMoreMessages,
-  userPreferences
+  userPreferences,
+  handleSuggestionButtonClick,
+  isLoadingSuggestions
 }) => {
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const [virtualItems, setVirtualItems] = useState<{ index: number; start: number }[]>([]);
@@ -240,7 +245,8 @@ const ChatMessagesContainer: React.FC<ChatMessagesContainerProps> = ({
             const message = chatHistory[index];
             if (!message) return null;
 
-            const formatted = formatMessageForDisplay(message, romanizationDisplay, language);
+            const isLastAIMessage = index === lastAIIndex;
+            const isLastMessage = index === chatHistory.length - 1;
             
             return (
               <div key={message.id || index} style={{
@@ -252,33 +258,48 @@ const ChatMessagesContainer: React.FC<ChatMessagesContainerProps> = ({
                 height: ESTIMATED_MESSAGE_HEIGHT,
                 padding: '0 0.5rem'
               }}>
-                {/* Message content would go here */}
-                <div style={{
-                  padding: '1rem',
-                  borderRadius: '12px',
-                  background: message.sender === 'User' 
-                    ? (isDarkMode ? '#3b5377' : '#e3f2fd')
-                    : (isDarkMode ? '#1e293b' : '#f5f5f5'),
-                  color: isDarkMode ? '#e2e8f0' : '#374151',
-                  marginBottom: '0.5rem',
-                  fontSize: '0.9rem',
-                  lineHeight: '1.5'
-                }}>
-                  <div style={{ fontWeight: 600, marginBottom: '0.5rem' }}>
-                    {message.sender}
-                  </div>
-                  <div>{formatted.mainText}</div>
-                  {formatted.romanizedText && (
-                    <div style={{ 
-                      fontSize: '0.8rem', 
-                      color: isDarkMode ? '#94a3b8' : '#6b7280',
-                      marginTop: '0.5rem',
-                      fontStyle: 'italic'
-                    }}>
-                      {formatted.romanizedText}
-                    </div>
-                  )}
-                </div>
+                <ChatMessageItem
+                  message={message}
+                  index={index}
+                  isDarkMode={isDarkMode}
+                  isLastAIMessage={isLastAIMessage}
+                  isLastMessage={isLastMessage}
+                  onMessageClick={onMessageClick}
+                  onTranslateMessage={onTranslateMessage}
+                  onRequestDetailedFeedback={onRequestDetailedFeedback}
+                  onRequestShortFeedback={onRequestShortFeedback}
+                  onRequestDetailedBreakdown={onRequestDetailedBreakdown}
+                  onToggleDetailedFeedback={onToggleDetailedFeedback}
+                  onToggleShortFeedback={onToggleShortFeedback}
+                  onQuickTranslation={onQuickTranslation}
+                  onExplainLLMResponse={onExplainLLMResponse}
+                  onPlayTTS={onPlayTTS}
+                  onPlayExistingTTS={onPlayExistingTTS}
+                  translations={translations}
+                  isTranslating={isTranslating}
+                  showTranslations={showTranslations}
+                  showDetailedBreakdown={showDetailedBreakdown}
+                  showSuggestionExplanations={showSuggestionExplanations}
+                  explainButtonPressed={explainButtonPressed}
+                  parsedBreakdown={parsedBreakdown}
+                  feedbackExplanations={feedbackExplanations}
+                  activePopup={activePopup}
+                  showCorrectedVersions={showCorrectedVersions}
+                  quickTranslations={quickTranslations}
+                  showQuickTranslations={showQuickTranslations}
+                  ttsCache={ttsCache}
+                  isGeneratingTTS={isGeneratingTTS}
+                  isPlayingTTS={isPlayingTTS}
+                  romanizationDisplay={romanizationDisplay}
+                  language={language}
+                  isLoadingMessageFeedback={{}}
+                  handleSuggestionButtonClick={handleSuggestionButtonClick}
+                  isLoadingSuggestions={isLoadingSuggestions}
+                  isProcessing={false}
+                  playExistingTTS={() => {}}
+                  extractCorrectedVersion={() => null}
+                  renderFormattedText={() => null}
+                />
               </div>
             );
           });

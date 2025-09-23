@@ -301,11 +301,30 @@ export const useSuggestions = (
     }
   }, [language]);
 
-  // Play suggestion TTS - placeholder implementation
-  const playSuggestionTTS = useCallback((suggestion: any, index: number) => {
+  // Play suggestion TTS - implementation
+  const playSuggestionTTS = useCallback(async (suggestion: any, index: number) => {
     console.log('🔍 [DEBUG] Playing suggestion TTS:', suggestion.text, index);
-    // TODO: Implement TTS playback for suggestions
-  }, []);
+    try {
+      const token = localStorage.getItem('jwt');
+      const response = await axios.post('/api/tts', {
+        text: suggestion.text,
+        language: language,
+        cacheKey: `suggestion_${index}_${Date.now()}`
+      }, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        }
+      });
+      
+      if (response.data.success && response.data.audioUrl) {
+        const audio = new Audio(response.data.audioUrl);
+        await audio.play();
+      }
+    } catch (error) {
+      console.error('Error playing suggestion TTS:', error);
+    }
+  }, [language]);
 
   return {
     // State

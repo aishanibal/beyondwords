@@ -35,6 +35,7 @@ import { useFeedback } from './hooks/useFeedback';
 import { useSuggestions } from './hooks/useSuggestions';
 import { useAudioHandlers } from './hooks/useAudioHandlers';
 import { useConversationManagement } from './hooks/useConversationManagement';
+import { useMessageInteractions } from './hooks/useMessageInteractions';
 
 // Import types and utilities
 import { 
@@ -271,6 +272,9 @@ const AnalyzeContentInner = () => {
     setShortFeedback
   );
 
+  // Use message interactions hook
+  const messageInteractions = useMessageInteractions(language);
+
   // URL parameter handling - from original
   useEffect(() => {
     if (urlParams.lang && urlParams.lang !== language) {
@@ -420,32 +424,42 @@ const AnalyzeContentInner = () => {
     }
   };
 
+  // Event handlers - using message interactions hook
   const handleRequestDetailedFeedback = async (messageIndex: number) => {
-    // Handle detailed feedback request
+    const message = chatHistory[messageIndex];
+    if (message) {
+      await messageInteractions.handleRequestDetailedFeedback(messageIndex, message.text);
+    }
   };
 
   const handleRequestShortFeedback = async (messageIndex: number) => {
-    // Handle short feedback request
+    const message = chatHistory[messageIndex];
+    if (message) {
+      await messageInteractions.handleRequestShortFeedback(messageIndex, message.text);
+    }
   };
 
   const handleRequestDetailedBreakdown = async (messageIndex: number) => {
-    // Handle detailed breakdown request
+    const message = chatHistory[messageIndex];
+    if (message) {
+      await messageInteractions.handleRequestDetailedBreakdown(messageIndex, message.text);
+    }
   };
 
   const handleToggleDetailedFeedback = (messageIndex: number) => {
-    // Handle toggle detailed feedback
+    messageInteractions.handleToggleDetailedFeedback(messageIndex);
   };
 
   const handleToggleShortFeedback = (messageIndex: number) => {
-    // Handle toggle short feedback
+    messageInteractions.handleToggleShortFeedback(messageIndex);
   };
 
   const handleQuickTranslation = async (messageIndex: number, text: string) => {
-    // Handle quick translation
+    await messageInteractions.handleQuickTranslation(messageIndex, text);
   };
 
   const handleExplainLLMResponse = async (messageIndex: number, text: string) => {
-    // Handle explain LLM response
+    await messageInteractions.handleExplainLLMResponse(messageIndex, text);
   };
 
   // Initialize MediaRecorder and SpeechRecognition classes - from original
@@ -502,7 +516,7 @@ const AnalyzeContentInner = () => {
         showLlmBreakdown={showLlmBreakdown}
         setShowLlmBreakdown={setShowLlmBreakdown}
         chatHistory={chatHistory}
-        isLoadingMessageFeedback={isLoadingMessageFeedback}
+            isLoadingMessageFeedback={messageInteractions.isLoadingMessageFeedback}
         explainLLMResponse={explainLLMResponse}
         renderClickableMessage={renderClickableMessage}
       >
@@ -519,20 +533,20 @@ const AnalyzeContentInner = () => {
               onToggleShortFeedback={handleToggleShortFeedback}
               onQuickTranslation={handleQuickTranslation}
               onExplainLLMResponse={handleExplainLLMResponse}
-              onPlayTTS={audioHandlers.handlePlayTTS}
-              onPlayExistingTTS={audioHandlers.handlePlayExistingTTS}
+            onPlayTTS={audioHandlers.handlePlayTTS}
+            onPlayExistingTTS={audioHandlers.handlePlayExistingTTS}
             translations={translations}
             isTranslating={isTranslating}
             showTranslations={showTranslations}
-            showDetailedBreakdown={showDetailedBreakdown}
+            showDetailedBreakdown={messageInteractions.showDetailedBreakdown}
             showSuggestionExplanations={{}}
             explainButtonPressed={suggestions.explainButtonPressed}
             parsedBreakdown={parsedBreakdown}
             feedbackExplanations={feedbackExplanations}
             activePopup={activePopup}
             showCorrectedVersions={showCorrectedVersions}
-            quickTranslations={quickTranslations}
-            showQuickTranslations={showQuickTranslations}
+            quickTranslations={messageInteractions.quickTranslations}
+            showQuickTranslations={messageInteractions.showQuickTranslations}
             ttsCache={ttsCache}
             isGeneratingTTS={isGeneratingTTS}
             isPlayingTTS={isPlayingTTS}
@@ -543,6 +557,8 @@ const AnalyzeContentInner = () => {
             isLoadingMoreMessages={isLoadingMoreMessages}
             loadMoreMessages={() => {/* TODO: Implement */}}
             userPreferences={userPreferences}
+            handleSuggestionButtonClick={suggestions.handleSuggestionButtonClick}
+            isLoadingSuggestions={suggestions.isLoadingSuggestions}
           />
           
           {/* Suggestion Carousel */}
