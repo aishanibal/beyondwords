@@ -39,6 +39,11 @@ export const isScriptLanguage = (languageCode: string): boolean => {
 };
 
 export const formatScriptLanguageText = (text: string, languageCode: string): { mainText: string; romanizedText?: string } => {
+  // Safety check for undefined or null text
+  if (!text || typeof text !== 'string') {
+    return { mainText: '' };
+  }
+  
   // Check if the text already contains romanization in the format "romanization (original)"
   const romanizationPattern = /^(.+?)\s*\(([^)]+)\)$/;
   const match = text.match(romanizationPattern);

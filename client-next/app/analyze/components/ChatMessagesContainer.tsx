@@ -89,11 +89,16 @@ const ChatMessagesContainer: React.FC<ChatMessagesContainerProps> = ({
 
   // Format message for display
   const formatMessageForDisplay = (message: ChatMessage, romanizationDisplay: string, language: string) => {
+    // Safety checks
+    if (!message) {
+      return { mainText: '', romanizedText: '' };
+    }
+    
     // This would contain the complex formatting logic from the original
     // For now, return a simple structure
     return {
-      mainText: message.text,
-      romanizedText: message.romanizedText
+      mainText: message.text || '',
+      romanizedText: message.romanizedText || ''
     };
   };
 
@@ -248,6 +253,9 @@ const ChatMessagesContainer: React.FC<ChatMessagesContainerProps> = ({
             const isLastAIMessage = index === lastAIIndex;
             const isLastMessage = index === chatHistory.length - 1;
             
+            // Generate formatted text for the message
+            const formatted = formatMessageForDisplay(message, romanizationDisplay, language);
+            
             return (
               <div key={message.id || index} style={{
                 position: 'absolute',
@@ -260,43 +268,34 @@ const ChatMessagesContainer: React.FC<ChatMessagesContainerProps> = ({
               }}>
                 <ChatMessageItem
                   message={message}
+                  formatted={formatted}
                   index={index}
                   isDarkMode={isDarkMode}
                   isLastAIMessage={isLastAIMessage}
                   isLastMessage={isLastMessage}
-                  onMessageClick={onMessageClick}
-                  onTranslateMessage={onTranslateMessage}
-                  onRequestDetailedFeedback={onRequestDetailedFeedback}
-                  onRequestShortFeedback={onRequestShortFeedback}
-                  onRequestDetailedBreakdown={onRequestDetailedBreakdown}
-                  onToggleDetailedFeedback={onToggleDetailedFeedback}
-                  onToggleShortFeedback={onToggleShortFeedback}
-                  onQuickTranslation={onQuickTranslation}
-                  onExplainLLMResponse={onExplainLLMResponse}
-                  onPlayTTS={onPlayTTS}
-                  onPlayExistingTTS={onPlayExistingTTS}
-                  translations={translations}
+                  toggleShortFeedback={() => {}}
+                  toggleDetailedFeedback={() => {}}
+                  generateTTSForText={() => {}}
+                  language={language}
+                  userPreferences={{ romanizationDisplay }}
+                  playTTS={onPlayTTS}
+                  getTTSText={(message: any, romanizationDisplay: string) => {
+                    if (romanizationDisplay === 'original' || romanizationDisplay === 'both') {
+                      return message.text;
+                    } else {
+                      return message.romanizedText || message.text;
+                    }
+                  }}
+                  isLoadingMessageFeedback={isLoadingMessageFeedback}
                   isTranslating={isTranslating}
-                  showTranslations={showTranslations}
-                  showDetailedBreakdown={showDetailedBreakdown}
-                  showSuggestionExplanations={showSuggestionExplanations}
-                  explainButtonPressed={explainButtonPressed}
-                  parsedBreakdown={parsedBreakdown}
-                  feedbackExplanations={feedbackExplanations}
-                  activePopup={activePopup}
-                  showCorrectedVersions={showCorrectedVersions}
-                  quickTranslations={quickTranslations}
-                  showQuickTranslations={showQuickTranslations}
-                  ttsCache={ttsCache}
                   isGeneratingTTS={isGeneratingTTS}
                   isPlayingTTS={isPlayingTTS}
-                  romanizationDisplay={romanizationDisplay}
-                  language={language}
-                  isLoadingMessageFeedback={{}}
+                  quickTranslation={onQuickTranslation}
                   handleSuggestionButtonClick={handleSuggestionButtonClick}
                   isLoadingSuggestions={isLoadingSuggestions}
                   isProcessing={false}
-                  playExistingTTS={() => {}}
+                  playExistingTTS={onPlayExistingTTS}
+                  showCorrectedVersions={showCorrectedVersions}
                   extractCorrectedVersion={() => null}
                   renderFormattedText={() => null}
                 />

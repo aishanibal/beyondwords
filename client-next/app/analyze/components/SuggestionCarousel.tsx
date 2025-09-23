@@ -141,7 +141,8 @@ const SuggestionCarousel: React.FC<SuggestionCarouselProps> = ({
             marginBottom: '0.3rem'
           }}>
             {(() => {
-              const formatted = formatMessageForDisplay(suggestion, userPreferences?.romanizationDisplay || 'both', language);
+              const text = suggestion?.text || '';
+              const formatted = formatScriptLanguageText(text, language);
               return (
                 <>
                   <span>{formatted.mainText}</span>
