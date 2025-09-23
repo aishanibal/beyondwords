@@ -163,6 +163,15 @@ const AnalyzeContentInner = () => {
   const [skipValidation, setSkipValidation] = useState(false);
   const [isUsingPersona, setIsUsingPersona] = useState<boolean>(false);
   const [isNewPersona, setIsNewPersona] = useState(false);
+  
+  // Recording state variables from original
+  const [wasInterrupted, setWasInterrupted] = useState(false);
+  const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
+  const [manualRecording, setManualRecording] = useState(false);
+  
+  // TTS state variables from original
+  const [isAnyTTSPlaying, setIsAnyTTSPlaying] = useState(false);
+  const [aiTTSQueued, setAiTTSQueued] = useState<{ text: string; language: string; cacheKey: string } | null>(null);
 
   // Suggestions state
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -253,6 +262,10 @@ const AnalyzeContentInner = () => {
   const interruptedRef = useRef<boolean>(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const rightPanelRef = useRef<HTMLDivElement>(null);
+  
+  // Additional refs from original
+  const MediaRecorderClassRef = useRef<typeof MediaRecorder | null>(null);
+  const SpeechRecognitionClassRef = useRef<any>(null);
 
   // Use the custom hooks
   const [chatHistory, setChatHistory] = usePersistentChatHistory(user as any);
@@ -387,7 +400,7 @@ const AnalyzeContentInner = () => {
       const dashboard = (dashboards || []).find((d: any) => d.language === languageCode);
       
       if (dashboard) {
-        return {
+    return {
           formality: dashboard.formality || 'friendly',
           topics: dashboard.talk_topics || [],
           user_goals: dashboard.learning_goals || [],
@@ -451,7 +464,7 @@ const AnalyzeContentInner = () => {
     try {
       const headers = await getAuthHeaders();
       const response = await axios.post(`/api/conversations`, {
-        language,
+      language, 
         title: description || 'New Conversation',
         topics,
         formality
@@ -891,16 +904,379 @@ const AnalyzeContentInner = () => {
     // Handle play existing TTS
   };
 
-  const handleStartRecording = () => {
-    audioRecording.startRecording();
+  // Missing functions from original - placeholders for now
+  const generateRomanizedText = async (text: string, language: string): Promise<string> => {
+    // TODO: Implement romanization logic
+    return '';
   };
 
-  const handleStopRecording = () => {
-    audioRecording.stopRecording();
+  const fetchAndShowShortFeedback = async (transcription: string, language: string) => {
+    // TODO: Implement short feedback logic
+    console.log('Short feedback requested for:', transcription);
+  };
+
+  const getTTSText = (message: ChatMessage, romanizationDisplay: string, language: string): string => {
+    // TODO: Implement TTS text logic
+    return message.text;
+  };
+
+  const playTTSAudio = async (text: string, language: string, cacheKey: string): Promise<void> => {
+    // TODO: Implement TTS audio playback
+    console.log('TTS audio playback requested:', text);
+  };
+
+  // Initialize MediaRecorder and SpeechRecognition classes - from original
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      MediaRecorderClassRef.current = window.MediaRecorder;
+      SpeechRecognitionClassRef.current = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      
+      if (!MediaRecorderClassRef.current) {
+        console.warn('MediaRecorder API not supported in this browser.');
+      }
+      if (!SpeechRecognitionClassRef.current) {
+        console.warn('SpeechRecognition API not supported in this browser.');
+      }
+      
+      // Check for HTTPS in production
+      if (process.env.NODE_ENV === 'production' && window.location.protocol !== 'https:') {
+        console.warn('getUserMedia requires HTTPS in production. Audio recording may not work.');
+      }
+    }
+  }, []);
+
+  const handleStartRecording = async () => {
+    setWasInterrupted(false);
+    
+    // Prevent recording when TTS is playing
+    if (isAnyTTSPlaying) {
+      console.log('[DEBUG] Cannot start recording - TTS is playing:', { isAnyTTSPlaying });
+      return;
+    }
+    
+    if (!MediaRecorderClassRef.current) {
+      alert('MediaRecorder API not supported in this browser.');
+      return;
+    }
+    
+    // Check if mediaDevices is available
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      alert('Microphone access is not available in this browser. Please use a modern browser with microphone support.');
+      return;
+    }
+    
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      setMediaStream(stream);
+      audioChunksRef.current = [];
+      const mediaRecorder = new MediaRecorderClassRef.current(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      mediaRecorder.ondataavailable = (e: BlobEvent) => {
+        if (e.data.size > 0) {
+          audioChunksRef.current.push(e.data);
+        }
+      };
+      mediaRecorder.onstop = () => {
+        if (interruptedRef.current) {
+          interruptedRef.current = false;
+          setWasInterrupted(true);
+          stream.getTracks().forEach(track => track.stop());
+          setMediaStream(null);
+          setIsRecording(false);
+          setManualRecording(false);
+          return;
+        }
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        sendAudioToBackend(audioBlob);
+        stream.getTracks().forEach(track => track.stop());
+        setMediaStream(null);
+        setIsRecording(false);
+        setManualRecording(false);
+      };
+      mediaRecorder.start();
+      setIsRecording(true);
+      if (autoSpeakRef.current) {
+        // Use SpeechRecognition for silence detection in autospeak mode only
+        if (!SpeechRecognitionClassRef.current) {
+          alert('SpeechRecognition API not supported in this browser.');
+          return;
+        }
+        const recognition = new SpeechRecognitionClassRef.current();
+        recognitionRef.current = recognition;
+        recognition.lang = language || 'en-US';
+        recognition.interimResults = false;
+        recognition.continuous = false;
+        
+        // Set longer timeout for autospeak mode to give users more time to speak
+        if (autoSpeakRef.current) {
+          recognition.maxAlternatives = 1;
+          setTimeout(() => {
+            if (recognitionRef.current) {
+              console.log('[DEBUG] Autospeak: Speech recognition timeout reached, stopping recording');
+              recognitionRef.current.stop();
+            }
+          }, 10000); // 10 seconds timeout for autospeak mode
+        }
+        recognition.onresult = (event: unknown) => {
+          setIsRecording(false);
+          if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+            mediaRecorderRef.current.stop();
+          }
+        };
+        recognition.onerror = (event: unknown) => {
+          setIsRecording(false);
+          if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+            mediaRecorderRef.current.stop();
+          }
+          alert('Speech recognition error: ' + (event as any).error);
+        };
+        recognition.onend = () => {
+          setIsRecording(false);
+          if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+            mediaRecorderRef.current.stop();
+          }
+        };
+        recognition.start();
+        setManualRecording(false);
+      } else {
+        // Manual mode: no speech recognition, just record until user stops
+        setManualRecording(true);
+      }
+    } catch (err: unknown) {
+      console.error('Error starting recording:', err);
+      alert('Failed to access microphone. Please check permissions.');
+    }
+  };
+
+  const handleStopRecording = (isManualStop: boolean = true) => {
+    if (isManualStop) {
+      interruptedRef.current = true;
+    }
+    
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      recognitionRef.current = null;
+    }
+    
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+    
+    if (mediaStream) {
+      mediaStream.getTracks().forEach(track => track.stop());
+      setMediaStream(null);
+    }
+    
+    setIsRecording(false);
+    setManualRecording(false);
   };
 
   const handleAudioRecorded = async (audioBlob: Blob) => {
-    // Handle audio recording
+    // This will be handled by sendAudioToBackend
+  };
+
+  // sendAudioToBackend function from original
+  const sendAudioToBackend = async (audioBlob: Blob) => {
+    if (!(audioBlob instanceof Blob)) return;
+    try {
+      setIsProcessing(true);
+      
+      // Add user message immediately with a placeholder
+      const placeholderMessage = { 
+        sender: 'User', 
+        text: '🎤 Processing your message...', 
+        romanizedText: '',
+        timestamp: new Date(),
+        isFromOriginalConversation: false,
+        isProcessing: true
+      };
+      
+      // Add placeholder message immediately
+      setChatHistory(prev => [...prev, placeholderMessage]);
+      
+      // Step 1: Get transcription first with language detection
+      const formData = new FormData();
+      formData.append('audio', audioBlob, 'recording.webm');
+      formData.append('language', language);
+      
+      // Add JWT token to headers
+      const token = localStorage.getItem('jwt');
+      const transcriptionResponse = await axios.post('/api/transcribe_only', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        }
+      });
+      
+      const transcription = transcriptionResponse.data.transcription || 'Speech recorded';
+      const detectedLanguage = language; // Persist session language; ignore detection
+      
+      // Generate romanized text for user messages in script languages
+      let userRomanizedText = '';
+      if (isScriptLanguage(language) && transcription !== 'Speech recorded') {
+        userRomanizedText = await generateRomanizedText(transcription, language);
+      }
+      
+      // Replace the placeholder message with the actual transcript
+      setChatHistory(prev => {
+        const updated = prev.map((msg, index) => {
+          if (msg.isProcessing && msg.sender === 'User') {
+            return {
+              ...msg,
+              text: transcription,
+              romanizedText: userRomanizedText,
+              isProcessing: false
+            };
+          }
+          return msg;
+        });
+        return updated;
+      });
+      
+      // Save user message to backend
+      if (conversationId) {
+        console.log('[MESSAGE_SAVE] Saving user message to conversation:', conversationId);
+        const userMessage: ChatMessage = {
+          sender: 'User',
+          text: transcription,
+          romanizedText: userRomanizedText,
+          timestamp: new Date(),
+          isFromOriginalConversation: false
+        };
+        await saveMessageToBackend(userMessage);
+      } else {
+        console.warn('[MESSAGE_SAVE] No conversation ID available for user message');
+      }
+      
+      // Step 1.5: Get short feedback first for autospeak mode
+      if (autoSpeak && enableShortFeedback && transcription !== 'Speech recorded') {
+        console.log('[DEBUG] Step 1.5: Getting short feedback for autospeak mode...');
+        await fetchAndShowShortFeedback(transcription, language);
+        console.log('[DEBUG] Short feedback completed, now starting AI processing...');
+      }
+      
+      // Step 2: Get AI response after short feedback is done
+      console.log('[DEBUG] Step 2: Getting AI response after short feedback...');
+      
+      // Add AI processing message after short feedback is complete
+      const aiProcessingMessage = { 
+        sender: 'AI', 
+        text: '🤖 Processing AI response...', 
+        romanizedText: '',
+        timestamp: new Date(),
+        isFromOriginalConversation: false,
+        isProcessing: true
+      };
+      setChatHistory(prev => [...prev, aiProcessingMessage]);
+      
+      // Create updated chat history that includes the user's transcription
+      const updatedChatHistory = [...chatHistory, {
+        sender: 'User',
+        text: transcription,
+        romanizedText: userRomanizedText,
+        timestamp: new Date(),
+        isFromOriginalConversation: false
+      }];
+      
+      const aiResponseData = {
+        transcription: transcription,
+        chat_history: updatedChatHistory,
+        language: language,
+        user_level: userPreferences?.userLevel || 'beginner',
+        user_topics: userPreferences?.topics || [],
+        user_goals: (user as any)?.learning_goals ? (typeof (user as any).learning_goals === 'string' ? JSON.parse((user as any).learning_goals) : (user as any).learning_goals) : [],
+        formality: userPreferences?.formality || 'neutral',
+        feedback_language: userPreferences?.feedbackLanguage || 'en'
+      };
+
+      console.log('🔍 [FRONTEND] sessionLanguage before AI call:', language);
+      console.log('🔍 [FRONTEND] Calling AI response API with data:', aiResponseData);
+      
+      // Use internal Next.js API route to proxy to backend
+      const aiResponseResponse = await axios.post('/api/ai_response', aiResponseData, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        }
+      });
+      
+      console.log('🔍 [FRONTEND] AI response API response:', {
+        status: aiResponseResponse.status,
+        data: aiResponseResponse.data
+      });
+      
+      const aiResponse = aiResponseResponse.data?.response || aiResponseResponse.data?.ai_response || aiResponseResponse.data?.message;
+      console.log('🔍 [FRONTEND] Extracted AI response:', aiResponse);
+      
+      // Add AI response if present
+      if (aiResponse) {
+        const formattedResponse = formatScriptLanguageText(aiResponse, language);
+        setChatHistory(prev => {
+          const updated = prev.map((msg, index) => {
+            // Find the last processing AI message and replace it
+            if (msg.isProcessing && msg.sender === 'AI') {
+              return {
+                ...msg,
+                text: formattedResponse.mainText,
+                romanizedText: formattedResponse.romanizedText,
+                ttsUrl: null,
+                isProcessing: false
+              };
+            }
+            return msg;
+          });
+          return updated;
+        });
+        if (conversationId) {
+          console.log('[MESSAGE_SAVE] Saving AI message to conversation:', conversationId);
+          const aiMessage: ChatMessage = {
+            sender: 'AI',
+            text: formattedResponse.mainText,
+            romanizedText: formattedResponse.romanizedText,
+            timestamp: new Date(),
+            isFromOriginalConversation: false
+          };
+          await saveMessageToBackend(aiMessage);
+        } else {
+          console.warn('[MESSAGE_SAVE] No conversation ID available for AI message');
+        }
+        
+        // Play TTS for AI response immediately
+        console.log('[DEBUG] Playing TTS for AI response immediately');
+        const ttsMessage: ChatMessage = {
+          text: formattedResponse.mainText,
+          romanizedText: formattedResponse.romanizedText,
+          sender: 'AI',
+          timestamp: new Date(),
+          isFromOriginalConversation: false
+        };
+        const ttsText = getTTSText(ttsMessage, userPreferences?.romanizationDisplay || 'both', language);
+        const cacheKey = `ai_message_auto_${Date.now()}`;
+        
+        // Play audio immediately for all AI messages
+        playTTSAudio(ttsText, language, cacheKey).catch(error => {
+          console.error('[DEBUG] Error playing AI TTS:', error);
+        });
+        
+        // Also queue for autospeak mode if enabled
+        if (autoSpeak) {
+          console.log('[DEBUG] Adding AI response TTS to queue for autospeak mode');
+          setAiTTSQueued({ text: ttsText, language, cacheKey });
+        }
+      }
+      
+    } catch (error: unknown) {
+      console.error('Error processing audio:', error);
+      const errorMessage = {
+        sender: 'System',
+        text: '❌ Error processing audio. Please try again.',
+        timestamp: new Date(),
+        isFromOriginalConversation: false
+      };
+      setChatHistory(prev => [...prev, errorMessage]);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   // Suggestion-specific handlers
@@ -1073,7 +1449,7 @@ const AnalyzeContentInner = () => {
           {/* Suggestion Carousel */}
           {!isProcessing && showSuggestionCarousel && suggestionMessages.length > 0 && (
             <SuggestionCarousel
-              isDarkMode={isDarkMode}
+                  isDarkMode={isDarkMode}
               suggestionMessages={suggestionMessages}
               currentSuggestionIndex={currentSuggestionIndex}
               onNavigateSuggestion={navigateSuggestion}
@@ -1188,7 +1564,7 @@ const AnalyzeContentInner = () => {
                     }}>
                       {Math.round(percentage)}%
                     </span>
-                  </div>
+    </div>
                   <div style={{
                     width: '100%',
                     height: '8px',
