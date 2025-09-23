@@ -804,7 +804,11 @@ const AnalyzeContentInner = () => {
         }
       }
     } else {
-      console.log('[DEBUG] No AI message or empty text, setting default message');
+      console.log('🔍 [DEBUG] No AI message or empty text, setting default message');
+      console.log('🔍 [DEBUG] aiMessage was:', aiMessage);
+      console.log('🔍 [DEBUG] aiMessage text:', (aiMessage as any)?.text);
+      console.log('🔍 [DEBUG] aiMessage text trim:', (aiMessage as any)?.text?.trim());
+      
       // Fallback: set a default AI message if none provided
       setChatHistory([{ sender: 'AI', text: 'Hello! What would you like to talk about today?', timestamp: new Date(), isFromOriginalConversation: false }]);
     }
@@ -946,11 +950,12 @@ const AnalyzeContentInner = () => {
   }, []);
 
   const handleStartRecording = async () => {
+    console.log('🔍 [DEBUG] handleStartRecording called');
     setWasInterrupted(false);
     
     // Prevent recording when TTS is playing
     if (isAnyTTSPlaying) {
-      console.log('[DEBUG] Cannot start recording - TTS is playing:', { isAnyTTSPlaying });
+      console.log('🔍 [DEBUG] Cannot start recording - TTS is playing:', { isAnyTTSPlaying });
       return;
     }
     
@@ -977,7 +982,12 @@ const AnalyzeContentInner = () => {
         }
       };
       mediaRecorder.onstop = () => {
+        console.log('🔍 [DEBUG] MediaRecorder onstop event triggered');
+        console.log('🔍 [DEBUG] interruptedRef.current:', interruptedRef.current);
+        console.log('🔍 [DEBUG] audioChunksRef.current length:', audioChunksRef.current.length);
+        
         if (interruptedRef.current) {
+          console.log('🔍 [DEBUG] Recording was interrupted, cleaning up');
           interruptedRef.current = false;
           setWasInterrupted(true);
           stream.getTracks().forEach(track => track.stop());
@@ -986,7 +996,10 @@ const AnalyzeContentInner = () => {
           setManualRecording(false);
           return;
         }
+        
+        console.log('🔍 [DEBUG] Creating audio blob and sending to backend');
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        console.log('🔍 [DEBUG] Audio blob created:', audioBlob.size, 'bytes');
         sendAudioToBackend(audioBlob);
         stream.getTracks().forEach(track => track.stop());
         setMediaStream(null);
@@ -1077,8 +1090,14 @@ const AnalyzeContentInner = () => {
 
   // sendAudioToBackend function from original
   const sendAudioToBackend = async (audioBlob: Blob) => {
-    if (!(audioBlob instanceof Blob)) return;
+    console.log('🔍 [DEBUG] sendAudioToBackend called with audioBlob:', audioBlob);
+    if (!(audioBlob instanceof Blob)) {
+      console.error('🔍 [DEBUG] Invalid audio blob provided');
+      return;
+    }
+    
     try {
+      console.log('🔍 [DEBUG] Starting audio processing...');
       setIsProcessing(true);
       
       // Add user message immediately with a placeholder
@@ -1091,16 +1110,21 @@ const AnalyzeContentInner = () => {
         isProcessing: true
       };
       
+      console.log('🔍 [DEBUG] Adding placeholder message to chat history');
       // Add placeholder message immediately
       setChatHistory(prev => [...prev, placeholderMessage]);
       
       // Step 1: Get transcription first with language detection
+      console.log('🔍 [DEBUG] Step 1: Starting transcription with language:', language);
       const formData = new FormData();
       formData.append('audio', audioBlob, 'recording.webm');
       formData.append('language', language);
       
       // Add JWT token to headers
       const token = localStorage.getItem('jwt');
+      console.log('🔍 [DEBUG] JWT token available:', !!token);
+      
+      console.log('🔍 [DEBUG] Calling /api/transcribe_only...');
       const transcriptionResponse = await axios.post('/api/transcribe_only', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
@@ -1108,7 +1132,9 @@ const AnalyzeContentInner = () => {
         }
       });
       
+      console.log('🔍 [DEBUG] Transcription response:', transcriptionResponse.data);
       const transcription = transcriptionResponse.data.transcription || 'Speech recorded';
+      console.log('🔍 [DEBUG] Extracted transcription:', transcription);
       const detectedLanguage = language; // Persist session language; ignore detection
       
       // Generate romanized text for user messages in script languages
@@ -1156,7 +1182,7 @@ const AnalyzeContentInner = () => {
       }
       
       // Step 2: Get AI response after short feedback is done
-      console.log('[DEBUG] Step 2: Getting AI response after short feedback...');
+      console.log('🔍 [DEBUG] Step 2: Getting AI response after short feedback...');
       
       // Add AI processing message after short feedback is complete
       const aiProcessingMessage = { 
@@ -1167,6 +1193,7 @@ const AnalyzeContentInner = () => {
         isFromOriginalConversation: false,
         isProcessing: true
       };
+      console.log('🔍 [DEBUG] Adding AI processing message to chat history');
       setChatHistory(prev => [...prev, aiProcessingMessage]);
       
       // Create updated chat history that includes the user's transcription
@@ -1189,10 +1216,13 @@ const AnalyzeContentInner = () => {
         feedback_language: userPreferences?.feedbackLanguage || 'en'
       };
 
-      console.log('🔍 [FRONTEND] sessionLanguage before AI call:', language);
-      console.log('🔍 [FRONTEND] Calling AI response API with data:', aiResponseData);
+      console.log('🔍 [DEBUG] sessionLanguage before AI call:', language);
+      console.log('🔍 [DEBUG] Calling AI response API with data:', aiResponseData);
+      console.log('🔍 [DEBUG] conversationId:', conversationId);
+      console.log('🔍 [DEBUG] userPreferences:', userPreferences);
       
       // Use internal Next.js API route to proxy to backend
+      console.log('🔍 [DEBUG] Making POST request to /api/ai_response...');
       const aiResponseResponse = await axios.post('/api/ai_response', aiResponseData, {
         headers: {
           'Content-Type': 'application/json',
@@ -1200,21 +1230,26 @@ const AnalyzeContentInner = () => {
         }
       });
       
-      console.log('🔍 [FRONTEND] AI response API response:', {
-        status: aiResponseResponse.status,
-        data: aiResponseResponse.data
-      });
+      console.log('🔍 [DEBUG] AI response API response status:', aiResponseResponse.status);
+      console.log('🔍 [DEBUG] AI response API response data:', aiResponseResponse.data);
       
       const aiResponse = aiResponseResponse.data?.response || aiResponseResponse.data?.ai_response || aiResponseResponse.data?.message;
-      console.log('🔍 [FRONTEND] Extracted AI response:', aiResponse);
+      console.log('🔍 [DEBUG] Extracted AI response:', aiResponse);
+      console.log('🔍 [DEBUG] AI response type:', typeof aiResponse);
+      console.log('🔍 [DEBUG] AI response length:', aiResponse?.length);
       
       // Add AI response if present
       if (aiResponse) {
+        console.log('🔍 [DEBUG] AI response found, processing...');
         const formattedResponse = formatScriptLanguageText(aiResponse, language);
+        console.log('🔍 [DEBUG] Formatted response:', formattedResponse);
+        
         setChatHistory(prev => {
+          console.log('🔍 [DEBUG] Current chat history before update:', prev);
           const updated = prev.map((msg, index) => {
             // Find the last processing AI message and replace it
             if (msg.isProcessing && msg.sender === 'AI') {
+              console.log('🔍 [DEBUG] Replacing processing AI message at index:', index);
               return {
                 ...msg,
                 text: formattedResponse.mainText,
@@ -1225,6 +1260,7 @@ const AnalyzeContentInner = () => {
             }
             return msg;
           });
+          console.log('🔍 [DEBUG] Updated chat history:', updated);
           return updated;
         });
         if (conversationId) {
@@ -1263,10 +1299,41 @@ const AnalyzeContentInner = () => {
           console.log('[DEBUG] Adding AI response TTS to queue for autospeak mode');
           setAiTTSQueued({ text: ttsText, language, cacheKey });
         }
+      } else {
+        console.log('🔍 [DEBUG] No AI response found!');
+        console.log('🔍 [DEBUG] AI response was:', aiResponse);
+        console.log('🔍 [DEBUG] Response data keys:', Object.keys(aiResponseResponse.data || {}));
+        
+        // Add a fallback message when no AI response is received
+        const fallbackMessage = {
+          sender: 'AI',
+          text: 'Hello! What would you like to talk about today?',
+          romanizedText: '',
+          timestamp: new Date(),
+          isFromOriginalConversation: false
+        };
+        
+        setChatHistory(prev => {
+          const updated = prev.map((msg, index) => {
+            if (msg.isProcessing && msg.sender === 'AI') {
+              console.log('🔍 [DEBUG] Replacing processing message with fallback');
+              return fallbackMessage;
+            }
+            return msg;
+          });
+          return updated;
+        });
       }
       
     } catch (error: unknown) {
-      console.error('Error processing audio:', error);
+      console.error('🔍 [DEBUG] Error processing audio:', error);
+      console.error('🔍 [DEBUG] Error details:', {
+        message: (error as any)?.message,
+        status: (error as any)?.response?.status,
+        data: (error as any)?.response?.data,
+        stack: (error as any)?.stack
+      });
+      
       const errorMessage = {
         sender: 'System',
         text: '❌ Error processing audio. Please try again.',
@@ -1275,6 +1342,7 @@ const AnalyzeContentInner = () => {
       };
       setChatHistory(prev => [...prev, errorMessage]);
     } finally {
+      console.log('🔍 [DEBUG] Audio processing completed, setting isProcessing to false');
       setIsProcessing(false);
     }
   };
