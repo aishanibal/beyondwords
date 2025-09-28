@@ -203,6 +203,7 @@ export const useAudioHandlers = (
       setChatHistory(prev => [...prev, placeholderMessage]);
       
       // Process audio with full pipeline
+      console.log('🔍 [DEBUG] Starting processAudioWithPipeline...');
       const result = await processAudioWithPipeline(
         audioBlob,
         language,
@@ -212,11 +213,14 @@ export const useAudioHandlers = (
         enableShortFeedback,
         user
       );
+      console.log('🔍 [DEBUG] processAudioWithPipeline completed:', result);
       
       // Replace the placeholder message with the actual transcript
+      console.log('🔍 [DEBUG] Replacing placeholder with transcription:', result.transcription);
       setChatHistory(prev => {
         const updated = prev.map((msg, index) => {
           if (msg.isProcessing && msg.sender === 'User') {
+            console.log('🔍 [DEBUG] Found processing message, replacing with:', result.transcription);
             return {
               ...msg,
               text: result.transcription,

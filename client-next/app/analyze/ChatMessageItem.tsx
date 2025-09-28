@@ -2,6 +2,21 @@ import React, { useMemo, useCallback } from 'react';
 import { motion } from 'framer-motion';
 export const dynamic = "force-dynamic";
 
+// Add CSS for spinning animation
+const spinKeyframes = `
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+`;
+
+// Inject the CSS
+if (typeof document !== 'undefined') {
+  const style = document.createElement('style');
+  style.textContent = spinKeyframes;
+  document.head.appendChild(style);
+}
+
 
 // Helper function to format message for display
 const formatMessageForDisplay = (message: any, romanizationDisplay: 'always' | 'never' | 'if_different', language?: string) => {
@@ -172,15 +187,34 @@ const ChatMessageItem: React.FC<ChatMessageItemProps> = React.memo(({
     }}>
       <div style={messageBubbleStyle}>
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <span style={{ fontSize: '0.9rem' }}>
-            {(message.detailedFeedback || (
-              typeof formatted.mainText === 'string' && (
-                formatted.mainText.includes('__') ||
-                formatted.mainText.includes('~~') ||
-                formatted.mainText.includes('==') ||
-                formatted.mainText.includes('<<')
-              )
-            )) ? renderFormattedText(formatted.mainText, index) : formatted.mainText}
+          <span style={{ 
+            fontSize: '0.9rem',
+            opacity: message.isProcessing ? 0.7 : 1,
+            fontStyle: message.isProcessing ? 'italic' : 'normal'
+          }}>
+            {message.isProcessing ? (
+              <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span style={{ 
+                  display: 'inline-block',
+                  width: '12px',
+                  height: '12px',
+                  border: '2px solid #ccc',
+                  borderTop: '2px solid #007bff',
+                  borderRadius: '50%',
+                  animation: 'spin 1s linear infinite'
+                }}></span>
+                {formatted.mainText}
+              </span>
+            ) : (
+              (message.detailedFeedback || (
+                typeof formatted.mainText === 'string' && (
+                  formatted.mainText.includes('__') ||
+                  formatted.mainText.includes('~~') ||
+                  formatted.mainText.includes('==') ||
+                  formatted.mainText.includes('<<')
+                )
+              )) ? renderFormattedText(formatted.mainText, index) : formatted.mainText
+            )}
           </span>
           {formatted.romanizedText && (
             <span style={{
