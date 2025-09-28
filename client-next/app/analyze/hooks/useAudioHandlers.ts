@@ -209,7 +209,8 @@ export const useAudioHandlers = (
         chatHistory,
         userPreferences,
         autoSpeak,
-        enableShortFeedback
+        enableShortFeedback,
+        user
       );
       
       // Replace the placeholder message with the actual transcript

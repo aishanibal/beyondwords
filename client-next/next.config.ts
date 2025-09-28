@@ -66,6 +66,18 @@ const nextConfig: NextConfig = {
       {
         source: '/api/conversation-summary',
         destination: `${backendUrl}/api/conversation-summary`, // Express backend
+      },
+      {
+        source: '/api/transcribe_only',
+        destination: `${backendUrl}/api/transcribe_only`, // Express backend
+      },
+      {
+        source: '/api/ai_response',
+        destination: `${backendUrl}/api/ai_response`, // Express backend
+      },
+      {
+        source: '/api/short_feedback',
+        destination: `${backendUrl}/api/short_feedback`, // Express backend
       }
     ];
   },

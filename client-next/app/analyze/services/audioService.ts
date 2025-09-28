@@ -35,7 +35,8 @@ export const getAIResponse = async (
   transcription: string,
   chatHistory: ChatMessage[],
   language: string,
-  userPreferences: any
+  userPreferences: any,
+  user?: any
 ) => {
   try {
     const token = localStorage.getItem('jwt');
@@ -46,7 +47,7 @@ export const getAIResponse = async (
       language: language,
       user_level: userPreferences?.userLevel || 'beginner',
       user_topics: userPreferences?.topics || [],
-      user_goals: userPreferences?.user_goals || [],
+      user_goals: user?.learning_goals ? (typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : user.learning_goals) : [],
       formality: userPreferences?.formality || 'neutral',
       feedback_language: userPreferences?.feedbackLanguage || 'en'
     };
@@ -135,7 +136,8 @@ export const processAudioWithPipeline = async (
   chatHistory: ChatMessage[],
   userPreferences: any,
   autoSpeak: boolean,
-  enableShortFeedback: boolean
+  enableShortFeedback: boolean,
+  user?: any
 ) => {
   try {
     // Step 1: Get transcription
@@ -164,7 +166,7 @@ export const processAudioWithPipeline = async (
     
     // Step 3: Get AI response
     const updatedChatHistory = [...chatHistory, userMessage];
-    const aiResponse = await getAIResponse(transcription, updatedChatHistory, language, userPreferences);
+    const aiResponse = await getAIResponse(transcription, updatedChatHistory, language, userPreferences, user);
     
     // Format AI response
     let formattedResponse: { mainText: string; romanizedText?: string } | null = null;
