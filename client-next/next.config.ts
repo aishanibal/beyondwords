@@ -78,6 +78,14 @@ const nextConfig: NextConfig = {
       {
         source: '/api/short_feedback',
         destination: `${backendUrl}/api/short_feedback`, // Express backend
+      },
+      {
+        source: '/api/feedback',
+        destination: `${backendUrl}/api/feedback`, // Express backend
+      },
+      {
+        source: '/api/personas',
+        destination: `${backendUrl}/api/personas`, // Express backend
       }
     ];
   },

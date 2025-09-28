@@ -197,10 +197,7 @@ const AnalyzeContentInner = () => {
   // Detailed feedback state
   const [showDetailedBreakdown, setShowDetailedBreakdown] = useState<{[key: number]: boolean}>({});
   const [parsedBreakdown, setParsedBreakdown] = useState<any[]>([]);
-  const [feedbackExplanations, setFeedbackExplanations] = useState<Record<number, Record<string, string>>>({});
   const [activePopup, setActivePopup] = useState<{ messageIndex: number; wordKey: string; position: { x: number; y: number } } | null>(null);
-  const [showCorrectedVersions, setShowCorrectedVersions] = useState<Record<number, boolean>>({});
-  const [isLoadingMessageFeedback, setIsLoadingMessageFeedback] = useState<Record<number, boolean>>({});
 
   // Quick translations state - now handled by messageInteractions hook
 
@@ -475,11 +472,71 @@ const AnalyzeContentInner = () => {
     }
   };
 
+  // Helper function to render formatted text with color-coded underlines and clickable popups
+  const renderFormattedText = (text: string, messageIndex: number) => {
+    console.log('[DEBUG] renderFormattedText called with:', text);
+    if (!text) return text;
+    
+    // Test if the text contains any formatting markers
+    const hasFormatting = text.includes('__') || text.includes('~~') || text.includes('==') || text.includes('<<');
+    console.log('[DEBUG] Text has formatting markers:', hasFormatting);
+    
+    if (!hasFormatting) {
+      return text;
+    }
+    
+    // Process the text to create clickable elements
+    let result = text;
+    
+    // Replace formatting markers with HTML
+    result = result.replace(/__([^_]+)__/g, '<span style="text-decoration: underline; text-decoration-color: #ff6b6b; cursor: pointer;" data-clickable-word="true" data-word="$1" data-message-index="' + messageIndex + '">$1</span>');
+    result = result.replace(/~~([^~]+)~~/g, '<span style="text-decoration: underline; text-decoration-color: #4ecdc4; cursor: pointer;" data-clickable-word="true" data-word="$1" data-message-index="' + messageIndex + '">$1</span>');
+    result = result.replace(/==([^=]+)==/g, '<span style="text-decoration: underline; text-decoration-color: #45b7d1; cursor: pointer;" data-clickable-word="true" data-word="$1" data-message-index="' + messageIndex + '">$1</span>');
+    result = result.replace(/<<([^>]+)>>/g, '<span style="text-decoration: underline; text-decoration-color: #f9ca24; cursor: pointer;" data-clickable-word="true" data-word="$1" data-message-index="' + messageIndex + '">$1</span>');
+    
+    return (
+      <span 
+        dangerouslySetInnerHTML={{ __html: result }} 
+      />
+    );
+  };
+
+  // Helper function to extract corrected version from feedback
+  const extractCorrectedVersion = (feedback: string): { mainText: string; romanizedText?: string } | null => {
+    if (!feedback) return null;
+    
+    // Find the corrected version section
+    const correctedMatch = feedback.match(/\*\*Corrected Version\*\*\s*\n([\s\S]*?)(?=\n\n|$)/);
+    if (!correctedMatch) return null;
+    
+    const correctedText = correctedMatch[1].trim();
+    
+    // Check if there's romanized text in parentheses
+    const romanizedMatch = correctedText.match(/^(.+?)\s*\(([^)]+)\)$/);
+    if (romanizedMatch) {
+      return {
+        mainText: romanizedMatch[1].trim(),
+        romanizedText: romanizedMatch[2].trim()
+      };
+    }
+    
+    return { mainText: correctedText };
+  };
+
   // Event handlers - using message interactions hook
   const handleRequestDetailedFeedback = async (messageIndex: number) => {
     const message = chatHistory[messageIndex];
     if (message) {
-      await messageInteractions.handleRequestDetailedFeedback(messageIndex, message.text);
+      await messageInteractions.handleRequestDetailedFeedback(
+        messageIndex, 
+        message.text, 
+        chatHistory, 
+        userPreferences,
+        conversationId,
+        setChatHistory,
+        fetchUserDashboardPreferences,
+        setUserPreferences
+      );
     }
   };
 
@@ -920,7 +977,7 @@ natutunan / natutunan -- learned (past tense)`;
         setRomanizationDebugInfo={setRomanizationDebugInfo}
         translations={translations}
         showTranslations={showTranslations}
-        feedbackExplanations={feedbackExplanations}
+        feedbackExplanations={messageInteractions.feedbackExplanations}
         showDetailedBreakdown={showDetailedBreakdown}
         setShowDetailedBreakdown={setShowDetailedBreakdown}
         parsedBreakdown={parsedBreakdown}
@@ -971,9 +1028,9 @@ natutunan / natutunan -- learned (past tense)`;
             showSuggestionExplanations={{}}
             explainButtonPressed={suggestions.explainButtonPressed}
             parsedBreakdown={parsedBreakdown}
-            feedbackExplanations={feedbackExplanations}
+            feedbackExplanations={messageInteractions.feedbackExplanations}
             activePopup={activePopup}
-            showCorrectedVersions={showCorrectedVersions}
+            showCorrectedVersions={messageInteractions.showCorrectedVersions}
             quickTranslations={messageInteractions.quickTranslations}
             showQuickTranslations={messageInteractions.showQuickTranslations}
             ttsCache={ttsCache}
@@ -989,6 +1046,11 @@ natutunan / natutunan -- learned (past tense)`;
             handleSuggestionButtonClick={suggestions.handleSuggestionButtonClick}
             isLoadingSuggestions={suggestions.isLoadingSuggestions}
             isLoadingMessageFeedback={messageInteractions.isLoadingMessageFeedback}
+            extractCorrectedVersion={(feedback) => {
+              const result = extractCorrectedVersion(feedback);
+              return result ? { ...result, romanizedText: result.romanizedText || '' } : null;
+            }}
+            renderFormattedText={renderFormattedText}
           />
           
           {/* Suggestion Carousel */}
@@ -1050,7 +1112,7 @@ natutunan / natutunan -- learned (past tense)`;
         activePopup={activePopup}
         isDarkMode={isDarkMode}
         quickTranslations={messageInteractions.quickTranslations}
-        feedbackExplanations={feedbackExplanations}
+        feedbackExplanations={messageInteractions.feedbackExplanations}
       />
     </>
   );

@@ -49,7 +49,7 @@ export const getAIResponse = async (
       user_level: userPreferences?.userLevel || 'beginner',
       user_topics: userPreferences?.topics || [],
       user_goals: user?.learning_goals ? (typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : user.learning_goals) : [],
-      formality: userPreferences?.formality || 'neutral',
+      formality: userPreferences?.formality || 'friendly',
       feedback_language: userPreferences?.feedbackLanguage || 'en'
     };
     
