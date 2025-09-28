@@ -4,6 +4,7 @@ import { saveMessageToBackend } from '../services/conversationService';
 import { playTTSAudio, getTTSText } from '../services/audioService';
 import { ChatMessage } from '../types/analyze';
 import { TTS_TIMEOUTS } from '../config/constants';
+import { useTTS } from './useTTS';
 
 export const useAudioHandlers = (
   user: any,
@@ -18,7 +19,9 @@ export const useAudioHandlers = (
   isAnyTTSPlaying: boolean,
   setIsAnyTTSPlaying: React.Dispatch<React.SetStateAction<boolean>>,
   setAiTTSQueued: React.Dispatch<React.SetStateAction<{ text: string; language: string; cacheKey: string } | null>>,
-  setShortFeedback: React.Dispatch<React.SetStateAction<string>>
+  setShortFeedback: React.Dispatch<React.SetStateAction<string>>,
+  setIsPlayingTTS: React.Dispatch<React.SetStateAction<{[key: string]: boolean}>>,
+  ttsAudioRef: React.MutableRefObject<HTMLAudioElement | null>
 ) => {
   const recognitionRef = useRef<any>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -32,6 +35,9 @@ export const useAudioHandlers = (
   const [wasInterrupted, setWasInterrupted] = useState(false);
   const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
   const [manualRecording, setManualRecording] = useState(false);
+
+  // Use TTS hook for TTS functionality
+  const { generateTTSForText } = useTTS();
 
   // Update autoSpeakRef when autoSpeak changes
   autoSpeakRef.current = autoSpeak;
@@ -335,12 +341,139 @@ export const useAudioHandlers = (
     }
   }, [language, chatHistory, userPreferences, autoSpeak, enableShortFeedback, conversationId, setChatHistory, setIsProcessing, setShortFeedback, setAiTTSQueued]);
 
-  const handlePlayTTS = useCallback(async (text: string, language: string) => {
+  const handlePlayTTS = useCallback(async (text: string, language: string, cacheKey?: string) => {
+    console.log('🎵 [PLAY_TTS_AUDIO] Called with:', { text, language, cacheKey });
+    console.log('🎵 [PLAY_TTS_AUDIO] Text length:', text.length);
+    console.log('🎵 [PLAY_TTS_AUDIO] Language:', language);
+    console.log('🎵 [PLAY_TTS_AUDIO] Cache key:', cacheKey);
+
+    const finalCacheKey = cacheKey || `manual_tts_${Date.now()}`;
+
+    // Stop any currently playing audio
+    if (ttsAudioRef.current) {
+      console.log('🎵 [PLAY_TTS_AUDIO] Stopping current audio');
+      ttsAudioRef.current.pause();
+      ttsAudioRef.current = null;
+    }
+
+    // Set playing state
+    console.log('🎵 [PLAY_TTS_AUDIO] Setting playing state');
+    setIsPlayingTTS(prev => ({ ...prev, [finalCacheKey]: true }));
+    setIsPlayingAnyTTS(true);
+    
     try {
-      const cacheKey = `manual_tts_${Date.now()}`;
-      await playTTSAudio(text, language, cacheKey);
+      console.log('🎵 [PLAY_TTS_AUDIO] Calling generateTTSForText...');
+      const ttsUrl = await generateTTSForText(text, language, finalCacheKey);
+      console.log('🎵 [PLAY_TTS_AUDIO] Generated TTS URL:', ttsUrl);
+      
+      if (ttsUrl) {
+        // Handle both relative and absolute URLs from backend
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://beyondwords-express.onrender.com';
+        const audioUrl = ttsUrl.startsWith('http') ? ttsUrl : `${backendUrl}${ttsUrl}`;
+        console.log('🎵 [PLAY_TTS_AUDIO] Constructed audio URL:', audioUrl);
+        
+        // Check if the audio file exists before creating Audio object (with retry)
+        const waitForUrlAccessible = async (url: string, attempts = 6, delayMs = 300): Promise<boolean> => {
+          for (let i = 0; i < attempts; i++) {
+            try {
+              const head = await fetch(url, { method: 'HEAD', cache: 'no-store' as RequestCache });
+              if (head.ok) return true;
+              console.warn(`🎵 [PLAY_TTS_AUDIO] HEAD ${head.status} retry ${i + 1}/${attempts}`);
+            } catch (e) {
+              console.warn(`🎵 [PLAY_TTS_AUDIO] HEAD error retry ${i + 1}/${attempts}:`, e);
+            }
+            await new Promise(r => setTimeout(r, delayMs));
+          }
+          return false;
+        };
+
+        const accessible = await waitForUrlAccessible(audioUrl, 6, 300);
+        if (!accessible) {
+          console.error('🎵 [PLAY_TTS_AUDIO] Audio file not accessible after retries');
+          setIsPlayingTTS(prev => ({ ...prev, [finalCacheKey]: false }));
+          setIsPlayingAnyTTS(false);
+          return;
+        }
+        console.log('🎵 [PLAY_TTS_AUDIO] Audio file is accessible');
+        
+        const audio = new window.Audio(audioUrl);
+        ttsAudioRef.current = audio;
+        
+        // Add more detailed event listeners for debugging
+        audio.addEventListener('loadstart', () => console.log('🎵 [PLAY_TTS_AUDIO] Audio loading started'));
+        audio.addEventListener('canplay', () => console.log('🎵 [PLAY_TTS_AUDIO] Audio can play'));
+        audio.addEventListener('canplaythrough', () => console.log('🎵 [PLAY_TTS_AUDIO] Audio can play through'));
+        audio.addEventListener('error', (e) => {
+          console.error('🎵 [PLAY_TTS_AUDIO] Audio error event:', e);
+          console.error('🎵 [PLAY_TTS_AUDIO] Audio error details:', audio.error);
+        });
+        
+        // Return a promise that resolves when audio finishes
+        return new Promise<void>((resolve, reject) => {
+          let timeoutId: NodeJS.Timeout;
+          let resolved = false;
+          
+          const cleanup = () => {
+            if (timeoutId) clearTimeout(timeoutId);
+            resolved = true;
+          };
+          
+          // Set a timeout to prevent infinite "playing" state
+          timeoutId = setTimeout(() => {
+            if (!resolved) {
+              console.error('🎵 [PLAY_TTS_AUDIO] Audio playback timeout after 30 seconds');
+              ttsAudioRef.current = null;
+              setIsPlayingTTS(prev => ({ ...prev, [finalCacheKey]: false }));
+              setIsPlayingAnyTTS(false);
+              cleanup();
+              reject(new Error('TTS audio playback timeout'));
+            }
+          }, 30000);
+          
+          audio.onended = () => {
+            if (!resolved) {
+              console.log('🎵 [PLAY_TTS_AUDIO] Audio playback ended');
+              ttsAudioRef.current = null;
+              setIsPlayingTTS(prev => ({ ...prev, [finalCacheKey]: false }));
+              setIsPlayingAnyTTS(false);
+              cleanup();
+              resolve();
+            }
+          };
+          
+          audio.onerror = () => {
+            if (!resolved) {
+              console.error('🎵 [PLAY_TTS_AUDIO] Audio playback error');
+              ttsAudioRef.current = null;
+              setIsPlayingTTS(prev => ({ ...prev, [finalCacheKey]: false }));
+              setIsPlayingAnyTTS(false);
+              cleanup();
+              reject(new Error('TTS audio playback error'));
+            }
+          };
+          
+          // Start playing
+          audio.play().catch(error => {
+            if (!resolved) {
+              console.error('🎵 [PLAY_TTS_AUDIO] Audio play failed:', error);
+              ttsAudioRef.current = null;
+              setIsPlayingTTS(prev => ({ ...prev, [finalCacheKey]: false }));
+              setIsPlayingAnyTTS(false);
+              cleanup();
+              reject(error);
+            }
+          });
+        });
+      } else {
+        console.error('🎵 [PLAY_TTS_AUDIO] No TTS URL generated');
+        setIsPlayingTTS(prev => ({ ...prev, [finalCacheKey]: false }));
+        setIsPlayingAnyTTS(false);
+      }
     } catch (error) {
-      console.error('Error playing TTS:', error);
+      console.error('🎵 [PLAY_TTS_AUDIO] Error:', error);
+      setIsPlayingTTS(prev => ({ ...prev, [finalCacheKey]: false }));
+      setIsPlayingAnyTTS(false);
+      throw error;
     }
   }, []);
 

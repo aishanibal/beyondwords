@@ -186,7 +186,6 @@ const AnalyzeContentInner = () => {
   const [ttsCache, setTtsCache] = useState<Map<string, { url: string; timestamp: number }>>(new Map());
   const [ttsDebugInfo, setTtsDebugInfo] = useState<string>('');
   const [romanizationDebugInfo, setRomanizationDebugInfo] = useState<string>('');
-
   // Progress tracking state
   const [userProgress, setUserProgress] = useState<{ [goalId: string]: SubgoalProgress }>({});
   const [learningGoals, setLearningGoals] = useState<LearningGoal[]>([]);
@@ -280,7 +279,9 @@ const AnalyzeContentInner = () => {
     isAnyTTSPlaying,
     setIsAnyTTSPlaying,
     setAiTTSQueued,
-    setShortFeedback
+    setShortFeedback,
+    setIsPlayingTTS,
+    ttsAudioRef
   );
 
   // Use message interactions hook
