@@ -508,10 +508,14 @@ const AnalyzeContentInner = () => {
     
     console.log('🏁 [END_CHAT] Chat history:', chatHistory.length);
     console.log('🏁 [END_CHAT] User messages:', userMessages.length);
+    console.log('🏁 [END_CHAT] Conversation ID:', conversationId);
     
-    // If no user messages, just navigate to dashboard without evaluation
-    if (userMessages.length === 0) {
-      console.log('🏁 [END_CHAT] No user messages in session, navigating to dashboard without evaluation');
+    // For new conversations (no conversationId), always generate title and progress
+    // even if there are no user messages, so it shows up in recent conversations
+    const isNewConversation = !conversationId;
+    
+    if (userMessages.length === 0 && !isNewConversation) {
+      console.log('🏁 [END_CHAT] No user messages in existing conversation, navigating to dashboard without evaluation');
       router.push('/dashboard');
       return;
     }
@@ -524,7 +528,9 @@ const AnalyzeContentInner = () => {
       console.log('🏁 [END_CHAT] Skipping persona modal - using existing persona');
       // Generate conversation summary (progress modal will handle navigation if needed)
       try {
-        if (chatHistory.length > 0) {
+        // For new conversations, always generate summary even if chatHistory is empty
+        // This ensures the conversation gets a title and shows up in recent conversations
+        if (chatHistory.length > 0 || isNewConversation) {
           console.log('🏁 [END_CHAT] Calling generateSummary...');
           await conversationManagement.generateSummary(
             chatHistory,
@@ -533,7 +539,7 @@ const AnalyzeContentInner = () => {
             conversationId || ''
           );
         } else {
-          console.log('🏁 [END_CHAT] No chat history, navigating to dashboard');
+          console.log('🏁 [END_CHAT] No chat history in existing conversation, navigating to dashboard');
           router.push('/dashboard');
         }
       } catch (error) {
@@ -587,15 +593,21 @@ const AnalyzeContentInner = () => {
           
           console.log('Session messages in savePersona:', chatHistory.length);
           console.log('User session messages in savePersona:', userMessages.length);
+          console.log('Conversation ID in savePersona:', conversationId);
           
-          // If no user messages in session, just navigate to dashboard without evaluation
-          if (userMessages.length === 0) {
-            console.log('No user messages in session, navigating to dashboard without evaluation');
+          // For new conversations, always generate title and progress even if no user messages
+          // so it shows up in recent conversations section
+          const isNewConversation = !conversationId;
+          
+          if (userMessages.length === 0 && !isNewConversation) {
+            console.log('No user messages in existing conversation, navigating to dashboard without evaluation');
             router.push('/dashboard');
             return;
           }
           
-          if (chatHistory.length > 0) {
+          // For new conversations, always generate summary even if chatHistory is empty
+          // This ensures the conversation gets a title and shows up in recent conversations
+          if (chatHistory.length > 0 || isNewConversation) {
             await conversationManagement.generateSummary(
               chatHistory,
               userPreferences?.topics || [],
