@@ -78,6 +78,8 @@ export const useAudioHandlers = (
         console.log('🔍 [DEBUG] MediaRecorder onstop event triggered');
         console.log('🔍 [DEBUG] interruptedRef.current:', interruptedRef.current);
         console.log('🔍 [DEBUG] audioChunksRef.current length:', audioChunksRef.current.length);
+        console.log('🔍 [DEBUG] manualRecording state:', manualRecording);
+        console.log('🔍 [DEBUG] isRecording state:', isRecording);
         
         if (interruptedRef.current) {
           console.log('🔍 [DEBUG] Recording was interrupted, cleaning up');
@@ -90,7 +92,7 @@ export const useAudioHandlers = (
           return;
         }
         
-        console.log('🔍 [DEBUG] Creating audio blob and sending to backend');
+        console.log('🔍 [DEBUG] Recording completed normally, creating audio blob and sending to backend');
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         console.log('🔍 [DEBUG] Audio blob created:', audioBlob.size, 'bytes');
         sendAudioToBackend(audioBlob);
@@ -101,53 +103,11 @@ export const useAudioHandlers = (
       };
       mediaRecorder.start();
       setIsRecording(true);
-      if (autoSpeakRef.current) {
-        // Use SpeechRecognition for silence detection in autospeak mode only
-        if (!SpeechRecognitionClassRef.current) {
-          alert('SpeechRecognition API not supported in this browser.');
-          return;
-        }
-        const recognition = new SpeechRecognitionClassRef.current();
-        recognitionRef.current = recognition;
-        recognition.lang = language || 'en-US';
-        recognition.interimResults = false;
-        recognition.continuous = false;
-        
-        // Set longer timeout for autospeak mode to give users more time to speak
-        if (autoSpeakRef.current) {
-          recognition.maxAlternatives = 1;
-          setTimeout(() => {
-            if (recognitionRef.current) {
-              console.log('[DEBUG] Autospeak: Speech recognition timeout reached, stopping recording');
-              recognitionRef.current.stop();
-            }
-          }, TTS_TIMEOUTS.autospeak);
-        }
-        recognition.onresult = (event: unknown) => {
-          setIsRecording(false);
-          if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-            mediaRecorderRef.current.stop();
-          }
-        };
-        recognition.onerror = (event: unknown) => {
-          setIsRecording(false);
-          if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-            mediaRecorderRef.current.stop();
-          }
-          alert('Speech recognition error: ' + (event as any).error);
-        };
-        recognition.onend = () => {
-          setIsRecording(false);
-          if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-            mediaRecorderRef.current.stop();
-          }
-        };
-        recognition.start();
-        setManualRecording(false);
-      } else {
-        // Manual mode: no speech recognition, just record until user stops
-        setManualRecording(true);
-      }
+      
+      // Always use manual mode - no automatic speech recognition stopping
+      // The user must manually click stop to end recording
+      setManualRecording(true);
+      console.log('🔍 [DEBUG] Recording started in manual mode - user must click stop to end recording');
     } catch (err: unknown) {
       console.error('Error starting recording:', err);
       alert('Failed to access microphone. Please check permissions.');
@@ -155,27 +115,37 @@ export const useAudioHandlers = (
   }, [language, isAnyTTSPlaying]);
 
   const handleStopRecording = useCallback((interrupted: boolean = false) => {
+    console.log('🔍 [DEBUG] handleStopRecording called with interrupted:', interrupted);
+    console.log('🔍 [DEBUG] Current recording state - isRecording:', isRecording, 'manualRecording:', manualRecording);
+    
     if (interrupted) {
       interruptedRef.current = true;
+      console.log('🔍 [DEBUG] Set interruptedRef.current to true');
     }
     
     if (recognitionRef.current) {
+      console.log('🔍 [DEBUG] Stopping speech recognition');
       recognitionRef.current.stop();
       recognitionRef.current = null;
     }
     
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      console.log('🔍 [DEBUG] Stopping media recorder, current state:', mediaRecorderRef.current.state);
       mediaRecorderRef.current.stop();
+    } else {
+      console.log('🔍 [DEBUG] Media recorder not active or not found');
     }
     
     if (mediaStream) {
+      console.log('🔍 [DEBUG] Stopping media stream tracks');
       mediaStream.getTracks().forEach(track => track.stop());
       setMediaStream(null);
     }
     
+    console.log('🔍 [DEBUG] Setting recording states to false');
     setIsRecording(false);
     setManualRecording(false);
-  }, [mediaStream]);
+  }, [mediaStream, isRecording, manualRecording]);
 
   const sendAudioToBackend = useCallback(async (audioBlob: Blob) => {
     console.log('🔍 [DEBUG] sendAudioToBackend called with audioBlob:', audioBlob);
