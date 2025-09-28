@@ -304,6 +304,7 @@ const AnalyzeContentInner = () => {
   // Handle persona data when using a persona - from original
   useEffect(() => {
     if (usePersona && user) {
+      setIsUsingPersona(true); // Set flag that we're using an existing persona
       const personaData = localStorage.getItem('selectedPersona');
       if (personaData) {
         try {
@@ -316,6 +317,16 @@ const AnalyzeContentInner = () => {
       }
     }
   }, [usePersona, user]);
+
+  // Handle existing conversations - check if they were using a persona
+  useEffect(() => {
+    if (urlConversationId && !usePersona && user) {
+      // For existing conversations, check if they were using a persona
+      // This would require a backend call to check conversation metadata
+      // For now, we'll assume existing conversations without usePersona flag are new conversations
+      console.log('[PERSONA] Existing conversation without persona flag - will show persona modal');
+    }
+  }, [urlConversationId, usePersona, user]);
 
   // Authentication protection - from original
   useEffect(() => {
@@ -505,12 +516,12 @@ const AnalyzeContentInner = () => {
       return;
     }
     
-    // Show persona modal for new conversations (not using existing persona)
-    if (isNewPersona) {
-      console.log('🏁 [END_CHAT] Showing persona modal for new conversation');
+    // Show persona modal unless we're using an existing persona
+    if (!isUsingPersona) {
+      console.log('🏁 [END_CHAT] Showing persona modal - no existing persona being used');
       setShowPersonaModal(true);
     } else {
-      console.log('🏁 [END_CHAT] Skipping persona modal, generating summary directly');
+      console.log('🏁 [END_CHAT] Skipping persona modal - using existing persona');
       // Generate conversation summary (progress modal will handle navigation if needed)
       try {
         if (chatHistory.length > 0) {
