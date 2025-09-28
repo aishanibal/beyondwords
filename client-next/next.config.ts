@@ -60,6 +60,10 @@ const nextConfig: NextConfig = {
         destination: `${backendUrl}/api/explain_suggestion`, // Express backend
       },
       {
+        source: '/api/detailed_breakdown',
+        destination: `${backendUrl}/api/detailed_breakdown`, // Express backend
+      },
+      {
         source: '/api/conversation-summary',
         destination: `${backendUrl}/api/conversation-summary`, // Express backend
       }
