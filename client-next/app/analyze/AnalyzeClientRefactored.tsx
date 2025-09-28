@@ -481,12 +481,7 @@ const AnalyzeContentInner = () => {
   };
 
   const handleExplainLLMResponse = async (messageIndex: number, text: string) => {
-    await messageInteractions.handleExplainLLMResponse(messageIndex, text);
-    
-    // Also trigger quick translation
-    await messageInteractions.handleQuickTranslation(messageIndex, text);
-    
-    // Also update the global LLM breakdown for the left panel
+    // This should only trigger the detailed breakdown (AI explanation)
     try {
       const token = localStorage.getItem('jwt');
       const requestData = {
