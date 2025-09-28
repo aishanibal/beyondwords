@@ -1,15 +1,10 @@
 import React from 'react';
-import RightPanel from './RightPanel';
 
 interface AnalyzeLayoutProps {
   isDarkMode: boolean;
-  leftPanelWidth: number;
-  rightPanelWidth: number;
+  panelWidths: { left: number; center: number; right: number };
   showShortFeedbackPanel: boolean;
   setShowShortFeedbackPanel: (show: boolean) => void;
-  showRightPanel: boolean;
-  setShowRightPanel: (show: boolean) => void;
-  setRightPanelWidth: (width: number) => void;
   ttsDebugInfo: any;
   setTtsDebugInfo: (info: any) => void;
   romanizationDebugInfo: any;
@@ -18,6 +13,7 @@ interface AnalyzeLayoutProps {
   showTranslations: Record<number, boolean>;
   feedbackExplanations: Record<number, Record<string, string>>;
   showDetailedBreakdown: Record<number, boolean>;
+  setShowDetailedBreakdown: (breakdown: Record<number, boolean>) => void;
   parsedBreakdown: any[];
   activePopup: { messageIndex: number; wordKey: string; position: { x: number; y: number } } | null;
   // Left panel content props
@@ -37,13 +33,9 @@ interface AnalyzeLayoutProps {
 
 const AnalyzeLayout: React.FC<AnalyzeLayoutProps> = ({
   isDarkMode,
-  leftPanelWidth,
-  rightPanelWidth,
+  panelWidths,
   showShortFeedbackPanel,
   setShowShortFeedbackPanel,
-  showRightPanel,
-  setShowRightPanel,
-  setRightPanelWidth,
   ttsDebugInfo,
   setTtsDebugInfo,
   romanizationDebugInfo,
@@ -52,6 +44,7 @@ const AnalyzeLayout: React.FC<AnalyzeLayoutProps> = ({
   showTranslations,
   feedbackExplanations,
   showDetailedBreakdown,
+  setShowDetailedBreakdown,
   parsedBreakdown,
   activePopup,
   // Left panel content props
@@ -380,7 +373,7 @@ const AnalyzeLayout: React.FC<AnalyzeLayoutProps> = ({
         {/* Left Panel - Short Feedback Panel */}
         {showShortFeedbackPanel && (
           <div className="panel-hover" style={{ 
-            width: `${leftPanelWidth * 100}%`, 
+            width: `${panelWidths.left * 100}%`, 
             background: isDarkMode 
               ? 'linear-gradient(135deg, var(--card) 0%, rgba(255,255,255,0.02) 100%)' 
               : 'linear-gradient(135deg, #ffffff 0%, rgba(59,83,119,0.02) 100%)', 
@@ -730,37 +723,31 @@ const AnalyzeLayout: React.FC<AnalyzeLayoutProps> = ({
           </div>
         )}
 
-        {/* Main Content Container */}
-        <div style={{
-          flex: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          position: 'relative',
-          background: isDarkMode ? 'var(--background)' : '#fcfcfc',
-          boxShadow: isDarkMode
-            ? 'inset 8px 0 16px -8px rgba(0,0,0,0.4)'
-            : 'inset 8px 0 16px -8px rgba(0,0,0,0.06)',
-          height: 'calc(100vh - 80px)',
-          borderRadius: 24,
+        {/* Chat Panel - Center */}
+        <div style={{ 
+          width: `${panelWidths.center * 100}%`,
+          background: isDarkMode 
+            ? 'linear-gradient(135deg, var(--card) 0%, rgba(255,255,255,0.02) 100%)' 
+            : 'linear-gradient(135deg, #ffffff 0%, rgba(195,141,148,0.02) 100%)', 
+          borderRadius: 24, 
+          display: 'flex', 
+          flexDirection: 'column', 
+          boxShadow: isDarkMode 
+            ? '0 8px 40px rgba(0,0,0,0.4), 0 2px 8px rgba(0,0,0,0.2)' 
+            : '0 8px 40px rgba(60,60,60,0.12), 0 2px 8px rgba(195,141,148,0.08)',
+          position: 'relative', 
+          transition: 'all 0.3s ease',
+          border: isDarkMode ? '1px solid var(--rose-primary)' : '1px solid var(--rose-primary)',
+          backdropFilter: 'blur(20px)',
+          zIndex: 1,
+          minHeight: 0,
+          height: '100%',
           overflow: 'hidden'
         }}>
           {/* Main Content - Children will be rendered here */}
           {children}
         </div>
 
-        {/* Right Panel */}
-        <RightPanel
-          isDarkMode={isDarkMode}
-          rightPanelWidth={rightPanelWidth}
-          showRightPanel={showRightPanel}
-          onClose={() => setShowRightPanel(false)}
-          translations={translations}
-          showTranslations={showTranslations}
-          feedbackExplanations={feedbackExplanations}
-          showDetailedBreakdown={showDetailedBreakdown}
-          parsedBreakdown={parsedBreakdown}
-          activePopup={activePopup}
-        />
 
       {/* Floating Panel Toggle Buttons */}
       {!showShortFeedbackPanel && (

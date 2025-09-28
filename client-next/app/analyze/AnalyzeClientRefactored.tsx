@@ -145,10 +145,22 @@ const AnalyzeContentInner = () => {
   // Suggestion translation state - now handled by useSuggestions hook
 
   // UI panels state
-  const [showShortFeedbackPanel, setShowShortFeedbackPanel] = useState(false);
-  const [showRightPanel, setShowRightPanel] = useState(false);
-  const [leftPanelWidth, setLeftPanelWidth] = useState(DEFAULT_PANEL_WIDTHS.left);
-  const [rightPanelWidth, setRightPanelWidth] = useState<number>(DEFAULT_PANEL_WIDTHS.right);
+  const [showShortFeedbackPanel, setShowShortFeedbackPanel] = useState(true);
+  const [leftPanelWidth, setLeftPanelWidth] = useState(0.2); // 20% of screen width
+  
+  // Calculate actual panel widths based on visibility - memoized to prevent unnecessary re-renders
+  const panelWidths = useMemo(() => {
+    const visiblePanels = [showShortFeedbackPanel, true].filter(Boolean).length;
+    
+    if (visiblePanels === 1) {
+      // Only middle panel visible
+      return { left: 0, center: 1, right: 0 };
+    } else {
+      // Left and middle panels visible - allow resizing between them
+      const centerWidth = Math.max(0.4, 1 - leftPanelWidth); // Ensure center is at least 40%
+      return { left: 1 - centerWidth, center: centerWidth, right: 0 };
+    }
+  }, [showShortFeedbackPanel, leftPanelWidth]);
   
   // Left panel content state - all from original
   const [shortFeedback, setShortFeedback] = useState<string>('');
@@ -490,13 +502,9 @@ const AnalyzeContentInner = () => {
     <>
       <AnalyzeLayout
         isDarkMode={isDarkMode}
-        leftPanelWidth={leftPanelWidth}
-        rightPanelWidth={rightPanelWidth}
+        panelWidths={panelWidths}
         showShortFeedbackPanel={showShortFeedbackPanel}
         setShowShortFeedbackPanel={setShowShortFeedbackPanel}
-        showRightPanel={showRightPanel}
-        setShowRightPanel={setShowRightPanel}
-        setRightPanelWidth={setRightPanelWidth}
         ttsDebugInfo={ttsDebugInfo}
         setTtsDebugInfo={setTtsDebugInfo}
         romanizationDebugInfo={romanizationDebugInfo}
@@ -505,6 +513,7 @@ const AnalyzeContentInner = () => {
         showTranslations={showTranslations}
         feedbackExplanations={feedbackExplanations}
         showDetailedBreakdown={showDetailedBreakdown}
+        setShowDetailedBreakdown={setShowDetailedBreakdown}
         parsedBreakdown={parsedBreakdown}
         activePopup={activePopup}
         // Left panel content props
