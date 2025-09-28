@@ -154,8 +154,8 @@ export const useAudioHandlers = (
     }
   }, [language, isAnyTTSPlaying]);
 
-  const handleStopRecording = useCallback((isManualStop: boolean = true) => {
-    if (isManualStop) {
+  const handleStopRecording = useCallback((interrupted: boolean = false) => {
+    if (interrupted) {
       interruptedRef.current = true;
     }
     
