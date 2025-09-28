@@ -38,6 +38,26 @@ const nextConfig: NextConfig = {
       {
         source: '/api/contact',
         destination: `${backendUrl}/api/contact`, // Express backend
+      },
+      {
+        source: '/api/tts',
+        destination: `${backendUrl}/api/tts`, // Express backend
+      },
+      {
+        source: '/api/tts-test',
+        destination: `${backendUrl}/api/tts-test`, // Express backend fallback
+      },
+      {
+        source: '/api/quick_translation',
+        destination: `${backendUrl}/api/quick_translation`, // Express backend
+      },
+      {
+        source: '/api/explain_suggestion',
+        destination: `${backendUrl}/api/explain_suggestion`, // Express backend
+      },
+      {
+        source: '/api/conversation-summary',
+        destination: `${backendUrl}/api/conversation-summary`, // Express backend
       }
     ];
   },
