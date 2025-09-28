@@ -118,9 +118,17 @@ export const useAudioHandlers = (
     console.log('🔍 [DEBUG] handleStopRecording called with interrupted:', interrupted);
     console.log('🔍 [DEBUG] Current recording state - isRecording:', isRecording, 'manualRecording:', manualRecording);
     
+    // Check if the first parameter is an event object (from button click)
+    if (interrupted && typeof interrupted === 'object' && interrupted.type === 'click') {
+      console.log('🔍 [DEBUG] Received click event, treating as normal stop (not interrupted)');
+      interrupted = false; // Treat click events as normal stops, not interruptions
+    }
+    
     if (interrupted) {
       interruptedRef.current = true;
       console.log('🔍 [DEBUG] Set interruptedRef.current to true');
+    } else {
+      console.log('🔍 [DEBUG] Normal stop - not setting interruptedRef');
     }
     
     if (recognitionRef.current) {
@@ -256,13 +264,21 @@ export const useAudioHandlers = (
         }
         
         // Play TTS for AI response immediately
-        console.log('[DEBUG] Playing TTS for AI response immediately');
+        console.log('🔍 [AI_TTS] Playing TTS for AI response immediately');
         const ttsText = getTTSText(result.aiMessage, userPreferences?.romanizationDisplay || 'both', language);
         const cacheKey = `ai_message_auto_${Date.now()}`;
         
+        console.log('🔍 [AI_TTS] TTS text:', ttsText);
+        console.log('🔍 [AI_TTS] Language:', language);
+        console.log('🔍 [AI_TTS] Cache key:', cacheKey);
+        console.log('🔍 [AI_TTS] playTTSAudio function:', typeof playTTSAudio);
+        
         // Play audio immediately for all AI messages
-        playTTSAudio(ttsText, language, cacheKey).catch(error => {
-          console.error('[DEBUG] Error playing AI TTS:', error);
+        console.log('🔍 [AI_TTS] Calling playTTSAudio...');
+        playTTSAudio(ttsText, language, cacheKey).then(() => {
+          console.log('🔍 [AI_TTS] TTS playback completed successfully');
+        }).catch(error => {
+          console.error('🔍 [AI_TTS] Error playing AI TTS:', error);
         });
         
         // Also queue for autospeak mode if enabled
