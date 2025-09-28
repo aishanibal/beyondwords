@@ -21,3 +21,4 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.status(error.response?.status || 500).json(error.response?.data || { error: 'Exchange failed' });
   }
 }
+

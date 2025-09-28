@@ -47,7 +47,8 @@ import {
   fixRomanizationPunctuation 
 } from './types/analyze';
 import { cleanTextForTTS } from './utils/textFormatting';
-import { explainLLMResponse, renderClickableMessage, getSessionMessages } from './utils/messageUtils';
+import { renderClickableMessage, getSessionMessages } from './utils/messageUtils';
+import { explainLLMResponse } from './services/messageService';
 
 // Import services
 import { getAuthHeaders } from './services/conversationService';
@@ -263,7 +264,8 @@ const AnalyzeContentInner = () => {
     setUserPreferences,
     setShowProgressModal,
     setProgressData,
-    setUserProgress
+    setUserProgress,
+    userProgress
   );
 
   // Use audio handlers hook
@@ -471,6 +473,15 @@ const AnalyzeContentInner = () => {
 
   const handleExplainLLMResponse = async (messageIndex: number, text: string) => {
     await messageInteractions.handleExplainLLMResponse(messageIndex, text);
+    
+    // Also update the global LLM breakdown for the left panel
+    try {
+      const explanation = await explainLLMResponse(messageIndex, text, language);
+      setLlmBreakdown(explanation);
+      setShowLlmBreakdown(true);
+    } catch (error) {
+      console.error('Error explaining LLM response for left panel:', error);
+    }
   };
 
   // Handle end chat functionality
@@ -646,7 +657,7 @@ const AnalyzeContentInner = () => {
         setShowLlmBreakdown={setShowLlmBreakdown}
         chatHistory={chatHistory}
             isLoadingMessageFeedback={messageInteractions.isLoadingMessageFeedback}
-        explainLLMResponse={explainLLMResponse}
+        explainLLMResponse={handleExplainLLMResponse}
         renderClickableMessage={renderClickableMessage}
       >
         <MainContentArea 

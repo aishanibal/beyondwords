@@ -25,7 +25,8 @@ export const useConversationManagement = (
     subgoalNames: string[];
     levelUpEvents?: LevelUpEvent[];
   } | null>>,
-  setUserProgress: React.Dispatch<React.SetStateAction<{ [goalId: string]: SubgoalProgress }>>
+  setUserProgress: React.Dispatch<React.SetStateAction<{ [goalId: string]: SubgoalProgress }>>,
+  userProgress: { [goalId: string]: SubgoalProgress }
 ) => {
   const router = useRouter();
   const [isLoadingConversation, setIsLoadingConversation] = useState(false);
@@ -146,7 +147,7 @@ export const useConversationManagement = (
 
       if (summary && summary.learningGoals && summary.learningGoals.length > 0) {
         // Process learning goals and track progress
-        const currentProgressArray = Object.values({}); // Get from userProgress state
+        const currentProgressArray = Object.values(userProgress); // Get from userProgress state
         const levelUpEvents: LevelUpEvent[] = [];
 
         for (const goal of summary.learningGoals) {

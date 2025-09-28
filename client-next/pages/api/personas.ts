@@ -2,15 +2,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import axios from 'axios';
 
-const PRIMARY_BASE = (
-  process.env.BACKEND_URL ||
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  process.env.AI_BACKEND_URL ||
-  'https://beyondwords-express.onrender.com'
-).replace(/\/$/, '');
-const FALLBACK_BASE = 'https://beyondwords.onrender.com';
-const PRIMARY_URL = `${PRIMARY_BASE}/api/personas`;
-const FALLBACK_URL = `${FALLBACK_BASE.replace(/\/$/, '')}/api/personas`;
+const BACKEND_URL = process.env.BACKEND_URL || 'https://beyondwords-express.onrender.com/api/personas';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const authHeader = req.headers.authorization || '';
@@ -18,50 +10,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     if (req.method === 'DELETE') {
       const { id } = req.query;
-      console.log('🔍 [PERSONAS_API] DELETE proxy', { id, primary: `${PRIMARY_URL}/${id}` });
-      let response;
-      try {
-        response = await axios.delete(`${PRIMARY_URL}/${id}`, { headers: { Authorization: authHeader }, timeout: 15000 });
-      } catch (e: any) {
-        if (e.response?.status === 404 || e.code === 'ECONNREFUSED') {
-          console.warn('🔍 [PERSONAS_API] Primary DELETE failed, trying fallback', { fallback: `${FALLBACK_URL}/${id}` });
-          response = await axios.delete(`${FALLBACK_URL}/${id}`, { headers: { Authorization: authHeader }, timeout: 15000 });
-        } else {
-          throw e;
-        }
-      }
+      const response = await axios.delete(`${BACKEND_URL}/${id}`, {
+        headers: { Authorization: authHeader }
+      });
       return res.status(response.status).json(response.data);
     }
 
     if (req.method === 'GET') {
-      console.log('🔍 [PERSONAS_API] GET proxy', { primary: PRIMARY_URL });
-      let response;
-      try {
-        response = await axios.get(PRIMARY_URL, { headers: { Authorization: authHeader }, timeout: 15000 });
-      } catch (e: any) {
-        if (e.response?.status === 404 || e.code === 'ECONNREFUSED') {
-          console.warn('🔍 [PERSONAS_API] Primary GET failed, trying fallback', { fallback: FALLBACK_URL });
-          response = await axios.get(FALLBACK_URL, { headers: { Authorization: authHeader }, timeout: 15000 });
-        } else {
-          throw e;
-        }
-      }
+      const response = await axios.get(BACKEND_URL, {
+        headers: { Authorization: authHeader }
+      });
       return res.status(response.status).json(response.data);
     }
 
     if (req.method === 'POST') {
-      console.log('🔍 [PERSONAS_API] POST proxy', { primary: PRIMARY_URL, hasAuth: !!authHeader });
-      let response;
-      try {
-        response = await axios.post(PRIMARY_URL, req.body, { headers: { Authorization: authHeader, 'Content-Type': 'application/json' }, timeout: 15000 });
-      } catch (e: any) {
-        if (e.response?.status === 404 || e.code === 'ECONNREFUSED') {
-          console.warn('🔍 [PERSONAS_API] Primary POST failed, trying fallback', { fallback: FALLBACK_URL });
-          response = await axios.post(FALLBACK_URL, req.body, { headers: { Authorization: authHeader, 'Content-Type': 'application/json' }, timeout: 15000 });
-        } else {
-          throw e;
-        }
-      }
+      const response = await axios.post(BACKEND_URL, req.body, {
+        headers: { Authorization: authHeader }
+      });
       return res.status(response.status).json(response.data);
     }
 

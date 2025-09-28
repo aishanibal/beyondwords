@@ -34,7 +34,6 @@ import {
   createPersona,
   getUserPersonas,
   deletePersona,
-  supabase,
   User,
   LanguageDashboard,
   Session,
@@ -758,40 +757,6 @@ app.post('/auth/login', async (req: Request, res: Response) => {
   }
 });
 
-// Alias under /api so frontend can call /api/auth/exchange without rewrites
-app.post('/api/auth/exchange', async (req: Request, res: Response) => {
-  try {
-    const { email, name } = req.body || {};
-    if (!email) return res.status(400).json({ error: 'Email required' });
-
-    // Find or create user by email
-    let user = await findUserByEmail(email);
-    if (!user) {
-      user = await createUser({ email, name: name || email.split('@')[0], role: 'user', onboarding_complete: false });
-    }
-
-    const token = jwt.sign(
-      { userId: user.id, email: user.email, name: user.name },
-      JWT_SECRET,
-      { expiresIn: '7d' }
-    );
-
-    res.json({ 
-      token,
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        onboarding_complete: Boolean(user.onboarding_complete)
-      }
-    });
-  } catch (error: any) {
-    console.error('Auth exchange alias error:', error);
-    res.status(500).json({ error: 'Failed to exchange identity' });
-  }
-});
-
 // Onboarding route (protected) - Creates first language dashboard
 app.post('/api/user/onboarding', authenticateJWT, async (req: Request, res: Response) => {
   try {
@@ -1329,25 +1294,7 @@ app.post('/api/conversations/:id/messages', optionalAuthenticateJWT as any, asyn
   try {
     console.log('🔄 SERVER: Adding message to conversation:', req.params.id);
     const { sender, text, messageType, audioFilePath, detailedFeedback, message_order, romanized_text } = req.body;
-    console.log('📝 SERVER: Message details:', { sender, text: (text||'').substring(0, 50) + '...', messageType, message_order, romanized_text: romanized_text ? 'present' : 'none' });
-
-    // Compute a safe message order if missing
-    let finalOrder: number | undefined = typeof message_order === 'number' ? message_order : undefined;
-    if (finalOrder === undefined || Number.isNaN(finalOrder)) {
-      const { data: maxRows, error: maxErr } = await supabase
-        .from('messages')
-        .select('message_order')
-        .eq('conversation_id', Number(req.params.id))
-        .order('message_order', { ascending: false })
-        .limit(1);
-      if (maxErr) {
-        console.warn('⚠️ SERVER: Could not fetch max message_order, defaulting to 1:', maxErr.message);
-        finalOrder = 1;
-      } else {
-        const currentMax = (maxRows && maxRows.length > 0 && typeof maxRows[0].message_order === 'number') ? maxRows[0].message_order : 0;
-        finalOrder = currentMax + 1;
-      }
-    }
+    console.log('📝 SERVER: Message details:', { sender, text: text.substring(0, 50) + '...', messageType, message_order, romanized_text: romanized_text ? 'present' : 'none' });
 
     const message = await addMessage(
       Number(req.params.id),
@@ -1356,7 +1303,7 @@ app.post('/api/conversations/:id/messages', optionalAuthenticateJWT as any, asyn
       messageType,
       audioFilePath,
       detailedFeedback,
-      finalOrder,
+      message_order,
       romanized_text
     );
 
@@ -1429,16 +1376,15 @@ app.patch('/api/conversations/:id', optionalAuthenticateJWT as any, async (req: 
 });
 
 // Text suggestions endpoint
-app.post('/api/suggestions', optionalAuthenticateJWT as any, async (req: Request, res: Response) => {
+app.post('/api/suggestions', authenticateJWT, async (req: Request, res: Response) => {
   try {
     console.log('🔍 [NODE_SERVER] POST /api/suggestions called');
     console.log('🔍 [NODE_SERVER] Request body:', req.body);
-    console.log('🔍 [NODE_SERVER] User ID:', req.user?.userId || '(none - fallback)');
+    console.log('🔍 [NODE_SERVER] User ID:', req.user?.userId);
     const { conversationId, language } = req.body;
     
     // Get user data for personalized suggestions
-    let user = null as any;
-    try { if (req.user?.userId) user = await findUserById(req.user.userId); } catch {}
+    const user = await findUserById(req.user.userId);
     const userLevel = req.body.user_level || user?.proficiency_level || 'beginner';
     const userTopics = req.body.user_topics || (user?.talk_topics && typeof user.talk_topics === 'string' ? JSON.parse(user.talk_topics) : Array.isArray(user?.talk_topics) ? user.talk_topics : []);
     const userGoals = req.body.user_goals || (user?.learning_goals && typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : Array.isArray(user?.learning_goals) ? user.learning_goals : []);
@@ -1580,7 +1526,7 @@ app.post('/api/suggestions-test', async (req: Request, res: Response) => {
 });
 
 // Translation endpoint
-app.post('/api/translate', optionalAuthenticateJWT as any, async (req: Request, res: Response) => {
+app.post('/api/translate', authenticateJWT, async (req: Request, res: Response) => {
   try {
     console.log('POST /api/translate called');
     const { text, source_language, target_language, breakdown } = req.body;
@@ -1626,7 +1572,7 @@ app.post('/api/translate', optionalAuthenticateJWT as any, async (req: Request, 
 });
 
 // Explain suggestion endpoint
-app.post('/api/explain_suggestion', optionalAuthenticateJWT as any, async (req: Request, res: Response) => {
+app.post('/api/explain_suggestion', authenticateJWT, async (req: Request, res: Response) => {
   try {
     console.log('POST /api/explain_suggestion called');
     const { suggestion_text, chatHistory, language, user_level, user_topics, formality, feedback_language, user_goals } = req.body;
