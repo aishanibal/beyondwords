@@ -474,6 +474,127 @@ const AnalyzeContentInner = () => {
     await messageInteractions.handleExplainLLMResponse(messageIndex, text);
   };
 
+  // Handle end chat functionality
+  const handleEndChat = async () => {
+    console.log('🏁 [END_CHAT] End chat initiated');
+    console.log('🏁 [END_CHAT] isNewPersona:', isNewPersona);
+    console.log('🏁 [END_CHAT] isUsingPersona:', isUsingPersona);
+    console.log('🏁 [END_CHAT] conversationDescription:', conversationDescription);
+    
+    // Check if there are any user messages in the chat history
+    const userMessages = chatHistory.filter(msg => msg.sender === 'User');
+    
+    console.log('🏁 [END_CHAT] Chat history:', chatHistory.length);
+    console.log('🏁 [END_CHAT] User messages:', userMessages.length);
+    
+    // If no user messages, just navigate to dashboard without evaluation
+    if (userMessages.length === 0) {
+      console.log('🏁 [END_CHAT] No user messages in session, navigating to dashboard without evaluation');
+      router.push('/dashboard');
+      return;
+    }
+    
+    // Show persona modal for new conversations (not using existing persona)
+    if (isNewPersona) {
+      console.log('🏁 [END_CHAT] Showing persona modal for new conversation');
+      setShowPersonaModal(true);
+    } else {
+      console.log('🏁 [END_CHAT] Skipping persona modal, generating summary directly');
+      // Generate conversation summary (progress modal will handle navigation if needed)
+      try {
+        if (chatHistory.length > 0) {
+          console.log('🏁 [END_CHAT] Calling generateSummary...');
+          await conversationManagement.generateSummary(
+            chatHistory,
+            userPreferences?.topics || [],
+            userPreferences?.formality || 'friendly',
+            conversationId || ''
+          );
+        } else {
+          console.log('🏁 [END_CHAT] No chat history, navigating to dashboard');
+          router.push('/dashboard');
+        }
+      } catch (error) {
+        console.error('🏁 [END_CHAT] Error generating conversation summary:', error);
+        router.push('/dashboard');
+      }
+    }
+  };
+
+  // Save persona functionality
+  const savePersona = async (personaName: string) => {
+    setIsSavingPersona(true);
+    try {
+      const personaData = {
+        name: personaName,
+        description: conversationDescription || '',
+        topics: userPreferences?.topics || [],
+        formality: userPreferences?.formality || 'neutral',
+        language: language,
+        conversationId: conversationId,
+        userId: (user as any)?.id
+      };
+
+      // Save persona to database
+      const response = await axios.post('/api/personas', personaData, {
+        headers: await getAuthHeaders()
+      });
+
+      if (response.status === 201) {
+        // Update the conversation to mark it as using a persona
+        if (conversationId) {
+          try {
+            await axios.patch(`/api/conversations/${conversationId}`, {
+              usesPersona: true,
+              personaId: response.data.persona.id
+            }, {
+              headers: await getAuthHeaders()
+            });
+          } catch (error) {
+            console.error('Error updating conversation with persona info:', error);
+          }
+        }
+        
+        // Close modal
+        setShowPersonaModal(false);
+        
+        // Generate conversation summary after saving persona
+        try {
+          // Check if there are any user messages in the chat history
+          const userMessages = chatHistory.filter(msg => msg.sender === 'User');
+          
+          console.log('Session messages in savePersona:', chatHistory.length);
+          console.log('User session messages in savePersona:', userMessages.length);
+          
+          // If no user messages in session, just navigate to dashboard without evaluation
+          if (userMessages.length === 0) {
+            console.log('No user messages in session, navigating to dashboard without evaluation');
+            router.push('/dashboard');
+            return;
+          }
+          
+          if (chatHistory.length > 0) {
+            await conversationManagement.generateSummary(
+              chatHistory,
+              userPreferences?.topics || [],
+              userPreferences?.formality || 'friendly',
+              conversationId || ''
+            );
+          } else {
+            router.push('/dashboard');
+          }
+        } catch (error) {
+          console.error('Error generating conversation summary:', error);
+          router.push('/dashboard');
+        }
+      }
+    } catch (error) {
+      console.error('Error saving persona:', error);
+    } finally {
+      setIsSavingPersona(false);
+    }
+  };
+
   // Initialize MediaRecorder and SpeechRecognition classes - from original
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -600,6 +721,7 @@ const AnalyzeContentInner = () => {
             setAutoSpeak={setAutoSpeak}
             enableShortFeedback={enableShortFeedback}
             setEnableShortFeedback={setEnableShortFeedback}
+            onEndChat={handleEndChat}
           />
         </MainContentArea>
       </AnalyzeLayout>
@@ -618,10 +740,7 @@ const AnalyzeContentInner = () => {
         <PersonaModal
           isOpen={showPersonaModal}
           onClose={() => setShowPersonaModal(false)}
-          onSave={async (personaName) => {
-            console.log('Save persona:', personaName);
-            setShowPersonaModal(false);
-          }}
+          onSave={savePersona}
           isSaving={isSavingPersona}
           currentTopics={userPreferences?.topics || []}
           currentDescription={conversationDescription}
