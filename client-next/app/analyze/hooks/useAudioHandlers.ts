@@ -360,7 +360,7 @@ export const useAudioHandlers = (
     // Set playing state
     console.log('🎵 [PLAY_TTS_AUDIO] Setting playing state');
     setIsPlayingTTS(prev => ({ ...prev, [finalCacheKey]: true }));
-    setIsPlayingAnyTTS(true);
+    // setIsPlayingAnyTTS(true); // Removed - using playTTSAudio from useTTS hook
     
     try {
       console.log('🎵 [PLAY_TTS_AUDIO] Calling generateTTSForText...');
@@ -392,7 +392,7 @@ export const useAudioHandlers = (
         if (!accessible) {
           console.error('🎵 [PLAY_TTS_AUDIO] Audio file not accessible after retries');
           setIsPlayingTTS(prev => ({ ...prev, [finalCacheKey]: false }));
-          setIsPlayingAnyTTS(false);
+          // setIsPlayingAnyTTS(false); // Removed - using playTTSAudio from useTTS hook
           return;
         }
         console.log('🎵 [PLAY_TTS_AUDIO] Audio file is accessible');
@@ -425,7 +425,7 @@ export const useAudioHandlers = (
               console.error('🎵 [PLAY_TTS_AUDIO] Audio playback timeout after 30 seconds');
               ttsAudioRef.current = null;
               setIsPlayingTTS(prev => ({ ...prev, [finalCacheKey]: false }));
-              setIsPlayingAnyTTS(false);
+              // setIsPlayingAnyTTS(false); // Removed - using playTTSAudio from useTTS hook
               cleanup();
               reject(new Error('TTS audio playback timeout'));
             }
@@ -436,7 +436,7 @@ export const useAudioHandlers = (
               console.log('🎵 [PLAY_TTS_AUDIO] Audio playback ended');
               ttsAudioRef.current = null;
               setIsPlayingTTS(prev => ({ ...prev, [finalCacheKey]: false }));
-              setIsPlayingAnyTTS(false);
+              // setIsPlayingAnyTTS(false); // Removed - using playTTSAudio from useTTS hook
               cleanup();
               resolve();
             }
@@ -447,7 +447,7 @@ export const useAudioHandlers = (
               console.error('🎵 [PLAY_TTS_AUDIO] Audio playback error');
               ttsAudioRef.current = null;
               setIsPlayingTTS(prev => ({ ...prev, [finalCacheKey]: false }));
-              setIsPlayingAnyTTS(false);
+              // setIsPlayingAnyTTS(false); // Removed - using playTTSAudio from useTTS hook
               cleanup();
               reject(new Error('TTS audio playback error'));
             }
@@ -459,7 +459,7 @@ export const useAudioHandlers = (
               console.error('🎵 [PLAY_TTS_AUDIO] Audio play failed:', error);
               ttsAudioRef.current = null;
               setIsPlayingTTS(prev => ({ ...prev, [finalCacheKey]: false }));
-              setIsPlayingAnyTTS(false);
+              // setIsPlayingAnyTTS(false); // Removed - using playTTSAudio from useTTS hook
               cleanup();
               reject(error);
             }
@@ -468,12 +468,12 @@ export const useAudioHandlers = (
       } else {
         console.error('🎵 [PLAY_TTS_AUDIO] No TTS URL generated');
         setIsPlayingTTS(prev => ({ ...prev, [finalCacheKey]: false }));
-        setIsPlayingAnyTTS(false);
+        // setIsPlayingAnyTTS(false); // Removed - using playTTSAudio from useTTS hook
       }
     } catch (error) {
       console.error('🎵 [PLAY_TTS_AUDIO] Error:', error);
       setIsPlayingTTS(prev => ({ ...prev, [finalCacheKey]: false }));
-      setIsPlayingAnyTTS(false);
+      // setIsPlayingAnyTTS(false); // Removed - using playTTSAudio from useTTS hook
       throw error;
     }
   }, []);
