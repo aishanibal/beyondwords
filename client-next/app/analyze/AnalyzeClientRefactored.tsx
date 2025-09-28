@@ -157,8 +157,11 @@ const AnalyzeContentInner = () => {
       return { left: 0, center: 1, right: 0 };
     } else {
       // Left and middle panels visible - allow resizing between them
-      const centerWidth = Math.max(0.4, 1 - leftPanelWidth); // Ensure center is at least 40%
-      return { left: 1 - centerWidth, center: centerWidth, right: 0 };
+      // Limit left panel to maximum 1/3 (33.33%) of screen width
+      const maxLeftWidth = 1/3; // 33.33%
+      const constrainedLeftWidth = Math.min(leftPanelWidth, maxLeftWidth);
+      const centerWidth = 1 - constrainedLeftWidth; // Center takes remaining space
+      return { left: constrainedLeftWidth, center: centerWidth, right: 0 };
     }
   }, [showShortFeedbackPanel, leftPanelWidth]);
   
@@ -706,6 +709,11 @@ natutunan / natutunan -- learned (past tense)`;
     }
   };
 
+  // Wrapper function for renderClickableMessage with additional parameters
+  const renderClickableMessageWrapper = (message: any, messageIndex: number, translation: any) => {
+    return renderClickableMessage(message, messageIndex, translation, setActivePopup, isDarkMode, userPreferences, language);
+  };
+
   // Handle end chat functionality
   const handleEndChat = async () => {
     console.log('🏁 [END_CHAT] End chat initiated');
@@ -892,7 +900,7 @@ natutunan / natutunan -- learned (past tense)`;
         chatHistory={chatHistory}
             isLoadingMessageFeedback={messageInteractions.isLoadingMessageFeedback}
         explainLLMResponse={handleExplainLLMResponse}
-        renderClickableMessage={renderClickableMessage}
+        renderClickableMessage={renderClickableMessageWrapper}
       >
         <MainContentArea 
           isDarkMode={isDarkMode}

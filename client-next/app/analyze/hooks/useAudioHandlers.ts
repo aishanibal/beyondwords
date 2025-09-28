@@ -1,7 +1,7 @@
 import { useRef, useState, useCallback } from 'react';
 import { processAudioWithPipeline } from '../services/audioService';
 import { saveMessageToBackend } from '../services/conversationService';
-import { playTTSAudio, getTTSText } from '../services/audioService';
+import { getTTSText } from '../services/audioService';
 import { ChatMessage } from '../types/analyze';
 import { TTS_TIMEOUTS } from '../config/constants';
 import { useTTS } from './useTTS';
@@ -37,7 +37,7 @@ export const useAudioHandlers = (
   const [manualRecording, setManualRecording] = useState(false);
 
   // Use TTS hook for TTS functionality
-  const { generateTTSForText } = useTTS();
+  const { generateTTSForText, playTTSAudio } = useTTS();
 
   // Update autoSpeakRef when autoSpeak changes
   autoSpeakRef.current = autoSpeak;
@@ -494,7 +494,7 @@ export const useAudioHandlers = (
     manualRecording,
     handleStartRecording,
     handleStopRecording,
-    handlePlayTTS,
+    playTTSAudio,
     handlePlayExistingTTS,
     recognitionRef,
     mediaRecorderRef,
