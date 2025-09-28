@@ -133,6 +133,7 @@ export const useMessageInteractions = (language: string) => {
     // Setters
     setShowDetailedBreakdown,
     setShowShortFeedback,
-    setShowQuickTranslations
+    setShowQuickTranslations,
+    setQuickTranslations
   };
 };

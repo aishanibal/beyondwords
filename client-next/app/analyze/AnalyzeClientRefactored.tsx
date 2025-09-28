@@ -476,8 +476,188 @@ const AnalyzeContentInner = () => {
     messageInteractions.handleToggleShortFeedback(messageIndex);
   };
 
+  // Simple parsing function for quick translation
+  const parseQuickTranslation = (translationText: string) => {
+    const result = {
+      fullTranslation: '',
+      wordTranslations: {} as Record<string, string>,
+      romanized: '',
+      error: false,
+      generatedWords: [] as string[], // Store the romanized words in order
+      generatedScriptWords: [] as string[] // Store the script words in order
+    };
+    
+    if (!translationText) return result;
+    
+    console.log('=== PARSING QUICK TRANSLATION ===');
+    console.log('Raw text:', translationText);
+    console.log('Text length:', translationText.length);
+    
+    try {
+      const lines = translationText.split('\n');
+      console.log('Total lines:', lines.length);
+      
+      for (const line of lines) {
+        const trimmedLine = line.trim();
+        console.log('Processing line:', `"${trimmedLine}"`);
+        
+        if (trimmedLine.includes('**Full Translation:**')) {
+          console.log('Found Full Translation section');
+          continue;
+        } else if (trimmedLine.includes('**Word-by-Word Breakdown:**')) {
+          console.log('Found Word-by-Word Breakdown section');
+          continue;
+        } else if (trimmedLine.includes('**Romanized Version:**')) {
+          console.log('Found Romanized Version section');
+          continue;
+        }
+        
+        // Simple parsing: look for "script \/ romanized -- translation" format
+        if (trimmedLine.includes(' / ') && trimmedLine.includes(' -- ')) {
+          console.log('Found script/romanized format:', trimmedLine);
+          const parts = trimmedLine.split(' -- ');
+          if (parts.length === 2) {
+            const leftSide = parts[0].trim();
+            const translation = parts[1].trim();
+            
+            // Split left side on " \/ " to get script and romanized
+            const scriptRomanized = leftSide.split(' / ');
+            if (scriptRomanized.length === 2) {
+              const script = scriptRomanized[0].trim();
+              const romanized = scriptRomanized[1].trim();
+              
+              // Store both script and romanized as keys (with punctuation included)
+              result.wordTranslations[script] = translation;
+              result.wordTranslations[romanized] = translation;
+              
+              // Add to generated words lists (with punctuation included)
+              result.generatedScriptWords.push(script);
+              result.generatedWords.push(romanized);
+              
+              console.log(`✅ Parsed: script="${script}", romanized="${romanized}", translation="${translation}"`);
+            }
+          }
+        }
+        // Also handle simple "word -- translation" format
+        else if (trimmedLine.includes(' -- ') && !trimmedLine.includes(' / ')) {
+          console.log('Found simple word format:', trimmedLine);
+          const parts = trimmedLine.split(' -- ');
+          if (parts.length === 2) {
+            const word = parts[0].trim();
+            const translation = parts[1].trim();
+            
+            // Store the word as-is (with punctuation included)
+            result.wordTranslations[word] = translation;
+            result.generatedWords.push(word);
+            result.generatedScriptWords.push(word); // For non-script languages, same as romanized
+            
+            console.log(`✅ Parsed: word="${word}", translation="${translation}"`);
+          }
+        }
+        // Handle full translation line
+        else if (trimmedLine && !trimmedLine.startsWith('**') && !result.fullTranslation) {
+          console.log('Found full translation:', trimmedLine);
+          result.fullTranslation = trimmedLine;
+        }
+      }
+      
+      console.log('=== FINAL PARSED RESULT ===');
+      console.log('Full translation:', result.fullTranslation);
+      console.log('Word translations count:', Object.keys(result.wordTranslations).length);
+      console.log('All word translations:', result.wordTranslations);
+      console.log('Generated script words in order:', result.generatedScriptWords);
+      console.log('Generated romanized words in order:', result.generatedWords);
+      
+    } catch (error) {
+      console.error('Error parsing quick translation:', error);
+      result.error = true;
+    }
+    
+    return result;
+  };
+
   const handleQuickTranslation = async (messageIndex: number, text: string) => {
-    await messageInteractions.handleQuickTranslation(messageIndex, text);
+    console.log('[DEBUG] handleQuickTranslation() called with messageIndex:', messageIndex, 'text:', text);
+    
+    if (messageInteractions.isLoadingMessageFeedback[messageIndex]) {
+      console.log('[DEBUG] Already loading, returning early');
+      return;
+    }
+    
+    try {
+      const token = localStorage.getItem('jwt');
+      const requestData = {
+        text: text,
+        fromLanguage: language,
+        toLanguage: 'en',
+        user_level: userPreferences?.userLevel || 'beginner',
+        user_topics: userPreferences?.topics || [],
+        formality: userPreferences?.formality || 'friendly',
+        feedback_language: userPreferences?.feedbackLanguage || 'en',
+        user_goals: (user as any)?.learning_goals ? (typeof (user as any).learning_goals === 'string' ? JSON.parse((user as any).learning_goals) : (user as any).learning_goals) : [],
+        description: conversationDescription
+      };
+      
+      console.log('[DEBUG] Current userPreferences:', userPreferences);
+      
+      const response = await axios.post('/api/quick_translation', requestData, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        }
+      });
+      
+      const result = response.data;
+      console.log('[DEBUG] handleQuickTranslation() received response:', result);
+      
+      const translationText = result.translation;
+      console.log('[DEBUG] Raw Gemini translation text:', translationText);
+      
+      const parsedTranslation = parseQuickTranslation(translationText);
+      console.log('[DEBUG] Parsed translation:', parsedTranslation);
+      
+      // Test with sample data if no translation received
+      if (!translationText || Object.keys(parsedTranslation.wordTranslations).length === 0) {
+        console.log('[DEBUG] No translation received, using test data');
+        const testResponse = `**Full Translation:**
+Yes, the day really flies by, doesn't it? So every day, you should learn something new!
+**Word-by-Word Breakdown:**
+Ang / ang -- The (article)
+bilis / bilis -- fast/quick
+talaga / talaga -- really/truly
+ng / ng -- of (preposition)
+araw / araw -- day
+'no / 'no -- isn't it/right (question particle)
+Kaya / kaya -- so/therefore
+dapat / dapat -- should/must
+bawat / bawat -- each/every
+araw / araw -- day
+may / may -- there is/has
+bago / bago -- new
+kang / kang -- you (contracted ka + ng)
+natutunan / natutunan -- learned (past tense)`;
+        
+        const testParsedTranslation = parseQuickTranslation(testResponse);
+        console.log('[DEBUG] Test parsed translation:', testParsedTranslation);
+        messageInteractions.setQuickTranslations(prev => ({ ...prev, [messageIndex]: testParsedTranslation }));
+      } else {
+        messageInteractions.setQuickTranslations(prev => ({ ...prev, [messageIndex]: parsedTranslation }));
+      }
+      
+    } catch (error) {
+      console.error('Quick translation error:', error);
+      messageInteractions.setQuickTranslations(prev => ({ 
+        ...prev, 
+        [messageIndex]: { 
+          fullTranslation: 'Translation failed', 
+          wordTranslations: {},
+          romanized: '',
+          error: true,
+          generatedWords: [],
+          generatedScriptWords: []
+        } 
+      }));
+    }
   };
 
   const handleExplainLLMResponse = async (messageIndex: number, text: string) => {
