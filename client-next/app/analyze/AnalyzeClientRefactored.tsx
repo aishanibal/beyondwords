@@ -19,7 +19,6 @@ import ChatMessageItem from './ChatMessageItem';
 import AnalyzeLayout from './components/AnalyzeLayout';
 import MainContentArea from './components/MainContentArea';
 import ChatMessagesContainer from './components/ChatMessagesContainer';
-import RecordingControls from './components/RecordingControls';
 import SuggestionCarousel from './components/SuggestionCarousel';
 import RightPanel from './components/RightPanel';
 import ProgressModal from './components/ProgressModal';
@@ -650,7 +649,18 @@ const AnalyzeContentInner = () => {
         explainLLMResponse={explainLLMResponse}
         renderClickableMessage={renderClickableMessage}
       >
-        <MainContentArea isDarkMode={isDarkMode}>
+        <MainContentArea 
+          isDarkMode={isDarkMode}
+          isRecording={audioHandlers.isRecording}
+          isProcessing={isProcessing}
+          onStartRecording={audioHandlers.handleStartRecording}
+          onStopRecording={audioHandlers.handleStopRecording}
+          autoSpeak={autoSpeak}
+          setAutoSpeak={setAutoSpeak}
+          enableShortFeedback={enableShortFeedback}
+          setEnableShortFeedback={setEnableShortFeedback}
+          onEndChat={handleEndChat}
+        >
           <ChatMessagesContainer
             chatHistory={chatHistory}
             isDarkMode={isDarkMode}
@@ -711,18 +721,6 @@ const AnalyzeContentInner = () => {
             />
           )}
           
-        <RecordingControls
-                  isDarkMode={isDarkMode}
-            isRecording={audioHandlers.isRecording}
-            isProcessing={isProcessing}
-                    onStartRecording={audioHandlers.handleStartRecording}
-                    onStopRecording={audioHandlers.handleStopRecording}
-            autoSpeak={autoSpeak}
-            setAutoSpeak={setAutoSpeak}
-            enableShortFeedback={enableShortFeedback}
-            setEnableShortFeedback={setEnableShortFeedback}
-            onEndChat={handleEndChat}
-          />
         </MainContentArea>
       </AnalyzeLayout>
 

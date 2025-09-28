@@ -70,14 +70,13 @@ const AnalyzeLayout: React.FC<AnalyzeLayoutProps> = ({
       background: isDarkMode 
         ? 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%)'
         : 'linear-gradient(135deg, #f9f6f4 0%, #f5f1ec 50%, #e8e0d8 100%)',
-      padding: '0arem 0.5rem 2rem 0.5rem',
+      padding: '0.5rem 0.5rem 0 0.5rem',
       gap: '0.5rem',
       transition: 'all 0.15s ease',
       fontFamily: 'Montserrat, Arial, sans-serif',
       position: 'relative',
       overflow: 'hidden',
-      boxSizing: 'border-box',
-      marginTop: '6rem'
+      boxSizing: 'border-box'
     }}>
       
       {/* TTS Debug Panel */}
