@@ -22,6 +22,7 @@ import ChatMessagesContainer from './components/ChatMessagesContainer';
 import SuggestionCarousel from './components/SuggestionCarousel';
 import RightPanel from './components/RightPanel';
 import ProgressModal from './components/ProgressModal';
+import WordExplanationPopup from './components/WordExplanationPopup';
 
 // Import hooks
 import { usePersistentChatHistory } from './hooks/useChatHistory';
@@ -304,6 +305,30 @@ const AnalyzeContentInner = () => {
       // Topics are now handled through userPreferences
     }
   }, [urlTopics]);
+
+  // Add global click handler for word clicks and popup management
+  useEffect(() => {
+    // Add click handler to close popup when clicking outside
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      
+      if (target && target.closest('[data-popup="true"]')) {
+        return; // Don't hide if clicking on popup
+      }
+      
+      if (target && target.closest('[data-clickable-word="true"]')) {
+        return; // Don't hide if clicking on a word
+      }
+      
+      setActivePopup(null);
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   // Handle persona data when using a persona - from original
   useEffect(() => {
@@ -714,6 +739,17 @@ natutunan / natutunan -- learned (past tense)`;
     return renderClickableMessage(message, messageIndex, translation, setActivePopup, isDarkMode, userPreferences, language);
   };
 
+  // Wrapper function for playTTS with cacheKey parameter
+  const playTTSWrapper = (text: string, language: string, cacheKey: string) => {
+    return audioHandlers.playTTSAudio(text, language, cacheKey);
+  };
+
+  // Wrapper function for playTTS with only 2 parameters (for ChatMessagesContainer)
+  const playTTSWrapper2 = (text: string, language: string) => {
+    const cacheKey = `manual_tts_${Date.now()}`;
+    return audioHandlers.playTTSAudio(text, language, cacheKey);
+  };
+
   // Handle end chat functionality
   const handleEndChat = async () => {
     console.log('🏁 [END_CHAT] End chat initiated');
@@ -926,7 +962,7 @@ natutunan / natutunan -- learned (past tense)`;
               onToggleShortFeedback={handleToggleShortFeedback}
               onQuickTranslation={handleQuickTranslation}
               onExplainLLMResponse={handleExplainLLMResponse}
-            onPlayTTS={audioHandlers.handlePlayTTS}
+            onPlayTTS={playTTSWrapper2}
             onPlayExistingTTS={audioHandlers.handlePlayExistingTTS}
             translations={translations}
             isTranslating={isTranslating}
@@ -1007,6 +1043,14 @@ natutunan / natutunan -- learned (past tense)`;
           setProgressData(null);
         }}
         progressData={progressData}
+      />
+
+      {/* Word Explanation Popup */}
+      <WordExplanationPopup
+        activePopup={activePopup}
+        isDarkMode={isDarkMode}
+        quickTranslations={messageInteractions.quickTranslations}
+        feedbackExplanations={feedbackExplanations}
       />
     </>
   );
