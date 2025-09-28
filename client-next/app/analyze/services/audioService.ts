@@ -39,6 +39,7 @@ export const getAIResponse = async (
   user?: any
 ) => {
   try {
+    console.log('🔍 [AI_RESPONSE] Getting AI response for transcription:', transcription);
     const token = localStorage.getItem('jwt');
     
     const aiResponseData = {
@@ -51,6 +52,8 @@ export const getAIResponse = async (
       formality: userPreferences?.formality || 'neutral',
       feedback_language: userPreferences?.feedbackLanguage || 'en'
     };
+    
+    console.log('🔍 [AI_RESPONSE] Request data:', aiResponseData);
 
     const aiResponseResponse = await axios.post('/api/ai_response', aiResponseData, {
       headers: {
@@ -59,10 +62,13 @@ export const getAIResponse = async (
       }
     });
     
+    console.log('🔍 [AI_RESPONSE] Response received:', aiResponseResponse.data);
+    
     const aiResponse = aiResponseResponse.data?.response || 
                       aiResponseResponse.data?.ai_response || 
                       aiResponseResponse.data?.message;
     
+    console.log('🔍 [AI_RESPONSE] Extracted AI response:', aiResponse);
     return aiResponse;
   } catch (error) {
     console.error('Error getting AI response:', error);
@@ -140,8 +146,15 @@ export const processAudioWithPipeline = async (
   user?: any
 ) => {
   try {
+    console.log('🔍 [PIPELINE] Starting audio processing pipeline...');
+    console.log('🔍 [PIPELINE] Audio blob size:', audioBlob.size, 'bytes');
+    console.log('🔍 [PIPELINE] Language:', language);
+    console.log('🔍 [PIPELINE] Chat history length:', chatHistory.length);
+    
     // Step 1: Get transcription
+    console.log('🔍 [PIPELINE] Step 1: Getting transcription...');
     const transcription = await processAudioTranscription(audioBlob, language);
+    console.log('🔍 [PIPELINE] Transcription received:', transcription);
     
     // Generate romanized text for user messages in script languages
     let userRomanizedText = '';
@@ -165,8 +178,11 @@ export const processAudioWithPipeline = async (
     }
     
     // Step 3: Get AI response
+    console.log('🔍 [PIPELINE] Step 3: Getting AI response...');
     const updatedChatHistory = [...chatHistory, userMessage];
+    console.log('🔍 [PIPELINE] Updated chat history length:', updatedChatHistory.length);
     const aiResponse = await getAIResponse(transcription, updatedChatHistory, language, userPreferences, user);
+    console.log('🔍 [PIPELINE] AI response received:', aiResponse);
     
     // Format AI response
     let formattedResponse: { mainText: string; romanizedText?: string } | null = null;
@@ -183,14 +199,17 @@ export const processAudioWithPipeline = async (
       isFromOriginalConversation: false
     } : null;
     
-    return {
+    const result = {
       userMessage,
       aiMessage,
       shortFeedback,
       transcription
     };
+    
+    console.log('🔍 [PIPELINE] Pipeline completed successfully:', result);
+    return result;
   } catch (error) {
-    console.error('Error in audio processing pipeline:', error);
+    console.error('🔍 [PIPELINE] Error in audio processing pipeline:', error);
     throw error;
   }
 };
