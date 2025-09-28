@@ -199,9 +199,7 @@ const AnalyzeContentInner = () => {
   const [showCorrectedVersions, setShowCorrectedVersions] = useState<Record<number, boolean>>({});
   const [isLoadingMessageFeedback, setIsLoadingMessageFeedback] = useState<Record<number, boolean>>({});
 
-  // Quick translations state
-  const [quickTranslations, setQuickTranslations] = useState<Record<number, any>>({});
-  const [showQuickTranslations, setShowQuickTranslations] = useState<Record<number, boolean>>({});
+  // Quick translations state - now handled by messageInteractions hook
 
   // User preferences state
   const [userPreferences, setUserPreferences] = useState<{
@@ -474,6 +472,9 @@ const AnalyzeContentInner = () => {
   const handleExplainLLMResponse = async (messageIndex: number, text: string) => {
     await messageInteractions.handleExplainLLMResponse(messageIndex, text);
     
+    // Also trigger quick translation
+    await messageInteractions.handleQuickTranslation(messageIndex, text);
+    
     // Also update the global LLM breakdown for the left panel
     try {
       const explanation = await explainLLMResponse(messageIndex, text, language);
@@ -649,7 +650,7 @@ const AnalyzeContentInner = () => {
         activePopup={activePopup}
         // Left panel content props
         shortFeedback={shortFeedback}
-        quickTranslations={quickTranslations}
+        quickTranslations={messageInteractions.quickTranslations}
         showQuickTranslation={showQuickTranslation}
         setShowQuickTranslation={setShowQuickTranslation}
         llmBreakdown={llmBreakdown}
