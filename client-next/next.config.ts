@@ -28,6 +28,10 @@ const nextConfig: NextConfig = {
         destination: `${backendUrl}/api/auth/:path*`, // Express backend
       },
       {
+        source: '/api/auth/exchange',
+        destination: `${backendUrl}/auth/exchange`, // Express backend (note: no /api prefix)
+      },
+      {
         source: '/api/messages/:path*',
         destination: `${backendUrl}/api/messages/:path*`, // Express backend
       },
