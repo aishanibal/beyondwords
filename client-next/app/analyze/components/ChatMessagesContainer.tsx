@@ -307,7 +307,7 @@ const ChatMessagesContainer: React.FC<ChatMessagesContainerProps> = ({
                   quickTranslation={onQuickTranslation}
                   handleSuggestionButtonClick={handleSuggestionButtonClick}
                   isLoadingSuggestions={isLoadingSuggestions}
-                  isProcessing={false}
+                  isProcessing={isProcessing}
                   playExistingTTS={onPlayExistingTTS}
                   showCorrectedVersions={showCorrectedVersions}
                   extractCorrectedVersion={() => null}
