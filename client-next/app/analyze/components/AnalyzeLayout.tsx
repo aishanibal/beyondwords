@@ -80,7 +80,7 @@ const AnalyzeLayout: React.FC<AnalyzeLayoutProps> = ({
     }}>
       
       {/* TTS Debug Panel */}
-      {ttsDebugInfo && (
+      {false && ttsDebugInfo && (
         <div style={{
           position: 'fixed',
           top: '7rem',
@@ -244,7 +244,7 @@ const AnalyzeLayout: React.FC<AnalyzeLayoutProps> = ({
       )}
       
       {/* Romanization Debug Panel */}
-      {romanizationDebugInfo && (
+      {false && romanizationDebugInfo && (
         <div style={{
           position: 'fixed',
           top: romanizationDebugInfo.fallbackUsed ? '12rem' : '7rem',
