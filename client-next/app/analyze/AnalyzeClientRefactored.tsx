@@ -303,7 +303,7 @@ const AnalyzeContentInner = () => {
     }
   }, [urlTopics]);
 
-  // Load conversation when URL conversation ID is available
+al  // Load conversation when URL conversation ID is available
   useEffect(() => {
     if (urlConversationId && user && !conversationId) {
       console.log('[CONVERSATION_LOAD] Loading conversation from URL:', urlConversationId);
@@ -1062,26 +1062,19 @@ natutunan / natutunan -- learned (past tense)`;
               return result ? { ...result, romanizedText: result.romanizedText || '' } : null;
             }}
             renderFormattedText={renderFormattedText}
+            // Suggestion carousel props
+            showSuggestionCarousel={suggestions.showSuggestionCarousel}
+            suggestionMessages={suggestions.suggestionMessages}
+            currentSuggestionIndex={suggestions.currentSuggestionIndex}
+            onNavigateSuggestion={suggestions.navigateSuggestion}
+            onExplainSuggestion={suggestions.explainSuggestion}
+            onPlaySuggestionTTS={suggestions.playSuggestionTTS}
+            isTranslatingSuggestion={suggestions.isTranslatingSuggestion}
+            showSuggestionTranslations={suggestions.showSuggestionTranslations}
+            suggestionTranslations={suggestions.suggestionTranslations}
+            isProcessing={isProcessing}
           />
           
-          {/* Suggestion Carousel */}
-          {!isProcessing && suggestions.showSuggestionCarousel && suggestions.suggestionMessages.length > 0 && (
-            <SuggestionCarousel
-              isDarkMode={isDarkMode}
-              suggestionMessages={suggestions.suggestionMessages}
-              currentSuggestionIndex={suggestions.currentSuggestionIndex}
-              onNavigateSuggestion={suggestions.navigateSuggestion}
-              onExplainSuggestion={suggestions.explainSuggestion}
-              onPlaySuggestionTTS={suggestions.playSuggestionTTS}
-              isTranslatingSuggestion={suggestions.isTranslatingSuggestion}
-              showSuggestionTranslations={suggestions.showSuggestionTranslations}
-              suggestionTranslations={suggestions.suggestionTranslations}
-              isGeneratingTTS={isGeneratingTTS}
-              isPlayingTTS={isPlayingTTS}
-              userPreferences={userPreferences}
-              language={language}
-            />
-          )}
           
         </MainContentArea>
       </AnalyzeLayout>
