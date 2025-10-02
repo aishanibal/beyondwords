@@ -303,6 +303,14 @@ const AnalyzeContentInner = () => {
     }
   }, [urlTopics]);
 
+  // Load conversation when URL conversation ID is available
+  useEffect(() => {
+    if (urlConversationId && user && !conversationId) {
+      console.log('[CONVERSATION_LOAD] Loading conversation from URL:', urlConversationId);
+      conversationManagement.loadConversation(urlConversationId);
+    }
+  }, [urlConversationId, user, conversationId, conversationManagement]);
+
   // Add global click handler for word clicks and popup management
   useEffect(() => {
     // Add click handler to close popup when clicking outside
