@@ -1954,6 +1954,122 @@ app.post('/api/quick_translation', authenticateJWT, async (req: Request, res: Re
   }
 });
 
+// AI Response endpoint (for frontend compatibility)
+app.post('/api/ai_response', authenticateJWT, async (req: Request, res: Response) => {
+  try {
+    console.log('🔍 [AI_RESPONSE] POST /api/ai_response called');
+    console.log('🔍 [AI_RESPONSE] Request body:', req.body);
+    console.log('🔍 [AI_RESPONSE] User ID:', req.user?.userId);
+    
+    const { transcription, chat_history, language, user_level, user_topics, formality, feedback_language, user_goals } = req.body;
+    
+    if (!transcription) {
+      return res.status(400).json({ error: 'No transcription provided' });
+    }
+    
+    // Call Python API for AI response
+    try {
+      const pythonApiUrl = (process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com').replace(/\/$/, '');
+      const pythonRequestData = {
+        transcription: transcription,
+        chat_history: chat_history || [],
+        language: language || 'en',
+        user_level: user_level || 'beginner',
+        user_topics: user_topics || [],
+        formality: formality || 'friendly',
+        feedback_language: feedback_language || 'en',
+        user_goals: user_goals || []
+      };
+      
+      console.log('🔍 [AI_RESPONSE] Calling Python API:', {
+        url: `${pythonApiUrl}/ai_response`,
+        data: pythonRequestData
+      });
+      
+      const pythonResponse = await axios.post(`${pythonApiUrl}/ai_response`, pythonRequestData, {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 30000
+      });
+      
+      console.log('🔍 [AI_RESPONSE] Python AI response received:', {
+        status: pythonResponse.status,
+        data: pythonResponse.data
+      });
+      res.json(pythonResponse.data);
+    } catch (pythonError: any) {
+      console.error('🔍 [AI_RESPONSE] Python API not available:', pythonError.message);
+      
+      // Fallback response if Python API fails
+      res.json({
+        response: "I'm sorry, I'm having trouble processing your request right now. Please try again later.",
+        error: "Python API not available"
+      });
+    }
+  } catch (error: any) {
+    console.error('🔍 [AI_RESPONSE] AI response error:', error);
+    res.status(500).json({ error: 'Error getting AI response', details: error.message });
+  }
+});
+
+// Conversation summary endpoint (for frontend compatibility)
+app.post('/api/conversation-summary', authenticateJWT, async (req: Request, res: Response) => {
+  try {
+    console.log('🔍 [CONVERSATION_SUMMARY] POST /api/conversation-summary called');
+    console.log('🔍 [CONVERSATION_SUMMARY] Request body:', req.body);
+    console.log('🔍 [CONVERSATION_SUMMARY] User ID:', req.user?.userId);
+    
+    const { messages, language, topics, formality, conversation_id } = req.body;
+    
+    if (!messages || !Array.isArray(messages)) {
+      return res.status(400).json({ error: 'No messages provided' });
+    }
+    
+    // Call Python API for conversation summary
+    try {
+      const pythonApiUrl = (process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com').replace(/\/$/, '');
+      const pythonRequestData = {
+        messages: messages,
+        language: language || 'en',
+        topics: topics || [],
+        formality: formality || 'friendly',
+        conversation_id: conversation_id || null
+      };
+      
+      console.log('🔍 [CONVERSATION_SUMMARY] Calling Python API:', {
+        url: `${pythonApiUrl}/conversation_summary`,
+        data: pythonRequestData
+      });
+      
+      const pythonResponse = await axios.post(`${pythonApiUrl}/conversation_summary`, pythonRequestData, {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 30000
+      });
+      
+      console.log('🔍 [CONVERSATION_SUMMARY] Python conversation summary received:', {
+        status: pythonResponse.status,
+        data: pythonResponse.data
+      });
+      res.json(pythonResponse.data);
+    } catch (pythonError: any) {
+      console.error('🔍 [CONVERSATION_SUMMARY] Python API not available:', pythonError.message);
+      
+      // Fallback response if Python API fails
+      res.json({
+        success: false,
+        summary: {
+          title: "Conversation Summary",
+          synopsis: "Summary generation is temporarily unavailable. Please try again later.",
+          learningGoals: []
+        },
+        error: "Python API not available"
+      });
+    }
+  } catch (error: any) {
+    console.error('🔍 [CONVERSATION_SUMMARY] Conversation summary error:', error);
+    res.status(500).json({ error: 'Error generating conversation summary', details: error.message });
+  }
+});
+
 // Serve uploads directory statically for TTS audio with proper CORS headers
 app.use('/uploads', (req, res, next) => {
   // Set CORS headers for audio files
