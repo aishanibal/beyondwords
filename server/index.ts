@@ -80,10 +80,23 @@ app.use(express.json());
 app.use(cors({ 
   origin: [
     'http://localhost:3000',
-    'https://speakbeyondwords-sigma.vercel.app'
+    'https://speakbeyondwords-sigma.vercel.app',
+    'https://speakbeyondwords-sigma.vercel.app/',
+    'https://speakbeyondwords-sigma.vercel.app/*'
   ], 
-  credentials: false 
+  credentials: false,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
 }));
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    message: 'BeyondWords Express server is running'
+  });
+});
 
 // Multer configuration for file uploads
 const storage: StorageEngine = multer.diskStorage({
