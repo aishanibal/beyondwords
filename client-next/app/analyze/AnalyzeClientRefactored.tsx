@@ -30,7 +30,6 @@ import { useAudioRecording } from './hooks/useAudioRecording';
 import { useTTS } from './hooks/useTTS';
 import { useTranslation } from './hooks/useTranslation';
 import { useConversation } from './hooks/useConversation';
-import { useAudioProcessing } from './hooks/useAudioProcessing';
 import { useFeedback } from './hooks/useFeedback';
 import { useSuggestions } from './hooks/useSuggestions';
 import { useAudioHandlers } from './hooks/useAudioHandlers';
@@ -235,7 +234,6 @@ const AnalyzeContentInner = () => {
   const tts = useTTS();
   const translation = useTranslation();
   const conversation = useConversation(user as any);
-  const audioProcessing = useAudioProcessing();
   const feedback = useFeedback();
   
   // Use suggestions hook
