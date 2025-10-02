@@ -305,7 +305,7 @@ export const useSuggestions = (
         [index]: false
       }));
     }
-  }, [language]);
+  }, [language, chatHistory, userPreferences, user]);
 
   // Play suggestion TTS - implementation
   const playSuggestionTTS = useCallback(async (suggestion: any, index: number) => {
