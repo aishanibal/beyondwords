@@ -44,3 +44,4 @@ const InterruptMessage: React.FC<InterruptMessageProps> = ({
 };
 
 export default InterruptMessage;
+

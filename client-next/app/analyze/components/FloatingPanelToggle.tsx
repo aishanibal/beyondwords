@@ -43,3 +43,4 @@ const FloatingPanelToggle: React.FC<FloatingPanelToggleProps> = ({
 };
 
 export default FloatingPanelToggle;
+

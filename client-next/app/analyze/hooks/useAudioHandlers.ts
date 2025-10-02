@@ -119,7 +119,7 @@ export const useAudioHandlers = (
     console.log('🔍 [DEBUG] Current recording state - isRecording:', isRecording, 'manualRecording:', manualRecording);
     
     // Check if the first parameter is an event object (from button click)
-    if (interrupted && typeof interrupted === 'object' && interrupted.type === 'click') {
+    if (interrupted && typeof interrupted === 'object' && (interrupted as any)?.type === 'click') {
       console.log('🔍 [DEBUG] Received click event, treating as normal stop (not interrupted)');
       interrupted = false; // Treat click events as normal stops, not interruptions
     }
@@ -308,6 +308,33 @@ export const useAudioHandlers = (
           });
           return updated;
         });
+
+        // Play TTS for the initial fallback message so the first message speaks
+        try {
+          const fallbackChatMessage: ChatMessage = {
+            sender: 'AI',
+            text: fallbackMessage.text,
+            romanizedText: fallbackMessage.romanizedText,
+            timestamp: fallbackMessage.timestamp,
+            isFromOriginalConversation: false
+          };
+          const ttsText = getTTSText(
+            fallbackChatMessage,
+            userPreferences?.romanizationDisplay || 'both',
+            language
+          );
+          const cacheKey = `ai_message_fallback_${Date.now()}`;
+          console.log('🔍 [AI_TTS] Playing TTS for fallback AI message');
+          playTTSAudio(ttsText, language, cacheKey).catch(error => {
+            console.error('🔍 [AI_TTS] Error playing fallback AI TTS:', error);
+          });
+
+          if (autoSpeak) {
+            setAiTTSQueued({ text: ttsText, language, cacheKey });
+          }
+        } catch (e) {
+          console.error('🔍 [AI_TTS] Failed to trigger fallback TTS:', e);
+        }
       }
       
     } catch (error: unknown) {

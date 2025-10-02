@@ -849,6 +849,8 @@ natutunan / natutunan -- learned (past tense)`;
             userPreferences?.formality || 'friendly',
             conversationId || ''
           );
+          // After summary generation, navigate back to dashboard so cards refresh
+          router.push('/dashboard');
         } else {
           console.log('🏁 [END_CHAT] No chat history in existing conversation, navigating to dashboard');
           router.push('/dashboard');
@@ -884,8 +886,8 @@ natutunan / natutunan -- learned (past tense)`;
         if (conversationId) {
           try {
             await axios.patch(`/api/conversations/${conversationId}`, {
-              usesPersona: true,
-              personaId: response.data.persona.id
+              uses_persona: true,
+              persona_id: response.data.persona.id
             }, {
               headers: await getAuthHeaders()
             });
@@ -925,6 +927,7 @@ natutunan / natutunan -- learned (past tense)`;
               userPreferences?.formality || 'friendly',
               conversationId || ''
             );
+            router.push('/dashboard');
           } else {
             router.push('/dashboard');
           }
@@ -1103,6 +1106,8 @@ natutunan / natutunan -- learned (past tense)`;
         onClose={() => {
           setShowProgressModal(false);
           setProgressData(null);
+          // Navigate back to dashboard after closing progress modal
+          router.push('/dashboard');
         }}
         progressData={progressData}
       />
