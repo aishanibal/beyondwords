@@ -275,9 +275,9 @@ const ChatMessagesContainer: React.FC<ChatMessagesContainerProps> = ({
                   isDarkMode={isDarkMode}
                   isLastAIMessage={isLastAIMessage}
                   isLastMessage={isLastMessage}
-                  toggleShortFeedback={() => {}}
-                  toggleDetailedFeedback={() => {}}
-                  generateTTSForText={() => {}}
+                  toggleShortFeedback={onToggleShortFeedback}
+                  toggleDetailedFeedback={onToggleDetailedFeedback}
+                  generateTTSForText={(text, language, cacheKey) => onPlayTTS(text, language)}
                   language={language}
                   userPreferences={{ romanizationDisplay }}
                   playTTS={onPlayTTS}

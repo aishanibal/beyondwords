@@ -663,42 +663,6 @@ const AnalyzeLayout: React.FC<AnalyzeLayoutProps> = ({
                 </div>
               )}
               
-              {/* Short Feedback Display */}
-              {shortFeedback && (
-                <div style={{
-                  background: isDarkMode 
-                    ? 'linear-gradient(135deg, rgba(195,141,148,0.15) 0%, rgba(195,141,148,0.08) 100%)'
-                    : 'linear-gradient(135deg, rgba(195,141,148,0.12) 0%, rgba(195,141,148,0.06) 100%)',
-                  color: isDarkMode ? 'var(--foreground)' : '#3e3e3e',
-                  padding: '1rem',
-                  fontSize: '0.85rem',
-                  lineHeight: 1.5,
-                  fontFamily: 'AR One Sans, Arial, sans-serif',
-                  fontWeight: 400,
-                  transition: 'background 0.3s ease, color 0.3s ease',
-                  flex: 1,
-                  overflowY: 'auto'
-                }}>
-                  <div style={{
-                    fontWeight: 600,
-                    fontSize: '1.1rem',
-                    marginBottom: '1rem',
-                    color: isDarkMode ? '#c38d94' : '#c38d94'
-                  }}>
-                    💡 AI Feedback
-                  </div>
-                  <div style={{
-                    background: isDarkMode ? '#334155' : '#f8f9fa',
-                    padding: '0.75rem',
-                    borderRadius: 8,
-                    fontSize: '0.85rem',
-                    lineHeight: '1.6',
-                    whiteSpace: 'pre-wrap'
-                  }}>
-                    {shortFeedback}
-                  </div>
-                </div>
-              )}
               
               {/* Default message when no content */}
               {!shortFeedback && Object.keys(quickTranslations).length === 0 && !showLlmBreakdown && (
