@@ -240,14 +240,23 @@ export const useConversationManagement = (
     // Set the initial AI message from the backend response
     if (aiMessage && (aiMessage as any).text && (aiMessage as any).text.trim()) {
       const formattedMessage = { mainText: (aiMessage as any).text, romanizedText: '' }; // Simplified for now
-      setChatHistory([{ 
+      const initialMessage = { 
         sender: 'AI', 
         text: formattedMessage.mainText, 
         romanizedText: formattedMessage.romanizedText,
         ttsUrl: (aiMessage as any).ttsUrl || null,
         timestamp: new Date(),
         isFromOriginalConversation: false // New conversation message
-      }]);
+      };
+      setChatHistory([initialMessage]);
+      
+      // Play TTS for the initial AI message automatically
+      if ((aiMessage as any).ttsUrl && (aiMessage as any).ttsUrl !== null) {
+        console.log('🔍 [INITIAL_TTS] Playing initial AI message TTS:', (aiMessage as any).ttsUrl);
+        // The TTS will be handled by the existing TTS system when the message is rendered
+      } else {
+        console.log('🔍 [INITIAL_TTS] No TTS URL provided for initial message, will generate TTS on demand');
+      }
     } else {
       console.log('🔍 [DEBUG] No AI message or empty text, setting default message');
       // Fallback: set a default AI message if none provided

@@ -303,7 +303,7 @@ const AnalyzeContentInner = () => {
     }
   }, [urlTopics]);
 
-al  // Load conversation when URL conversation ID is available
+ // Load conversation when URL conversation ID is available
   useEffect(() => {
     if (urlConversationId && user && !conversationId) {
       console.log('[CONVERSATION_LOAD] Loading conversation from URL:', urlConversationId);
@@ -431,6 +431,26 @@ al  // Load conversation when URL conversation ID is available
       setLanguage((user as any).selectedLanguage);
     }
   }, [(user as any)?.selectedLanguage, language]);
+
+  // Play TTS for initial AI message when page loads
+  useEffect(() => {
+    if (chatHistory.length > 0 && user && !isProcessing) {
+      const firstMessage = chatHistory[0];
+      if (firstMessage.sender === 'AI' && firstMessage.ttsUrl) {
+        console.log('🔍 [INITIAL_TTS] Playing TTS for initial AI message:', firstMessage.ttsUrl);
+        // Play the existing TTS URL
+        audioHandlers.handlePlayExistingTTS(firstMessage.ttsUrl);
+      } else if (firstMessage.sender === 'AI' && !firstMessage.ttsUrl) {
+        console.log('🔍 [INITIAL_TTS] Generating TTS for initial AI message without TTS URL');
+        // Generate TTS for the initial message
+        const ttsText = firstMessage.romanizedText || firstMessage.text;
+        const cacheKey = `initial_ai_message_${Date.now()}`;
+        audioHandlers.playTTSAudio(ttsText, language, cacheKey).catch(error => {
+          console.error('🔍 [INITIAL_TTS] Error playing initial AI TTS:', error);
+        });
+      }
+    }
+  }, [chatHistory, user, isProcessing, language, audioHandlers]);
 
 
 

@@ -208,6 +208,7 @@ export const useAudioHandlers = (
           }
           return msg;
         });
+        console.log('🔍 [DEBUG] Updated chat history after user message replacement:', updated);
         return updated;
       });
       
@@ -242,6 +243,7 @@ export const useAudioHandlers = (
         setChatHistory(prev => {
           const updated = prev.map((msg, index) => {
             if (msg.isProcessing && msg.sender === 'AI') {
+              console.log('🔍 [DEBUG] Found AI processing message, replacing with:', result.aiMessage!.text);
               return {
                 ...msg,
                 text: result.aiMessage!.text,
@@ -252,6 +254,7 @@ export const useAudioHandlers = (
             }
             return msg;
           });
+          console.log('🔍 [DEBUG] Updated chat history after AI message replacement:', updated);
           return updated;
         });
         

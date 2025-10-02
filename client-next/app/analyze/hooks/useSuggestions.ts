@@ -258,7 +258,7 @@ export const useSuggestions = (
     setShowSuggestionExplanations(false);
   }, []);
 
-  // Explain suggestion - placeholder implementation
+  // Explain suggestion - fixed implementation
   const explainSuggestion = useCallback(async (index: number, text: string) => {
     setIsTranslatingSuggestion(prev => ({
       ...prev,
@@ -268,8 +268,14 @@ export const useSuggestions = (
     try {
       const token = localStorage.getItem('jwt');
       const response = await axios.post('/api/explain_suggestion', {
-        suggestion: text,
-        language: language
+        suggestion_text: text,
+        chatHistory: chatHistory,
+        language: language,
+        user_level: userPreferences?.userLevel || 'beginner',
+        user_topics: userPreferences?.topics || [],
+        formality: userPreferences?.formality || 'neutral',
+        feedback_language: userPreferences?.feedbackLanguage || 'en',
+        user_goals: user?.learning_goals ? (typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : user.learning_goals) : []
       }, {
         headers: {
           'Content-Type': 'application/json',
