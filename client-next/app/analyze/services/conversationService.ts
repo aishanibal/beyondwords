@@ -189,17 +189,23 @@ export const generateConversationSummary = async (
       };
       
       // Update conversation title and synopsis
+      // Convert progress data to proper format for database
+      const progressData = {
+        goals: [], // We'll populate this from user's learning goals
+        percentages: summary.learningGoals
+      };
+      
       console.log('🔍 [CONVERSATION_SERVICE] Updating conversation with:', {
         conversationId,
         title: summary.title,
         synopsis: summary.synopsis,
-        progress_data: summary.learningGoals
+        progress_data: progressData
       });
       
       await axios.put(`/api/conversations/${conversationId}/title`, {
         title: summary.title,
         synopsis: summary.synopsis,
-        progress_data: summary.learningGoals
+        progress_data: progressData
       }, { headers });
       
       console.log('🔍 [CONVERSATION_SERVICE] Conversation updated successfully');

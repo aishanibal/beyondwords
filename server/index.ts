@@ -1396,26 +1396,43 @@ app.post('/api/conversations/:id/messages', optionalAuthenticateJWT as any, asyn
 app.put('/api/conversations/:id/title', optionalAuthenticateJWT as any, async (req: Request, res: Response) => {
   try {
     const { title, synopsis, progress_data } = req.body;
-    console.log('🔍 [UPDATE_TITLE] Updating conversation:', req.params.id, { title, synopsis, progress_data });
+    const conversationId = Number(req.params.id);
+    
+    console.log('🔍 [UPDATE_TITLE] Updating conversation:', conversationId, { 
+      title: title ? title.substring(0, 50) + '...' : null, 
+      synopsis: synopsis ? synopsis.substring(0, 100) + '...' : null, 
+      progress_data: progress_data 
+    });
     
     let changes = 0;
     
     // Update title if provided
     if (title) {
-      const titleResult = await updateConversationTitle(Number(req.params.id), title);
+      console.log('🔍 [UPDATE_TITLE] Updating title for conversation:', conversationId);
+      const titleResult = await updateConversationTitle(conversationId, title);
       changes += titleResult.changes;
+      console.log('🔍 [UPDATE_TITLE] Title updated successfully, changes:', titleResult.changes);
     }
     
     // Update synopsis if provided
     if (synopsis) {
-      const synopsisResult = await updateConversationSynopsis(Number(req.params.id), synopsis, progress_data);
+      console.log('🔍 [UPDATE_TITLE] Updating synopsis for conversation:', conversationId);
+      const synopsisResult = await updateConversationSynopsis(conversationId, synopsis, progress_data);
       changes += synopsisResult.changes;
+      console.log('🔍 [UPDATE_TITLE] Synopsis updated successfully, changes:', synopsisResult.changes);
     }
     
+    console.log('🔍 [UPDATE_TITLE] Total changes made:', changes);
     res.json({ success: true, changes });
   } catch (error: any) {
-    console.error('Update conversation title/synopsis error:', error);
-    res.status(500).json({ error: 'Failed to update conversation title/synopsis' });
+    console.error('🔍 [UPDATE_TITLE] Update conversation title/synopsis error:', error);
+    console.error('🔍 [UPDATE_TITLE] Error details:', {
+      message: error.message,
+      stack: error.stack,
+      conversationId: req.params.id,
+      body: req.body
+    });
+    res.status(500).json({ error: 'Failed to update conversation title/synopsis', details: error.message });
   }
 });
 
