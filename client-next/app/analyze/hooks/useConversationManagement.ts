@@ -169,8 +169,8 @@ export const useConversationManagement = (
 
         setUserProgress(updatedProgressObj);
         
-        // Show progress modal if there are level up events
-        if (levelUpEvents.length > 0) {
+        // Show progress modal if there are learning goals (regardless of level up events)
+        if (summary.learningGoals && summary.learningGoals.length > 0) {
           const percentages = currentProgressArray.map(p => p.percentage);
           const subgoalNames = currentProgressArray.map(progress => {
             const goal = LEARNING_GOALS.find(g => g.subgoals?.some(sg => sg.id === progress.subgoalId));

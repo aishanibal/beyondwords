@@ -1395,12 +1395,27 @@ app.post('/api/conversations/:id/messages', optionalAuthenticateJWT as any, asyn
 
 app.put('/api/conversations/:id/title', optionalAuthenticateJWT as any, async (req: Request, res: Response) => {
   try {
-    const { title } = req.body;
-    const result = await updateConversationTitle(Number(req.params.id), title);
-    res.json({ success: true, changes: result.changes });
+    const { title, synopsis, progress_data } = req.body;
+    console.log('🔍 [UPDATE_TITLE] Updating conversation:', req.params.id, { title, synopsis, progress_data });
+    
+    let changes = 0;
+    
+    // Update title if provided
+    if (title) {
+      const titleResult = await updateConversationTitle(Number(req.params.id), title);
+      changes += titleResult.changes;
+    }
+    
+    // Update synopsis if provided
+    if (synopsis) {
+      const synopsisResult = await updateConversationSynopsis(Number(req.params.id), synopsis, progress_data);
+      changes += synopsisResult.changes;
+    }
+    
+    res.json({ success: true, changes });
   } catch (error: any) {
-    console.error('Update conversation title error:', error);
-    res.status(500).json({ error: 'Failed to update conversation title' });
+    console.error('Update conversation title/synopsis error:', error);
+    res.status(500).json({ error: 'Failed to update conversation title/synopsis' });
   }
 });
 
