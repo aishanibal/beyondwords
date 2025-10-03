@@ -56,7 +56,6 @@ export const useSuggestions = (
   conversationId: string | null,
   userPreferences: any,
   chatHistory: any[],
-  isProcessing: boolean,
   formatScriptLanguageText: (text: string, language: string) => { mainText: string; romanizedText?: string }
 ): UseSuggestionsReturn => {
   // Suggestions state
@@ -156,7 +155,7 @@ export const useSuggestions = (
 
   // Handle suggestion button click - from original
   const handleSuggestionButtonClick = useCallback(async () => {
-    if (!user || isProcessing) return;
+    if (!user) return;
     
     console.log('🔍 [DEBUG] handleSuggestionButtonClick called');
     setIsLoadingSuggestions(true);
@@ -234,7 +233,7 @@ export const useSuggestions = (
     } finally {
       setIsLoadingSuggestions(false);
     }
-  }, [user, language, conversationId, userPreferences, chatHistory, isProcessing, formatScriptLanguageText]);
+  }, [user, language, conversationId, userPreferences, chatHistory, formatScriptLanguageText]);
 
   // Navigate suggestion carousel - from original
   const navigateSuggestion = useCallback((direction: 'prev' | 'next') => {

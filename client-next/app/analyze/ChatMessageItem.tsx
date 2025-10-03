@@ -92,7 +92,6 @@ interface ChatMessageItemProps {
   quickTranslation: (index: number, text: string) => void;
   handleSuggestionButtonClick: () => void;
   isLoadingSuggestions: boolean;
-  isProcessing: boolean;
   playExistingTTS: (url: string, cacheKey: string) => void;
   showCorrectedVersions: { [key: number]: boolean };
   extractCorrectedVersion: (feedback: string) => { mainText: string; romanizedText: string | null } | null;
@@ -120,7 +119,6 @@ const ChatMessageItem: React.FC<ChatMessageItemProps> = React.memo(({
   quickTranslation,
   handleSuggestionButtonClick,
   isLoadingSuggestions,
-  isProcessing,
   playExistingTTS,
   showCorrectedVersions,
   extractCorrectedVersion,
@@ -391,16 +389,16 @@ const ChatMessageItem: React.FC<ChatMessageItemProps> = React.memo(({
             {(isLastAIMessage || isLastMessage) && (
                 <button
                     onClick={handleSuggestionButtonClick}
-                    disabled={isLoadingSuggestions || isProcessing}
+                    disabled={isLoadingSuggestions}
                     style={{
                         padding: '0.3rem 0.7rem',
                         border: '1px solid var(--rose-primary)',
                         background: isDarkMode ? 'rgba(232,179,195,0.15)' : 'rgba(132,84,109,0.1)',
                         color: 'var(--rose-primary)',
                         fontSize: '0.7rem',
-                        cursor: (isLoadingSuggestions || isProcessing) ? 'not-allowed' : 'pointer',
+                        cursor: isLoadingSuggestions ? 'not-allowed' : 'pointer',
                         transition: 'all 0.3s ease',
-                        opacity: (isLoadingSuggestions || isProcessing) ? 0.6 : 1,
+                        opacity: isLoadingSuggestions ? 0.6 : 1,
                         fontWeight: 600,
                         fontFamily: 'Montserrat, Arial, sans-serif',
                         borderRadius: 8,
@@ -410,7 +408,7 @@ const ChatMessageItem: React.FC<ChatMessageItemProps> = React.memo(({
                     }}
                     title="Get conversation suggestions"
                 >
-                    {isLoadingSuggestions ? 'Loading...' : isProcessing ? 'Processing...' : '💡 Suggestions'}
+                    {isLoadingSuggestions ? 'Loading...' : '💡 Suggestions'}
                 </button>
             )}
           </>

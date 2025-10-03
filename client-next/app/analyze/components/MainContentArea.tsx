@@ -6,7 +6,6 @@ interface MainContentAreaProps {
   children: React.ReactNode;
   // Recording controls props
   isRecording: boolean;
-  isProcessing: boolean;
   onStartRecording: () => void;
   onStopRecording: () => void;
   autoSpeak: boolean;
@@ -20,7 +19,6 @@ const MainContentArea: React.FC<MainContentAreaProps> = ({
   isDarkMode,
   children,
   isRecording,
-  isProcessing,
   onStartRecording,
   onStopRecording,
   autoSpeak,
@@ -48,7 +46,6 @@ const MainContentArea: React.FC<MainContentAreaProps> = ({
       <RecordingControls
         isDarkMode={isDarkMode}
         isRecording={isRecording}
-        isProcessing={isProcessing}
         onStartRecording={onStartRecording}
         onStopRecording={onStopRecording}
         autoSpeak={autoSpeak}

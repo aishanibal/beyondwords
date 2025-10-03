@@ -243,7 +243,6 @@ const AnalyzeContentInner = () => {
     conversationId,
     userPreferences,
     chatHistory,
-    isProcessing,
     formatScriptLanguageText
   );
 
@@ -1027,7 +1026,6 @@ natutunan / natutunan -- learned (past tense)`;
         <MainContentArea 
           isDarkMode={isDarkMode}
           isRecording={audioHandlers.isRecording}
-          isProcessing={isProcessing}
           onStartRecording={audioHandlers.handleStartRecording}
           onStopRecording={audioHandlers.handleStopRecording}
           autoSpeak={autoSpeak}
@@ -1090,7 +1088,6 @@ natutunan / natutunan -- learned (past tense)`;
             isTranslatingSuggestion={suggestions.isTranslatingSuggestion}
             showSuggestionTranslations={suggestions.showSuggestionTranslations}
             suggestionTranslations={suggestions.suggestionTranslations}
-            isProcessing={isProcessing}
           />
           
           

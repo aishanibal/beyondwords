@@ -43,7 +43,6 @@ interface ChatMessagesContainerProps {
   isPlayingTTS: Record<string, boolean>;
   userPreferences: any;
   language: string;
-  isProcessing: boolean;
   ttsCache: Map<string, { url: string; timestamp: number }>;
   isLoadingMessageFeedback: Record<number, boolean>; // Loading state for message feedback
   romanizationDisplay: string;
@@ -307,7 +306,6 @@ const ChatMessagesContainer: React.FC<ChatMessagesContainerProps> = ({
                   quickTranslation={onQuickTranslation}
                   handleSuggestionButtonClick={handleSuggestionButtonClick}
                   isLoadingSuggestions={isLoadingSuggestions}
-                  isProcessing={isProcessing}
                   playExistingTTS={onPlayExistingTTS}
                   showCorrectedVersions={showCorrectedVersions}
                   extractCorrectedVersion={() => null}
@@ -319,7 +317,7 @@ const ChatMessagesContainer: React.FC<ChatMessagesContainerProps> = ({
         })()}
         
         {/* Suggestion Carousel - positioned after the last message */}
-        {!isProcessing && showSuggestionCarousel && suggestionMessages.length > 0 && (
+        {showSuggestionCarousel && suggestionMessages.length > 0 && (
           <div style={{
             position: 'absolute',
             top: `${totalHeight}px`,

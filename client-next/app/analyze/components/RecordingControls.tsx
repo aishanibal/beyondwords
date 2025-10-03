@@ -4,7 +4,6 @@ import { motion } from 'framer-motion';
 interface RecordingControlsProps {
   isDarkMode: boolean;
   isRecording: boolean;
-  isProcessing: boolean;
   onStartRecording: () => void;
   onStopRecording: () => void;
   autoSpeak: boolean;
@@ -17,7 +16,6 @@ interface RecordingControlsProps {
 const RecordingControls: React.FC<RecordingControlsProps> = ({
   isDarkMode,
   isRecording,
-  isProcessing,
   onStartRecording,
   onStopRecording,
   autoSpeak,
@@ -123,9 +121,8 @@ const RecordingControls: React.FC<RecordingControlsProps> = ({
         }}>
           <motion.button
             onClick={isRecording ? onStopRecording : onStartRecording}
-            disabled={isProcessing}
-            whileHover={{ scale: isProcessing ? 1 : 1.05 }}
-            whileTap={{ scale: isProcessing ? 1 : 0.95 }}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
             style={{
               width: '80px',
               height: '80px',
@@ -135,7 +132,7 @@ const RecordingControls: React.FC<RecordingControlsProps> = ({
                 ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)'
                 : 'linear-gradient(135deg, var(--rose-primary) 0%, #8a6a7a 100%)',
               color: '#fff',
-              cursor: isProcessing ? 'not-allowed' : 'pointer',
+              cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -145,11 +142,11 @@ const RecordingControls: React.FC<RecordingControlsProps> = ({
               boxShadow: isRecording 
                 ? '0 8px 32px rgba(239,68,68,0.4), 0 4px 16px rgba(239,68,68,0.2)'
                 : '0 8px 32px rgba(195,141,148,0.4), 0 4px 16px rgba(195,141,148,0.2)',
-              opacity: isProcessing ? 0.6 : 1,
+              opacity: 1,
               transform: 'translateZ(0)'
             }}
           >
-            {isProcessing ? '⏳' : isRecording ? '⏹️' : '🎤'}
+            {isRecording ? '⏹️' : '🎤'}
           </motion.button>
         </div>
 
