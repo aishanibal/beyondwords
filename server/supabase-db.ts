@@ -463,7 +463,7 @@ export const updateConversationTitle = async (conversationId: number, title: str
     .from('conversations')
     .update({ title })
     .eq('id', conversationId)
-    .select('id', { count: 'exact' });
+    .select('id', { count: 'exact', head: true });
   
   if (error) {
     console.error('🔍 [DB] Error updating conversation title:', error);
@@ -490,7 +490,7 @@ export const updateConversationSynopsis = async (conversationId: number, synopsi
     .from('conversations')
     .update(updates)
     .eq('id', conversationId)
-    .select('id', { count: 'exact' });
+    .select('id', { count: 'exact', head: true });
   
   if (error) {
     console.error('🔍 [DB] Error updating conversation synopsis:', error);
