@@ -204,12 +204,19 @@ const ShortFeedbackPanel: React.FC<ShortFeedbackPanelProps> = ({
               </div>
               <button
                 onClick={() => {
-                  // Find the AI message that has the quick translation
-                  const messageIndex = Object.keys(quickTranslations)[0];
-                  if (messageIndex) {
-                    const message = chatHistory[parseInt(messageIndex)];
+                  // Find the most recent AI message in chat history
+                  let mostRecentAIMessageIndex = -1;
+                  for (let i = chatHistory.length - 1; i >= 0; i--) {
+                    if (chatHistory[i] && chatHistory[i].sender === 'AI') {
+                      mostRecentAIMessageIndex = i;
+                      break;
+                    }
+                  }
+                  
+                  if (mostRecentAIMessageIndex >= 0) {
+                    const message = chatHistory[mostRecentAIMessageIndex];
                     if (message) {
-                      explainLLMResponse(parseInt(messageIndex), message.text);
+                      explainLLMResponse(mostRecentAIMessageIndex, message.text);
                     }
                   }
                 }}
