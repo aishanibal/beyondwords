@@ -27,10 +27,21 @@ app.use(express_1.default.json());
 app.use((0, cors_1.default)({
     origin: [
         'http://localhost:3000',
-        'https://speakbeyondwords-sigma.vercel.app'
+        'https://speakbeyondwords-sigma.vercel.app',
+        'https://speakbeyondwords-sigma.vercel.app/',
+        'https://speakbeyondwords-sigma.vercel.app/*'
     ],
-    credentials: false
+    credentials: false,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
 }));
+app.get('/health', (req, res) => {
+    res.status(200).json({
+        status: 'OK',
+        timestamp: new Date().toISOString(),
+        message: 'BeyondWords Express server is running'
+    });
+});
 const storage = multer_1.default.diskStorage({
     destination: function (req, file, cb) {
         cb(null, uploadsDir);
@@ -84,6 +95,18 @@ function authenticateJWT(req, res, next) {
         }
         return res.status(403).json({ error: 'Invalid token' });
     });
+}
+function optionalAuthenticateJWT(req, res, next) {
+    try {
+        const authHeader = req.headers.authorization;
+        if (authHeader && authHeader.trim() !== '') {
+            return authenticateJWT(req, res, next);
+        }
+        return next();
+    }
+    catch (e) {
+        return next();
+    }
 }
 app.get('/api/user', authenticateJWT, async (req, res) => {
     try {
@@ -238,16 +261,11 @@ app.post('/api/analyze', authenticateJWT, upload.single('audio'), async (req, re
                 timeout: 30000
             });
             if (ttsResponse.data.success && ttsResponse.data.output_path) {
-                if (fs_1.default.existsSync(ttsFilePath)) {
-                    const stats = fs_1.default.statSync(ttsFilePath);
-                    console.log('TTS file created, size:', stats.size, 'bytes');
-                    ttsUrl = `/uploads/${ttsFileName}`;
-                    console.log('TTS audio generated at:', ttsUrl);
-                }
-                else {
-                    console.error('TTS file was not created');
-                    ttsUrl = null;
-                }
+                const relativePath = ttsResponse.data.output_path;
+                const fileName = path_1.default.basename(relativePath);
+                ttsUrl = `/files/${fileName}`;
+                console.log('TTS audio generated at:', ttsUrl);
+                console.log('TTS relative path:', relativePath);
             }
             else {
                 console.error('TTS generation failed:', ttsResponse.data.error);
@@ -285,16 +303,17 @@ app.post('/api/analyze', authenticateJWT, upload.single('audio'), async (req, re
         });
     }
 });
-app.post('/api/feedback', authenticateJWT, async (req, res) => {
+app.post('/api/feedback', optionalAuthenticateJWT, async (req, res) => {
     try {
         console.log('POST /api/feedback called');
-        console.log('Request body:', req.body);
+        console.log('Auth present:', !!req.headers.authorization);
+        console.log('Request body keys:', Object.keys(req.body || {}));
         const { user_input, context, language, user_level, user_topics, romanization_display } = req.body;
         if (!user_input || !context) {
             console.log('Missing required fields:', { user_input: !!user_input, context: !!context });
             return res.status(400).json({ error: 'Missing user_input or context' });
         }
-        console.log('Parsed parameters:', { user_input, context: context.substring(0, 100) + '...', language, user_level, user_topics });
+        console.log('Parsed parameters:', { user_input_len: (user_input || '').length, context_len: (context || '').length, language, user_level, user_topics_count: Array.isArray(user_topics) ? user_topics.length : 0 });
         const chat_history = context
             .split('\n')
             .map((line) => {
@@ -500,6 +519,56 @@ app.post('/auth/login', async (req, res) => {
     catch (error) {
         console.error('Login error:', error);
         res.status(500).json({ error: 'Login failed' });
+    }
+});
+app.post('/auth/exchange', async (req, res) => {
+    try {
+        const { email, name } = req.body;
+        if (!email) {
+            return res.status(400).json({ error: 'Email is required' });
+        }
+        console.log('[AUTH_EXCHANGE] Token exchange request for email:', email);
+        let user = await (0, supabase_db_1.findUserByEmail)(email);
+        if (!user) {
+            console.log('[AUTH_EXCHANGE] Creating new user for email:', email);
+            const newUser = {
+                email,
+                name: name || email.split('@')[0],
+                google_id: undefined,
+                role: 'user',
+                onboarding_complete: false
+            };
+            try {
+                user = await (0, supabase_db_1.createUser)(newUser);
+                console.log('[AUTH_EXCHANGE] New user created with ID:', user.id);
+            }
+            catch (error) {
+                console.error('[AUTH_EXCHANGE] Failed to create user:', error);
+                return res.status(500).json({ error: 'Failed to create user' });
+            }
+        }
+        else {
+            console.log('[AUTH_EXCHANGE] Found existing user with ID:', user.id);
+        }
+        if (!user) {
+            return res.status(500).json({ error: 'User not found or created' });
+        }
+        const token = jsonwebtoken_1.default.sign({ userId: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
+        console.log('[AUTH_EXCHANGE] JWT token generated for user:', user.id);
+        res.json({
+            token,
+            user: {
+                id: user.id,
+                email: user.email,
+                name: user.name,
+                role: user.role,
+                onboarding_complete: Boolean(user.onboarding_complete)
+            }
+        });
+    }
+    catch (error) {
+        console.error('[AUTH_EXCHANGE] Token exchange error:', error);
+        res.status(500).json({ error: 'Token exchange failed' });
     }
 });
 app.post('/api/user/onboarding', authenticateJWT, async (req, res) => {
@@ -855,11 +924,37 @@ app.post('/api/conversations', authenticateJWT, async (req, res) => {
                 }
                 aiIntro = 'Hello! What would you like to talk about today?';
             }
-            if (aiIntro && aiIntro.trim()) {
-                ttsUrl = await generateTTS(aiIntro, language);
-                console.log('Generated TTS for initial message:', ttsUrl);
+            try {
+                if (aiIntro && aiIntro.trim()) {
+                    const ttsResult = await generateTTSWithDebug(aiIntro, language);
+                    ttsUrl = ttsResult.ttsUrl;
+                    console.log('Generated TTS for initial message:', ttsUrl);
+                    console.log('TTS Debug info:', ttsResult.debug);
+                    if (!ttsUrl) {
+                        console.log('⚠️ TTS generation failed, continuing without audio');
+                    }
+                }
             }
-            aiMessage = await (0, supabase_db_1.addMessage)(conversation.id, 'AI', aiIntro, 'text', undefined, undefined, 1);
+            catch (ttsError) {
+                console.error('⚠️ TTS generation error (non-blocking):', ttsError);
+                ttsUrl = null;
+            }
+            console.log('🔄 SERVER: Attempting to save AI message to database...');
+            console.log('🔄 SERVER: Message details:', {
+                conversationId: conversation.id,
+                sender: 'AI',
+                text: aiIntro.substring(0, 50) + '...',
+                messageType: 'text',
+                messageOrder: 1
+            });
+            try {
+                aiMessage = await (0, supabase_db_1.addMessage)(conversation.id, 'AI', aiIntro, 'text', undefined, undefined, 1);
+                console.log('✅ AI message saved to database:', aiMessage?.id);
+            }
+            catch (addMessageError) {
+                console.error('❌ SERVER: Failed to save AI message:', addMessageError);
+                aiMessage = null;
+            }
         }
         catch (err) {
             console.error('Error generating/saving AI intro message:', err);
@@ -891,7 +986,7 @@ app.get('/api/conversations', authenticateJWT, async (req, res) => {
         res.status(500).json({ error: 'Failed to get conversations' });
     }
 });
-app.get('/api/conversations/:id', authenticateJWT, async (req, res) => {
+app.get('/api/conversations/:id', optionalAuthenticateJWT, async (req, res) => {
     try {
         console.log('🔄 SERVER: Getting conversation:', req.params.id);
         const conversation = await (0, supabase_db_1.getConversationWithMessages)(Number(req.params.id));
@@ -918,7 +1013,7 @@ app.get('/api/conversations/:id', authenticateJWT, async (req, res) => {
         res.status(500).json({ error: 'Failed to get conversation' });
     }
 });
-app.post('/api/conversations/:id/messages', authenticateJWT, async (req, res) => {
+app.post('/api/conversations/:id/messages', optionalAuthenticateJWT, async (req, res) => {
     try {
         console.log('🔄 SERVER: Adding message to conversation:', req.params.id);
         const { sender, text, messageType, audioFilePath, detailedFeedback, message_order, romanized_text } = req.body;
@@ -931,15 +1026,40 @@ app.post('/api/conversations/:id/messages', authenticateJWT, async (req, res) =>
         res.status(500).json({ error: 'Failed to add message' });
     }
 });
-app.put('/api/conversations/:id/title', authenticateJWT, async (req, res) => {
+app.put('/api/conversations/:id/title', optionalAuthenticateJWT, async (req, res) => {
     try {
-        const { title } = req.body;
-        const result = await (0, supabase_db_1.updateConversationTitle)(Number(req.params.id), title);
-        res.json({ success: true, changes: result.changes });
+        const { title, synopsis, progress_data } = req.body;
+        const conversationId = Number(req.params.id);
+        console.log('🔍 [UPDATE_TITLE] Updating conversation:', conversationId, {
+            title: title ? title.substring(0, 50) + '...' : null,
+            synopsis: synopsis ? synopsis.substring(0, 100) + '...' : null,
+            progress_data: progress_data
+        });
+        let changes = 0;
+        if (title) {
+            console.log('🔍 [UPDATE_TITLE] Updating title for conversation:', conversationId);
+            const titleResult = await (0, supabase_db_1.updateConversationTitle)(conversationId, title);
+            changes += titleResult.changes;
+            console.log('🔍 [UPDATE_TITLE] Title updated successfully, changes:', titleResult.changes);
+        }
+        if (synopsis) {
+            console.log('🔍 [UPDATE_TITLE] Updating synopsis for conversation:', conversationId);
+            const synopsisResult = await (0, supabase_db_1.updateConversationSynopsis)(conversationId, synopsis, progress_data);
+            changes += synopsisResult.changes;
+            console.log('🔍 [UPDATE_TITLE] Synopsis updated successfully, changes:', synopsisResult.changes);
+        }
+        console.log('🔍 [UPDATE_TITLE] Total changes made:', changes);
+        res.json({ success: true, changes });
     }
     catch (error) {
-        console.error('Update conversation title error:', error);
-        res.status(500).json({ error: 'Failed to update conversation title' });
+        console.error('🔍 [UPDATE_TITLE] Update conversation title/synopsis error:', error);
+        console.error('🔍 [UPDATE_TITLE] Error details:', {
+            message: error.message,
+            stack: error.stack,
+            conversationId: req.params.id,
+            body: req.body
+        });
+        res.status(500).json({ error: 'Failed to update conversation title/synopsis', details: error.message });
     }
 });
 app.delete('/api/conversations/:id', authenticateJWT, async (req, res) => {
@@ -952,56 +1072,146 @@ app.delete('/api/conversations/:id', authenticateJWT, async (req, res) => {
         res.status(500).json({ error: 'Failed to delete conversation' });
     }
 });
-app.patch('/api/conversations/:id', authenticateJWT, async (req, res) => {
+app.patch('/api/conversations/:id', optionalAuthenticateJWT, async (req, res) => {
     try {
         const conversationId = parseInt(req.params.id);
-        const { usesPersona, personaId, synopsis, progress_data } = req.body;
+        const { usesPersona, personaId, synopsis, progress_data, description } = req.body;
+        console.log('🔄 [CONVERSATION_UPDATE] Updating conversation:', {
+            conversationId,
+            usesPersona,
+            personaId,
+            synopsis: synopsis ? synopsis.substring(0, 100) + '...' : undefined,
+            progress_data,
+            description
+        });
         if (synopsis !== undefined) {
-            console.log('Updating conversation synopsis and progress:', { conversationId, synopsis: synopsis.substring(0, 100) + '...', progress_data });
+            console.log('🔄 [CONVERSATION_UPDATE] Updating synopsis and progress data');
             await (0, supabase_db_1.updateConversationSynopsis)(conversationId, synopsis, progress_data);
-            console.log('Conversation synopsis and progress updated successfully');
-            res.json({ message: 'Conversation synopsis and progress updated successfully' });
         }
-        else if (usesPersona !== undefined) {
+        if (usesPersona !== undefined) {
+            console.log('🔄 [CONVERSATION_UPDATE] Updating persona information');
             await (0, supabase_db_1.updateConversationPersona)(conversationId, usesPersona, personaId);
-            res.json({ message: 'Conversation updated successfully' });
         }
-        else {
-            res.status(400).json({ error: 'No valid update fields provided' });
+        if (description !== undefined) {
+            console.log('🔄 [CONVERSATION_UPDATE] Updating conversation description');
+            await (0, supabase_db_1.updateConversationDescription)(conversationId, description);
         }
+        console.log('🔄 [CONVERSATION_UPDATE] Conversation updated successfully');
+        res.json({ message: 'Conversation updated successfully' });
     }
     catch (error) {
-        console.error('Error updating conversation:', error);
+        console.error('🔄 [CONVERSATION_UPDATE] Error updating conversation:', error);
         res.status(500).json({ error: 'Failed to update conversation' });
     }
 });
 app.post('/api/suggestions', authenticateJWT, async (req, res) => {
     try {
-        console.log('POST /api/suggestions called');
+        console.log('🔍 [NODE_SERVER] POST /api/suggestions called');
+        console.log('🔍 [NODE_SERVER] Request body:', req.body);
+        console.log('🔍 [NODE_SERVER] User ID:', req.user?.userId);
         const { conversationId, language } = req.body;
         const user = await (0, supabase_db_1.findUserById)(req.user.userId);
         const userLevel = req.body.user_level || user?.proficiency_level || 'beginner';
         const userTopics = req.body.user_topics || (user?.talk_topics && typeof user.talk_topics === 'string' ? JSON.parse(user.talk_topics) : Array.isArray(user?.talk_topics) ? user.talk_topics : []);
         const userGoals = req.body.user_goals || (user?.learning_goals && typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : Array.isArray(user?.learning_goals) ? user.learning_goals : []);
         let chatHistory = [];
-        if (conversationId) {
+        if (req.body.chat_history && Array.isArray(req.body.chat_history)) {
+            chatHistory = req.body.chat_history;
+            console.log('🔍 [NODE_SERVER] Using chat history from frontend:', chatHistory.length, 'messages');
+        }
+        else if (conversationId) {
+            console.log('🔍 [NODE_SERVER] Getting conversation history for ID:', conversationId);
             const conversation = await (0, supabase_db_1.getConversationWithMessages)(Number(conversationId));
+            console.log('🔍 [NODE_SERVER] Conversation data:', conversation ? 'found' : 'not found');
             if (conversation) {
+                console.log('🔍 [NODE_SERVER] Messages count:', conversation.messages?.length || 0);
                 chatHistory = (conversation.messages || []).map(msg => ({
                     sender: msg.sender,
                     text: msg.text,
                     timestamp: msg.created_at
                 }));
+                console.log('🔍 [NODE_SERVER] Mapped chat history from database:', chatHistory.length, 'messages');
+            }
+        }
+        else {
+            console.log('🔍 [NODE_SERVER] No conversationId or chat_history provided, using empty chat history');
+        }
+        try {
+            const pythonApiUrl = (process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com').replace(/\/$/, '');
+            const pythonRequestData = {
+                chat_history: chatHistory,
+                language: language || user?.target_language || 'en',
+                user_level: userLevel,
+                user_topics: userTopics,
+                formality: req.body.formality || 'friendly',
+                feedback_language: req.body.feedback_language || 'en',
+                user_goals: userGoals,
+                description: req.body.description || null
+            };
+            console.log('🔍 [NODE_SERVER] Calling Python API for suggestions:', {
+                url: `${pythonApiUrl}/suggestions`,
+                data: pythonRequestData
+            });
+            const pythonResponse = await axios_1.default.post(`${pythonApiUrl}/suggestions`, pythonRequestData, {
+                headers: { 'Content-Type': 'application/json' },
+                timeout: 30000
+            });
+            console.log('🔍 [NODE_SERVER] Python suggestions response:', {
+                status: pythonResponse.status,
+                suggestionsCount: pythonResponse.data.suggestions?.length || 0,
+                data: pythonResponse.data
+            });
+            res.json({ suggestions: pythonResponse.data.suggestions });
+        }
+        catch (pythonError) {
+            console.error('Python API not available for suggestions:', pythonError.message);
+            if (pythonError.response) {
+                console.error('🔍 [NODE_SERVER] Python error response:', {
+                    status: pythonError.response.status,
+                    data: pythonError.response.data
+                });
+            }
+            const fallbackSuggestions = [
+                { text: "Hello", translation: "Hello", difficulty: "easy" },
+                { text: "How are you?", translation: "How are you?", difficulty: "easy" },
+                { text: "Thank you", translation: "Thank you", difficulty: "easy" }
+            ];
+            res.json({ suggestions: fallbackSuggestions });
+        }
+    }
+    catch (error) {
+        console.error('Suggestions error:', error);
+        res.status(500).json({ error: 'Error getting suggestions', details: error.message });
+    }
+});
+app.post('/api/suggestions-test', async (req, res) => {
+    try {
+        console.log('POST /api/suggestions-test called');
+        const { conversationId, language, user_level, user_topics, user_goals } = req.body;
+        let chatHistory = [];
+        if (conversationId) {
+            try {
+                const conversation = await (0, supabase_db_1.getConversationWithMessages)(Number(conversationId));
+                if (conversation) {
+                    chatHistory = (conversation.messages || []).map(msg => ({
+                        sender: msg.sender,
+                        text: msg.text,
+                        timestamp: msg.created_at
+                    }));
+                }
+            }
+            catch (e) {
+                console.log('Could not fetch conversation history:', e);
             }
         }
         try {
             const pythonApiUrl = (process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com').replace(/\/$/, '');
             const pythonResponse = await axios_1.default.post(`${pythonApiUrl}/suggestions`, {
                 chat_history: chatHistory,
-                language: language || user?.target_language || 'en',
-                user_level: userLevel,
-                user_topics: userTopics,
-                user_goals: userGoals
+                language: language || 'en',
+                user_level: user_level || 'beginner',
+                user_topics: user_topics || [],
+                user_goals: user_goals || []
             }, {
                 headers: { 'Content-Type': 'application/json' },
                 timeout: 30000
@@ -1101,6 +1311,45 @@ app.post('/api/explain_suggestion', authenticateJWT, async (req, res) => {
         res.status(500).json({ error: 'Error explaining suggestion', details: error.message });
     }
 });
+app.post('/api/explain_suggestion-test', async (req, res) => {
+    try {
+        console.log('POST /api/explain_suggestion-test called');
+        const { suggestion_text, chatHistory, language, user_level, user_topics, formality, feedback_language, user_goals } = req.body;
+        if (!suggestion_text) {
+            return res.status(400).json({ error: 'No suggestion text provided' });
+        }
+        try {
+            const pythonApiUrl = (process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com').replace(/\/$/, '');
+            const pythonResponse = await axios_1.default.post(`${pythonApiUrl}/explain_suggestion`, {
+                suggestion_text: suggestion_text,
+                chatHistory: chatHistory || [],
+                language: language || 'en',
+                user_level: user_level || 'beginner',
+                user_topics: user_topics || [],
+                formality: formality || 'friendly',
+                feedback_language: feedback_language || 'en',
+                user_goals: user_goals || []
+            }, {
+                headers: { 'Content-Type': 'application/json' },
+                timeout: 30000
+            });
+            console.log('Python explanation received');
+            res.json(pythonResponse.data);
+        }
+        catch (pythonError) {
+            console.error('Python API not available for explanation:', pythonError.message);
+            res.json({
+                translation: "Explanation service temporarily unavailable",
+                explanation: "The explanation service is currently unavailable. Please try again later.",
+                error: "Python API not available"
+            });
+        }
+    }
+    catch (error) {
+        console.error('Explain suggestion error:', error);
+        res.status(500).json({ error: 'Error explaining suggestion', details: error.message });
+    }
+});
 app.post('/api/short_feedback', authenticateJWT, async (req, res) => {
     try {
         const user = await (0, supabase_db_1.findUserById)(req.user.userId);
@@ -1154,10 +1403,10 @@ app.post('/api/detailed_breakdown', authenticateJWT, async (req, res) => {
         });
     }
 });
-app.post('/api/personas', authenticateJWT, async (req, res) => {
+app.post('/api/personas', optionalAuthenticateJWT, async (req, res) => {
     try {
         const { name, description, topics, formality, language, conversationId } = req.body;
-        const userId = req.user.userId;
+        const userId = req.user?.userId || null;
         if (!name) {
             return res.status(400).json({ error: 'Name is required' });
         }
@@ -1176,9 +1425,9 @@ app.post('/api/personas', authenticateJWT, async (req, res) => {
         res.status(500).json({ error: 'Failed to create persona', details: error.message });
     }
 });
-app.get('/api/personas', authenticateJWT, async (req, res) => {
+app.get('/api/personas', optionalAuthenticateJWT, async (req, res) => {
     try {
-        const userId = req.user.userId;
+        const userId = req.user?.userId || null;
         const personas = await (0, supabase_db_1.getUserPersonas)(userId);
         res.json({ personas });
     }
@@ -1201,13 +1450,20 @@ app.delete('/api/personas/:id', authenticateJWT, async (req, res) => {
         res.status(500).json({ error: 'Failed to delete persona', details: error.message });
     }
 });
-app.post('/api/tts', authenticateJWT, async (req, res) => {
+app.post('/api/tts', optionalAuthenticateJWT, async (req, res) => {
     try {
         const { text, language } = req.body;
+        console.log('🎯 [EXPRESS_TTS] TTS request received:');
+        console.log('🎯 [EXPRESS_TTS]   text:', text);
+        console.log('🎯 [EXPRESS_TTS]   language:', language);
+        console.log('🎯 [EXPRESS_TTS]   request body:', req.body);
+        console.log('🎯 [EXPRESS_TTS]   user ID:', req.user?.userId);
         if (!text || !text.trim()) {
+            console.log('🎯 [EXPRESS_TTS] Error: Text is required');
             return res.status(400).json({ error: 'Text is required' });
         }
         const lang = language || 'en';
+        console.log('🎯 [EXPRESS_TTS] Using language:', lang);
         const isHealthy = await checkPythonAPIHealth();
         if (!isHealthy) {
             return res.status(503).json({
@@ -1215,11 +1471,15 @@ app.post('/api/tts', authenticateJWT, async (req, res) => {
                 details: 'The TTS service is temporarily unavailable. Please try again later.'
             });
         }
+        console.log('🎯 [EXPRESS_TTS] Calling generateTTS...');
         const ttsUrl = await generateTTS(text, lang);
+        console.log('🎯 [EXPRESS_TTS] generateTTS result:', ttsUrl);
         if (ttsUrl) {
+            console.log('🎯 [EXPRESS_TTS] TTS generation successful, returning URL:', ttsUrl);
             res.json({ ttsUrl });
         }
         else {
+            console.log('🎯 [EXPRESS_TTS] TTS generation failed, returning error');
             res.status(500).json({ error: 'Failed to generate TTS' });
         }
     }
@@ -1298,15 +1558,18 @@ app.post('/api/tts-test', async (req, res) => {
 });
 app.post('/api/quick_translation', authenticateJWT, async (req, res) => {
     try {
-        console.log('POST /api/quick_translation called');
-        const { ai_message, language, user_level, user_topics, formality, feedback_language, user_goals, description } = req.body;
+        console.log('🔍 [NODE_SERVER] POST /api/quick_translation called');
+        console.log('🔍 [NODE_SERVER] Request body:', req.body);
+        console.log('🔍 [NODE_SERVER] User ID:', req.user?.userId);
+        const { ai_message, chat_history, language, user_level, user_topics, formality, feedback_language, user_goals, description } = req.body;
         if (!ai_message) {
             return res.status(400).json({ error: 'No AI message provided' });
         }
         try {
             const pythonApiUrl = (process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com').replace(/\/$/, '');
-            const pythonResponse = await axios_1.default.post(`${pythonApiUrl}/quick_translation`, {
+            const pythonRequestData = {
                 ai_message: ai_message,
+                chat_history: chat_history || [],
                 language: language || 'en',
                 user_level: user_level || 'beginner',
                 user_topics: user_topics || [],
@@ -1314,11 +1577,19 @@ app.post('/api/quick_translation', authenticateJWT, async (req, res) => {
                 feedback_language: feedback_language || 'en',
                 user_goals: user_goals || [],
                 description: description || null
-            }, {
+            };
+            console.log('🔍 [NODE_SERVER] Calling Python API:', {
+                url: `${pythonApiUrl}/quick_translation`,
+                data: pythonRequestData
+            });
+            const pythonResponse = await axios_1.default.post(`${pythonApiUrl}/quick_translation`, pythonRequestData, {
                 headers: { 'Content-Type': 'application/json' },
                 timeout: 30000
             });
-            console.log('Python quick translation received');
+            console.log('🔍 [NODE_SERVER] Python quick translation response:', {
+                status: pythonResponse.status,
+                data: pythonResponse.data
+            });
             res.json(pythonResponse.data);
         }
         catch (pythonError) {
@@ -1334,8 +1605,166 @@ app.post('/api/quick_translation', authenticateJWT, async (req, res) => {
         res.status(500).json({ error: 'Error getting quick translation', details: error.message });
     }
 });
-app.use('/uploads', express_1.default.static(path_1.default.join(__dirname, 'uploads')));
+app.post('/api/ai_response', authenticateJWT, async (req, res) => {
+    try {
+        console.log('🔍 [AI_RESPONSE] POST /api/ai_response called');
+        console.log('🔍 [AI_RESPONSE] Request body:', req.body);
+        console.log('🔍 [AI_RESPONSE] User ID:', req.user?.userId);
+        const { transcription, chat_history, language, user_level, user_topics, formality, feedback_language, user_goals } = req.body;
+        if (!transcription) {
+            return res.status(400).json({ error: 'No transcription provided' });
+        }
+        try {
+            const pythonApiUrl = (process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com').replace(/\/$/, '');
+            const pythonRequestData = {
+                transcription: transcription,
+                chat_history: chat_history || [],
+                language: language || 'en',
+                user_level: user_level || 'beginner',
+                user_topics: user_topics || [],
+                formality: formality || 'friendly',
+                feedback_language: feedback_language || 'en',
+                user_goals: user_goals || []
+            };
+            console.log('🔍 [AI_RESPONSE] Calling Python API:', {
+                url: `${pythonApiUrl}/ai_response`,
+                data: pythonRequestData
+            });
+            const pythonResponse = await axios_1.default.post(`${pythonApiUrl}/ai_response`, pythonRequestData, {
+                headers: { 'Content-Type': 'application/json' },
+                timeout: 30000
+            });
+            console.log('🔍 [AI_RESPONSE] Python AI response received:', {
+                status: pythonResponse.status,
+                data: pythonResponse.data
+            });
+            res.json(pythonResponse.data);
+        }
+        catch (pythonError) {
+            console.error('🔍 [AI_RESPONSE] Python API not available:', pythonError.message);
+            res.json({
+                response: "I'm sorry, I'm having trouble processing your request right now. Please try again later.",
+                error: "Python API not available"
+            });
+        }
+    }
+    catch (error) {
+        console.error('🔍 [AI_RESPONSE] AI response error:', error);
+        res.status(500).json({ error: 'Error getting AI response', details: error.message });
+    }
+});
+app.post('/api/conversation-summary', authenticateJWT, async (req, res) => {
+    try {
+        console.log('🔍 [CONVERSATION_SUMMARY] POST /api/conversation-summary called');
+        console.log('🔍 [CONVERSATION_SUMMARY] Request body:', req.body);
+        console.log('🔍 [CONVERSATION_SUMMARY] User ID:', req.user?.userId);
+        const { chat_history, subgoal_instructions, user_topics, target_language, feedback_language, is_continued_conversation, conversation_id } = req.body;
+        if (!chat_history || !Array.isArray(chat_history)) {
+            return res.status(400).json({ error: 'No chat history provided' });
+        }
+        try {
+            const pythonApiUrl = (process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com').replace(/\/$/, '');
+            const pythonRequestData = {
+                chat_history: chat_history,
+                subgoal_instructions: subgoal_instructions || '',
+                user_topics: user_topics || [],
+                target_language: target_language || 'en',
+                feedback_language: feedback_language || 'en',
+                is_continued_conversation: is_continued_conversation || false
+            };
+            console.log('🔍 [CONVERSATION_SUMMARY] Calling Python API:', {
+                url: `${pythonApiUrl}/conversation_summary`,
+                data: pythonRequestData
+            });
+            const pythonResponse = await axios_1.default.post(`${pythonApiUrl}/conversation_summary`, pythonRequestData, {
+                headers: { 'Content-Type': 'application/json' },
+                timeout: 30000
+            });
+            console.log('🔍 [CONVERSATION_SUMMARY] Python conversation summary received:', {
+                status: pythonResponse.status,
+                data: pythonResponse.data
+            });
+            try {
+                if (conversation_id && req.user?.userId) {
+                    const userRecord = await (0, supabase_db_1.findUserById)(req.user.userId);
+                    let userGoals = [];
+                    if (userRecord && userRecord.learning_goals) {
+                        const raw = userRecord.learning_goals;
+                        userGoals = Array.isArray(raw) ? raw : JSON.parse(raw);
+                    }
+                    if (Array.isArray(userGoals) && userGoals.length > 0) {
+                        await (0, supabase_db_1.updateConversationLearningGoals)(Number(conversation_id), userGoals);
+                    }
+                }
+            }
+            catch (persistErr) {
+                console.warn('⚠️ [CONVERSATION_SUMMARY] Failed to persist learning_goals:', persistErr);
+            }
+            res.json(pythonResponse.data);
+        }
+        catch (pythonError) {
+            console.error('🔍 [CONVERSATION_SUMMARY] Python API not available:', pythonError.message);
+            res.json({
+                success: false,
+                summary: {
+                    title: "Conversation Summary",
+                    synopsis: "Summary generation is temporarily unavailable. Please try again later.",
+                    learningGoals: []
+                },
+                error: "Python API not available"
+            });
+        }
+    }
+    catch (error) {
+        console.error('🔍 [CONVERSATION_SUMMARY] Conversation summary error:', error);
+        res.status(500).json({ error: 'Error generating conversation summary', details: error.message });
+    }
+});
+app.use('/uploads', (req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    res.header('Cache-Control', 'public, max-age=3600');
+    next();
+}, express_1.default.static(path_1.default.join(__dirname, 'uploads')));
 app.use('/files', express_1.default.static(path_1.default.join(__dirname, '..')));
+app.get('/files/:filename', async (req, res) => {
+    try {
+        const filename = req.params.filename;
+        console.log(`🔍 [TTS_PROXY] Serving TTS file: ${filename}`);
+        const localPath = path_1.default.join(uploadsDir, filename);
+        if (fs_1.default.existsSync(localPath)) {
+            console.log(`🔍 [TTS_PROXY] Serving from local path: ${localPath}`);
+            res.sendFile(localPath);
+            return;
+        }
+        const pythonApiUrl = (process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com').replace(/\/$/, '');
+        const pythonFileUrl = `${pythonApiUrl}/uploads/${filename}`;
+        console.log(`🔍 [TTS_PROXY] File not found locally, trying Python API: ${pythonFileUrl}`);
+        try {
+            const response = await axios_1.default.get(pythonFileUrl, {
+                responseType: 'stream',
+                timeout: 10000
+            });
+            console.log(`🔍 [TTS_PROXY] Python API response status: ${response.status}`);
+            res.set({
+                'Content-Type': 'audio/wav',
+                'Cache-Control': 'public, max-age=3600',
+                'Access-Control-Allow-Origin': '*'
+            });
+            response.data.pipe(res);
+        }
+        catch (pythonError) {
+            console.error(`🔍 [TTS_PROXY] Failed to fetch from Python API: ${pythonError.message}`);
+            console.error(`🔍 [TTS_PROXY] Python API error details:`, pythonError.response?.status, pythonError.response?.data);
+            res.status(404).json({ error: 'TTS file not found' });
+        }
+    }
+    catch (error) {
+        console.error(`🔍 [TTS_PROXY] Error serving TTS file: ${error.message}`);
+        res.status(500).json({ error: 'Failed to serve TTS file' });
+    }
+});
 async function checkPythonAPIHealth() {
     try {
         const pythonApiUrl = process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com';
@@ -1388,33 +1817,23 @@ async function generateTTSWithDebug(text, language) {
         };
         console.log(`🎯 [TTS DEBUG] Extracted debug info:`, debugInfo);
         if (ttsResponse.data.success && ttsResponse.data.output_path) {
-            const actualFilePath = ttsResponse.data.output_path;
-            console.log(`🎯 [TTS DEBUG] Actual file path from Python API: ${actualFilePath}`);
-            if (fs_1.default.existsSync(actualFilePath)) {
-                const stats = fs_1.default.statSync(actualFilePath);
-                console.log('🎯 [TTS DEBUG] TTS file created, size:', stats.size, 'bytes');
-                const fileName = path_1.default.basename(actualFilePath);
-                const isInUploads = actualFilePath.includes('uploads');
-                const ttsUrl = isInUploads ? `/uploads/${fileName}` : `/files/${fileName}`;
-                console.log('🎯 [TTS DEBUG] TTS audio generated at:', ttsUrl);
-                console.log('🎯 [TTS DEBUG] File location:', isInUploads ? 'uploads directory' : 'root directory');
-                console.log('🎯 [TTS DEBUG] File extension:', path_1.default.extname(actualFilePath));
-                return {
-                    ttsUrl: ttsUrl,
-                    debug: debugInfo
-                };
-            }
-            else {
-                console.error('🎯 [TTS DEBUG] TTS file was not created at expected path');
-                return {
-                    ttsUrl: null,
-                    debug: {
-                        ...debugInfo,
-                        fallback_reason: 'File not created',
-                        error: 'TTS file was not created at expected path'
-                    }
-                };
-            }
+            const relativePath = ttsResponse.data.output_path;
+            const actualPath = ttsResponse.data.actual_path;
+            console.log(`🎯 [TTS DEBUG] Relative path from Python API: ${relativePath}`);
+            console.log(`🎯 [TTS DEBUG] Actual path from Python API: ${actualPath}`);
+            const fileName = path_1.default.basename(relativePath);
+            const ttsUrl = `/files/${fileName}`;
+            console.log('🎯 [TTS DEBUG] TTS audio will be served at:', ttsUrl);
+            console.log('🎯 [TTS DEBUG] File extension:', path_1.default.extname(relativePath));
+            return {
+                ttsUrl: ttsUrl,
+                debug: {
+                    ...debugInfo,
+                    relative_path: relativePath,
+                    actual_path: actualPath,
+                    serving_url: ttsUrl
+                }
+            };
         }
         else {
             console.error('🎯 [TTS DEBUG] TTS generation failed:', ttsResponse.data.error);

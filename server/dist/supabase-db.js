@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.closeDatabase = exports.getUserStreak = exports.deletePersona = exports.getUserPersonas = exports.createPersona = exports.addMessage = exports.updateConversationPersona = exports.deleteConversation = exports.updateConversationSynopsis = exports.updateConversationTitle = exports.getConversationWithMessages = exports.getUserConversations = exports.createConversation = exports.deleteLanguageDashboard = exports.updateLanguageDashboard = exports.getLanguageDashboard = exports.getUserLanguageDashboards = exports.createLanguageDashboard = exports.getAllSessions = exports.getSession = exports.saveSession = exports.getAllUsers = exports.updateUser = exports.findUserById = exports.findUserByEmail = exports.findUserByGoogleId = exports.createUser = exports.supabase = void 0;
+exports.closeDatabase = exports.getUserStreak = exports.deletePersona = exports.getUserPersonas = exports.createPersona = exports.addMessage = exports.updateConversationDescription = exports.updateConversationPersona = exports.deleteConversation = exports.updateConversationLearningGoals = exports.updateConversationSynopsis = exports.updateConversationTitle = exports.getConversationWithMessages = exports.getUserConversations = exports.createConversation = exports.deleteLanguageDashboard = exports.updateLanguageDashboard = exports.getLanguageDashboard = exports.getUserLanguageDashboards = exports.createLanguageDashboard = exports.getAllSessions = exports.getSession = exports.saveSession = exports.getAllUsers = exports.updateUser = exports.findUserById = exports.findUserByEmail = exports.findUserByGoogleId = exports.createUser = exports.supabase = void 0;
 const supabase_js_1 = require("@supabase/supabase-js");
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
@@ -311,13 +311,18 @@ const getConversationWithMessages = async (conversationId) => {
 };
 exports.getConversationWithMessages = getConversationWithMessages;
 const updateConversationTitle = async (conversationId, title) => {
-    const { error } = await exports.supabase
+    console.log('🔍 [DB] Updating conversation title:', { conversationId, title: title.substring(0, 50) + '...' });
+    const { error, data } = await exports.supabase
         .from('conversations')
         .update({ title })
-        .eq('id', conversationId);
-    if (error)
+        .eq('id', conversationId)
+        .select('id');
+    if (error) {
+        console.error('🔍 [DB] Error updating conversation title:', error);
         throw error;
-    return { changes: 1 };
+    }
+    console.log('🔍 [DB] Conversation title updated successfully, data:', data);
+    return { changes: data ? data.length : 1 };
 };
 exports.updateConversationTitle = updateConversationTitle;
 const updateConversationSynopsis = async (conversationId, synopsis, progressData) => {
@@ -325,15 +330,39 @@ const updateConversationSynopsis = async (conversationId, synopsis, progressData
     if (progressData) {
         updates.progress_data = progressData;
     }
-    const { error } = await exports.supabase
+    console.log('🔍 [DB] Updating conversation synopsis:', {
+        conversationId,
+        synopsis: synopsis.substring(0, 100) + '...',
+        progressData
+    });
+    const { error, data } = await exports.supabase
         .from('conversations')
         .update(updates)
-        .eq('id', conversationId);
-    if (error)
+        .eq('id', conversationId)
+        .select('id');
+    if (error) {
+        console.error('🔍 [DB] Error updating conversation synopsis:', error);
         throw error;
-    return { changes: 1 };
+    }
+    console.log('🔍 [DB] Conversation synopsis updated successfully, data:', data);
+    return { changes: data ? data.length : 1 };
 };
 exports.updateConversationSynopsis = updateConversationSynopsis;
+const updateConversationLearningGoals = async (conversationId, learningGoals) => {
+    console.log('🔍 [DB] Updating conversation learning_goals:', { conversationId, learningGoals });
+    const { error, data } = await exports.supabase
+        .from('conversations')
+        .update({ learning_goals: learningGoals })
+        .eq('id', conversationId)
+        .select('id');
+    if (error) {
+        console.error('🔍 [DB] Error updating learning_goals:', error);
+        throw error;
+    }
+    console.log('🔍 [DB] Learning goals updated successfully, data:', data);
+    return { changes: data ? data.length : 1 };
+};
+exports.updateConversationLearningGoals = updateConversationLearningGoals;
 const deleteConversation = async (conversationId) => {
     const { error } = await exports.supabase
         .from('conversations')
@@ -357,6 +386,18 @@ const updateConversationPersona = async (conversationId, usesPersona, personaId)
     return { changes: 1 };
 };
 exports.updateConversationPersona = updateConversationPersona;
+const updateConversationDescription = async (conversationId, description) => {
+    const { error } = await exports.supabase
+        .from('conversations')
+        .update({
+        description: description
+    })
+        .eq('id', conversationId);
+    if (error)
+        throw error;
+    return { changes: 1 };
+};
+exports.updateConversationDescription = updateConversationDescription;
 const addMessage = async (conversationId, sender, text, messageType = 'text', audioFilePath, detailedFeedback, messageOrder, romanizedText) => {
     const { data, error } = await exports.supabase
         .from('messages')

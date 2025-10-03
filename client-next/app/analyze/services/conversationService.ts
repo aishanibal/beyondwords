@@ -2,7 +2,7 @@ import axios from 'axios';
 import { supabase } from '../../../lib/supabase';
 import { getUserLanguageDashboards } from '../../../lib/api';
 import { ChatMessage } from '../types/analyze';
-import { LEARNING_GOALS } from '../../lib/preferences';
+import { LEARNING_GOALS } from '../../../lib/preferences';
 
 // Helper to get JWT token
 export const getAuthHeaders = async () => {
