@@ -16,6 +16,7 @@ interface ShortFeedbackPanelProps {
   setShowLlmBreakdown: (show: boolean) => void;
   chatHistory: any[];
   isLoadingMessageFeedback: Record<number, boolean>;
+  isLoadingExplain: boolean;
   explainLLMResponse: (messageIndex: number, text: string) => Promise<void>;
   renderClickableMessage: (message: any, messageIndex: number, translation: any) => React.ReactNode;
   parsedBreakdown: any[];
@@ -41,6 +42,7 @@ const ShortFeedbackPanel: React.FC<ShortFeedbackPanelProps> = ({
   setShowLlmBreakdown,
   chatHistory,
   isLoadingMessageFeedback,
+  isLoadingExplain,
   explainLLMResponse,
   renderClickableMessage,
   parsedBreakdown,
@@ -220,7 +222,7 @@ const ShortFeedbackPanel: React.FC<ShortFeedbackPanelProps> = ({
                     }
                   }
                 }}
-                disabled={isLoadingMessageFeedback[Object.keys(quickTranslations)[0] || '0']}
+                disabled={isLoadingExplain}
                 style={{
                   padding: '0.35rem 0.7rem',
                   borderRadius: 6,
@@ -230,9 +232,9 @@ const ShortFeedbackPanel: React.FC<ShortFeedbackPanelProps> = ({
                     : 'rgba(59,83,119,0.08)',
                   color: isDarkMode ? '#8ba3d9' : '#3b5377',
                   fontSize: '0.7rem',
-                  cursor: isLoadingMessageFeedback[Object.keys(quickTranslations)[0] || '0'] ? 'not-allowed' : 'pointer',
+                  cursor: isLoadingExplain ? 'not-allowed' : 'pointer',
                   transition: 'all 0.2s ease',
-                  opacity: isLoadingMessageFeedback[Object.keys(quickTranslations)[0] || '0'] ? 0.6 : 1,
+                  opacity: isLoadingExplain ? 0.6 : 1,
                   fontWeight: 500,
                   boxShadow: isDarkMode 
                     ? '0 1px 3px rgba(139,163,217,0.10)' 
@@ -240,7 +242,7 @@ const ShortFeedbackPanel: React.FC<ShortFeedbackPanelProps> = ({
                 }}
                 title="Get detailed LLM breakdown"
               >
-                {isLoadingMessageFeedback[Object.keys(quickTranslations)[0] || '0'] ? '🔄' : '📝 Detailed Explanation'}
+                {isLoadingExplain ? '🔄' : '📝 Detailed Explanation'}
               </button>
             </div>
             {showQuickTranslation && (

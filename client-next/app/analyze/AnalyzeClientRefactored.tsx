@@ -171,6 +171,7 @@ const AnalyzeContentInner = () => {
   const [showQuickTranslation, setShowQuickTranslation] = useState<boolean>(true);
   const [llmBreakdown, setLlmBreakdown] = useState<string>('');
   const [showLlmBreakdown, setShowLlmBreakdown] = useState<boolean>(false);
+  const [isLoadingExplain, setIsLoadingExplain] = useState<boolean>(false);
 
   // Modals state
   const [showTopicModal, setShowTopicModal] = useState(false);
@@ -772,8 +773,20 @@ natutunan / natutunan -- learned (past tense)`;
   };
 
   const handleExplainLLMResponse = async (messageIndex: number, text: string) => {
+    // Prevent multiple simultaneous requests
+    if (isLoadingExplain) {
+      console.log('[DEBUG] Explain request already in progress, ignoring');
+      return;
+    }
+    
     // This should only trigger the detailed breakdown (AI explanation)
     try {
+      setIsLoadingExplain(true);
+      
+      // Clear any existing explanation first to ensure only one explanation is shown
+      setLlmBreakdown('');
+      setShowLlmBreakdown(false);
+      
       const token = localStorage.getItem('jwt');
       const requestData = {
         llm_response: text,
@@ -806,13 +819,15 @@ natutunan / natutunan -- learned (past tense)`;
         return;
       }
       
-      // Set the breakdown in sidebar state
+      // Set the breakdown in sidebar state (this overwrites any previous explanation)
       setLlmBreakdown(breakdownText);
       setShowLlmBreakdown(true);
       setShowQuickTranslation(false); // Collapse quick translation when LLM breakdown is shown
       
     } catch (error) {
       console.error('Error explaining LLM response for left panel:', error);
+    } finally {
+      setIsLoadingExplain(false);
     }
   };
 
@@ -1019,7 +1034,8 @@ natutunan / natutunan -- learned (past tense)`;
         showLlmBreakdown={showLlmBreakdown}
         setShowLlmBreakdown={setShowLlmBreakdown}
         chatHistory={chatHistory}
-            isLoadingMessageFeedback={messageInteractions.isLoadingMessageFeedback}
+        isLoadingMessageFeedback={messageInteractions.isLoadingMessageFeedback}
+        isLoadingExplain={isLoadingExplain}
         explainLLMResponse={handleExplainLLMResponse}
         renderClickableMessage={renderClickableMessageWrapper}
       >
