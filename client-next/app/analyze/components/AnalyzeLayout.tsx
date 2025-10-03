@@ -411,7 +411,10 @@ const AnalyzeLayout: React.FC<AnalyzeLayoutProps> = ({
               transition: 'all 0.3s ease',
               boxShadow: isDarkMode 
                 ? '0 4px 16px rgba(139,163,217,0.2)' 
-                : '0 4px 16px rgba(59,83,119,0.15)'
+                : '0 4px 16px rgba(59,83,119,0.15)',
+              position: 'sticky',
+              top: 0,
+              zIndex: 2
             }}>
               <div style={{ 
                 display: 'flex',
@@ -468,12 +471,13 @@ const AnalyzeLayout: React.FC<AnalyzeLayoutProps> = ({
               }}
             />
             
-            {/* Short Feedback Content */}
+            {/* Short Feedback Content (scrollable body) */}
             <div style={{ 
               flex: 1, 
               display: 'flex',
               flexDirection: 'column',
-              minHeight: 0
+              minHeight: 0,
+              overflowY: 'auto'
             }}>
               
               {/* Quick Translation Section */}
