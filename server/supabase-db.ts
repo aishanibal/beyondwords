@@ -459,19 +459,19 @@ export const getConversationWithMessages = async (conversationId: number): Promi
 export const updateConversationTitle = async (conversationId: number, title: string): Promise<{ changes: number }> => {
   console.log('🔍 [DB] Updating conversation title:', { conversationId, title: title.substring(0, 50) + '...' });
   
-  const { error, count } = await supabase
+  const { error, data } = await supabase
     .from('conversations')
     .update({ title })
     .eq('id', conversationId)
-    .select('id', { count: 'exact', head: true });
+    .select('id');
   
   if (error) {
     console.error('🔍 [DB] Error updating conversation title:', error);
     throw error;
   }
   
-  console.log('🔍 [DB] Conversation title updated successfully, count:', count);
-  return { changes: count || 1 };
+  console.log('🔍 [DB] Conversation title updated successfully, data:', data);
+  return { changes: data ? data.length : 1 };
 };
 
 export const updateConversationSynopsis = async (conversationId: number, synopsis: string, progressData?: any): Promise<{ changes: number }> => {
@@ -486,19 +486,19 @@ export const updateConversationSynopsis = async (conversationId: number, synopsi
     progressData 
   });
   
-  const { error, count } = await supabase
+  const { error, data } = await supabase
     .from('conversations')
     .update(updates)
     .eq('id', conversationId)
-    .select('id', { count: 'exact', head: true });
+    .select('id');
   
   if (error) {
     console.error('🔍 [DB] Error updating conversation synopsis:', error);
     throw error;
   }
   
-  console.log('🔍 [DB] Conversation synopsis updated successfully, count:', count);
-  return { changes: count || 1 };
+  console.log('🔍 [DB] Conversation synopsis updated successfully, data:', data);
+  return { changes: data ? data.length : 1 };
 };
 
 export const deleteConversation = async (conversationId: number): Promise<{ changes: number }> => {
