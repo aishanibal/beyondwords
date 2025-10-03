@@ -770,6 +770,68 @@ app.post('/auth/login', async (req: Request, res: Response) => {
   }
 });
 
+// JWT token exchange endpoint (for Supabase auth integration)
+app.post('/auth/exchange', async (req: Request, res: Response) => {
+  try {
+    const { email, name } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+    
+    console.log('[AUTH_EXCHANGE] Token exchange request for email:', email);
+    
+    // Find or create user by email
+    let user = await findUserByEmail(email);
+    
+    if (!user) {
+      // Create new user if doesn't exist
+      console.log('[AUTH_EXCHANGE] Creating new user for email:', email);
+      const newUser = {
+        email,
+        name: name || email.split('@')[0],
+        google_id: null, // This is from Supabase, not Google OAuth
+        role: 'user',
+        onboarding_complete: false
+      };
+      
+      const result = await createUser(newUser);
+      if (result.success && result.data) {
+        user = result.data;
+        console.log('[AUTH_EXCHANGE] New user created with ID:', user.id);
+      } else {
+        console.error('[AUTH_EXCHANGE] Failed to create user:', result.error);
+        return res.status(500).json({ error: 'Failed to create user' });
+      }
+    } else {
+      console.log('[AUTH_EXCHANGE] Found existing user with ID:', user.id);
+    }
+    
+    // Generate JWT token
+    const token = jwt.sign(
+      { userId: user.id, email: user.email, role: user.role },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+    
+    console.log('[AUTH_EXCHANGE] JWT token generated for user:', user.id);
+    
+    res.json({ 
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        onboarding_complete: Boolean(user.onboarding_complete)
+      }
+    });
+  } catch (error: any) {
+    console.error('[AUTH_EXCHANGE] Token exchange error:', error);
+    res.status(500).json({ error: 'Token exchange failed' });
+  }
+});
+
 // Onboarding route (protected) - Creates first language dashboard
 app.post('/api/user/onboarding', authenticateJWT, async (req: Request, res: Response) => {
   try {
