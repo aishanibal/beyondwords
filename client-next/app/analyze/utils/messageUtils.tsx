@@ -15,6 +15,7 @@ export const renderClickableMessage = (message: any, messageIndex: number, trans
   }
   
   console.log('renderClickableMessage:', {
+    messageIndex: messageIndex,
     messageText: messageText,
     generatedWords: translation.generatedWords,
     generatedScriptWords: translation.generatedScriptWords,
@@ -22,8 +23,40 @@ export const renderClickableMessage = (message: any, messageIndex: number, trans
     availableKeys: Object.keys(translation.wordTranslations)
   });
   
+  // Check if generated words match the message text
+  if (translation.generatedWords && translation.generatedWords.length > 0) {
+    const messageWords = messageText.split(/\s+/).filter(word => word.trim());
+    const generatedWords = translation.generatedWords;
+    
+    console.log('=== WORD MATCHING DEBUG ===');
+    console.log('Message words:', messageWords);
+    console.log('Generated words:', generatedWords);
+    console.log('Words match:', JSON.stringify(messageWords) === JSON.stringify(generatedWords));
+    
+    // If words don't match, this might be cached data from a different message
+    if (JSON.stringify(messageWords) !== JSON.stringify(generatedWords)) {
+      console.warn('⚠️ MISMATCH: Generated words do not match message text!');
+      console.warn('This suggests cached translation data from a different message.');
+      console.warn('Message index:', messageIndex);
+      console.warn('Message text:', messageText);
+      console.warn('Generated words:', generatedWords);
+    }
+  }
+  
   // Use the generated words from the AI response to guarantee keys exist
   if (translation.generatedWords && translation.generatedWords.length > 0) {
+    // Check if generated words match the message text
+    const messageWords = messageText.split(/\s+/).filter(word => word.trim());
+    const generatedWords = translation.generatedWords;
+    const wordsMatch = JSON.stringify(messageWords) === JSON.stringify(generatedWords);
+    
+    // If words don't match, fall back to parsing the actual message text
+    if (!wordsMatch) {
+      console.warn('⚠️ Generated words mismatch detected, falling back to message text parsing');
+      const displayText = formatMessageForDisplay(message, userPreferences?.romanizationDisplay || 'both');
+      return renderClickableWords(displayText, translation, messageIndex, setActivePopup);
+    }
+    
     // Check if this is a script language (has both script and romanized words)
     const isScriptLanguage = translation.generatedScriptWords && 
                             translation.generatedScriptWords.length > 0 && 
