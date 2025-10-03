@@ -501,6 +501,23 @@ export const updateConversationSynopsis = async (conversationId: number, synopsi
   return { changes: data ? data.length : 1 };
 };
 
+export const updateConversationLearningGoals = async (conversationId: number, learningGoals: string[]): Promise<{ changes: number }> => {
+  console.log('🔍 [DB] Updating conversation learning_goals:', { conversationId, learningGoals });
+  const { error, data } = await supabase
+    .from('conversations')
+    .update({ learning_goals: learningGoals })
+    .eq('id', conversationId)
+    .select('id');
+
+  if (error) {
+    console.error('🔍 [DB] Error updating learning_goals:', error);
+    throw error;
+  }
+
+  console.log('🔍 [DB] Learning goals updated successfully, data:', data);
+  return { changes: data ? data.length : 1 };
+};
+
 export const deleteConversation = async (conversationId: number): Promise<{ changes: number }> => {
   const { error } = await supabase
     .from('conversations')

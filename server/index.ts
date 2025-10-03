@@ -39,7 +39,8 @@ import {
   Session,
   Conversation,
   Message,
-  Persona
+  Persona,
+  updateConversationLearningGoals
 } from './supabase-db';
 import { OAuth2Client } from 'google-auth-library';
 import path from 'path';
@@ -2161,6 +2162,23 @@ app.post('/api/conversation-summary', authenticateJWT, async (req: Request, res:
         status: pythonResponse.status,
         data: pythonResponse.data
       });
+      // Persist learning_goals on the conversation if available
+      try {
+        if (conversation_id && req.user?.userId) {
+          const userRecord = await findUserById(req.user.userId);
+          let userGoals: string[] = [];
+          if (userRecord && (userRecord as any).learning_goals) {
+            const raw = (userRecord as any).learning_goals;
+            userGoals = Array.isArray(raw) ? raw : JSON.parse(raw);
+          }
+          if (Array.isArray(userGoals) && userGoals.length > 0) {
+            await updateConversationLearningGoals(Number(conversation_id), userGoals);
+          }
+        }
+      } catch (persistErr) {
+        console.warn('⚠️ [CONVERSATION_SUMMARY] Failed to persist learning_goals:', persistErr);
+      }
+
       res.json(pythonResponse.data);
     } catch (pythonError: any) {
       console.error('🔍 [CONVERSATION_SUMMARY] Python API not available:', pythonError.message);
