@@ -2112,21 +2112,22 @@ app.post('/api/conversation-summary', authenticateJWT, async (req: Request, res:
     console.log('🔍 [CONVERSATION_SUMMARY] Request body:', req.body);
     console.log('🔍 [CONVERSATION_SUMMARY] User ID:', req.user?.userId);
     
-    const { messages, language, topics, formality, conversation_id } = req.body;
+    const { chat_history, subgoal_instructions, user_topics, target_language, feedback_language, is_continued_conversation, conversation_id } = req.body;
     
-    if (!messages || !Array.isArray(messages)) {
-      return res.status(400).json({ error: 'No messages provided' });
+    if (!chat_history || !Array.isArray(chat_history)) {
+      return res.status(400).json({ error: 'No chat history provided' });
     }
     
     // Call Python API for conversation summary
     try {
       const pythonApiUrl = (process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com').replace(/\/$/, '');
       const pythonRequestData = {
-        messages: messages,
-        language: language || 'en',
-        topics: topics || [],
-        formality: formality || 'friendly',
-        conversation_id: conversation_id || null
+        chat_history: chat_history,
+        subgoal_instructions: subgoal_instructions || '',
+        user_topics: user_topics || [],
+        target_language: target_language || 'en',
+        feedback_language: feedback_language || 'en',
+        is_continued_conversation: is_continued_conversation || false
       };
       
       console.log('🔍 [CONVERSATION_SUMMARY] Calling Python API:', {

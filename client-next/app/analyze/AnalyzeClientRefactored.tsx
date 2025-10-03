@@ -874,14 +874,18 @@ const AnalyzeContentInner = () => {
         // This ensures the conversation gets a title and shows up in recent conversations
         if (chatHistory.length > 0 || isNewConversation) {
           console.log('🏁 [END_CHAT] Calling generateSummary...');
-          await conversationManagement.generateSummary(
+          const progressModalShown = await conversationManagement.generateSummary(
             chatHistory,
             userPreferences?.topics || [],
             userPreferences?.formality || 'friendly',
             conversationId || ''
           );
-          // After summary generation, navigate back to dashboard so cards refresh
-          router.push('/dashboard');
+          // Progress modal will handle navigation if learning goals exist
+          // If no learning goals, navigate to dashboard
+          if (!progressModalShown) {
+            console.log('🏁 [END_CHAT] No progress modal shown, navigating to dashboard');
+            router.push('/dashboard');
+          }
         } else {
           console.log('🏁 [END_CHAT] No chat history in existing conversation, navigating to dashboard');
           router.push('/dashboard');
@@ -952,13 +956,17 @@ const AnalyzeContentInner = () => {
           // For new conversations, always generate summary even if chatHistory is empty
           // This ensures the conversation gets a title and shows up in recent conversations
           if (chatHistory.length > 0 || isNewConversation) {
-            await conversationManagement.generateSummary(
+            const progressModalShown = await conversationManagement.generateSummary(
               chatHistory,
               userPreferences?.topics || [],
               userPreferences?.formality || 'friendly',
               conversationId || ''
             );
-            router.push('/dashboard');
+            // Progress modal will handle navigation if learning goals exist
+            // If no learning goals, navigate to dashboard
+            if (!progressModalShown) {
+              router.push('/dashboard');
+            }
           } else {
             router.push('/dashboard');
           }

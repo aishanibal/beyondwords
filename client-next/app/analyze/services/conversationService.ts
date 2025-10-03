@@ -172,19 +172,27 @@ export const generateConversationSummary = async (
     const headers = await getAuthHeaders();
     
     const response = await axios.post(`/api/conversation-summary`, {
-      messages: sessionMessages,
-      language: language,
-      topics: topics,
-      formality: formality
+      chat_history: sessionMessages,
+      subgoal_instructions: '',
+      user_topics: topics,
+      target_language: language,
+      feedback_language: 'en',
+      is_continued_conversation: false,
+      conversation_id: conversationId
     }, { headers });
 
     if (response.data.success) {
-      const summary = response.data.summary;
+      const summary = {
+        title: response.data.title,
+        synopsis: response.data.synopsis,
+        learningGoals: response.data.progress_percentages || []
+      };
       
       // Update conversation title and synopsis
       await axios.put(`/api/conversations/${conversationId}/title`, {
         title: summary.title,
-        synopsis: summary.synopsis
+        synopsis: summary.synopsis,
+        progress_data: summary.learningGoals
       }, { headers });
 
       return summary;

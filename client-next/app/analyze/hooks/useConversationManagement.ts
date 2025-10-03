@@ -133,8 +133,8 @@ export const useConversationManagement = (
     topics: string[],
     formality: string,
     conversationId: string
-  ) => {
-    if (!user || !conversationId) return;
+  ): Promise<boolean> => {
+    if (!user || !conversationId) return false;
 
     try {
       const summary = await generateConversationSummary(
@@ -183,10 +183,13 @@ export const useConversationManagement = (
             levelUpEvents
           });
           setShowProgressModal(true);
+          return true; // Progress modal was shown
         }
       }
+      return false; // No progress modal shown
     } catch (error) {
       console.error('Error generating conversation summary:', error);
+      return false;
     }
   }, [user, language, setUserProgress, setProgressData, setShowProgressModal]);
 
