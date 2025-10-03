@@ -94,7 +94,17 @@ const ChatMessagesContainer: React.FC<ChatMessagesContainerProps> = ({
   loadMoreMessages,
   userPreferences,
   handleSuggestionButtonClick,
-  isLoadingSuggestions
+  isLoadingSuggestions,
+  // Suggestion carousel props
+  showSuggestionCarousel,
+  suggestionMessages,
+  currentSuggestionIndex,
+  onNavigateSuggestion,
+  onExplainSuggestion,
+  onPlaySuggestionTTS,
+  isTranslatingSuggestion,
+  showSuggestionTranslations,
+  suggestionTranslations
 }) => {
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const [virtualItems, setVirtualItems] = useState<{ index: number; start: number }[]>([]);
