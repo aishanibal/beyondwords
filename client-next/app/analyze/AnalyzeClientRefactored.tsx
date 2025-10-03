@@ -699,9 +699,9 @@ const AnalyzeContentInner = () => {
     try {
       const token = localStorage.getItem('jwt');
       const requestData = {
-        text: text,
-        fromLanguage: language,
-        toLanguage: 'en',
+        ai_message: text,
+        chat_history: chatHistory,
+        language: language,
         user_level: userPreferences?.userLevel || 'beginner',
         user_topics: userPreferences?.topics || [],
         formality: userPreferences?.formality || 'friendly',
@@ -728,31 +728,22 @@ const AnalyzeContentInner = () => {
       const parsedTranslation = parseQuickTranslation(translationText);
       console.log('[DEBUG] Parsed translation:', parsedTranslation);
       
-      // Test with sample data if no translation received
+      // Handle translation result
       if (!translationText || Object.keys(parsedTranslation.wordTranslations).length === 0) {
-        console.log('[DEBUG] No translation received, using test data');
-        const testResponse = `**Full Translation:**
-Yes, the day really flies by, doesn't it? So every day, you should learn something new!
-**Word-by-Word Breakdown:**
-Ang / ang -- The (article)
-bilis / bilis -- fast/quick
-talaga / talaga -- really/truly
-ng / ng -- of (preposition)
-araw / araw -- day
-'no / 'no -- isn't it/right (question particle)
-Kaya / kaya -- so/therefore
-dapat / dapat -- should/must
-bawat / bawat -- each/every
-araw / araw -- day
-may / may -- there is/has
-bago / bago -- new
-kang / kang -- you (contracted ka + ng)
-natutunan / natutunan -- learned (past tense)`;
-        
-        const testParsedTranslation = parseQuickTranslation(testResponse);
-        console.log('[DEBUG] Test parsed translation:', testParsedTranslation);
-        messageInteractions.setQuickTranslations(prev => ({ ...prev, [messageIndex]: testParsedTranslation }));
+        console.log('[DEBUG] No translation received, setting error state');
+        messageInteractions.setQuickTranslations(prev => ({ 
+          ...prev, 
+          [messageIndex]: { 
+            fullTranslation: 'Translation failed - please try again', 
+            wordTranslations: {},
+            romanized: '',
+            error: true,
+            generatedWords: [],
+            generatedScriptWords: []
+          } 
+        }));
       } else {
+        console.log('[DEBUG] Translation received successfully, setting parsed translation');
         messageInteractions.setQuickTranslations(prev => ({ ...prev, [messageIndex]: parsedTranslation }));
       }
       
