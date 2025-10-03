@@ -1,10 +1,11 @@
 import { useRef, useState, useCallback } from 'react';
-import { processAudioWithPipeline } from '../services/audioService';
+import { processAudioWithPipeline, processAudioTranscription, getAIResponse, getShortFeedback } from '../services/audioService';
 import { saveMessageToBackend } from '../services/conversationService';
 import { getTTSText } from '../services/audioService';
 import { ChatMessage } from '../types/analyze';
 import { TTS_TIMEOUTS } from '../config/constants';
 import { useTTS } from './useTTS';
+import { isScriptLanguage, generateRomanizedText, formatScriptLanguageText } from '../utils/romanization';
 
 export const useAudioHandlers = (
   user: any,
@@ -177,164 +178,147 @@ export const useAudioHandlers = (
       };
       
       console.log('🔍 [DEBUG] Adding placeholder message to chat history');
-      // Add placeholder message immediately
       setChatHistory(prev => [...prev, placeholderMessage]);
-      
-      // Process audio with full pipeline
-      console.log('🔍 [DEBUG] Starting processAudioWithPipeline...');
-      const result = await processAudioWithPipeline(
-        audioBlob,
-        language,
-        chatHistory,
-        userPreferences,
-        autoSpeak,
-        enableShortFeedback,
-        user
-      );
-      console.log('🔍 [DEBUG] processAudioWithPipeline completed:', result);
-      
-      // Replace the placeholder message with the actual transcript
-      console.log('🔍 [DEBUG] Replacing placeholder with transcription:', result.transcription);
+
+      // Step 1: Transcription
+      console.log('🔍 [PIPELINE] Step 1: Getting transcription (optimistic UI)...');
+      const transcription = await processAudioTranscription(audioBlob, language);
+      console.log('🔍 [PIPELINE] Transcription received:', transcription);
+
+      // Romanize if needed
+      let userRomanizedText = '';
+      if (isScriptLanguage(language) && transcription !== 'Speech recorded') {
+        try {
+          userRomanizedText = await generateRomanizedText(transcription, language);
+        } catch (e) {
+          console.warn('🔍 [PIPELINE] Romanization failed, continuing with plain text');
+        }
+      }
+
+      // Replace placeholder with actual transcription
+      const userMessage: ChatMessage = {
+        sender: 'User',
+        text: transcription,
+        romanizedText: userRomanizedText,
+        timestamp: new Date(),
+        isFromOriginalConversation: false
+      };
+
+      console.log('🔍 [DEBUG] Replacing placeholder with transcription:', transcription);
       setChatHistory(prev => {
-        const updated = prev.map((msg, index) => {
-          if (msg.isProcessing && msg.sender === 'User') {
-            console.log('🔍 [DEBUG] Found processing message, replacing with:', result.transcription);
-            return {
-              ...msg,
-              text: result.transcription,
-              romanizedText: result.userMessage.romanizedText,
-              isProcessing: false
-            };
+        const updated = prev.map((msg) => {
+          if ((msg as any).isProcessing && msg.sender === 'User') {
+            return { ...msg, text: userMessage.text, romanizedText: userMessage.romanizedText, isProcessing: false } as any;
           }
           return msg;
         });
-        console.log('🔍 [DEBUG] Updated chat history after user message replacement:', updated);
-        return updated;
+        return updated as ChatMessage[];
       });
-      
-      // Save user message to backend
+
+      // Save user message
       if (conversationId) {
         console.log('[MESSAGE_SAVE] Saving user message to conversation:', conversationId);
-        await saveMessageToBackend(result.userMessage, conversationId);
+        await saveMessageToBackend(userMessage, conversationId);
       } else {
         console.warn('[MESSAGE_SAVE] No conversation ID available for user message');
       }
-      
-      // Show short feedback if available
-      if (result.shortFeedback) {
-        setShortFeedback(result.shortFeedback);
+
+      // Optional: short feedback
+      if (autoSpeak && enableShortFeedback && transcription !== 'Speech recorded') {
+        try {
+          const short = await getShortFeedback(transcription, language);
+          if (short) setShortFeedback(short);
+        } catch (e) {
+          console.warn('🔍 [PIPELINE] Short feedback failed');
+        }
       }
-      
-      // Add AI response if present
-      if (result.aiMessage) {
-        // Add AI processing message
-        const aiProcessingMessage = { 
-          sender: 'AI', 
-          text: '🤖 Processing AI response...', 
-          romanizedText: '',
+
+      // Add AI processing placeholder BEFORE requesting AI
+      const aiProcessingMessage: ChatMessage & { isProcessing?: boolean } = {
+        sender: 'AI',
+        text: '🤖 Processing AI response...',
+        romanizedText: '',
+        timestamp: new Date(),
+        isFromOriginalConversation: false,
+        isProcessing: true
+      } as any;
+      console.log('🔍 [DEBUG] Adding AI processing message to chat history');
+      setChatHistory(prev => [...prev, aiProcessingMessage as any]);
+
+      // Step 2: Get AI response
+      console.log('🔍 [PIPELINE] Step 2: Getting AI response...');
+      const updatedChatHistory = [...chatHistory, userMessage];
+      const aiResponse = await getAIResponse(transcription, updatedChatHistory, language, userPreferences, user);
+      console.log('🔍 [PIPELINE] AI response received:', aiResponse);
+
+      // Format AI response
+      let aiMessage: ChatMessage | null = null;
+      if (aiResponse) {
+        const formatted = formatScriptLanguageText(aiResponse, language);
+        aiMessage = {
+          sender: 'AI',
+          text: formatted.mainText,
+          romanizedText: formatted.romanizedText || '',
           timestamp: new Date(),
-          isFromOriginalConversation: false,
-          isProcessing: true
+          isFromOriginalConversation: false
         };
-        console.log('🔍 [DEBUG] Adding AI processing message to chat history');
-        setChatHistory(prev => [...prev, aiProcessingMessage]);
-        
-        // Replace processing message with actual AI response
+      }
+
+      if (aiMessage) {
+        // Replace AI processing placeholder with actual response
         setChatHistory(prev => {
-          const updated = prev.map((msg, index) => {
-            if (msg.isProcessing && msg.sender === 'AI') {
-              console.log('🔍 [DEBUG] Found AI processing message, replacing with:', result.aiMessage!.text);
-              return {
-                ...msg,
-                text: result.aiMessage!.text,
-                romanizedText: result.aiMessage!.romanizedText,
-                ttsUrl: null,
-                isProcessing: false
-              };
+          const updated = prev.map((msg) => {
+            if ((msg as any).isProcessing && msg.sender === 'AI') {
+              return { ...msg, text: aiMessage!.text, romanizedText: aiMessage!.romanizedText, isProcessing: false } as any;
             }
             return msg;
           });
-          console.log('🔍 [DEBUG] Updated chat history after AI message replacement:', updated);
-          return updated;
+          return updated as ChatMessage[];
         });
-        
-        // Save AI message to backend
+
+        // Save AI message
         if (conversationId) {
           console.log('[MESSAGE_SAVE] Saving AI message to conversation:', conversationId);
-          await saveMessageToBackend(result.aiMessage, conversationId);
+          await saveMessageToBackend(aiMessage, conversationId);
         } else {
           console.warn('[MESSAGE_SAVE] No conversation ID available for AI message');
         }
-        
+
         // Play TTS for AI response immediately
         console.log('🔍 [AI_TTS] Playing TTS for AI response immediately');
-        const ttsText = getTTSText(result.aiMessage, userPreferences?.romanizationDisplay || 'both', language);
+        const ttsText = getTTSText(aiMessage, userPreferences?.romanizationDisplay || 'both', language);
         const cacheKey = `ai_message_auto_${Date.now()}`;
-        
-        console.log('🔍 [AI_TTS] TTS text:', ttsText);
-        console.log('🔍 [AI_TTS] Language:', language);
-        console.log('🔍 [AI_TTS] Cache key:', cacheKey);
-        console.log('🔍 [AI_TTS] playTTSAudio function:', typeof playTTSAudio);
-        
-        // Play audio immediately for all AI messages
-        console.log('🔍 [AI_TTS] Calling playTTSAudio...');
-        playTTSAudio(ttsText, language, cacheKey).then(() => {
-          console.log('🔍 [AI_TTS] TTS playback completed successfully');
-        }).catch(error => {
+        try {
+          await playTTSAudio(ttsText, language, cacheKey);
+        } catch (error) {
           console.error('🔍 [AI_TTS] Error playing AI TTS:', error);
-        });
-        
-        // Also queue for autospeak mode if enabled
+        }
         if (autoSpeak) {
-          console.log('[DEBUG] Adding AI response TTS to queue for autospeak mode');
           setAiTTSQueued({ text: ttsText, language, cacheKey });
         }
       } else {
-        console.log('🔍 [DEBUG] No AI response found!');
-        
-        // Add a fallback message when no AI response is received
-        const fallbackMessage = {
+        console.log('🔍 [DEBUG] No AI response found! Replacing with fallback');
+        const fallbackMessage: ChatMessage = {
           sender: 'AI',
           text: 'Hello! What would you like to talk about today?',
           romanizedText: '',
           timestamp: new Date(),
           isFromOriginalConversation: false
         };
-        
         setChatHistory(prev => {
-          const updated = prev.map((msg, index) => {
-            if (msg.isProcessing && msg.sender === 'AI') {
-              console.log('🔍 [DEBUG] Replacing processing message with fallback');
-              return fallbackMessage;
+          const updated = prev.map((msg) => {
+            if ((msg as any).isProcessing && msg.sender === 'AI') {
+              return fallbackMessage as any;
             }
             return msg;
           });
-          return updated;
+          return updated as ChatMessage[];
         });
-
-        // Play TTS for the initial fallback message so the first message speaks
         try {
-          const fallbackChatMessage: ChatMessage = {
-            sender: 'AI',
-            text: fallbackMessage.text,
-            romanizedText: fallbackMessage.romanizedText,
-            timestamp: fallbackMessage.timestamp,
-            isFromOriginalConversation: false
-          };
-          const ttsText = getTTSText(
-            fallbackChatMessage,
-            userPreferences?.romanizationDisplay || 'both',
-            language
-          );
+          const ttsText = getTTSText(fallbackMessage, userPreferences?.romanizationDisplay || 'both', language);
           const cacheKey = `ai_message_fallback_${Date.now()}`;
-          console.log('🔍 [AI_TTS] Playing TTS for fallback AI message');
-          playTTSAudio(ttsText, language, cacheKey).catch(error => {
-            console.error('🔍 [AI_TTS] Error playing fallback AI TTS:', error);
-          });
-
-          if (autoSpeak) {
-            setAiTTSQueued({ text: ttsText, language, cacheKey });
-          }
+          await playTTSAudio(ttsText, language, cacheKey);
+          if (autoSpeak) setAiTTSQueued({ text: ttsText, language, cacheKey });
         } catch (e) {
           console.error('🔍 [AI_TTS] Failed to trigger fallback TTS:', e);
         }
