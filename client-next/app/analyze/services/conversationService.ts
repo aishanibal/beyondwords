@@ -2,6 +2,7 @@ import axios from 'axios';
 import { supabase } from '../../../lib/supabase';
 import { getUserLanguageDashboards } from '../../../lib/api';
 import { ChatMessage } from '../types/analyze';
+import { LEARNING_GOALS } from '../../lib/preferences';
 
 // Helper to get JWT token
 export const getAuthHeaders = async () => {
@@ -188,11 +189,39 @@ export const generateConversationSummary = async (
         learningGoals: response.data.progress_percentages || []
       };
       
-      // Update conversation title and synopsis
-      // Convert progress data to proper format for database
+      // Build progress data expected by dashboard (subgoalIds aligned to percentages)
+      let subgoalIds: string[] = [];
+      let subgoalNames: string[] = [];
+
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const userId = session?.user?.id;
+        if (userId) {
+          const dashboards = await getUserLanguageDashboards(userId);
+          const success = (dashboards as any)?.success;
+          const data = (dashboards as any)?.data;
+          const dashboard = success ? (data || []).find((d: any) => d.language === language) : null;
+          const userLearningGoals: string[] = dashboard?.learning_goals || [];
+
+          // Map goalIds to subgoalIds/subgoalNames in deterministic order
+          userLearningGoals.forEach((goalId: string) => {
+            const goal = LEARNING_GOALS.find(g => g.id === goalId);
+            if (goal?.subgoals) {
+              goal.subgoals.forEach(sub => {
+                subgoalIds.push(sub.id);
+                subgoalNames.push(goal.goal);
+              });
+            }
+          });
+        }
+      } catch (e) {
+        console.warn('[CONVERSATION_SERVICE] Failed to fetch user dashboard for learning goals, saving percentages only');
+      }
+
       const progressData = {
-        goals: [], // We'll populate this from user's learning goals
-        percentages: summary.learningGoals
+        subgoalIds,
+        subgoalNames,
+        percentages: summary.learningGoals as number[]
       };
       
       console.log('🔍 [CONVERSATION_SERVICE] Updating conversation with:', {
