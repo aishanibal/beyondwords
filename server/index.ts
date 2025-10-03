@@ -790,21 +790,25 @@ app.post('/auth/exchange', async (req: Request, res: Response) => {
       const newUser = {
         email,
         name: name || email.split('@')[0],
-        google_id: null, // This is from Supabase, not Google OAuth
-        role: 'user',
+        google_id: undefined, // This is from Supabase, not Google OAuth
+        role: 'user' as const,
         onboarding_complete: false
       };
       
-      const result = await createUser(newUser);
-      if (result.success && result.data) {
-        user = result.data;
+      try {
+        user = await createUser(newUser);
         console.log('[AUTH_EXCHANGE] New user created with ID:', user.id);
-      } else {
-        console.error('[AUTH_EXCHANGE] Failed to create user:', result.error);
+      } catch (error: any) {
+        console.error('[AUTH_EXCHANGE] Failed to create user:', error);
         return res.status(500).json({ error: 'Failed to create user' });
       }
     } else {
       console.log('[AUTH_EXCHANGE] Found existing user with ID:', user.id);
+    }
+    
+    // Ensure user exists before proceeding
+    if (!user) {
+      return res.status(500).json({ error: 'User not found or created' });
     }
     
     // Generate JWT token
