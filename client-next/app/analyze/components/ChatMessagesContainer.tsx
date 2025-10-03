@@ -326,15 +326,13 @@ const ChatMessagesContainer: React.FC<ChatMessagesContainerProps> = ({
           });
         })()}
         
-        {/* Suggestion Carousel - positioned after the last message */}
+        {/* Suggestion Carousel - positioned after the last visible message */}
         {showSuggestionCarousel && suggestionMessages.length > 0 && (
           <div style={{
-            position: 'absolute',
-            top: `${totalHeight}px`,
-            left: 0,
-            right: 0,
+            position: 'relative',
             padding: '0.75rem 0.75rem 0.75rem 0.75rem',
-            marginTop: '0.5rem'
+            marginTop: '0.5rem',
+            width: '100%'
           }}>
             <SuggestionCarousel
               isDarkMode={isDarkMode}
