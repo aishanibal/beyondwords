@@ -1850,7 +1850,7 @@ def get_short_feedback(user_input: str, context: str = "", language: str = 'en',
     try:
         print(f"[SHORT_FEEDBACK] Prompt sent to AI:\n{prompt}")
         print(f"[SHORT_FEEDBACK] Prompt length: {len(prompt)} characters")
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        model = genai.GenerativeModel("gemini-1.5-flash-001")
         response = model.generate_content(prompt)
         if response and response.text:
             print(f"[SHORT_FEEDBACK] AI response: {response.text[:200]}...")
@@ -1877,7 +1877,7 @@ def get_translation(text: str, source_language: str = 'auto', target_language: s
         return {"translation": "[Translation unavailable - Google AI not configured]", "breakdown": "", "romanized": ""}
     
     try:
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        model = genai.GenerativeModel("gemini-1.5-flash-001")
         
         # Check if source language is a script language
         is_script = source_language in LanguageTutor.SCRIPT_LANGUAGES
@@ -2082,7 +2082,9 @@ User topics: {user_topics}
     print("=" * 80)
 
     try:
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        # Try the correct model name for the current API version
+        print(f"DEBUG: Attempting to use model: gemini-1.5-flash-001")
+        model = genai.GenerativeModel("gemini-1.5-flash-001")
         response = model.generate_content(prompt)
         if response and response.text:
             # Parse the response
@@ -2384,7 +2386,7 @@ def get_quick_translation(ai_message: str, language: str = 'en', user_level: str
         return "Translation unavailable - Google AI not configured"
     
     try:
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        model = genai.GenerativeModel("gemini-1.5-flash-001")
         
         # Check if language is a script language
         is_script = language in LanguageTutor.SCRIPT_LANGUAGES
@@ -2519,7 +2521,7 @@ def _get_ai_breakdown(ai_message: str, language: str, user_level: str, feedback_
         if not GOOGLE_AI_AVAILABLE:
             return "AI translation unavailable - Google AI not configured"
         
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        model = genai.GenerativeModel("gemini-1.5-flash-001")
         
         # Check if language is a script language
         is_script = language in LanguageTutor.SCRIPT_LANGUAGES
