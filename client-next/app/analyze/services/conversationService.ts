@@ -189,11 +189,20 @@ export const generateConversationSummary = async (
       };
       
       // Update conversation title and synopsis
+      console.log('🔍 [CONVERSATION_SERVICE] Updating conversation with:', {
+        conversationId,
+        title: summary.title,
+        synopsis: summary.synopsis,
+        progress_data: summary.learningGoals
+      });
+      
       await axios.put(`/api/conversations/${conversationId}/title`, {
         title: summary.title,
         synopsis: summary.synopsis,
         progress_data: summary.learningGoals
       }, { headers });
+      
+      console.log('🔍 [CONVERSATION_SERVICE] Conversation updated successfully');
 
       return summary;
     }

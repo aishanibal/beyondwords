@@ -146,12 +146,38 @@ export const useConversationManagement = (
       );
 
       if (summary && summary.learningGoals && summary.learningGoals.length > 0) {
-        // Process learning goals and track progress
-        const currentProgressArray = Object.values(userProgress); // Get from userProgress state
+        // summary.learningGoals is actually an array of progress percentages from the API
+        const progressPercentages = summary.learningGoals as number[];
+        
+        // Get the current user's learning goals to map progress to subgoals
+        const currentProgressArray = Object.values(userProgress);
         const levelUpEvents: LevelUpEvent[] = [];
-
-        for (const goal of summary.learningGoals) {
-          const result = updateSubgoalProgress(goal.id, goal.progress, currentProgressArray);
+        
+        // Map progress percentages to subgoal IDs
+        // We need to get the subgoal IDs from the user's current learning goals
+        const userLearningGoals = user?.learning_goals ? 
+          (typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : user.learning_goals) : [];
+        
+        const subgoalIds: string[] = [];
+        const subgoalNames: string[] = [];
+        
+        // Extract subgoal IDs from user's learning goals
+        userLearningGoals.forEach((goalId: string) => {
+          const goal = LEARNING_GOALS.find(g => g.id === goalId);
+          if (goal?.subgoals) {
+            goal.subgoals.forEach(subgoal => {
+              subgoalIds.push(subgoal.id);
+              subgoalNames.push(goal.goal);
+            });
+          }
+        });
+        
+        // Process each progress percentage
+        for (let i = 0; i < Math.min(progressPercentages.length, subgoalIds.length); i++) {
+          const subgoalId = subgoalIds[i];
+          const progress = progressPercentages[i];
+          
+          const result = updateSubgoalProgress(subgoalId, progress, currentProgressArray);
           
           if (result.levelUpEvent) {
             levelUpEvents.push(result.levelUpEvent);
@@ -170,16 +196,10 @@ export const useConversationManagement = (
         setUserProgress(updatedProgressObj);
         
         // Show progress modal if there are learning goals (regardless of level up events)
-        if (summary.learningGoals && summary.learningGoals.length > 0) {
-          const percentages = currentProgressArray.map(p => p.percentage);
-          const subgoalNames = currentProgressArray.map(progress => {
-            const goal = LEARNING_GOALS.find(g => g.subgoals?.some(sg => sg.id === progress.subgoalId));
-            return goal ? goal.goal : progress.subgoalId;
-          });
-          
+        if (progressPercentages.length > 0) {
           setProgressData({
-            percentages,
-            subgoalNames,
+            percentages: progressPercentages,
+            subgoalNames: subgoalNames.slice(0, progressPercentages.length),
             levelUpEvents
           });
           setShowProgressModal(true);
