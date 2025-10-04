@@ -311,16 +311,18 @@ export const useSuggestions = (
     console.log('🔍 [DEBUG] Playing suggestion TTS:', suggestion.text, index);
     try {
       const token = localStorage.getItem('jwt');
-      const response = await axios.post('/api/tts', {
-        text: suggestion.text,
-        language: language,
-        cacheKey: `suggestion_${index}_${Date.now()}`
-      }, {
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
-        }
-      });
+        // Call Express backend directly instead of Next.js API route
+        const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://beyondwords-express.onrender.com';
+        const response = await axios.post(`${backendUrl}/api/tts`, {
+          text: suggestion.text,
+          language: language,
+          cacheKey: `suggestion_${index}_${Date.now()}`
+        }, {
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          }
+        });
       
       if (response.data.ttsUrl) {
         const audio = new Audio(response.data.ttsUrl);

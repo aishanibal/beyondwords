@@ -145,7 +145,9 @@ export const playTTSAudio = async (text: string, language: string, cacheKey: str
     const cleanText = cleanTextForTTS(text);
     const token = localStorage.getItem('jwt');
     
-    const response = await axios.post('/api/tts', {
+    // Call Express backend directly instead of Next.js API route
+    const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://beyondwords-express.onrender.com';
+    const response = await axios.post(`${backendUrl}/api/tts`, {
       text: cleanText,
       language: language,
       cacheKey: cacheKey
