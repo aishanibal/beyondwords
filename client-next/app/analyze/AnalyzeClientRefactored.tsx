@@ -301,13 +301,14 @@ const AnalyzeContentInner = () => {
     }
   }, [urlTopics]);
 
- // Load conversation when URL conversation ID is available
+  // Load conversation when URL conversation ID is available
   useEffect(() => {
-    if (urlConversationId && user && !conversationId) {
+    if (urlConversationId && user) {
       console.log('[CONVERSATION_LOAD] Loading conversation from URL:', urlConversationId);
+      // Always load conversation if URL has conversation ID, regardless of current conversationId state
       conversationManagement.loadConversation(urlConversationId);
     }
-  }, [urlConversationId, user, conversationId, conversationManagement]);
+  }, [urlConversationId, user, conversationManagement]);
 
   // Add global click handler for word clicks and popup management
   useEffect(() => {
@@ -395,15 +396,26 @@ const AnalyzeContentInner = () => {
 
   // Show topic modal if no conversation ID - from original
   useEffect(() => {
-    if (!urlConversationId && !conversationId && user && chatHistory.length === 0 && !isLoadingConversation) {
+    // Only show topic modal if:
+    // 1. No URL conversation ID
+    // 2. No current conversation ID
+    // 3. User is authenticated
+    // 4. No chat history
+    // 5. Not currently loading a conversation
+    // 6. URL parameters are fully loaded (not empty string)
+    if (!urlConversationId && !conversationId && user && chatHistory.length === 0 && !isLoadingConversation && urlParams.conversationId !== '') {
       console.log('[TOPIC_MODAL] Showing topic modal - no existing conversation');
       setShowTopicModal(true);
     } else if (conversationId && chatHistory.length > 0) {
       // If we have a conversation ID and chat history, ensure topic modal is closed
       console.log('[TOPIC_MODAL] Hiding topic modal - conversation loaded with messages');
       setShowTopicModal(false);
+    } else if (urlConversationId && isLoadingConversation) {
+      // If we're loading a conversation from URL, keep topic modal closed
+      console.log('[TOPIC_MODAL] Keeping topic modal closed - loading conversation from URL');
+      setShowTopicModal(false);
     }
-  }, [urlConversationId, conversationId, user, chatHistory.length, isLoadingConversation]);
+  }, [urlConversationId, conversationId, user, chatHistory.length, isLoadingConversation, urlParams.conversationId]);
 
   // Show save prompt if localStorage has chat history - from original
   useEffect(() => {
@@ -1005,6 +1017,15 @@ const AnalyzeContentInner = () => {
 
 
 
+
+  // Show loading while loading conversation
+  if (isLoadingConversation) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-lg">Loading conversation...</div>
+      </div>
+    );
+  }
 
   return (
     <>

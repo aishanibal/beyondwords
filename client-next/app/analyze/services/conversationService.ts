@@ -118,29 +118,48 @@ export const saveSessionToBackend = async (
 // Load existing conversation
 export const loadExistingConversation = async (conversationId: string) => {
   try {
+    console.log('[CONVERSATION_SERVICE] Loading conversation:', conversationId);
     const headers = await getAuthHeaders();
     const response = await axios.get(`/api/conversations/${conversationId}`, { headers });
+
+    console.log('[CONVERSATION_SERVICE] Response status:', response.status);
+    console.log('[CONVERSATION_SERVICE] Response data:', response.data);
 
     if (response.data.success) {
       const conversation = response.data.conversation;
       
-      // Parse messages from conversation
-      const messages: ChatMessage[] = conversation.messages || [];
+      // Parse messages from conversation and ensure proper structure
+      const messages: ChatMessage[] = (conversation.messages || []).map((msg: any) => ({
+        sender: msg.sender,
+        text: msg.text,
+        romanizedText: msg.romanized_text || '',
+        timestamp: new Date(msg.created_at || msg.timestamp),
+        isFromOriginalConversation: true,
+        messageType: msg.message_type || 'text',
+        audioFilePath: msg.audio_file_path,
+        detailedFeedback: msg.detailed_feedback
+      }));
+      
+      console.log('[CONVERSATION_SERVICE] Parsed messages:', messages.length);
       
       return {
         messages,
         conversationId,
         description: conversation.description || '',
-        language: conversation.language,
+        language: conversation.language || conversation.language_dashboards?.language,
         formality: conversation.formality,
-        topics: conversation.topics,
-        createdAt: conversation.createdAt
+        topics: conversation.topics || [],
+        createdAt: conversation.created_at || conversation.createdAt
       };
+    } else {
+      console.warn('[CONVERSATION_SERVICE] Conversation not found or access denied');
+      return null;
     }
-    
-    return null;
-  } catch (error) {
-    console.error('Error loading conversation:', error);
+  } catch (error: any) {
+    console.error('[CONVERSATION_SERVICE] Error loading conversation:', error);
+    if (error.response) {
+      console.error('[CONVERSATION_SERVICE] Error response:', error.response.status, error.response.data);
+    }
     return null;
   }
 };

@@ -69,34 +69,59 @@ export const useConversationManagement = (
 
   // Load existing conversation
   const loadConversation = useCallback(async (conversationId: string) => {
-    if (!user) return;
+    if (!user) {
+      console.warn('[CONVERSATION_LOAD] No user available, cannot load conversation');
+      return;
+    }
 
+    console.log('[CONVERSATION_LOAD] Starting to load conversation:', conversationId);
     setIsLoadingConversation(true);
+    
     try {
       const result = await loadExistingConversation(conversationId);
       
       if (result) {
+        console.log('[CONVERSATION_LOAD] Successfully loaded conversation with', result.messages?.length || 0, 'messages');
+        
         // Set conversation data
-        setChatHistory(result.messages);
+        setChatHistory(result.messages || []);
         setConversationId(conversationId);
-        setConversationDescription(result.description);
+        setConversationDescription(result.description || '');
         
         // Set language, formality, topics from conversation
         if (result.language) {
           // Language will be handled by parent component
+          console.log('[CONVERSATION_LOAD] Conversation language:', result.language);
         }
         if (result.formality) {
           setUserPreferences(prev => ({ ...prev, formality: result.formality }));
+          console.log('[CONVERSATION_LOAD] Set formality:', result.formality);
         }
         if (result.topics) {
           setUserPreferences(prev => ({ ...prev, topics: result.topics }));
+          console.log('[CONVERSATION_LOAD] Set topics:', result.topics);
         }
         
         // Set session start time
-        setSessionStartTime(new Date(result.createdAt));
+        if (result.createdAt) {
+          setSessionStartTime(new Date(result.createdAt));
+          console.log('[CONVERSATION_LOAD] Set session start time:', result.createdAt);
+        }
+      } else {
+        console.warn('[CONVERSATION_LOAD] No conversation data returned for ID:', conversationId);
+        // Clear any existing conversation state if loading failed
+        setChatHistory([]);
+        setConversationId(null);
+        setConversationDescription('');
+        setSessionStartTime(null);
       }
     } catch (error) {
-      console.error('Error loading conversation:', error);
+      console.error('[CONVERSATION_LOAD] Error loading conversation:', error);
+      // Clear conversation state on error
+      setChatHistory([]);
+      setConversationId(null);
+      setConversationDescription('');
+      setSessionStartTime(null);
     } finally {
       setIsLoadingConversation(false);
     }
