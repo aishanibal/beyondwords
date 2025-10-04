@@ -402,12 +402,22 @@ const AnalyzeContentInner = () => {
   useEffect(() => {
     // Add a small delay to ensure URL parameters are fully loaded
     const timer = setTimeout(() => {
+      console.log('[TOPIC_MODAL] Checking conditions:', {
+        urlConversationId,
+        user: !!user,
+        isLoadingConversation,
+        conversationId,
+        chatHistoryLength: chatHistory.length,
+        urlParamsConversationId: urlParams.conversationId
+      });
+
       // Show topic modal if:
       // 1. No URL conversation ID (new conversation)
       // 2. User is authenticated
       // 3. Not currently loading a conversation
-      // 4. URL parameters are fully loaded (not empty string)
-      if (!urlConversationId && user && !isLoadingConversation && urlParams.conversationId !== '') {
+      // 4. No current conversation ID
+      // 5. No chat history
+      if (!urlConversationId && user && !isLoadingConversation && !conversationId && chatHistory.length === 0) {
         console.log('[TOPIC_MODAL] Showing topic modal - new conversation');
         setShowTopicModal(true);
       } else if (urlConversationId) {
@@ -419,10 +429,10 @@ const AnalyzeContentInner = () => {
         console.log('[TOPIC_MODAL] Hiding topic modal - conversation loaded with messages');
         setShowTopicModal(false);
       }
-    }, 100); // Small delay to ensure URL params are loaded
+    }, 200); // Increased delay to ensure URL params are loaded
 
     return () => clearTimeout(timer);
-  }, [urlConversationId, conversationId, user, chatHistory.length, isLoadingConversation, urlParams.conversationId]);
+  }, [urlConversationId, conversationId, user, chatHistory.length, isLoadingConversation]);
 
   // Show save prompt if localStorage has chat history - from original
   useEffect(() => {
