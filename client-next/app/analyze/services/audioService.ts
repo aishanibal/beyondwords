@@ -139,30 +139,62 @@ export const getTTSText = (message: ChatMessage, romanizationDisplay: string, la
   }
 };
 
-// Play TTS audio
-export const playTTSAudio = async (text: string, language: string, cacheKey: string): Promise<void> => {
-  try {
-    const cleanText = cleanTextForTTS(text);
-    const token = localStorage.getItem('jwt');
-    
-    const response = await axios.post('/api/tts', {
-      text: cleanText,
-      language: language,
-      cacheKey: cacheKey
-    }, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {})
+// Retry TTS request with exponential backoff
+const retryTTSRequest = async (
+  text: string, 
+  language: string, 
+  cacheKey: string, 
+  maxRetries: number = 3,
+  baseDelay: number = 1000
+): Promise<void> => {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const cleanText = cleanTextForTTS(text);
+      const token = localStorage.getItem('jwt');
+      
+      const response = await axios.post('/api/tts', {
+        text: cleanText,
+        language: language,
+        cacheKey: cacheKey
+      }, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        }
+      });
+      
+      if (response.data.ttsUrl) {
+        const audio = new Audio(response.data.ttsUrl);
+        await audio.play();
+        return; // Success, exit retry loop
       }
-    });
-    
-    if (response.data.ttsUrl) {
-      const audio = new Audio(response.data.ttsUrl);
-      await audio.play();
+    } catch (error: any) {
+      console.error(`TTS attempt ${attempt} failed:`, error);
+      
+      // If it's the last attempt, handle the error
+      if (attempt === maxRetries) {
+        if (error.response?.status === 503) {
+          console.warn('🔊 TTS service is temporarily unavailable. The Python API may be starting up. Audio will be available shortly.');
+          console.info('💡 Tip: TTS audio may take a moment to become available. Please try again in a few seconds.');
+        } else if (error.response?.status === 500) {
+          console.warn('🔊 TTS generation failed. Please try again later.');
+        } else {
+          console.warn('🔊 TTS request failed:', error.message);
+        }
+        return;
+      }
+      
+      // Wait before retrying (exponential backoff)
+      const delay = baseDelay * Math.pow(2, attempt - 1);
+      console.log(`⏳ Retrying TTS in ${delay}ms... (attempt ${attempt + 1}/${maxRetries})`);
+      await new Promise(resolve => setTimeout(resolve, delay));
     }
-  } catch (error) {
-    console.error('Error playing TTS audio:', error);
   }
+};
+
+// Play TTS audio with retry mechanism
+export const playTTSAudio = async (text: string, language: string, cacheKey: string): Promise<void> => {
+  await retryTTSRequest(text, language, cacheKey);
 };
 
 // Process audio with full pipeline

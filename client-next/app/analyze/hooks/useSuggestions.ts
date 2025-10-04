@@ -326,8 +326,17 @@ export const useSuggestions = (
         const audio = new Audio(response.data.ttsUrl);
         await audio.play();
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error playing suggestion TTS:', error);
+      
+      // Handle specific error cases
+      if (error.response?.status === 503) {
+        console.warn('TTS service is temporarily unavailable for suggestion audio.');
+      } else if (error.response?.status === 500) {
+        console.warn('Suggestion TTS generation failed. Please try again later.');
+      } else {
+        console.warn('Suggestion TTS request failed:', error.message);
+      }
     }
   }, [language]);
 

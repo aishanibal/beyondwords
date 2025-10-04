@@ -18,7 +18,8 @@ export const useAudioHandlers = (
   isAnyTTSPlaying: boolean,
   setIsAnyTTSPlaying: React.Dispatch<React.SetStateAction<boolean>>,
   setAiTTSQueued: React.Dispatch<React.SetStateAction<{ text: string; language: string; cacheKey: string } | null>>,
-  setShortFeedback: React.Dispatch<React.SetStateAction<string>>
+  setShortFeedback: React.Dispatch<React.SetStateAction<string>>,
+  setIsPlayingShortFeedbackTTS: React.Dispatch<React.SetStateAction<boolean>>
 ) => {
   const recognitionRef = useRef<any>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -260,9 +261,21 @@ export const useAudioHandlers = (
         console.warn('[MESSAGE_SAVE] No conversation ID available for user message');
       }
       
-      // Show short feedback if available
+      // Show short feedback if available and play TTS automatically
       if (result.shortFeedback) {
         setShortFeedback(result.shortFeedback);
+        
+        // Play short feedback TTS immediately for all modes
+        const cacheKey = `short_feedback_${Date.now()}`;
+        console.log('[DEBUG] Playing short feedback TTS immediately');
+        setIsPlayingShortFeedbackTTS(true);
+        playTTSAudio(result.shortFeedback, language, cacheKey).then(() => {
+          console.log('[DEBUG] Short feedback TTS finished');
+          setIsPlayingShortFeedbackTTS(false);
+        }).catch(error => {
+          console.error('[DEBUG] Error playing short feedback TTS:', error);
+          setIsPlayingShortFeedbackTTS(false);
+        });
       }
       
       // Add AI response if present

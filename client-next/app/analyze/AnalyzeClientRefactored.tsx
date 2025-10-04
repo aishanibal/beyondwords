@@ -188,6 +188,10 @@ const AnalyzeContentInner = () => {
   const [ttsCache, setTtsCache] = useState<Map<string, { url: string; timestamp: number }>>(new Map());
   const [ttsDebugInfo, setTtsDebugInfo] = useState<string>('');
   const [romanizationDebugInfo, setRomanizationDebugInfo] = useState<string>('');
+  
+  // Auto TTS queue state
+  const [isPlayingShortFeedbackTTS, setIsPlayingShortFeedbackTTS] = useState(false);
+  const [isPlayingAITTS, setIsPlayingAITTS] = useState(false);
   // Progress tracking state
   const [userProgress, setUserProgress] = useState<{ [goalId: string]: SubgoalProgress }>({});
   const [learningGoals, setLearningGoals] = useState<LearningGoal[]>([]);
@@ -273,7 +277,8 @@ const AnalyzeContentInner = () => {
     isAnyTTSPlaying,
     setIsAnyTTSPlaying,
     setAiTTSQueued,
-    setShortFeedback
+    setShortFeedback,
+    setIsPlayingShortFeedbackTTS
   );
 
   // Use message interactions hook
@@ -478,6 +483,39 @@ const AnalyzeContentInner = () => {
       }
     }
   }, [chatHistory, user, isProcessing, language, audioHandlers]);
+
+  // Handle AI TTS playback when short feedback TTS finishes (auto TTS queue)
+  useEffect(() => {
+    if (!isPlayingShortFeedbackTTS && aiTTSQueued && !isPlayingAITTS && autoSpeak) {
+      console.log('[DEBUG] Short feedback TTS finished, playing AI TTS');
+      setIsPlayingAITTS(true);
+      
+      const playAITTS = async () => {
+        try {
+          await audioHandlers.handlePlayTTS(aiTTSQueued.text, aiTTSQueued.language);
+          console.log('[DEBUG] AI TTS finished');
+        } catch (error) {
+          console.error('[DEBUG] Error playing AI TTS:', error);
+        } finally {
+          setIsPlayingAITTS(false);
+          setAiTTSQueued(null);
+          
+          // Restart recording after AI TTS is completely done
+          if (autoSpeak) {
+            console.log('[DEBUG] AI TTS finished, restarting recording');
+            setTimeout(() => {
+              if (autoSpeak && !isAnyTTSPlaying) {
+                console.log('[DEBUG] Starting recording after AI TTS completion');
+                audioHandlers.handleStartRecording();
+              }
+            }, 300);
+          }
+        }
+      };
+      
+      playAITTS();
+    }
+  }, [isPlayingShortFeedbackTTS, aiTTSQueued, isPlayingAITTS, autoSpeak, isAnyTTSPlaying, audioHandlers]);
 
 
 
