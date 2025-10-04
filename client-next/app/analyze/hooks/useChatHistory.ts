@@ -32,3 +32,4 @@ export function usePersistentChatHistory(user: User | null): [ChatMessage[], Rea
 
   return [chatHistory, setChatHistory];
 }
+

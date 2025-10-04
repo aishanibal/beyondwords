@@ -199,3 +199,4 @@ export const parseQuickTranslation = (translationText: string) => {
 
   return { translation, breakdown };
 };
+

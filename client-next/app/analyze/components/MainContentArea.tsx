@@ -56,3 +56,5 @@ const MainContentArea: React.FC<MainContentAreaProps> = ({
 };
 
 export default MainContentArea;
+
+

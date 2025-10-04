@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: beyondwords-api
+    name: beyondwords-express
     env: node
     plan: free
     buildCommand: npm install && npm run build

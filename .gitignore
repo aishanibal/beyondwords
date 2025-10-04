@@ -63,7 +63,6 @@ whisper_words_*.
 # Archive outputs
 archive/opensmile_features/
 archive/mfa_output/
-<<<<<<< HEAD
 
 # OS generated files
 .DS_Store
@@ -94,4 +93,3 @@ node_modules/
 client/node_modules/
 server/node_modules/
 node_modules
->>>>>>> 08a751abfd469c63016d4eef4895811c4baeda11

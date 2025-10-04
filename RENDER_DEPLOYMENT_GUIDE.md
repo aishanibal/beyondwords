@@ -50,7 +50,7 @@ SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 
 2. **Configure Express Backend**
    ```
-   Name: heirloom-express-backend
+   Name: beyondwords-express
    Environment: Node
    Build Command: cd server && npm install && npm run build
    Start Command: cd server && npm start
@@ -64,7 +64,7 @@ SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 4. **Deploy**
    - Click "Create Web Service"
    - Wait for build to complete
-   - Note the URL (e.g., `https://heirloom-express-backend.onrender.com`)
+   - Note the URL (e.g., `https://beyondwords-express.onrender.com`)
 
 ## **🐍 Step 3: Deploy Python API**
 
@@ -74,7 +74,7 @@ SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 
 2. **Configure Python API**
    ```
-   Name: heirloom-python-api
+   Name: beyondwords
    Environment: Python
    Build Command: pip install -r requirements.txt
    Start Command: python python_api.py
@@ -95,8 +95,8 @@ Update your Vercel frontend to use the Render backend URLs:
 
 ### **Environment Variables for Vercel**
 ```bash
-NEXT_PUBLIC_EXPRESS_API_URL=https://heirloom-express-backend.onrender.com
-NEXT_PUBLIC_PYTHON_API_URL=https://heirloom-python-api.onrender.com
+NEXT_PUBLIC_BACKEND_URL=https://beyondwords-express.onrender.com
+AI_BACKEND_URL=https://beyondwords.onrender.com
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
@@ -110,8 +110,8 @@ const expressApiUrl = 'http://localhost:4000';
 const pythonApiUrl = 'http://localhost:5000';
 
 // After
-const expressApiUrl = process.env.NEXT_PUBLIC_EXPRESS_API_URL;
-const pythonApiUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL;
+const expressApiUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+const pythonApiUrl = process.env.AI_BACKEND_URL;
 ```
 
 ## **🔧 Step 5: Configure CORS**
@@ -123,14 +123,14 @@ The Express backend is already configured to handle CORS for production. The Pyt
 1. **Health Checks**
    ```bash
    # Test Express Backend
-   curl https://heirloom-express-backend.onrender.com/health
+   curl https://beyondwords-express.onrender.com/api/health
    
    # Test Python API
-   curl https://heirloom-python-api.onrender.com/health
+   curl https://beyondwords.onrender.com/health
    ```
 
 2. **Admin Dashboard**
-   - Visit: `https://heirloom-python-api.onrender.com/admin`
+   - Visit: `https://beyondwords.onrender.com/admin`
    - Login with: `admin123`
 
 ## **🔒 Step 7: Security Considerations**

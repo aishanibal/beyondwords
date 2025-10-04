@@ -50,10 +50,29 @@ export function useAudioRecording() {
     }
     
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Configure audio constraints for better speech recording
+      const audioConstraints = {
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          sampleRate: 44100,
+          channelCount: 1
+        }
+      };
+      
+      const stream = await navigator.mediaDevices.getUserMedia(audioConstraints);
       setMediaStream(stream);
       audioChunksRef.current = [];
-      const mediaRecorder = new MediaRecorderClassRef.current(stream);
+      
+      // Get optimal MIME type for speech recording
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
+        ? 'audio/webm;codecs=opus' 
+        : MediaRecorder.isTypeSupported('audio/webm') 
+        ? 'audio/webm' 
+        : 'audio/wav';
+      
+      const mediaRecorder = new MediaRecorderClassRef.current(stream, { mimeType });
       mediaRecorderRef.current = mediaRecorder;
       
       mediaRecorder.ondataavailable = (e: BlobEvent) => {
@@ -72,7 +91,7 @@ export function useAudioRecording() {
           setManualRecording(false);
           return;
         }
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
         // This will be handled by the parent component
         stream.getTracks().forEach(track => track.stop());
         setMediaStream(null);
@@ -80,7 +99,8 @@ export function useAudioRecording() {
         setManualRecording(false);
       };
       
-      mediaRecorder.start();
+      // Start recording with timeslice to get regular audio chunks
+      mediaRecorder.start(100); // 100ms timeslice for better audio capture
       setIsRecording(true);
       
       if (isAutoSpeak) {

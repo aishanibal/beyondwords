@@ -31,6 +31,7 @@ import {
   updateLanguageDashboard,
   deleteLanguageDashboard,
   getUserStreak,
+  createConversationWithInitialMessage,
   createPersona,
   getUserPersonas,
   deletePersona,
@@ -1158,28 +1159,17 @@ app.post('/api/conversations', authenticateJWT, async (req: Request, res: Respon
       languageDashboardId = null;
     }
 
-    const conversation = await createConversation(req.user.userId, languageDashboardId, title, topics, formality, description, usesPersona, personaId, learningGoals);
-    console.log('🔄 SERVER: Conversation creation result:', conversation);
-    if (!conversation || !conversation.id) {
-      console.error('❌ SERVER: Failed to create conversation (no id)');
-      return res.status(500).json({ error: 'DB_ERROR: Conversation create returned no id' });
-    }
-    // Immediately try to fetch the conversation from the DB
-    const verify = await getConversationWithMessages(conversation.id);
-    if (!verify) {
-      console.error('❌ SERVER: Conversation not found after creation:', conversation.id);
-      return res.status(500).json({ error: 'VERIFY_ERROR: Conversation not found after creation' });
-    }
-    // Generate and save AI intro message
-    let aiMessage = null;
+    // Generate AI intro message first (before creating conversation)
     let aiIntro = 'Hello! What would you like to talk about today?';
     let ttsUrl = null;
+    
     try {
       const user = await findUserById(req.user.userId);
       const userLevel = user?.proficiency_level || 'beginner';
       const userTopics = user?.talk_topics && typeof user.talk_topics === 'string' ? JSON.parse(user.talk_topics) : Array.isArray(user?.talk_topics) ? user.talk_topics : [];
       const pythonApiUrl = (process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com').replace(/\/$/, '');
       const topicsToSend = topics && topics.length > 0 ? topics : userTopics;
+      
       try {
         const requestPayload = {
           chat_history: [],
@@ -1248,28 +1238,61 @@ app.post('/api/conversations', authenticateJWT, async (req: Request, res: Respon
         console.error('⚠️ TTS generation error (non-blocking):', ttsError);
         ttsUrl = null;
       }
+    } catch (err) {
+      console.error('Error generating AI intro message:', err);
+      // Continue with fallback message
+    }
+
+    // Create conversation and AI message atomically
+    console.log('🔄 SERVER: Creating conversation with initial AI message atomically...');
+    let conversation, aiMessage;
+    
+    try {
+      const result = await createConversationWithInitialMessage(
+        req.user.userId, 
+        languageDashboardId, 
+        title, 
+        topics, 
+        formality, 
+        description, 
+        usesPersona, 
+        personaId, 
+        learningGoals,
+        aiIntro
+      );
       
-      // Save the AI message to database
-      console.log('🔄 SERVER: Attempting to save AI message to database...');
-      console.log('🔄 SERVER: Message details:', {
-        conversationId: conversation.id,
-        sender: 'AI',
-        text: aiIntro.substring(0, 50) + '...',
-        messageType: 'text',
-        messageOrder: 1
-      });
+      conversation = result.conversation;
+      aiMessage = result.aiMessage;
       
+      console.log('✅ SERVER: Atomic conversation creation result:', conversation);
+      console.log('✅ SERVER: AI message created:', aiMessage?.id);
+      
+      if (!conversation || !conversation.id) {
+        throw new Error('Atomic conversation create returned no id');
+      }
+    } catch (atomicError) {
+      console.error('❌ SERVER: Atomic conversation creation failed, falling back to separate operations:', atomicError);
+      
+      // Fallback: Create conversation first, then message separately
+      conversation = await createConversation(req.user.userId, languageDashboardId, title, topics, formality, description, usesPersona, personaId, learningGoals);
+      console.log('🔄 SERVER: Fallback conversation creation result:', conversation);
+      
+      if (!conversation || !conversation.id) {
+        console.error('❌ SERVER: Failed to create conversation in fallback mode');
+        return res.status(500).json({ error: 'DB_ERROR: Both atomic and fallback conversation creation failed' });
+      }
+      
+      // Try to add the AI message separately
       try {
         aiMessage = await addMessage(conversation.id, 'AI', aiIntro, 'text', undefined, undefined, 1);
-        console.log('✅ AI message saved to database:', aiMessage?.id);
+        console.log('✅ SERVER: Fallback AI message created:', aiMessage?.id);
       } catch (addMessageError) {
-        console.error('❌ SERVER: Failed to save AI message:', addMessageError);
-        // Don't throw - continue without the message
+        console.error('❌ SERVER: Failed to add AI message in fallback mode:', addMessageError);
         aiMessage = null;
+        // Don't fail the entire request - conversation exists, just no initial message
       }
-    } catch (err) {
-      console.error('Error generating/saving AI intro message:', err);
     }
+
     // Return the actual AI intro text and TTS URL for the frontend
     res.json({ conversation, aiMessage: { text: aiIntro, ttsUrl } });
   } catch (error: any) {

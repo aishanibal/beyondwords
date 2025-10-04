@@ -59,6 +59,8 @@ class GeminiTranscriber:
             with open(audio_path, "rb") as audio_file:
                 audio_content = audio_file.read()
                 audio_encoded = base64.b64encode(audio_content).decode('utf-8')
+                
+            print(f"🔍 [GEMINI] Audio file info: {len(audio_content)} bytes, {audio_path}")
 
             # Default prompt for transcription
             if not prompt:
@@ -108,6 +110,7 @@ class GeminiTranscriber:
             
             if response.status_code == 200:
                 result = response.json()
+                print(f"🔍 [GEMINI] API Response: {result}")
                 
                 if 'candidates' in result and len(result['candidates']) > 0:
                     # Extract the transcribed text
@@ -116,6 +119,7 @@ class GeminiTranscriber:
                     return transcript.strip()
                 else:
                     print("❌ No transcription results returned")
+                    print(f"🔍 [GEMINI] Full response: {result}")
                     return None
             else:
                 print(f"❌ Gemini API error: {response.status_code} - {response.text}")

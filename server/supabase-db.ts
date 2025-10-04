@@ -546,6 +546,90 @@ export const addMessage = async (
   return data;
 };
 
+// Atomic conversation creation with initial AI message
+export const createConversationWithInitialMessage = async (
+  userId: string,
+  languageDashboardId: number | null,
+  title: string,
+  topics: string[],
+  formality: string,
+  description?: string,
+  usesPersona?: boolean,
+  personaId?: number,
+  learningGoals?: string[],
+  initialAiMessage?: string
+): Promise<{ conversation: Conversation; aiMessage: Message | null }> => {
+  try {
+    // Start a transaction by creating the conversation first
+    const insertPayload: any = {
+      user_id: userId,
+      title,
+      topics,
+      formality,
+      description,
+      uses_persona: usesPersona,
+      persona_id: personaId,
+      learning_goals: learningGoals
+    };
+
+    if (languageDashboardId) {
+      insertPayload.language_dashboard_id = languageDashboardId;
+    }
+
+    const { data: conversation, error: convError } = await supabase
+      .from('conversations')
+      .insert([insertPayload])
+      .select()
+      .single();
+    
+    if (convError) throw convError;
+
+    let aiMessage: Message | null = null;
+
+    // If we have an initial AI message, add it atomically
+    if (initialAiMessage && conversation?.id) {
+      try {
+        const { data: message, error: msgError } = await supabase
+          .from('messages')
+          .insert([{
+            conversation_id: conversation.id,
+            sender: 'AI',
+            text: initialAiMessage,
+            message_type: 'text',
+            message_order: 1
+          }])
+          .select()
+          .single();
+        
+        if (msgError) {
+          console.error('❌ Failed to create initial AI message:', msgError);
+          // If message creation fails, we should clean up the conversation
+          await supabase
+            .from('conversations')
+            .delete()
+            .eq('id', conversation.id);
+          throw new Error(`Failed to create initial AI message: ${msgError.message}`);
+        }
+        
+        aiMessage = message;
+      } catch (msgErr) {
+        console.error('❌ Error in atomic message creation:', msgErr);
+        // Clean up the conversation if message creation failed
+        await supabase
+          .from('conversations')
+          .delete()
+          .eq('id', conversation.id);
+        throw msgErr;
+      }
+    }
+
+    return { conversation, aiMessage };
+  } catch (error) {
+    console.error('❌ Atomic conversation creation failed:', error);
+    throw error;
+  }
+};
+
 // Persona functions
 export const createPersona = async (userId: string, personaData: Partial<Persona>): Promise<Persona> => {
   // Convert camelCase to snake_case for database

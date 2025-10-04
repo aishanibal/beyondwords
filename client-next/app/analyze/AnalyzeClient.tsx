@@ -1117,10 +1117,29 @@ const AnalyzeContentInner = () => {
       }
       
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        // Configure audio constraints for better speech recording
+        const audioConstraints = {
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            sampleRate: 44100,
+            channelCount: 1
+          }
+        };
+        
+        const stream = await navigator.mediaDevices.getUserMedia(audioConstraints);
         setMediaStream(stream);
         audioChunksRef.current = [];
-        const mediaRecorder = new MediaRecorderClassRef.current(stream);
+        
+        // Get optimal MIME type for speech recording
+        const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
+          ? 'audio/webm;codecs=opus' 
+          : MediaRecorder.isTypeSupported('audio/webm') 
+          ? 'audio/webm' 
+          : 'audio/wav';
+        
+        const mediaRecorder = new MediaRecorderClassRef.current(stream, { mimeType });
         mediaRecorderRef.current = mediaRecorder;
         mediaRecorder.ondataavailable = (e: BlobEvent) => {
           if (e.data.size > 0) {
@@ -1137,14 +1156,16 @@ const AnalyzeContentInner = () => {
             setManualRecording(false); // Only reset manualRecording if we were in manual mode
             return;
           }
-          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+          const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
           sendAudioToBackend(audioBlob);
           stream.getTracks().forEach(track => track.stop());
           setMediaStream(null);
           setIsRecording(false);
           setManualRecording(false); // Only reset manualRecording if we were in manual mode
         };
-        mediaRecorder.start();
+        
+        // Start recording with timeslice to get regular audio chunks
+        mediaRecorder.start(100); // 100ms timeslice for better audio capture
         setIsRecording(true);
         if (autoSpeakRef.current) {
           // Use SpeechRecognition for silence detection in autospeak mode only
@@ -2029,6 +2050,8 @@ const AnalyzeContentInner = () => {
         });
         
         const transcription = transcriptionResponse.data.transcription || 'Speech recorded';
+        console.log('🔍 [PIPELINE] Transcription received:', transcription);
+        console.log('🔍 [DEBUG] Replacing placeholder with transcription:', transcription);
         const detectedLanguage = language; // Persist session language; ignore detection
         
         // Generate romanized text for user messages in script languages

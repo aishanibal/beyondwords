@@ -58,13 +58,35 @@ export const useAudioHandlers = (
     }
     
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Configure audio constraints for better speech recording
+      const audioConstraints = {
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          sampleRate: 44100,
+          channelCount: 1
+        }
+      };
+      
+      const stream = await navigator.mediaDevices.getUserMedia(audioConstraints);
       setMediaStream(stream);
       audioChunksRef.current = [];
-      const mediaRecorder = new MediaRecorderClassRef.current(stream);
+      
+      // Get optimal MIME type for speech recording
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
+        ? 'audio/webm;codecs=opus' 
+        : MediaRecorder.isTypeSupported('audio/webm') 
+        ? 'audio/webm' 
+        : 'audio/wav';
+      
+      console.log('🔍 [DEBUG] Using MIME type:', mimeType);
+      
+      const mediaRecorder = new MediaRecorderClassRef.current(stream, { mimeType });
       mediaRecorderRef.current = mediaRecorder;
       mediaRecorder.ondataavailable = (e: BlobEvent) => {
         if (e.data.size > 0) {
+          console.log('🔍 [DEBUG] Audio chunk received:', e.data.size, 'bytes');
           audioChunksRef.current.push(e.data);
         }
       };
@@ -72,6 +94,7 @@ export const useAudioHandlers = (
         console.log('🔍 [DEBUG] MediaRecorder onstop event triggered');
         console.log('🔍 [DEBUG] interruptedRef.current:', interruptedRef.current);
         console.log('🔍 [DEBUG] audioChunksRef.current length:', audioChunksRef.current.length);
+        console.log('🔍 [DEBUG] Total audio chunks size:', audioChunksRef.current.reduce((total, chunk) => total + chunk.size, 0), 'bytes');
         
         if (interruptedRef.current) {
           console.log('🔍 [DEBUG] Recording was interrupted, cleaning up');
@@ -85,15 +108,22 @@ export const useAudioHandlers = (
         }
         
         console.log('🔍 [DEBUG] Creating audio blob and sending to backend');
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        console.log('🔍 [DEBUG] Audio blob created:', audioBlob.size, 'bytes');
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+        console.log('🔍 [DEBUG] Audio blob created:', {
+          size: audioBlob.size,
+          type: audioBlob.type,
+          chunks: audioChunksRef.current.length,
+          mimeType: mimeType
+        });
         sendAudioToBackend(audioBlob);
         stream.getTracks().forEach(track => track.stop());
         setMediaStream(null);
         setIsRecording(false);
         setManualRecording(false);
       };
-      mediaRecorder.start();
+      
+      // Start recording with timeslice to get regular audio chunks
+      mediaRecorder.start(100); // 100ms timeslice for better audio capture
       setIsRecording(true);
       if (autoSpeakRef.current) {
         // Use SpeechRecognition for silence detection in autospeak mode only
@@ -369,3 +399,5 @@ export const useAudioHandlers = (
     SpeechRecognitionClassRef
   };
 };
+
+

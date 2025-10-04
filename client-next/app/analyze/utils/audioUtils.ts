@@ -99,3 +99,4 @@ export const cleanupAudio = (audio: HTMLAudioElement): void => {
   stopAudio(audio);
   audio.remove();
 };
+

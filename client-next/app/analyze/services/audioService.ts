@@ -9,6 +9,12 @@ import { ChatMessage } from '../types/analyze';
 // Process audio and get transcription
 export const processAudioTranscription = async (audioBlob: Blob, language: string) => {
   try {
+    console.log('🔍 [AUDIO_SERVICE] Processing audio transcription:', {
+      audioBlobSize: audioBlob.size,
+      audioBlobType: audioBlob.type,
+      language: language
+    });
+    
     const formData = new FormData();
     formData.append('audio', audioBlob, 'recording.webm');
     formData.append('language', language);
@@ -23,6 +29,10 @@ export const processAudioTranscription = async (audioBlob: Blob, language: strin
     });
     
     const transcription = transcriptionResponse.data.transcription || 'Speech recorded';
+    console.log('🔍 [AUDIO_SERVICE] Transcription response:', {
+      transcription: transcription,
+      responseData: transcriptionResponse.data
+    });
     return transcription;
   } catch (error) {
     console.error('Error processing audio transcription:', error);

@@ -176,3 +176,5 @@ const RightPanel: React.FC<RightPanelProps> = ({
 };
 
 export default RightPanel;
+
+
