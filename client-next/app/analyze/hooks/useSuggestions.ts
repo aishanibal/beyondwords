@@ -306,36 +306,7 @@ export const useSuggestions = (
     }
   }, [language, chatHistory, userPreferences, user]);
 
-  // Play suggestion TTS - implementation
-  // Fallback TTS using browser's built-in speech synthesis
-  const fallbackTTS = useCallback((text: string, language: string): Promise<void> => {
-    return new Promise((resolve, reject) => {
-      if (!('speechSynthesis' in window)) {
-        reject(new Error('Speech synthesis not supported in this browser'));
-        return;
-      }
-
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = language;
-      utterance.rate = 0.9;
-      utterance.pitch = 1.0;
-      utterance.volume = 0.8;
-
-      utterance.onend = () => {
-        console.log('🔊 [FALLBACK_TTS] Suggestion speech synthesis completed');
-        resolve();
-      };
-
-      utterance.onerror = (event) => {
-        console.error('🔊 [FALLBACK_TTS] Suggestion speech synthesis error:', event.error);
-        reject(new Error(`Speech synthesis failed: ${event.error}`));
-      };
-
-      console.log('🔊 [FALLBACK_TTS] Using browser speech synthesis for suggestion');
-      speechSynthesis.speak(utterance);
-    });
-  }, []);
-
+  // Play suggestion TTS - implementation (simplified)
   const playSuggestionTTS = useCallback(async (suggestion: any, index: number) => {
     console.log('🔍 [DEBUG] Playing suggestion TTS:', suggestion.text, index);
     try {
@@ -357,26 +328,15 @@ export const useSuggestions = (
       }
     } catch (error: any) {
       console.error('Error playing suggestion TTS:', error);
-      
-      // Try fallback TTS for 503 and 500 errors
-      if (error.response?.status === 503 || error.response?.status === 500) {
-        console.warn('TTS service unavailable. Trying browser fallback for suggestion...');
-        try {
-          await fallbackTTS(suggestion.text, language);
-          console.log('🔊 [FALLBACK_TTS] Successfully used browser speech synthesis for suggestion');
-        } catch (fallbackError) {
-          console.error('🔊 [FALLBACK_TTS] Browser speech synthesis also failed for suggestion:', fallbackError);
-          if (error.response?.status === 503) {
-            console.warn('TTS service is temporarily unavailable for suggestion audio.');
-          } else {
-            console.warn('Suggestion TTS generation failed. Please try again later.');
-          }
-        }
+      if (error.response?.status === 503) {
+        console.warn('TTS service is temporarily unavailable for suggestion audio.');
+      } else if (error.response?.status === 500) {
+        console.warn('Suggestion TTS generation failed. Please try again later.');
       } else {
         console.warn('Suggestion TTS request failed:', error.message);
       }
     }
-  }, [language, fallbackTTS]);
+  }, [language]);
 
   return {
     // State

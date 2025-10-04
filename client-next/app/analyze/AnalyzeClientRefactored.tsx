@@ -192,6 +192,8 @@ const AnalyzeContentInner = () => {
   // Auto TTS queue state
   const [isPlayingShortFeedbackTTS, setIsPlayingShortFeedbackTTS] = useState(false);
   const [isPlayingAITTS, setIsPlayingAITTS] = useState(false);
+  const [hasPlayedInitialTTS, setHasPlayedInitialTTS] = useState(false);
+  const [lastTTSMessageId, setLastTTSMessageId] = useState<string | null>(null);
   // Progress tracking state
   const [userProgress, setUserProgress] = useState<{ [goalId: string]: SubgoalProgress }>({});
   const [learningGoals, setLearningGoals] = useState<LearningGoal[]>([]);
@@ -316,6 +318,8 @@ const AnalyzeContentInner = () => {
     if (!urlConversationId && loadedConversationId) {
       console.log('[CONVERSATION_LOAD] URL conversation ID cleared, resetting loaded conversation ID');
       setLoadedConversationId(null);
+      setHasPlayedInitialTTS(false); // Reset TTS flag for new conversations
+      setLastTTSMessageId(null); // Reset TTS message tracking
     }
   }, [urlConversationId, loadedConversationId]);
 
@@ -464,34 +468,63 @@ const AnalyzeContentInner = () => {
     }
   }, [(user as any)?.selectedLanguage, language]);
 
-  // Play TTS for initial AI message when page loads
+  // Play TTS for initial AI message ONLY for new conversations (not existing ones)
   useEffect(() => {
-    if (chatHistory.length > 0 && user && !isProcessing) {
+    // Only play TTS for new conversations (no conversationId in URL) and only once
+    if (chatHistory.length === 1 && user && !isProcessing && !urlConversationId && !hasPlayedInitialTTS) {
       const firstMessage = chatHistory[0];
-      if (firstMessage.sender === 'AI' && firstMessage.ttsUrl) {
-        console.log('🔍 [INITIAL_TTS] Playing TTS for initial AI message:', firstMessage.ttsUrl);
-        // Play the existing TTS URL with fallback to generating new TTS
-        audioHandlers.handlePlayExistingTTS(firstMessage.ttsUrl).catch(error => {
-          console.error('🔍 [INITIAL_TTS] Error playing existing TTS:', error);
-          console.log('🔍 [INITIAL_TTS] Falling back to generating new TTS');
-          // Fallback: generate new TTS for the message
-          const ttsText = firstMessage.romanizedText || firstMessage.text;
-          const cacheKey = `initial_ai_message_fallback_${Date.now()}`;
-          audioHandlers.handlePlayTTS(ttsText, language).catch(fallbackError => {
-            console.error('🔍 [INITIAL_TTS] Error generating fallback TTS:', fallbackError);
+      if (firstMessage.sender === 'AI') {
+        setHasPlayedInitialTTS(true); // Mark as played to prevent multiple calls
+        
+        if (firstMessage.ttsUrl) {
+          console.log('🔍 [INITIAL_TTS] Playing TTS for initial AI message in new conversation:', firstMessage.ttsUrl);
+          // Play the existing TTS URL
+          audioHandlers.handlePlayExistingTTS(firstMessage.ttsUrl).catch(error => {
+            console.error('🔍 [INITIAL_TTS] Error playing existing TTS:', error);
           });
-        });
-      } else if (firstMessage.sender === 'AI' && !firstMessage.ttsUrl) {
-        console.log('🔍 [INITIAL_TTS] Generating TTS for initial AI message without TTS URL');
-        // Generate TTS for the initial message
-        const ttsText = firstMessage.romanizedText || firstMessage.text;
-        const cacheKey = `initial_ai_message_${Date.now()}`;
-        audioHandlers.handlePlayTTS(ttsText, language).catch(error => {
-          console.error('🔍 [INITIAL_TTS] Error playing initial AI TTS:', error);
-        });
+        } else {
+          console.log('🔍 [INITIAL_TTS] Generating TTS for initial AI message in new conversation');
+          // Generate TTS for the initial message
+          const ttsText = firstMessage.romanizedText || firstMessage.text;
+          audioHandlers.handlePlayTTS(ttsText, language).catch(error => {
+            console.error('🔍 [INITIAL_TTS] Error playing initial AI TTS:', error);
+          });
+        }
       }
     }
-  }, [chatHistory, user, isProcessing, language, audioHandlers]);
+  }, [chatHistory, user, isProcessing, language, audioHandlers, urlConversationId, hasPlayedInitialTTS]);
+
+  // Auto-play TTS for new AI messages (not from database)
+  useEffect(() => {
+    if (chatHistory.length > 0 && user && !isProcessing) {
+      const lastMessage = chatHistory[chatHistory.length - 1];
+      
+      // Create a unique ID for this message to prevent duplicate TTS calls
+      const messageId = `${lastMessage.timestamp.getTime()}_${lastMessage.text.substring(0, 50)}`;
+      
+      // Only play TTS for new AI messages (not from original conversation) and only once per message
+      if (lastMessage.sender === 'AI' && 
+          !lastMessage.isFromOriginalConversation && 
+          lastTTSMessageId !== messageId) {
+        
+        console.log('🔍 [AUTO_TTS] New AI message detected, playing TTS');
+        setLastTTSMessageId(messageId); // Mark this message as having TTS played
+        
+        if (lastMessage.ttsUrl) {
+          // Play existing TTS URL
+          audioHandlers.handlePlayExistingTTS(lastMessage.ttsUrl).catch(error => {
+            console.error('🔍 [AUTO_TTS] Error playing existing TTS:', error);
+          });
+        } else {
+          // Generate new TTS
+          const ttsText = lastMessage.romanizedText || lastMessage.text;
+          audioHandlers.handlePlayTTS(ttsText, language).catch(error => {
+            console.error('🔍 [AUTO_TTS] Error playing new AI TTS:', error);
+          });
+        }
+      }
+    }
+  }, [chatHistory, user, isProcessing, language, audioHandlers, lastTTSMessageId]);
 
   // Handle AI TTS playback when short feedback TTS finishes (auto TTS queue)
   useEffect(() => {
