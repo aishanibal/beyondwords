@@ -28,9 +28,6 @@ import WordExplanationPopup from './components/WordExplanationPopup';
 import { usePersistentChatHistory } from './hooks/useChatHistory';
 import { useAudioRecording } from './hooks/useAudioRecording';
 import { useTTS } from './hooks/useTTS';
-import { useTranslation } from './hooks/useTranslation';
-import { useConversation } from './hooks/useConversation';
-import { useFeedback } from './hooks/useFeedback';
 import { useSuggestions } from './hooks/useSuggestions';
 import { useAudioHandlers } from './hooks/useAudioHandlers';
 import { useConversationManagement } from './hooks/useConversationManagement';
@@ -51,7 +48,7 @@ import { renderClickableMessage, getSessionMessages } from './utils/messageUtils
 import { explainLLMResponse } from './services/messageService';
 
 // Import services
-import { getAuthHeaders } from './services/conversationService';
+import { getAuthHeaders, fetchUserDashboardPreferences } from './services/conversationService';
 
 // Import constants
 import { MESSAGES_PER_PAGE, DEFAULT_PANEL_WIDTHS } from './config/constants';
@@ -233,9 +230,6 @@ const AnalyzeContentInner = () => {
   const [chatHistory, setChatHistory] = usePersistentChatHistory(user as any);
   const audioRecording = useAudioRecording();
   const tts = useTTS();
-  const translation = useTranslation();
-  const conversation = useConversation(user as any);
-  const feedback = useFeedback();
   
   // Use suggestions hook
   const suggestions = useSuggestions(
@@ -278,9 +272,7 @@ const AnalyzeContentInner = () => {
     isAnyTTSPlaying,
     setIsAnyTTSPlaying,
     setAiTTSQueued,
-    setShortFeedback,
-    setIsPlayingTTS,
-    ttsAudioRef
+    setShortFeedback
   );
 
   // Use message interactions hook
@@ -455,7 +447,7 @@ const AnalyzeContentInner = () => {
         // Generate TTS for the initial message
         const ttsText = firstMessage.romanizedText || firstMessage.text;
         const cacheKey = `initial_ai_message_${Date.now()}`;
-        audioHandlers.playTTSAudio(ttsText, language, cacheKey).catch(error => {
+        audioHandlers.handlePlayTTS(ttsText, language).catch(error => {
           console.error('🔍 [INITIAL_TTS] Error playing initial AI TTS:', error);
         });
       }
@@ -572,7 +564,7 @@ const AnalyzeContentInner = () => {
         userPreferences,
         conversationId,
         setChatHistory,
-        fetchUserDashboardPreferences,
+        (languageCode: string) => fetchUserDashboardPreferences(languageCode, (user as any)?.id),
         setUserPreferences
       );
     }
@@ -841,13 +833,12 @@ const AnalyzeContentInner = () => {
 
   // Wrapper function for playTTS with cacheKey parameter
   const playTTSWrapper = (text: string, language: string, cacheKey: string) => {
-    return audioHandlers.playTTSAudio(text, language, cacheKey);
+    return audioHandlers.handlePlayTTS(text, language);
   };
 
   // Wrapper function for playTTS with only 2 parameters (for ChatMessagesContainer)
   const playTTSWrapper2 = (text: string, language: string) => {
-    const cacheKey = `manual_tts_${Date.now()}`;
-    return audioHandlers.playTTSAudio(text, language, cacheKey);
+    return audioHandlers.handlePlayTTS(text, language);
   };
 
   // Handle end chat functionality
@@ -1109,11 +1100,6 @@ const AnalyzeContentInner = () => {
             handleSuggestionButtonClick={suggestions.handleSuggestionButtonClick}
             isLoadingSuggestions={suggestions.isLoadingSuggestions}
             isLoadingMessageFeedback={messageInteractions.isLoadingMessageFeedback}
-            extractCorrectedVersion={(feedback) => {
-              const result = extractCorrectedVersion(feedback);
-              return result ? { ...result, romanizedText: result.romanizedText || '' } : null;
-            }}
-            renderFormattedText={renderFormattedText}
             // Suggestion carousel props
             showSuggestionCarousel={suggestions.showSuggestionCarousel}
             suggestionMessages={suggestions.suggestionMessages}
