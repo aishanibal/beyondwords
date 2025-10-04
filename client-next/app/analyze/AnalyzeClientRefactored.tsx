@@ -306,6 +306,14 @@ const AnalyzeContentInner = () => {
     }
   }, [urlConversationId, user, isLoadingConversation, loadedConversationId, conversationId, conversationManagement]);
 
+  // Reset loaded conversation ID when URL changes to empty (new conversation)
+  useEffect(() => {
+    if (!urlConversationId && loadedConversationId) {
+      console.log('[CONVERSATION_LOAD] URL conversation ID cleared, resetting loaded conversation ID');
+      setLoadedConversationId(null);
+    }
+  }, [urlConversationId, loadedConversationId]);
+
   // Add global click handler for word clicks and popup management
   useEffect(() => {
     // Add click handler to close popup when clicking outside
@@ -390,27 +398,30 @@ const AnalyzeContentInner = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatHistory]);
 
-  // Show topic modal if no conversation ID - from original
+  // Show topic modal for new conversations only
   useEffect(() => {
-    // Only show topic modal if:
-    // 1. No URL conversation ID
-    // 2. No current conversation ID
-    // 3. User is authenticated
-    // 4. No chat history
-    // 5. Not currently loading a conversation
-    // 6. URL parameters are fully loaded (not empty string)
-    if (!urlConversationId && !conversationId && user && chatHistory.length === 0 && !isLoadingConversation && urlParams.conversationId !== '') {
-      console.log('[TOPIC_MODAL] Showing topic modal - no existing conversation');
-      setShowTopicModal(true);
-    } else if (conversationId && chatHistory.length > 0) {
-      // If we have a conversation ID and chat history, ensure topic modal is closed
-      console.log('[TOPIC_MODAL] Hiding topic modal - conversation loaded with messages');
-      setShowTopicModal(false);
-    } else if (urlConversationId && isLoadingConversation) {
-      // If we're loading a conversation from URL, keep topic modal closed
-      console.log('[TOPIC_MODAL] Keeping topic modal closed - loading conversation from URL');
-      setShowTopicModal(false);
-    }
+    // Add a small delay to ensure URL parameters are fully loaded
+    const timer = setTimeout(() => {
+      // Show topic modal if:
+      // 1. No URL conversation ID (new conversation)
+      // 2. User is authenticated
+      // 3. Not currently loading a conversation
+      // 4. URL parameters are fully loaded (not empty string)
+      if (!urlConversationId && user && !isLoadingConversation && urlParams.conversationId !== '') {
+        console.log('[TOPIC_MODAL] Showing topic modal - new conversation');
+        setShowTopicModal(true);
+      } else if (urlConversationId) {
+        // If we have a URL conversation ID, hide topic modal (existing conversation)
+        console.log('[TOPIC_MODAL] Hiding topic modal - existing conversation from URL');
+        setShowTopicModal(false);
+      } else if (conversationId && chatHistory.length > 0) {
+        // If we have a loaded conversation with messages, hide topic modal
+        console.log('[TOPIC_MODAL] Hiding topic modal - conversation loaded with messages');
+        setShowTopicModal(false);
+      }
+    }, 100); // Small delay to ensure URL params are loaded
+
+    return () => clearTimeout(timer);
   }, [urlConversationId, conversationId, user, chatHistory.length, isLoadingConversation, urlParams.conversationId]);
 
   // Show save prompt if localStorage has chat history - from original
