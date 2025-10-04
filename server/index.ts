@@ -2234,7 +2234,14 @@ app.use('/uploads', (req, res, next) => {
 }, express.static(path.join(__dirname, 'uploads')));
 
 // Also serve files from the current directory (where Python API might create files)
-app.use('/files', express.static(path.join(__dirname, '..')));
+app.use('/files', (req, res, next) => {
+  // Set CORS headers for TTS files
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+  res.header('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
+  next();
+}, express.static(path.join(__dirname, '..')));
 
 // Proxy endpoint to serve TTS files from Python API
 app.get('/files/:filename', async (req: Request, res: Response) => {

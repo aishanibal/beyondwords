@@ -4,6 +4,7 @@ import { saveMessageToBackend } from '../services/conversationService';
 import { playTTSAudio, getTTSText } from '../services/audioService';
 import { ChatMessage } from '../types/analyze';
 import { TTS_TIMEOUTS } from '../config/constants';
+import { constructTTSUrl, isTTSUrlAccessible } from '../config/ttsConfig';
 
 export const useAudioHandlers = (
   user: any,
@@ -387,14 +388,41 @@ export const useAudioHandlers = (
     }
   }, []);
 
-  const handlePlayExistingTTS = useCallback((ttsUrl: string) => {
+  const handlePlayExistingTTS = useCallback(async (ttsUrl: string) => {
     try {
-      const audio = new Audio(ttsUrl);
-      audio.play().catch(error => {
-        console.error('Failed to play existing TTS audio:', error);
+      console.log('🔍 [EXISTING_TTS] Attempting to play existing TTS:', ttsUrl);
+      
+      // Construct absolute URL using the configuration
+      const absoluteUrl = constructTTSUrl(ttsUrl);
+      console.log('🔍 [EXISTING_TTS] Constructed absolute URL:', absoluteUrl);
+      
+      // Check if the URL is accessible before trying to play
+      const isAccessible = await isTTSUrlAccessible(ttsUrl);
+      if (!isAccessible) {
+        throw new Error('TTS file is not accessible');
+      }
+      
+      const audio = new Audio(absoluteUrl);
+      
+      // Add event listeners for better error handling
+      audio.addEventListener('error', (e) => {
+        console.error('🔍 [EXISTING_TTS] Audio load error:', e);
+        console.warn('🔍 [EXISTING_TTS] Audio file may be corrupted or in unsupported format');
       });
+      
+      audio.addEventListener('canplaythrough', () => {
+        console.log('🔍 [EXISTING_TTS] Audio loaded successfully, playing...');
+      });
+      
+      await audio.play();
+      console.log('🔍 [EXISTING_TTS] Successfully playing existing TTS');
+      
     } catch (error) {
-      console.error('Error playing existing TTS:', error);
+      console.error('🔍 [EXISTING_TTS] Failed to play existing TTS audio:', error);
+      console.warn('🔍 [EXISTING_TTS] The TTS file may be missing, inaccessible, or corrupted');
+      
+      // Don't try to generate new TTS here as we don't have the original text
+      // The user can manually trigger TTS if needed
     }
   }, []);
 

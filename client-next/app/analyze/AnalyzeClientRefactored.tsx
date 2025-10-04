@@ -470,8 +470,17 @@ const AnalyzeContentInner = () => {
       const firstMessage = chatHistory[0];
       if (firstMessage.sender === 'AI' && firstMessage.ttsUrl) {
         console.log('🔍 [INITIAL_TTS] Playing TTS for initial AI message:', firstMessage.ttsUrl);
-        // Play the existing TTS URL
-        audioHandlers.handlePlayExistingTTS(firstMessage.ttsUrl);
+        // Play the existing TTS URL with fallback to generating new TTS
+        audioHandlers.handlePlayExistingTTS(firstMessage.ttsUrl).catch(error => {
+          console.error('🔍 [INITIAL_TTS] Error playing existing TTS:', error);
+          console.log('🔍 [INITIAL_TTS] Falling back to generating new TTS');
+          // Fallback: generate new TTS for the message
+          const ttsText = firstMessage.romanizedText || firstMessage.text;
+          const cacheKey = `initial_ai_message_fallback_${Date.now()}`;
+          audioHandlers.handlePlayTTS(ttsText, language).catch(fallbackError => {
+            console.error('🔍 [INITIAL_TTS] Error generating fallback TTS:', fallbackError);
+          });
+        });
       } else if (firstMessage.sender === 'AI' && !firstMessage.ttsUrl) {
         console.log('🔍 [INITIAL_TTS] Generating TTS for initial AI message without TTS URL');
         // Generate TTS for the initial message
