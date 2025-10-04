@@ -128,7 +128,7 @@ export const loadExistingConversation = async (conversationId: string) => {
     console.log('[CONVERSATION_SERVICE] Response status:', response.status);
     console.log('[CONVERSATION_SERVICE] Response data:', response.data);
 
-    if (response.data.success) {
+    if (response.data.conversation) {
       const conversation = response.data.conversation;
       
       // Parse messages from conversation and ensure proper structure
@@ -155,7 +155,7 @@ export const loadExistingConversation = async (conversationId: string) => {
         createdAt: conversation.created_at || conversation.createdAt
       };
     } else {
-      console.warn('[CONVERSATION_SERVICE] Conversation not found or access denied');
+      console.warn('[CONVERSATION_SERVICE] No conversation data in response');
       return null;
     }
   } catch (error: any) {

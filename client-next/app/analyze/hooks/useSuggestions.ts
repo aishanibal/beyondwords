@@ -322,8 +322,8 @@ export const useSuggestions = (
         }
       });
       
-      if (response.data.success && response.data.audioUrl) {
-        const audio = new Audio(response.data.audioUrl);
+      if (response.data.ttsUrl) {
+        const audio = new Audio(response.data.ttsUrl);
         await audio.play();
       }
     } catch (error) {
