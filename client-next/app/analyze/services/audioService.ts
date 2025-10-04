@@ -45,9 +45,11 @@ export const getAIResponse = async (
   transcription: string,
   chatHistory: ChatMessage[],
   language: string,
-  userPreferences: any
+  userPreferences: any,
+  user?: any
 ) => {
   try {
+    console.log('🔍 [AI_RESPONSE] Getting AI response for transcription:', transcription);
     const token = localStorage.getItem('jwt');
     
     const aiResponseData = {
@@ -56,22 +58,47 @@ export const getAIResponse = async (
       language: language,
       user_level: userPreferences?.userLevel || 'beginner',
       user_topics: userPreferences?.topics || [],
-      user_goals: userPreferences?.user_goals || [],
-      formality: userPreferences?.formality || 'neutral',
+      user_goals: user?.learning_goals ? (typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : user.learning_goals) : [],
+      formality: userPreferences?.formality || 'friendly',
       feedback_language: userPreferences?.feedbackLanguage || 'en'
     };
+    
+    console.log('🔍 [AI_RESPONSE] Request data:', aiResponseData);
 
-    const aiResponseResponse = await axios.post('/api/ai_response', aiResponseData, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {})
+    let aiResponseResponse;
+    try {
+      aiResponseResponse = await axios.post('/api/ai_response', aiResponseData, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        }
+      });
+    } catch (primaryErr: any) {
+      const status = primaryErr?.response?.status;
+      console.warn('🔍 [AI_RESPONSE] /api/ai_response failed:', status, primaryErr?.response?.data);
+      // Client-side fallback: call Express directly to bypass any Vercel route issues
+      const backendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL || 'https://beyondwords-express.onrender.com').replace(/\/$/, '');
+      const directUrl = `${backendUrl}/api/ai_response`;
+      try {
+        aiResponseResponse = await axios.post(directUrl, aiResponseData, {
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          }
+        });
+      } catch (directErr) {
+        console.error('🔍 [AI_RESPONSE] Direct Express fallback failed:', directErr);
+        throw primaryErr; // surface the original
       }
-    });
+    }
+    
+    console.log('🔍 [AI_RESPONSE] Response received:', aiResponseResponse.data);
     
     const aiResponse = aiResponseResponse.data?.response || 
                       aiResponseResponse.data?.ai_response || 
                       aiResponseResponse.data?.message;
     
+    console.log('🔍 [AI_RESPONSE] Extracted AI response:', aiResponse);
     return aiResponse;
   } catch (error) {
     console.error('Error getting AI response:', error);
@@ -145,11 +172,19 @@ export const processAudioWithPipeline = async (
   chatHistory: ChatMessage[],
   userPreferences: any,
   autoSpeak: boolean,
-  enableShortFeedback: boolean
+  enableShortFeedback: boolean,
+  user?: any
 ) => {
   try {
+    console.log('🔍 [PIPELINE] Starting audio processing pipeline...');
+    console.log('🔍 [PIPELINE] Audio blob size:', audioBlob.size, 'bytes');
+    console.log('🔍 [PIPELINE] Language:', language);
+    console.log('🔍 [PIPELINE] Chat history length:', chatHistory.length);
+    
     // Step 1: Get transcription
+    console.log('🔍 [PIPELINE] Step 1: Getting transcription...');
     const transcription = await processAudioTranscription(audioBlob, language);
+    console.log('🔍 [PIPELINE] Transcription received:', transcription);
     
     // Generate romanized text for user messages in script languages
     let userRomanizedText = '';
@@ -173,8 +208,11 @@ export const processAudioWithPipeline = async (
     }
     
     // Step 3: Get AI response
+    console.log('🔍 [PIPELINE] Step 3: Getting AI response...');
     const updatedChatHistory = [...chatHistory, userMessage];
-    const aiResponse = await getAIResponse(transcription, updatedChatHistory, language, userPreferences);
+    console.log('🔍 [PIPELINE] Updated chat history length:', updatedChatHistory.length);
+    const aiResponse = await getAIResponse(transcription, updatedChatHistory, language, userPreferences, user);
+    console.log('🔍 [PIPELINE] AI response received:', aiResponse);
     
     // Format AI response
     let formattedResponse: { mainText: string; romanizedText?: string } | null = null;
@@ -191,14 +229,17 @@ export const processAudioWithPipeline = async (
       isFromOriginalConversation: false
     } : null;
     
-    return {
+    const result = {
       userMessage,
       aiMessage,
       shortFeedback,
       transcription
     };
+    
+    console.log('🔍 [PIPELINE] Pipeline completed successfully:', result);
+    return result;
   } catch (error) {
-    console.error('Error in audio processing pipeline:', error);
+    console.error('🔍 [PIPELINE] Error in audio processing pipeline:', error);
     throw error;
   }
 };

@@ -2,11 +2,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import axios from 'axios';
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  process.env.BACKEND_URL ||
-  process.env.AI_BACKEND_URL ||
-  'https://beyondwords.onrender.com';
+const API_BASE = (process.env.BACKEND_URL || 'https://beyondwords-express.onrender.com').replace(/\/$/, '');
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end();
@@ -21,3 +17,4 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.status(error.response?.status || 500).json(error.response?.data || { error: 'Exchange failed' });
   }
 }
+

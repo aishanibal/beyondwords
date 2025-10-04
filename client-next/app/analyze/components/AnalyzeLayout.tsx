@@ -1,15 +1,10 @@
 import React from 'react';
-import RightPanel from './RightPanel';
 
 interface AnalyzeLayoutProps {
   isDarkMode: boolean;
-  leftPanelWidth: number;
-  rightPanelWidth: number;
+  panelWidths: { left: number; center: number; right: number };
   showShortFeedbackPanel: boolean;
   setShowShortFeedbackPanel: (show: boolean) => void;
-  showRightPanel: boolean;
-  setShowRightPanel: (show: boolean) => void;
-  setRightPanelWidth: (width: number) => void;
   ttsDebugInfo: any;
   setTtsDebugInfo: (info: any) => void;
   romanizationDebugInfo: any;
@@ -18,6 +13,7 @@ interface AnalyzeLayoutProps {
   showTranslations: Record<number, boolean>;
   feedbackExplanations: Record<number, Record<string, string>>;
   showDetailedBreakdown: Record<number, boolean>;
+  setShowDetailedBreakdown: (breakdown: Record<number, boolean>) => void;
   parsedBreakdown: any[];
   activePopup: { messageIndex: number; wordKey: string; position: { x: number; y: number } } | null;
   // Left panel content props
@@ -30,6 +26,7 @@ interface AnalyzeLayoutProps {
   setShowLlmBreakdown: (show: boolean) => void;
   chatHistory: any[];
   isLoadingMessageFeedback: Record<number, boolean>;
+  isLoadingExplain: boolean;
   explainLLMResponse: (messageIndex: number, text: string) => void;
   renderClickableMessage: (message: any, messageIndex: number, translation: any) => React.ReactNode;
   children: React.ReactNode;
@@ -37,13 +34,9 @@ interface AnalyzeLayoutProps {
 
 const AnalyzeLayout: React.FC<AnalyzeLayoutProps> = ({
   isDarkMode,
-  leftPanelWidth,
-  rightPanelWidth,
+  panelWidths,
   showShortFeedbackPanel,
   setShowShortFeedbackPanel,
-  showRightPanel,
-  setShowRightPanel,
-  setRightPanelWidth,
   ttsDebugInfo,
   setTtsDebugInfo,
   romanizationDebugInfo,
@@ -52,6 +45,7 @@ const AnalyzeLayout: React.FC<AnalyzeLayoutProps> = ({
   showTranslations,
   feedbackExplanations,
   showDetailedBreakdown,
+  setShowDetailedBreakdown,
   parsedBreakdown,
   activePopup,
   // Left panel content props
@@ -64,6 +58,7 @@ const AnalyzeLayout: React.FC<AnalyzeLayoutProps> = ({
   setShowLlmBreakdown,
   chatHistory,
   isLoadingMessageFeedback,
+  isLoadingExplain,
   explainLLMResponse,
   renderClickableMessage,
   children
@@ -77,18 +72,17 @@ const AnalyzeLayout: React.FC<AnalyzeLayoutProps> = ({
       background: isDarkMode 
         ? 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%)'
         : 'linear-gradient(135deg, #f9f6f4 0%, #f5f1ec 50%, #e8e0d8 100%)',
-      padding: '0arem 0.5rem 2rem 0.5rem',
+      padding: '0.5rem 0.5rem 0 0.5rem',
       gap: '0.5rem',
       transition: 'all 0.15s ease',
       fontFamily: 'Montserrat, Arial, sans-serif',
       position: 'relative',
       overflow: 'hidden',
-      boxSizing: 'border-box',
-      marginTop: '6rem'
+      boxSizing: 'border-box'
     }}>
       
       {/* TTS Debug Panel */}
-      {ttsDebugInfo && (
+      {false && ttsDebugInfo && (
         <div style={{
           position: 'fixed',
           top: '7rem',
@@ -252,7 +246,7 @@ const AnalyzeLayout: React.FC<AnalyzeLayoutProps> = ({
       )}
       
       {/* Romanization Debug Panel */}
-      {romanizationDebugInfo && (
+      {false && romanizationDebugInfo && (
         <div style={{
           position: 'fixed',
           top: romanizationDebugInfo.fallbackUsed ? '12rem' : '7rem',
@@ -380,7 +374,7 @@ const AnalyzeLayout: React.FC<AnalyzeLayoutProps> = ({
         {/* Left Panel - Short Feedback Panel */}
         {showShortFeedbackPanel && (
           <div className="panel-hover" style={{ 
-            width: `${leftPanelWidth * 100}%`, 
+            width: `${panelWidths.left * 100}%`, 
             background: isDarkMode 
               ? 'linear-gradient(135deg, var(--card) 0%, rgba(255,255,255,0.02) 100%)' 
               : 'linear-gradient(135deg, #ffffff 0%, rgba(59,83,119,0.02) 100%)', 
@@ -417,7 +411,10 @@ const AnalyzeLayout: React.FC<AnalyzeLayoutProps> = ({
               transition: 'all 0.3s ease',
               boxShadow: isDarkMode 
                 ? '0 4px 16px rgba(139,163,217,0.2)' 
-                : '0 4px 16px rgba(59,83,119,0.15)'
+                : '0 4px 16px rgba(59,83,119,0.15)',
+              position: 'sticky',
+              top: 0,
+              zIndex: 2
             }}>
               <div style={{ 
                 display: 'flex',
@@ -474,12 +471,13 @@ const AnalyzeLayout: React.FC<AnalyzeLayoutProps> = ({
               }}
             />
             
-            {/* Short Feedback Content */}
+            {/* Short Feedback Content (scrollable body) */}
             <div style={{ 
               flex: 1, 
               display: 'flex',
               flexDirection: 'column',
-              minHeight: 0
+              minHeight: 0,
+              overflowY: 'auto'
             }}>
               
               {/* Quick Translation Section */}
@@ -529,16 +527,23 @@ const AnalyzeLayout: React.FC<AnalyzeLayoutProps> = ({
                     </div>
                     <button
                       onClick={() => {
-                        // Find the AI message that has the quick translation
-                        const messageIndex = Object.keys(quickTranslations)[0];
-                        if (messageIndex) {
-                          const message = chatHistory[parseInt(messageIndex)];
+                        // Find the most recent AI message in chat history
+                        let mostRecentAIMessageIndex = -1;
+                        for (let i = chatHistory.length - 1; i >= 0; i--) {
+                          if (chatHistory[i] && chatHistory[i].sender === 'AI') {
+                            mostRecentAIMessageIndex = i;
+                            break;
+                          }
+                        }
+                        
+                        if (mostRecentAIMessageIndex >= 0) {
+                          const message = chatHistory[mostRecentAIMessageIndex];
                           if (message) {
-                            explainLLMResponse(parseInt(messageIndex), message.text);
+                            explainLLMResponse(mostRecentAIMessageIndex, message.text);
                           }
                         }
                       }}
-                      disabled={isLoadingMessageFeedback[Object.keys(quickTranslations)[0] || '0']}
+                      disabled={isLoadingExplain}
                       style={{
                         padding: '0.35rem 0.7rem',
                         borderRadius: 6,
@@ -548,9 +553,9 @@ const AnalyzeLayout: React.FC<AnalyzeLayoutProps> = ({
                           : 'rgba(59,83,119,0.08)',
                         color: isDarkMode ? '#8ba3d9' : '#3b5377',
                         fontSize: '0.7rem',
-                        cursor: isLoadingMessageFeedback[Object.keys(quickTranslations)[0] || '0'] ? 'not-allowed' : 'pointer',
+                        cursor: isLoadingExplain ? 'not-allowed' : 'pointer',
                         transition: 'all 0.2s ease',
-                        opacity: isLoadingMessageFeedback[Object.keys(quickTranslations)[0] || '0'] ? 0.6 : 1,
+                        opacity: isLoadingExplain ? 0.6 : 1,
                         fontWeight: 500,
                         boxShadow: isDarkMode 
                           ? '0 1px 3px rgba(139,163,217,0.10)' 
@@ -558,7 +563,7 @@ const AnalyzeLayout: React.FC<AnalyzeLayoutProps> = ({
                       }}
                       title="Get detailed LLM breakdown"
                     >
-                      {isLoadingMessageFeedback[Object.keys(quickTranslations)[0] || '0'] ? '🔄' : '📝 Detailed Explanation'}
+                      {isLoadingExplain ? '🔄' : '📝 Detailed Explanation'}
                     </button>
                   </div>
                   {showQuickTranslation && (
@@ -671,42 +676,6 @@ const AnalyzeLayout: React.FC<AnalyzeLayoutProps> = ({
                 </div>
               )}
               
-              {/* Short Feedback Display */}
-              {shortFeedback && (
-                <div style={{
-                  background: isDarkMode 
-                    ? 'linear-gradient(135deg, rgba(195,141,148,0.15) 0%, rgba(195,141,148,0.08) 100%)'
-                    : 'linear-gradient(135deg, rgba(195,141,148,0.12) 0%, rgba(195,141,148,0.06) 100%)',
-                  color: isDarkMode ? 'var(--foreground)' : '#3e3e3e',
-                  padding: '1rem',
-                  fontSize: '0.85rem',
-                  lineHeight: 1.5,
-                  fontFamily: 'AR One Sans, Arial, sans-serif',
-                  fontWeight: 400,
-                  transition: 'background 0.3s ease, color 0.3s ease',
-                  flex: 1,
-                  overflowY: 'auto'
-                }}>
-                  <div style={{
-                    fontWeight: 600,
-                    fontSize: '1.1rem',
-                    marginBottom: '1rem',
-                    color: isDarkMode ? '#c38d94' : '#c38d94'
-                  }}>
-                    💡 AI Feedback
-                  </div>
-                  <div style={{
-                    background: isDarkMode ? '#334155' : '#f8f9fa',
-                    padding: '0.75rem',
-                    borderRadius: 8,
-                    fontSize: '0.85rem',
-                    lineHeight: '1.6',
-                    whiteSpace: 'pre-wrap'
-                  }}>
-                    {shortFeedback}
-                  </div>
-                </div>
-              )}
               
               {/* Default message when no content */}
               {!shortFeedback && Object.keys(quickTranslations).length === 0 && !showLlmBreakdown && (
@@ -730,37 +699,31 @@ const AnalyzeLayout: React.FC<AnalyzeLayoutProps> = ({
           </div>
         )}
 
-        {/* Main Content Container */}
-        <div style={{
-          flex: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          position: 'relative',
-          background: isDarkMode ? 'var(--background)' : '#fcfcfc',
-          boxShadow: isDarkMode
-            ? 'inset 8px 0 16px -8px rgba(0,0,0,0.4)'
-            : 'inset 8px 0 16px -8px rgba(0,0,0,0.06)',
-          height: 'calc(100vh - 80px)',
-          borderRadius: 24,
+        {/* Chat Panel - Center */}
+        <div style={{ 
+          width: `${panelWidths.center * 100}%`,
+          background: isDarkMode 
+            ? 'linear-gradient(135deg, var(--card) 0%, rgba(255,255,255,0.02) 100%)' 
+            : 'linear-gradient(135deg, #ffffff 0%, rgba(195,141,148,0.02) 100%)', 
+          borderRadius: 24, 
+          display: 'flex', 
+          flexDirection: 'column', 
+          boxShadow: isDarkMode 
+            ? '0 8px 40px rgba(0,0,0,0.4), 0 2px 8px rgba(0,0,0,0.2)' 
+            : '0 8px 40px rgba(60,60,60,0.12), 0 2px 8px rgba(195,141,148,0.08)',
+          position: 'relative', 
+          transition: 'all 0.3s ease',
+          border: isDarkMode ? '1px solid var(--rose-primary)' : '1px solid var(--rose-primary)',
+          backdropFilter: 'blur(20px)',
+          zIndex: 1,
+          minHeight: 0,
+          height: '100%',
           overflow: 'hidden'
         }}>
           {/* Main Content - Children will be rendered here */}
           {children}
         </div>
 
-        {/* Right Panel */}
-        <RightPanel
-          isDarkMode={isDarkMode}
-          rightPanelWidth={rightPanelWidth}
-          showRightPanel={showRightPanel}
-          onClose={() => setShowRightPanel(false)}
-          translations={translations}
-          showTranslations={showTranslations}
-          feedbackExplanations={feedbackExplanations}
-          showDetailedBreakdown={showDetailedBreakdown}
-          parsedBreakdown={parsedBreakdown}
-          activePopup={activePopup}
-        />
 
       {/* Floating Panel Toggle Buttons */}
       {!showShortFeedbackPanel && (
@@ -793,35 +756,6 @@ const AnalyzeLayout: React.FC<AnalyzeLayoutProps> = ({
         </button>
       )}
 
-      {!showRightPanel && (
-        <button
-          onClick={() => setShowRightPanel(true)}
-          style={{
-            position: 'fixed',
-            right: '1rem',
-            top: '6.7rem',
-            background: 'var(--blue-secondary)',
-            color: '#fff',
-            border: 'none',
-            borderRadius: '0 12px 12px 0',
-            padding: '1.1rem 0.75rem',
-            fontSize: '1.2rem',
-            cursor: 'pointer',
-            fontWeight: 600,
-            transition: 'all 0.3s ease',
-            boxShadow: '0 4px 16px rgba(60,76,115,0.25)',
-            zIndex: 1000,
-            fontFamily: 'Montserrat, Arial, sans-serif',
-            height: '60px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}
-          title="Show Translations & Feedback Panel"
-        >
-          📚
-        </button>
-      )}
       </div>
     </div>
   );

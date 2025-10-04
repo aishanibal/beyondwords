@@ -56,7 +56,6 @@ export const useSuggestions = (
   conversationId: string | null,
   userPreferences: any,
   chatHistory: any[],
-  isProcessing: boolean,
   formatScriptLanguageText: (text: string, language: string) => { mainText: string; romanizedText?: string }
 ): UseSuggestionsReturn => {
   // Suggestions state
@@ -156,7 +155,7 @@ export const useSuggestions = (
 
   // Handle suggestion button click - from original
   const handleSuggestionButtonClick = useCallback(async () => {
-    if (!user || isProcessing) return;
+    if (!user) return;
     
     console.log('🔍 [DEBUG] handleSuggestionButtonClick called');
     setIsLoadingSuggestions(true);
@@ -234,7 +233,7 @@ export const useSuggestions = (
     } finally {
       setIsLoadingSuggestions(false);
     }
-  }, [user, language, conversationId, userPreferences, chatHistory, isProcessing, formatScriptLanguageText]);
+  }, [user, language, conversationId, userPreferences, chatHistory, formatScriptLanguageText]);
 
   // Navigate suggestion carousel - from original
   const navigateSuggestion = useCallback((direction: 'prev' | 'next') => {
@@ -258,7 +257,7 @@ export const useSuggestions = (
     setShowSuggestionExplanations(false);
   }, []);
 
-  // Explain suggestion - placeholder implementation
+  // Explain suggestion - fixed implementation
   const explainSuggestion = useCallback(async (index: number, text: string) => {
     setIsTranslatingSuggestion(prev => ({
       ...prev,
@@ -268,8 +267,14 @@ export const useSuggestions = (
     try {
       const token = localStorage.getItem('jwt');
       const response = await axios.post('/api/explain_suggestion', {
-        suggestion: text,
-        language: language
+        suggestion_text: text,
+        chatHistory: chatHistory,
+        language: language,
+        user_level: userPreferences?.userLevel || 'beginner',
+        user_topics: userPreferences?.topics || [],
+        formality: userPreferences?.formality || 'neutral',
+        feedback_language: userPreferences?.feedbackLanguage || 'en',
+        user_goals: user?.learning_goals ? (typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : user.learning_goals) : []
       }, {
         headers: {
           'Content-Type': 'application/json',
@@ -299,7 +304,7 @@ export const useSuggestions = (
         [index]: false
       }));
     }
-  }, [language]);
+  }, [language, chatHistory, userPreferences, user]);
 
   // Play suggestion TTS - implementation
   const playSuggestionTTS = useCallback(async (suggestion: any, index: number) => {

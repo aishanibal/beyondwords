@@ -12,6 +12,14 @@ import TopicSelectionModal from './TopicSelectionModal';
 import PersonaModal from './PersonaModal';
 import LoadingScreen from '../components/LoadingScreen';
 import { LEARNING_GOALS, LearningGoal, getProgressiveSubgoalDescription, getSubgoalLevel, updateSubgoalProgress, SubgoalProgress, LevelUpEvent } from '../../lib/preferences';
+
+// Import the new components
+import TTSDebugPanel from './components/TTSDebugPanel';
+import RomanizationDebugPanel from './components/RomanizationDebugPanel';
+import WordExplanationPopup from './components/WordExplanationPopup';
+import FloatingPanelToggle from './components/FloatingPanelToggle';
+import ShortFeedbackPanel from './components/ShortFeedbackPanel';
+import InterruptMessage from './components/InterruptMessage';
 import { getUserLanguageDashboards, getAuthHeaders } from '../../lib/api';
 import ChatMessageItem from './ChatMessageItem';
 import unidecode from 'unidecode';
@@ -1035,16 +1043,16 @@ const AnalyzeContentInner = () => {
         // 2. Add each message in chatHistory as a message in the conversation, with correct order
         for (let i = 0; i < chatHistory.length; i++) {
           const msg = chatHistory[i];
-          const headers = await getAuthHeaders();
+          const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://beyondwords-express.onrender.com';
           await axios.post(
-            `/api/conversations/${newConversationId}/messages`,
+            `${backendUrl}/api/conversations/${newConversationId}/messages`,
             {
               sender: msg.sender,
               text: msg.text,
               messageType: 'text',
               message_order: i + 1,
             },
-            { headers: headers as any }
+            token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
           );
         }
   
@@ -3065,9 +3073,7 @@ const AnalyzeContentInner = () => {
             text,
             messageType,
             audioFilePath,
-            romanized_text: romanizedText,
-            // Ensure backend receives a valid NOT NULL order
-            message_order: Math.max(1, (chatHistory?.length || 0))
+            romanized_text: romanizedText
           },
           { headers: authHeaders as any }
         );
@@ -3678,14 +3684,11 @@ const AnalyzeContentInner = () => {
         console.log('[MESSAGE_SYNC] Persisting unsaved messages:', unsaved.length);
         for (const msg of unsaved) {
           try {
-            const globalIndex = Math.max(0, chatHistory.indexOf(msg));
-            const order = globalIndex + 1;
             await axios.post(`/api/conversations/${conversationId}/messages`, {
               sender: msg.sender,
               text: msg.text,
               messageType: 'text',
               romanized_text: msg.romanizedText || null,
-              message_order: order,
               timestamp: (msg.timestamp instanceof Date ? msg.timestamp : new Date()).toISOString()
             }, { headers: authHeaders as any });
           } catch (e) {
@@ -5216,383 +5219,18 @@ const AnalyzeContentInner = () => {
             }}>
         
         {/* TTS Debug Panel */}
-        {ttsDebugInfo && (
-          <div style={{
-            position: 'fixed',
-            top: '7rem',
-            right: '1rem',
-            zIndex: 1000,
-            maxWidth: '300px',
-            background: isDarkMode 
-              ? 'linear-gradient(135deg, rgba(30,41,59,0.95) 0%, rgba(51,65,85,0.95) 100%)'
-              : 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(249,246,244,0.95) 100%)',
-            border: isDarkMode ? '1px solid rgba(139,163,217,0.3)' : '1px solid rgba(59,83,119,0.2)',
-            borderRadius: '12px',
-            boxShadow: isDarkMode 
-              ? '0 8px 32px rgba(139,163,217,0.2), 0 2px 8px rgba(139,163,217,0.1)'
-              : '0 8px 32px rgba(59,83,119,0.15), 0 2px 8px rgba(59,83,119,0.1)',
-            padding: '1rem',
-            backdropFilter: 'blur(20px)',
-            transition: 'all 0.3s ease',
-            fontFamily: 'Montserrat, Arial, sans-serif'
-          }}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: '0.75rem'
-            }}>
-              <h3 style={{
-                fontSize: '0.9rem',
-                fontWeight: 600,
-                color: isDarkMode ? '#e2e8f0' : '#374151',
-                margin: 0
-              }}>
-                🎤 TTS Service Status
-              </h3>
-              <button
-                onClick={() => setTtsDebugInfo(null)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: isDarkMode ? '#94a3b8' : '#6b7280',
-                  cursor: 'pointer',
-                  fontSize: '1rem',
-                  padding: '0.25rem',
-                  borderRadius: '4px',
-                  transition: 'all 0.2s ease'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.color = isDarkMode ? '#e2e8f0' : '#374151';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.color = isDarkMode ? '#94a3b8' : '#6b7280';
-                }}
-              >
-                ✕
-              </button>
-            </div>
-            
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <span style={{
-                  fontSize: '0.75rem',
-                  fontWeight: 500,
-                  color: isDarkMode ? '#cbd5e1' : '#6b7280',
-                  minWidth: '60px'
-                }}>
-                  Service:
-                </span>
-                <span style={{
-                  padding: '0.25rem 0.5rem',
-                  borderRadius: '6px',
-                  fontSize: '0.7rem',
-                  fontWeight: 600,
-                  ...(ttsDebugInfo.serviceUsed === 'system' ? {
-                    background: 'rgba(34,197,94,0.1)',
-                    color: '#16a34a'
-                  } : ttsDebugInfo.serviceUsed === 'google_cloud' ? {
-                    background: 'rgba(59,130,246,0.1)',
-                    color: '#2563eb'
-                  } : ttsDebugInfo.serviceUsed === 'gemini' ? {
-                    background: 'rgba(245,158,11,0.1)',
-                    color: '#d97706'
-                  } : ttsDebugInfo.serviceUsed === 'fallback' ? {
-                    background: 'rgba(239,68,68,0.1)',
-                    color: '#dc2626'
-                  } : ttsDebugInfo.serviceUsed === 'cached' ? {
-                    background: 'rgba(147,51,234,0.1)',
-                    color: '#9333ea'
-                  } : {
-                    background: 'rgba(107,114,128,0.1)',
-                    color: '#6b7280'
-                  })
-                }}>
-                  {ttsDebugInfo.serviceUsed === 'system' ? '🖥️ System (FREE)' :
-                   ttsDebugInfo.serviceUsed === 'google_cloud' ? '☁️ Google Cloud (CHEAP)' :
-                   ttsDebugInfo.serviceUsed === 'gemini' ? '🤖 Gemini (EXPENSIVE)' :
-                   ttsDebugInfo.serviceUsed === 'fallback' ? '🔇 Fallback' :
-                   ttsDebugInfo.serviceUsed === 'cached' ? '💾 Cached' :
-                   ttsDebugInfo.serviceUsed}
-                </span>
-              </div>
-              
-              {ttsDebugInfo.costEstimate !== 'unknown' && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span style={{
-                    fontSize: '0.75rem',
-                    fontWeight: 500,
-                    color: isDarkMode ? '#cbd5e1' : '#6b7280',
-                    minWidth: '60px'
-                  }}>
-                    Cost:
-                  </span>
-                  <span style={{
-                    padding: '0.25rem 0.5rem',
-                    borderRadius: '6px',
-                    fontSize: '0.7rem',
-                    fontWeight: 600,
-                    ...(ttsDebugInfo.costEstimate === '0.00' ? {
-                      background: 'rgba(34,197,94,0.1)',
-                      color: '#16a34a'
-                    } : {
-                      background: 'rgba(245,158,11,0.1)',
-                      color: '#d97706'
-                    })
-                  }}>
-                    ${ttsDebugInfo.costEstimate}
-                  </span>
-                </div>
-              )}
-              
-              {ttsDebugInfo.fallbackReason !== 'none' && (
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
-                  <span style={{
-                    fontSize: '0.75rem',
-                    fontWeight: 500,
-                    color: isDarkMode ? '#cbd5e1' : '#6b7280',
-                    minWidth: '60px'
-                  }}>
-                    Reason:
-                  </span>
-                  <span style={{
-                    fontSize: '0.7rem',
-                    color: isDarkMode ? '#94a3b8' : '#6b7280',
-                    lineHeight: '1.3'
-                  }}>
-                    {ttsDebugInfo.fallbackReason}
-                  </span>
-                </div>
-              )}
-              
-              {ttsDebugInfo.lastUpdate && (
-                <div style={{
-                  fontSize: '0.65rem',
-                  color: isDarkMode ? '#64748b' : '#9ca3af',
-                  marginTop: '0.25rem',
-                  textAlign: 'center'
-                }}>
-                  Updated: {ttsDebugInfo.lastUpdate.toLocaleTimeString()}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+        <TTSDebugPanel
+          ttsDebugInfo={ttsDebugInfo}
+          setTtsDebugInfo={setTtsDebugInfo}
+          isDarkMode={isDarkMode}
+        />
         
         {/* Romanization Debug Panel */}
-        {romanizationDebugInfo && (
-          <div style={{
-            position: 'fixed',
-            top: romanizationDebugInfo.fallbackUsed ? '12rem' : '7rem',
-            right: '1rem',
-            zIndex: 1000,
-            maxWidth: '350px',
-            background: isDarkMode 
-              ? 'linear-gradient(135deg, rgba(30,41,59,0.95) 0%, rgba(51,65,85,0.95) 100%)'
-              : 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(249,246,244,0.95) 100%)',
-            border: isDarkMode ? '1px solid rgba(139,163,217,0.3)' : '1px solid rgba(59,83,119,0.2)',
-            borderRadius: '12px',
-            boxShadow: isDarkMode 
-              ? '0 8px 32px rgba(139,163,217,0.2), 0 2px 8px rgba(139,163,217,0.1)'
-              : '0 8px 32px rgba(59,83,119,0.15), 0 2px 8px rgba(59,83,119,0.1)',
-            padding: '1rem',
-            backdropFilter: 'blur(20px)',
-            transition: 'all 0.3s ease',
-            fontFamily: 'Montserrat, Arial, sans-serif'
-          }}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: '0.75rem'
-            }}>
-              <h3 style={{
-                fontSize: '0.9rem',
-                fontWeight: 600,
-                color: isDarkMode ? '#e2e8f0' : '#374151',
-                margin: 0
-              }}>
-                🔤 Romanization Status
-              </h3>
-              <button
-                onClick={() => setRomanizationDebugInfo(null)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: isDarkMode ? '#94a3b8' : '#6b7280',
-                  cursor: 'pointer',
-                  fontSize: '1rem',
-                  padding: '0.25rem',
-                  borderRadius: '4px',
-                  transition: 'all 0.2s ease'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.color = isDarkMode ? '#e2e8f0' : '#374151';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.color = isDarkMode ? '#94a3b8' : '#6b7280';
-                }}
-              >
-                ✕
-              </button>
-            </div>
-            
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <span style={{
-                  fontSize: '0.75rem',
-                  fontWeight: 500,
-                  color: isDarkMode ? '#cbd5e1' : '#6b7280',
-                  minWidth: '60px'
-                }}>
-                  Method:
-                </span>
-                <span style={{
-                  padding: '0.25rem 0.5rem',
-                  borderRadius: '6px',
-                  fontSize: '0.7rem',
-                  fontWeight: 600,
-                  ...(romanizationDebugInfo.method === 'kuroshiro' ? {
-                    background: 'rgba(34,197,94,0.1)',
-                    color: '#16a34a'
-                  } : romanizationDebugInfo.method === 'wanakana' ? {
-                    background: 'rgba(59,130,246,0.1)',
-                    color: '#2563eb'
-                  } : romanizationDebugInfo.method === 'pinyin' ? {
-                    background: 'rgba(245,158,11,0.1)',
-                    color: '#d97706'
-                  } : romanizationDebugInfo.method === 'transliteration' ? {
-                    background: 'rgba(147,51,234,0.1)',
-                    color: '#9333ea'
-                  } : {
-                    background: 'rgba(107,114,128,0.1)',
-                    color: '#6b7280'
-                  })
-                }}>
-                  {romanizationDebugInfo.method === 'kuroshiro' ? '🎯 Kuroshiro (Best)' :
-                   romanizationDebugInfo.method === 'wanakana' ? '⚡ Wanakana (Fast)' :
-                   romanizationDebugInfo.method === 'pinyin' ? '📝 Pinyin (Chinese)' :
-                   romanizationDebugInfo.method === 'transliteration' ? '🔄 Transliteration' :
-                   romanizationDebugInfo.method === 'unidecode' ? '🔧 Unidecode' :
-                   romanizationDebugInfo.method}
-                </span>
-              </div>
-              
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <span style={{
-                  fontSize: '0.75rem',
-                  fontWeight: 500,
-                  color: isDarkMode ? '#cbd5e1' : '#6b7280',
-                  minWidth: '60px'
-                }}>
-                  Language:
-                </span>
-                <span style={{
-                  padding: '0.25rem 0.5rem',
-                  borderRadius: '6px',
-                  fontSize: '0.7rem',
-                  fontWeight: 600,
-                  background: 'rgba(59,130,246,0.1)',
-                  color: '#2563eb'
-                }}>
-                  {romanizationDebugInfo.language.toUpperCase()}
-                </span>
-              </div>
-              
-              {romanizationDebugInfo.fallbackUsed && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <span style={{
-                      fontSize: '0.75rem',
-                      fontWeight: 500,
-                      color: isDarkMode ? '#cbd5e1' : '#6b7280',
-                      minWidth: '60px'
-                    }}>
-                      Status:
-                    </span>
-                    <span style={{
-                      padding: '0.25rem 0.5rem',
-                      borderRadius: '6px',
-                      fontSize: '0.7rem',
-                      fontWeight: 600,
-                      background: 'rgba(245,158,11,0.1)',
-                      color: '#d97706'
-                    }}>
-                      ⚠️ Fallback Used
-                    </span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <span style={{
-                      fontSize: '0.7rem',
-                      fontWeight: 500,
-                      color: isDarkMode ? '#cbd5e1' : '#6b7280',
-                      minWidth: '60px'
-                    }}>
-                      Reason:
-                    </span>
-                    <span style={{
-                      fontSize: '0.65rem',
-                      color: isDarkMode ? '#94a3b8' : '#6b7280',
-                      lineHeight: '1.3'
-                    }}>
-                      {romanizationDebugInfo.fallbackReason}
-                    </span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <span style={{
-                      fontSize: '0.7rem',
-                      fontWeight: 500,
-                      color: isDarkMode ? '#cbd5e1' : '#6b7280',
-                      minWidth: '60px'
-                    }}>
-                      Text:
-                    </span>
-                    <span style={{
-                      fontSize: '0.65rem',
-                      color: isDarkMode ? '#94a3b8' : '#6b7280',
-                      lineHeight: '1.3'
-                    }}>
-                      {romanizationDebugInfo.textAnalysis.hasKanji ? '漢字' : ''}
-                      {romanizationDebugInfo.textAnalysis.hasHiragana ? ' ひらがな' : ''}
-                      {romanizationDebugInfo.textAnalysis.hasKatakana ? ' カタカナ' : ''}
-                      {romanizationDebugInfo.textAnalysis.isPureKana ? ' (Pure Kana)' : ''}
-                    </span>
-                  </div>
-                </div>
-              )}
-              
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <span style={{
-                  fontSize: '0.75rem',
-                  fontWeight: 500,
-                  color: isDarkMode ? '#cbd5e1' : '#6b7280',
-                  minWidth: '60px'
-                }}>
-                  Speed:
-                </span>
-                <span style={{
-                  padding: '0.25rem 0.5rem',
-                  borderRadius: '6px',
-                  fontSize: '0.7rem',
-                  fontWeight: 600,
-                  background: 'rgba(34,197,94,0.1)',
-                  color: '#16a34a'
-                }}>
-                  {romanizationDebugInfo.processingTime.toFixed(1)}ms
-                </span>
-              </div>
-              
-              <div style={{
-                fontSize: '0.65rem',
-                color: isDarkMode ? '#64748b' : '#9ca3af',
-                marginTop: '0.25rem',
-                textAlign: 'center'
-              }}>
-                Updated: {romanizationDebugInfo.lastUpdate?.toLocaleTimeString()}
-              </div>
-            </div>
-          </div>
-        )}
+        <RomanizationDebugPanel
+          romanizationDebugInfo={romanizationDebugInfo}
+          setRomanizationDebugInfo={setRomanizationDebugInfo}
+          isDarkMode={isDarkMode}
+        />
         
         {/* Background decorative elements */}
         <div style={{
@@ -5629,523 +5267,30 @@ const AnalyzeContentInner = () => {
           minHeight: 0
         }}>
         {/* Short Feedback Panel - Left */}
-        {showShortFeedbackPanel && (
-          <div className="panel-hover" style={{ 
-                        width: `${panelWidths.left * 100}%`, 
-            background: isDarkMode 
-              ? 'linear-gradient(135deg, var(--card) 0%, rgba(255,255,255,0.02) 100%)' 
-              : 'linear-gradient(135deg, #ffffff 0%, rgba(59,83,119,0.02) 100%)', 
-            borderRadius: 24,
-            display: 'flex',
-            flexDirection: 'column',
-            boxShadow: isDarkMode 
-              ? '0 8px 32px rgba(139,163,217,0.2), 0 2px 8px rgba(139,163,217,0.1)' 
-              : '0 8px 32px rgba(59,83,119,0.25), 0 2px 8px rgba(59,83,119,0.15)',
-            position: 'relative',
-            transition: 'all 0.15s ease',
-            border: isDarkMode ? '1px solid rgba(139,163,217,0.3)' : '1px solid #3b5377',
-            backdropFilter: 'blur(20px)',
-            zIndex: 1,
-            overflow: 'hidden',
-            height: '100%'
-          }}>
-            {/* AI Explanations Header */}
-            <div style={{ 
-              background: isDarkMode 
-                ? 'linear-gradient(135deg, #3b5377 0%, #2a3d5a 100%)' 
-                : 'linear-gradient(135deg, #3b5377 0%, #2a3d5a 100%)', 
-              color: '#ffffff', 
-              padding: '0.75rem 1.25rem', 
-              borderRadius: '24px 24px 0 0',
-              textAlign: 'center',
-              borderBottom: isDarkMode ? '1px solid rgba(139,163,217,0.3)' : '1px solid #3b5377',
-              fontFamily: 'Gabriela, Arial, sans-serif',
-              fontWeight: 700,
-              fontSize: '1rem',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              transition: 'all 0.3s ease',
-              boxShadow: isDarkMode 
-                ? '0 4px 16px rgba(139,163,217,0.2)' 
-                : '0 4px 16px rgba(59,83,119,0.15)'
-            }}>
-              <div style={{ 
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                paddingLeft: '0.2rem',
-                paddingRight: '0.2rem',
-                paddingTop: '0.25rem',
-                paddingBottom: '0.25rem',
-                width: '100%'
-              }}>
-                <div style={{ 
-                  color: '#ffffff', 
-                  fontWeight: 700, 
-                  fontSize: '1.2rem', 
-                  fontFamily: 'Gabriela, Arial, sans-serif',
-                  transition: 'color 0.3s ease',
-                  whiteSpace: 'nowrap',
-                  flexShrink: 0
-                }}>
-                  💡 AI Explanations
-                </div>
-                <button
-                  onClick={() => setShowShortFeedbackPanel(false)}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: '#ffffff',
-                    fontSize: '1.1rem',
-                    cursor: 'pointer',
-                    padding: '0.2rem',
-                    borderRadius: '4px',
-                    transition: 'all 0.2s'
-                  }}
-                  title="Hide panel"
-                >
-                  ◀
-                </button>
-              </div>
-            </div>
-            {/* Resize Handle */}
-            <div
-              onMouseDown={handleLeftResizeStart}
-              style={{
-                position: 'absolute',
-                right: -4,
-                top: 0,
-                bottom: 0,
-                width: 8,
-                cursor: 'col-resize',
-                background: 'transparent',
-                zIndex: 10
-              }}
-            />
-            {/* Short Feedback Content */}
-            <div style={{ 
-              flex: 1, 
-              display: 'flex',
-              flexDirection: 'column',
-              minHeight: 0
-            }}>
-              
-  
-              
-              {/* Quick Translation Section */}
-              {Object.keys(quickTranslations).length > 0 && (
-                <div style={{
-                  background: isDarkMode 
-                    ? 'linear-gradient(135deg, rgba(132,84,109,0.15) 0%, rgba(132,84,109,0.08) 100%)'
-                    : 'linear-gradient(135deg, rgba(132,84,109,0.12) 0%, rgba(132,84,109,0.06) 100%)',
-                  color: isDarkMode ? 'var(--foreground)' : '#3e3e3e',
-                  padding: '1rem',
-                  borderBottom: isDarkMode ? '1px solid rgba(195,141,148,0.3)' : '1px solid #c38d94',
-                                                                       fontSize: '0.85rem',
-                    lineHeight: 1.5,
-                  fontFamily: 'AR One Sans, Arial, sans-serif',
-                  fontWeight: 400,
-                  transition: 'background 0.3s ease, color 0.3s ease'
-                }}>
-                  <div style={{
-                    fontWeight: 600,
-                    fontSize: '1.1rem',
-                    marginBottom: showQuickTranslation ? '1rem' : '0',
-                    color: isDarkMode ? '#84546d' : '#84546d',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between'
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <span>Quick Translation</span>
-                      {showLlmBreakdown && (
-                        <button
-                          onClick={() => setShowQuickTranslation(!showQuickTranslation)}
-                          style={{
-                            padding: '0.15rem 0.4rem',
-                            borderRadius: 3,
-                            border: '1px solid #666',
-                            background: 'rgba(102,102,102,0.1)',
-                            color: '#666',
-                            fontSize: '0.6rem',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s ease'
-                          }}
-                          title={showQuickTranslation ? 'Collapse' : 'Expand'}
-                        >
-                          {showQuickTranslation ? '▼' : '▶'}
-                        </button>
-                      )}
-                    </div>
-                    <button
-                      onClick={() => {
-                        // Find the AI message that has the quick translation
-                        const messageIndex = Object.keys(quickTranslations)[0];
-                        if (messageIndex) {
-                          const message = chatHistory[parseInt(messageIndex)];
-                          if (message) {
-                            explainLLMResponse(parseInt(messageIndex), message.text);
-                          }
-                        }
-                      }}
-                      disabled={isLoadingMessageFeedback[Object.keys(quickTranslations)[0] || '0']}
-                                            style={{
-                          padding: '0.35rem 0.7rem',
-                          borderRadius: 6,
-                          border: `1px solid ${isDarkMode ? 'rgba(139,163,217,0.6)' : '#3b5377'}`,
-                          background: isDarkMode 
-                            ? 'rgba(139,163,217,0.15)' 
-                            : 'rgba(59,83,119,0.08)',
-                          color: isDarkMode ? '#8ba3d9' : '#3b5377',
-                          fontSize: '0.7rem',
-                          cursor: isLoadingMessageFeedback[Object.keys(quickTranslations)[0] || '0'] ? 'not-allowed' : 'pointer',
-                          transition: 'all 0.2s ease',
-                          opacity: isLoadingMessageFeedback[Object.keys(quickTranslations)[0] || '0'] ? 0.6 : 1,
-                          fontWeight: 500,
-                          boxShadow: isDarkMode 
-                            ? '0 1px 3px rgba(139,163,217,0.10)' 
-                            : '0 1px 3px rgba(59,83,119,0.10)'
-                        }}
-                      title="Get detailed LLM breakdown"
-                    >
-                      {isLoadingMessageFeedback[Object.keys(quickTranslations)[0] || '0'] ? '🔄' : '📝 Detailed Explanation'}
-                    </button>
-                  </div>
-                  {showQuickTranslation && (
-                    <div style={{
-                      maxHeight: showLlmBreakdown ? '200px' : 'none',
-                      overflowY: showLlmBreakdown ? 'auto' : 'visible'
-                    }}>
-                      {Object.entries(quickTranslations).map(([messageIndex, translation]) => (
-                        <div key={messageIndex} style={{ marginBottom: '1rem' }}>
-                          {translation.error ? (
-                            <div style={{ color: '#dc3545', fontStyle: 'italic' }}>
-                              {translation.fullTranslation}
-                            </div>
-                          ) : (
-                            <div>
-                              {/* Word by word breakdown with clickable words */}
-                              <div style={{ marginBottom: '0.5rem' }}>
-                                <strong>Word by Word Breakdown:</strong>
-                                <div style={{
-                                  background: isDarkMode ? '#334155' : '#f8f9fa',
-                                  padding: '0.75rem',
-                                  borderRadius: 8,
-                                  marginTop: '0.5rem',
-                                  fontSize: '0.95rem',
-                                  lineHeight: '1.6',
-                                  maxHeight: showLlmBreakdown ? '120px' : 'none',
-                                  overflowY: showLlmBreakdown ? 'auto' : 'visible'
-                                }}>
-                                  {renderClickableMessage(chatHistory[parseInt(messageIndex)], parseInt(messageIndex), translation)}
-                                </div>
-                              </div>
-                              
-                              {/* Full translation */}
-                              {translation.fullTranslation && (
-                                <div style={{ marginBottom: '0.5rem' }}>
-                                  <strong>Translation:</strong>
-                                  <div style={{
-                                    background: isDarkMode ? '#334155' : '#f8f9fa',
-                                    padding: '0.75rem',
-                                    borderRadius: 8,
-                                    marginTop: '0.5rem',
-                                    fontSize: '0.85rem',
-                                    lineHeight: '1.6'
-                                  }}>
-                                    {translation.fullTranslation}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-              
-              {/* LLM Response Breakdown Section */}
-              {showLlmBreakdown && llmBreakdown && (
-                <div style={{
-                  background: isDarkMode ? '#1e293b' : '#fff',
-                  color: isDarkMode ? '#f8fafc' : '#000',
-                  padding: '1rem',
-                  borderBottom: isDarkMode ? '1px solid #334155' : '1px solid #ececec',
-                  fontSize: '0.85rem',
-                  lineHeight: 1.5,
-                  fontFamily: 'AR One Sans, Arial, sans-serif',
-                  fontWeight: 400,
-                  transition: 'background 0.3s ease, color 0.3s ease'
-                }}>
-                  <div style={{
-                    fontWeight: 600,
-                    fontSize: '1.1rem',
-                    marginBottom: '1rem',
-                    color: isDarkMode ? '#f8fafc' : '#000',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between'
-                  }}>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      📝 Detailed Breakdown
-                    </span>
-                    <button
-                      onClick={() => setShowLlmBreakdown(false)}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        color: isDarkMode ? '#94a3b8' : '#666',
-                        cursor: 'pointer',
-                        fontSize: '1.2rem',
-                        padding: '0.2rem',
-                        borderRadius: '50%',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        transition: 'all 0.2s ease'
-                      }}
-                      title="Close breakdown"
-                    >
-                      ×
-                    </button>
-                  </div>
-                  <div style={{
-                    background: isDarkMode ? '#334155' : '#f8f9fa',
-                    padding: '0.75rem',
-                    borderRadius: 8,
-                    fontSize: '0.85rem',
-                    lineHeight: '1.6',
-                    whiteSpace: 'pre-wrap',
-                    maxHeight: '400px',
-                    overflowY: 'auto'
-                  }}>
-                    {llmBreakdown}
-                  </div>
-                </div>
-              )}
-              
-              {shortFeedback && (
-                <div style={{
-                  background: isDarkMode ? '#1e293b' : '#fff',
-                  color: isDarkMode ? '#f8fafc' : '#000',
-                                    padding: '0.75rem',
-                    flex: 1,
-                    overflowY: 'auto',
-                    overflowX: 'hidden',
-                    fontSize: '0.85rem',
-                  lineHeight: 1.5,
-                  whiteSpace: 'pre-wrap',
-                  fontFamily: 'AR One Sans, Arial, sans-serif',
-                  fontWeight: 400,
-                  minHeight: 0,
-                  transition: 'background 0.3s ease, color 0.3s ease'
-                }}>
-                  {parsedBreakdown.length > 0 ? (
-                    <div>
-                      {/* TTS button for detailed breakdown */}
-                      <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'flex-end' }}>
-                        <button
-                          onClick={() => {
-                            const cacheKey = `detailed_breakdown_panel`;
-                            playTTSAudio(shortFeedback, language, cacheKey);
-                          }}
-                          disabled={isGeneratingTTS['detailed_breakdown_panel'] || isPlayingTTS['detailed_breakdown_panel']}
-                          style={{
-                            padding: '0.3rem 0.7rem',
-                            borderRadius: 6,
-                            border: isPlayingTTS['detailed_breakdown_panel'] ? 'none' : '1px solid #28a745',
-                            background: isPlayingTTS['detailed_breakdown_panel'] ? 'linear-gradient(135deg, #28a745 0%, #1e7e34 100%)' : 'rgba(40,167,69,0.08)',
-                            color: isPlayingTTS['detailed_breakdown_panel'] ? '#fff' : '#28a745',
-                            fontSize: '0.7rem',
-                            cursor: (isGeneratingTTS['detailed_breakdown_panel'] || isPlayingTTS['detailed_breakdown_panel']) ? 'not-allowed' : 'pointer',
-                            transition: 'all 0.2s ease',
-                            opacity: (isGeneratingTTS['detailed_breakdown_panel'] || isPlayingTTS['detailed_breakdown_panel']) ? 0.6 : 1,
-                            fontWeight: 500,
-                            boxShadow: isPlayingTTS['detailed_breakdown_panel'] ? '0 2px 6px rgba(40,167,69,0.18)' : '0 1px 3px rgba(40,167,69,0.10)'
-                          }}
-                          title={isPlayingTTS['detailed_breakdown_panel'] ? 'Playing audio...' : 'Listen to this breakdown'}
-                        >
-                          {isGeneratingTTS['detailed_breakdown_panel'] ? '🔄' : isPlayingTTS['detailed_breakdown_panel'] ? '🔊 Playing' : '🔊 Listen'}
-                        </button>
-                      </div>
-                                            {parsedBreakdown.map((sentenceData, index) => (
-                          <div key={index} style={{ marginBottom: index < parsedBreakdown.length - 1 ? '1rem' : '0' }}>
-                            <div style={{ 
-                              display: 'flex', 
-                              flexDirection: 'column',
-                              width: '100%'
-                            }}>
-                              <div style={{ 
-                                display: 'flex', 
-                                justifyContent: 'space-between', 
-                                alignItems: 'flex-start',
-                                marginBottom: '0.4rem'
-                              }}>
-                                <div style={{ 
-                                  fontWeight: 600, 
-                                  fontSize: '0.95rem', 
-                                  flex: 1,
-                                  color: isDarkMode ? '#f8fafc' : '#000'
-                                }}>
-                                  {sentenceData.sentence}
-                                </div>
-                                {sentenceData.details && sentenceData.details.trim() && (
-                                  <button
-                                    onClick={() => {
-                                      const newExpanded = { ...showDetailedBreakdown };
-                                      newExpanded[index] = !newExpanded[index];
-                                      setShowDetailedBreakdown(newExpanded);
-                                    }}
-                                    style={{
-                                      background: showDetailedBreakdown[index] ? '#4a90e2' : 'rgba(74,144,226,0.08)',
-                                      border: '1px solid #4a90e2',
-                                      color: showDetailedBreakdown[index] ? '#fff' : '#4a90e2',
-                                      padding: '0.3rem 0.7rem',
-                                      borderRadius: 6,
-                                      cursor: 'pointer',
-                                      fontSize: '0.7rem',
-                                      fontWeight: 600,
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      gap: '0.3rem',
-                                      transition: 'all 0.2s ease',
-                                      boxShadow: showDetailedBreakdown[index] ? '0 2px 6px rgba(74,144,226,0.2)' : '0 1px 3px rgba(74,144,226,0.1)',
-                                      minWidth: 'fit-content',
-                                      height: 'fit-content',
-                                      marginLeft: '0.5rem'
-                                    }}
-                                  >
-                                    {showDetailedBreakdown[index] ? '▼' : '▶'} 
-                                    {showDetailedBreakdown[index] ? 'Hide' : 'Details'}
-                                  </button>
-                                )}
-                              </div>
-                              <div style={{ 
-                                color: isDarkMode ? '#94a3b8' : '#666', 
-                                fontSize: '0.85rem', 
-                                width: '100%', 
-                                lineHeight: '1.4' 
-                              }}>
-                                {sentenceData.overview}
-                              </div>
-                            </div>
-                          {showDetailedBreakdown[index] && sentenceData.details && sentenceData.details.trim() && (
-                            <div style={{
-                              marginTop: '0.75rem',
-                              padding: '1rem',
-                              background: isDarkMode 
-                                ? 'linear-gradient(135deg, #334155 0%, #475569 100%)'
-                                : 'linear-gradient(135deg, #f8f9fa 0%, #f0f4f8 100%)',
-                              borderRadius: 8,
-                              border: isDarkMode ? '1px solid #475569' : '1px solid #e1e8ed',
-                              fontSize: '0.8rem',
-                              lineHeight: 1.5,
-                              whiteSpace: 'pre-wrap',
-                              boxShadow: isDarkMode 
-                                ? 'inset 0 1px 3px rgba(0,0,0,0.2)' 
-                                : 'inset 0 1px 3px rgba(0,0,0,0.05)',
-                              color: isDarkMode ? '#f8fafc' : '#2c3e50',
-                              transition: 'background 0.3s ease, border-color 0.3s ease, color 0.3s ease'
-                            }}>
-                              {sentenceData.details}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div>
-                      <div style={{ marginBottom: '0.5rem' }}>{shortFeedback}</div>
-                      {/* TTS button for short feedback */}
-                      <button
-                        onClick={() => {
-                          const cacheKey = `short_feedback_panel`;
-                          playTTSAudio(shortFeedback, language, cacheKey);
-                        }}
-                        disabled={isGeneratingTTS['short_feedback_panel'] || isPlayingTTS['short_feedback_panel']}
-                                                style={{
-                            padding: '0.3rem 0.7rem',
-                            borderRadius: 6,
-                            border: isPlayingTTS['short_feedback_panel'] ? 'none' : '1px solid #28a745',
-                            background: isPlayingTTS['short_feedback_panel'] ? 'linear-gradient(135deg, #28a745 0%, #1e7e34 100%)' : 'rgba(40,167,69,0.08)',
-                            color: isPlayingTTS['short_feedback_panel'] ? '#fff' : '#28a745',
-                            fontSize: '0.7rem',
-                          cursor: (isGeneratingTTS['short_feedback_panel'] || isPlayingTTS['short_feedback_panel']) ? 'not-allowed' : 'pointer',
-                          transition: 'all 0.2s ease',
-                          opacity: (isGeneratingTTS['short_feedback_panel'] || isPlayingTTS['short_feedback_panel']) ? 0.6 : 1,
-                          fontWeight: 500,
-                          boxShadow: isPlayingTTS['short_feedback_panel'] ? '0 2px 6px rgba(40,167,69,0.18)' : '0 1px 3px rgba(40,167,69,0.10)'
-                        }}
-                        title={isPlayingTTS['short_feedback_panel'] ? 'Playing audio...' : 'Listen to this feedback'}
-                      >
-                        {isGeneratingTTS['short_feedback_panel'] ? '🔄' : isPlayingTTS['short_feedback_panel'] ? '🔊 Playing' : '🔊 Listen'}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-  
-              {!shortFeedback && Object.keys(quickTranslations).length === 0 && (
-                <div style={{
-                  background: isDarkMode ? '#1e293b' : '#fff',
-                  color: isDarkMode ? '#94a3b8' : '#666',
-                                    padding: '0.75rem',
-                    flex: 1,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '0.85rem',
-                  fontStyle: 'italic',
-                  transition: 'background 0.3s ease, color 0.3s ease'
-                }}>
-                  Click "💡 Explain" on any AI message to see short feedback here
-                </div>
-              )}
-              {explainButtonPressed && (
-                <button
-                  onClick={() => {
-                    // Find the current AI message that has short feedback
-                    const currentMessageIndex = chatHistory.findIndex((msg, index) => 
-                      msg.sender === 'AI' && shortFeedbacks[index] === shortFeedback
-                    );
-                    
-                    if (currentMessageIndex !== -1) {
-                      requestDetailedBreakdownForMessage(currentMessageIndex);
-                    } else {
-                      // Fallback: try to find any AI message with short feedback
-                      const fallbackIndex = chatHistory.findIndex((msg, index) => 
-                        msg.sender === 'AI' && shortFeedbacks[index]
-                      );
-                      if (fallbackIndex !== -1) {
-                        requestDetailedFeedbackForMessage(fallbackIndex);
-                      }
-                    }
-                  }}
-                  disabled={!shortFeedback}
-                  style={{
-                    width: '100%',
-                    padding: '0.6rem',
-                    background: shortFeedback ? 'var(--rose-primary)' : '#ccc',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: 8,
-                    boxShadow: 'inset 0 2px 8px #c38d9422',
-                    cursor: !shortFeedback ? 'not-allowed' : 'pointer',
-                    fontWeight: 600,
-                    fontSize: '0.9rem',
-                    transition: 'all 0.2s',
-                    marginTop: 'auto'
-                  }}
-                >
-                  🎯 Get Detailed Explanation
-                </button>
-              )}
-          </div>
-          </div>
-        )}
+        <ShortFeedbackPanel
+          showShortFeedbackPanel={showShortFeedbackPanel}
+          setShowShortFeedbackPanel={setShowShortFeedbackPanel}
+          leftPanelWidth={panelWidths.left}
+          isDarkMode={isDarkMode}
+          shortFeedback={shortFeedback}
+          quickTranslations={quickTranslations}
+          showQuickTranslation={showQuickTranslation}
+          setShowQuickTranslation={setShowQuickTranslation}
+          llmBreakdown={llmBreakdown}
+          showLlmBreakdown={showLlmBreakdown}
+          setShowLlmBreakdown={setShowLlmBreakdown}
+          chatHistory={chatHistory}
+          isLoadingMessageFeedback={isLoadingMessageFeedback}
+          explainLLMResponse={explainLLMResponse}
+          renderClickableMessage={renderClickableMessage}
+          parsedBreakdown={parsedBreakdown}
+          isGeneratingTTS={isGeneratingTTS}
+          isPlayingTTS={isPlayingTTS}
+          playTTSAudio={playTTSAudio}
+          language={language}
+          userPreferences={userPreferences}
+          handleLeftResizeStart={handleLeftResizeStart}
+        />
         {/* Chat Panel - Center */}
                 <div style={{ 
                         width: `${panelWidths.center * 100}%`,
@@ -7045,68 +6190,17 @@ const AnalyzeContentInner = () => {
           </div>
         </div>
         {/* Interrupt message - prominent UI position */}
-        {wasInterrupted && !isRecording && (
-          <div style={{
-            position: 'fixed',
-            left: 0,
-            right: 0,
-            top: 80,
-            zIndex: 10000,
-            display: 'flex',
-            justifyContent: 'center',
-            pointerEvents: 'none'
-          }}>
-            <div style={{
-              background: '#fff7e6',
-              color: '#e67e22',
-              border: '2px solid #e67e22',
-              borderRadius: 12,
-              padding: '1rem 2rem',
-              fontWeight: 700,
-              fontSize: '1.1rem',
-              boxShadow: '0 2px 12px rgba(230,126,34,0.08)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 12,
-              pointerEvents: 'auto'
-            }}>
-              <span style={{ fontSize: '1.5rem' }}>⏹️</span>
-              Recording canceled. You can try again.
-            </div>
-          </div>
-        )}
+        <InterruptMessage
+          wasInterrupted={wasInterrupted}
+          isRecording={isRecording}
+        />
   
   
         {/* Floating Panel Toggle Buttons */}
-        {!showShortFeedbackPanel && (
-          <button
-            onClick={() => setShowShortFeedbackPanel(true)}
-            style={{
-              position: 'fixed',
-              left: '1rem',
-              top: '6.7rem',
-              background: 'var(--blue-secondary)',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '12px 0 0 12px',
-              padding: '1.1rem 0.75rem',
-              fontSize: '1.2rem',
-              cursor: 'pointer',
-              fontWeight: 600,
-              transition: 'all 0.3s ease',
-              boxShadow: '0 4px 16px rgba(60,76,115,0.25)',
-              zIndex: 1000,
-              fontFamily: 'Montserrat, Arial, sans-serif',
-              height: '60px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}
-            title="Show Short Feedback Panel"
-          >
-            💡
-          </button>
-        )}
+        <FloatingPanelToggle
+          showShortFeedbackPanel={showShortFeedbackPanel}
+          setShowShortFeedbackPanel={setShowShortFeedbackPanel}
+        />
   
         {/* Topic Selection Modal */}
         <TopicSelectionModal
@@ -7128,61 +6222,12 @@ const AnalyzeContentInner = () => {
         />
   
         {/* Grammarly-style popup for word explanations */}
-        {activePopup && (
-          <div
-            data-popup="true"
-            style={{
-              position: 'fixed',
-              left: Math.max(10, Math.min(window.innerWidth - 320, activePopup.position.x)),
-              top: Math.max(10, activePopup.position.y - 60),
-              transform: 'translateX(-50%)',
-              backgroundColor: isDarkMode ? '#1e293b' : '#ffffff',
-              border: `1px solid ${isDarkMode ? '#475569' : '#e2e8f0'}`,
-              borderRadius: '8px',
-              padding: '12px 16px',
-              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-              zIndex: 1000,
-              maxWidth: '300px',
-              fontSize: '14px',
-              lineHeight: '1.4',
-              color: isDarkMode ? '#e2e8f0' : '#1e293b',
-              pointerEvents: 'auto'
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ fontWeight: 400, marginBottom: '4px', color: isDarkMode ? '#cbd5e1' : '#475569', fontSize: '13px' }}>
-              {activePopup.wordKey.replace(/[__~~==<<>>]/g, '')}
-            </div>
-            <div style={{ fontSize: '14px', fontWeight: 600, color: isDarkMode ? '#f1f5f9' : '#0f172a' }}>
-              {(() => {
-                const translation = quickTranslations[activePopup.messageIndex]?.wordTranslations[activePopup.wordKey];
-                console.log('Popup translation lookup:', { 
-                  messageIndex: activePopup.messageIndex, 
-                  wordKey: activePopup.wordKey, 
-                  translation, 
-                  allTranslations: quickTranslations[activePopup.messageIndex]?.wordTranslations,
-                  availableKeys: Object.keys(quickTranslations[activePopup.messageIndex]?.wordTranslations || {})
-                });
-                return translation || feedbackExplanations[activePopup.messageIndex]?.[activePopup.wordKey] || 'No translation available';
-              })()}
-            </div>
-            {/* Arrow pointing down to the word */}
-            <div
-              style={{
-                position: 'absolute',
-                bottom: '-6px',
-                left: '50%',
-                transform: 'translateX(-50%)',
-                width: 0,
-                height: 0,
-                borderLeft: '6px solid transparent',
-                borderRight: '6px solid transparent',
-                borderTop: `6px solid ${isDarkMode ? '#1e293b' : '#ffffff'}`,
-                filter: `drop-shadow(0 1px 1px ${isDarkMode ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.1)'})`
-              }}
-            />
-          </div>
-        )}
+        <WordExplanationPopup
+          activePopup={activePopup}
+          isDarkMode={isDarkMode}
+          quickTranslations={quickTranslations}
+          feedbackExplanations={feedbackExplanations}
+        />
   
         {/* Progress Modal */}
         {showProgressModal && progressData && chatHistory.length < 30 && (

@@ -69,9 +69,15 @@ export const getQuickTranslation = async (messageIndex: number, text: string, la
   try {
     const token = localStorage.getItem('jwt');
     const response = await axios.post('/api/quick_translation', {
-      text: text,
-      fromLanguage: language,
-      toLanguage: 'en'
+      ai_message: text,
+      chat_history: [],
+      language: language,
+      user_level: 'beginner',
+      user_topics: [],
+      formality: 'friendly',
+      feedback_language: 'en',
+      user_goals: [],
+      description: null
     }, {
       headers: {
         'Content-Type': 'application/json',

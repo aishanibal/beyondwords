@@ -25,7 +25,8 @@ export const useConversationManagement = (
     subgoalNames: string[];
     levelUpEvents?: LevelUpEvent[];
   } | null>>,
-  setUserProgress: React.Dispatch<React.SetStateAction<{ [goalId: string]: SubgoalProgress }>>
+  setUserProgress: React.Dispatch<React.SetStateAction<{ [goalId: string]: SubgoalProgress }>>,
+  userProgress: { [goalId: string]: SubgoalProgress }
 ) => {
   const router = useRouter();
   const [isLoadingConversation, setIsLoadingConversation] = useState(false);
@@ -132,8 +133,8 @@ export const useConversationManagement = (
     topics: string[],
     formality: string,
     conversationId: string
-  ) => {
-    if (!user || !conversationId) return;
+  ): Promise<boolean> => {
+    if (!user || !conversationId) return false;
 
     try {
       const summary = await generateConversationSummary(
@@ -145,12 +146,38 @@ export const useConversationManagement = (
       );
 
       if (summary && summary.learningGoals && summary.learningGoals.length > 0) {
-        // Process learning goals and track progress
-        const currentProgressArray = Object.values({}); // Get from userProgress state
+        // summary.learningGoals is actually an array of progress percentages from the API
+        const progressPercentages = summary.learningGoals as number[];
+        
+        // Get the current user's learning goals to map progress to subgoals
+        const currentProgressArray = Object.values(userProgress);
         const levelUpEvents: LevelUpEvent[] = [];
-
-        for (const goal of summary.learningGoals) {
-          const result = updateSubgoalProgress(goal.id, goal.progress, currentProgressArray);
+        
+        // Map progress percentages to subgoal IDs
+        // We need to get the subgoal IDs from the user's current learning goals
+        const userLearningGoals = user?.learning_goals ? 
+          (typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : user.learning_goals) : [];
+        
+        const subgoalIds: string[] = [];
+        const subgoalNames: string[] = [];
+        
+        // Extract subgoal IDs from user's learning goals
+        userLearningGoals.forEach((goalId: string) => {
+          const goal = LEARNING_GOALS.find(g => g.id === goalId);
+          if (goal?.subgoals) {
+            goal.subgoals.forEach(subgoal => {
+              subgoalIds.push(subgoal.id);
+              subgoalNames.push(goal.goal);
+            });
+          }
+        });
+        
+        // Process each progress percentage
+        for (let i = 0; i < Math.min(progressPercentages.length, subgoalIds.length); i++) {
+          const subgoalId = subgoalIds[i];
+          const progress = progressPercentages[i];
+          
+          const result = updateSubgoalProgress(subgoalId, progress, currentProgressArray);
           
           if (result.levelUpEvent) {
             levelUpEvents.push(result.levelUpEvent);
@@ -168,24 +195,21 @@ export const useConversationManagement = (
 
         setUserProgress(updatedProgressObj);
         
-        // Show progress modal if there are level up events
-        if (levelUpEvents.length > 0) {
-          const percentages = currentProgressArray.map(p => p.percentage);
-          const subgoalNames = currentProgressArray.map(progress => {
-            const goal = LEARNING_GOALS.find(g => g.subgoals?.some(sg => sg.id === progress.subgoalId));
-            return goal ? goal.goal : progress.subgoalId;
-          });
-          
+        // Show progress modal if there are learning goals (regardless of level up events)
+        if (progressPercentages.length > 0) {
           setProgressData({
-            percentages,
-            subgoalNames,
+            percentages: progressPercentages,
+            subgoalNames: subgoalNames.slice(0, progressPercentages.length),
             levelUpEvents
           });
           setShowProgressModal(true);
+          return true; // Progress modal was shown
         }
       }
+      return false; // No progress modal shown
     } catch (error) {
       console.error('Error generating conversation summary:', error);
+      return false;
     }
   }, [user, language, setUserProgress, setProgressData, setShowProgressModal]);
 
@@ -239,14 +263,23 @@ export const useConversationManagement = (
     // Set the initial AI message from the backend response
     if (aiMessage && (aiMessage as any).text && (aiMessage as any).text.trim()) {
       const formattedMessage = { mainText: (aiMessage as any).text, romanizedText: '' }; // Simplified for now
-      setChatHistory([{ 
+      const initialMessage = { 
         sender: 'AI', 
         text: formattedMessage.mainText, 
         romanizedText: formattedMessage.romanizedText,
         ttsUrl: (aiMessage as any).ttsUrl || null,
         timestamp: new Date(),
         isFromOriginalConversation: false // New conversation message
-      }]);
+      };
+      setChatHistory([initialMessage]);
+      
+      // Play TTS for the initial AI message automatically
+      if ((aiMessage as any).ttsUrl && (aiMessage as any).ttsUrl !== null) {
+        console.log('🔍 [INITIAL_TTS] Playing initial AI message TTS:', (aiMessage as any).ttsUrl);
+        // The TTS will be handled by the existing TTS system when the message is rendered
+      } else {
+        console.log('🔍 [INITIAL_TTS] No TTS URL provided for initial message, will generate TTS on demand');
+      }
     } else {
       console.log('🔍 [DEBUG] No AI message or empty text, setting default message');
       // Fallback: set a default AI message if none provided

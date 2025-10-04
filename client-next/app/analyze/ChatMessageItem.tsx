@@ -2,6 +2,21 @@ import React, { useMemo, useCallback } from 'react';
 import { motion } from 'framer-motion';
 export const dynamic = "force-dynamic";
 
+// Add CSS for spinning animation
+const spinKeyframes = `
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+`;
+
+// Inject the CSS
+if (typeof document !== 'undefined') {
+  const style = document.createElement('style');
+  style.textContent = spinKeyframes;
+  document.head.appendChild(style);
+}
+
 
 // Helper function to format message for display
 const formatMessageForDisplay = (message: any, romanizationDisplay: 'always' | 'never' | 'if_different', language?: string) => {
@@ -77,7 +92,6 @@ interface ChatMessageItemProps {
   quickTranslation: (index: number, text: string) => void;
   handleSuggestionButtonClick: () => void;
   isLoadingSuggestions: boolean;
-  isProcessing: boolean;
   playExistingTTS: (url: string, cacheKey: string) => void;
   showCorrectedVersions: { [key: number]: boolean };
   extractCorrectedVersion: (feedback: string) => { mainText: string; romanizedText: string | null } | null;
@@ -105,7 +119,6 @@ const ChatMessageItem: React.FC<ChatMessageItemProps> = React.memo(({
   quickTranslation,
   handleSuggestionButtonClick,
   isLoadingSuggestions,
-  isProcessing,
   playExistingTTS,
   showCorrectedVersions,
   extractCorrectedVersion,
@@ -172,15 +185,34 @@ const ChatMessageItem: React.FC<ChatMessageItemProps> = React.memo(({
     }}>
       <div style={messageBubbleStyle}>
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <span style={{ fontSize: '0.9rem' }}>
-            {(message.detailedFeedback || (
-              typeof formatted.mainText === 'string' && (
-                formatted.mainText.includes('__') ||
-                formatted.mainText.includes('~~') ||
-                formatted.mainText.includes('==') ||
-                formatted.mainText.includes('<<')
-              )
-            )) ? renderFormattedText(formatted.mainText, index) : formatted.mainText}
+          <span style={{ 
+            fontSize: '0.9rem',
+            opacity: message.isProcessing ? 0.7 : 1,
+            fontStyle: message.isProcessing ? 'italic' : 'normal'
+          }}>
+            {message.isProcessing ? (
+              <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span style={{ 
+                  display: 'inline-block',
+                  width: '12px',
+                  height: '12px',
+                  border: '2px solid #ccc',
+                  borderTop: '2px solid #007bff',
+                  borderRadius: '50%',
+                  animation: 'spin 1s linear infinite'
+                }}></span>
+                {formatted.mainText}
+              </span>
+            ) : (
+              (message.detailedFeedback || (
+                typeof formatted.mainText === 'string' && (
+                  formatted.mainText.includes('__') ||
+                  formatted.mainText.includes('~~') ||
+                  formatted.mainText.includes('==') ||
+                  formatted.mainText.includes('<<')
+                )
+              )) ? renderFormattedText(formatted.mainText, index) : formatted.mainText
+            )}
           </span>
           {formatted.romanizedText && (
             <span style={{
@@ -357,16 +389,16 @@ const ChatMessageItem: React.FC<ChatMessageItemProps> = React.memo(({
             {(isLastAIMessage || isLastMessage) && (
                 <button
                     onClick={handleSuggestionButtonClick}
-                    disabled={isLoadingSuggestions || isProcessing}
+                    disabled={isLoadingSuggestions}
                     style={{
                         padding: '0.3rem 0.7rem',
                         border: '1px solid var(--rose-primary)',
                         background: isDarkMode ? 'rgba(232,179,195,0.15)' : 'rgba(132,84,109,0.1)',
                         color: 'var(--rose-primary)',
                         fontSize: '0.7rem',
-                        cursor: (isLoadingSuggestions || isProcessing) ? 'not-allowed' : 'pointer',
+                        cursor: isLoadingSuggestions ? 'not-allowed' : 'pointer',
                         transition: 'all 0.3s ease',
-                        opacity: (isLoadingSuggestions || isProcessing) ? 0.6 : 1,
+                        opacity: isLoadingSuggestions ? 0.6 : 1,
                         fontWeight: 600,
                         fontFamily: 'Montserrat, Arial, sans-serif',
                         borderRadius: 8,
@@ -376,7 +408,7 @@ const ChatMessageItem: React.FC<ChatMessageItemProps> = React.memo(({
                     }}
                     title="Get conversation suggestions"
                 >
-                    {isLoadingSuggestions ? 'Loading...' : isProcessing ? 'Processing...' : '💡 Suggestions'}
+                    {isLoadingSuggestions ? 'Loading...' : '💡 Suggestions'}
                 </button>
             )}
           </>

@@ -2,6 +2,7 @@ import axios from 'axios';
 import { supabase } from '../../../lib/supabase';
 import { getUserLanguageDashboards } from '../../../lib/api';
 import { ChatMessage } from '../types/analyze';
+import { LEARNING_GOALS } from '../../../lib/preferences';
 
 // Helper to get JWT token
 export const getAuthHeaders = async () => {
@@ -172,20 +173,71 @@ export const generateConversationSummary = async (
     const headers = await getAuthHeaders();
     
     const response = await axios.post(`/api/conversation-summary`, {
-      messages: sessionMessages,
-      language: language,
-      topics: topics,
-      formality: formality
+      chat_history: sessionMessages,
+      subgoal_instructions: '',
+      user_topics: topics,
+      target_language: language,
+      feedback_language: 'en',
+      is_continued_conversation: false,
+      conversation_id: conversationId
     }, { headers });
 
     if (response.data.success) {
-      const summary = response.data.summary;
+      const summary = {
+        title: response.data.title,
+        synopsis: response.data.synopsis,
+        learningGoals: response.data.progress_percentages || []
+      };
       
-      // Update conversation title and synopsis
+      // Build progress data expected by dashboard (subgoalIds aligned to percentages)
+      let subgoalIds: string[] = [];
+      let subgoalNames: string[] = [];
+
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const userId = session?.user?.id;
+        if (userId) {
+          const dashboards = await getUserLanguageDashboards(userId);
+          const success = (dashboards as any)?.success;
+          const data = (dashboards as any)?.data;
+          const dashboard = success ? (data || []).find((d: any) => d.language === language) : null;
+          const userLearningGoals: string[] = dashboard?.learning_goals || [];
+
+          // Map goalIds to subgoalIds/subgoalNames in deterministic order
+          userLearningGoals.forEach((goalId: string) => {
+            const goal = LEARNING_GOALS.find(g => g.id === goalId);
+            if (goal?.subgoals) {
+              goal.subgoals.forEach(sub => {
+                subgoalIds.push(sub.id);
+                subgoalNames.push(goal.goal);
+              });
+            }
+          });
+        }
+      } catch (e) {
+        console.warn('[CONVERSATION_SERVICE] Failed to fetch user dashboard for learning goals, saving percentages only');
+      }
+
+      const progressData = {
+        subgoalIds,
+        subgoalNames,
+        percentages: summary.learningGoals as number[]
+      };
+      
+      console.log('🔍 [CONVERSATION_SERVICE] Updating conversation with:', {
+        conversationId,
+        title: summary.title,
+        synopsis: summary.synopsis,
+        progress_data: progressData
+      });
+      
       await axios.put(`/api/conversations/${conversationId}/title`, {
         title: summary.title,
-        synopsis: summary.synopsis
+        synopsis: summary.synopsis,
+        progress_data: progressData
       }, { headers });
+      
+      console.log('🔍 [CONVERSATION_SERVICE] Conversation updated successfully');
 
       return summary;
     }

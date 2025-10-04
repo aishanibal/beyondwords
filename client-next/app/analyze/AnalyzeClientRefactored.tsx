@@ -19,10 +19,10 @@ import ChatMessageItem from './ChatMessageItem';
 import AnalyzeLayout from './components/AnalyzeLayout';
 import MainContentArea from './components/MainContentArea';
 import ChatMessagesContainer from './components/ChatMessagesContainer';
-import RecordingControls from './components/RecordingControls';
 import SuggestionCarousel from './components/SuggestionCarousel';
 import RightPanel from './components/RightPanel';
 import ProgressModal from './components/ProgressModal';
+import WordExplanationPopup from './components/WordExplanationPopup';
 
 // Import hooks
 import { usePersistentChatHistory } from './hooks/useChatHistory';
@@ -30,7 +30,6 @@ import { useAudioRecording } from './hooks/useAudioRecording';
 import { useTTS } from './hooks/useTTS';
 import { useTranslation } from './hooks/useTranslation';
 import { useConversation } from './hooks/useConversation';
-import { useAudioProcessing } from './hooks/useAudioProcessing';
 import { useFeedback } from './hooks/useFeedback';
 import { useSuggestions } from './hooks/useSuggestions';
 import { useAudioHandlers } from './hooks/useAudioHandlers';
@@ -48,7 +47,8 @@ import {
   fixRomanizationPunctuation 
 } from './types/analyze';
 import { cleanTextForTTS } from './utils/textFormatting';
-import { explainLLMResponse, renderClickableMessage, getSessionMessages } from './utils/messageUtils';
+import { renderClickableMessage, getSessionMessages } from './utils/messageUtils';
+import { explainLLMResponse } from './services/messageService';
 
 // Import services
 import { getAuthHeaders } from './services/conversationService';
@@ -145,10 +145,25 @@ const AnalyzeContentInner = () => {
   // Suggestion translation state - now handled by useSuggestions hook
 
   // UI panels state
-  const [showShortFeedbackPanel, setShowShortFeedbackPanel] = useState(false);
-  const [showRightPanel, setShowRightPanel] = useState(false);
-  const [leftPanelWidth, setLeftPanelWidth] = useState(DEFAULT_PANEL_WIDTHS.left);
-  const [rightPanelWidth, setRightPanelWidth] = useState<number>(DEFAULT_PANEL_WIDTHS.right);
+  const [showShortFeedbackPanel, setShowShortFeedbackPanel] = useState(true);
+  const [leftPanelWidth, setLeftPanelWidth] = useState(0.2); // 20% of screen width
+  
+  // Calculate actual panel widths based on visibility - memoized to prevent unnecessary re-renders
+  const panelWidths = useMemo(() => {
+    const visiblePanels = [showShortFeedbackPanel, true].filter(Boolean).length;
+    
+    if (visiblePanels === 1) {
+      // Only middle panel visible
+      return { left: 0, center: 1, right: 0 };
+    } else {
+      // Left and middle panels visible - allow resizing between them
+      // Limit left panel to maximum 1/3 (33.33%) of screen width
+      const maxLeftWidth = 1/3; // 33.33%
+      const constrainedLeftWidth = Math.min(leftPanelWidth, maxLeftWidth);
+      const centerWidth = 1 - constrainedLeftWidth; // Center takes remaining space
+      return { left: constrainedLeftWidth, center: centerWidth, right: 0 };
+    }
+  }, [showShortFeedbackPanel, leftPanelWidth]);
   
   // Left panel content state - all from original
   const [shortFeedback, setShortFeedback] = useState<string>('');
@@ -156,6 +171,7 @@ const AnalyzeContentInner = () => {
   const [showQuickTranslation, setShowQuickTranslation] = useState<boolean>(true);
   const [llmBreakdown, setLlmBreakdown] = useState<string>('');
   const [showLlmBreakdown, setShowLlmBreakdown] = useState<boolean>(false);
+  const [isLoadingExplain, setIsLoadingExplain] = useState<boolean>(false);
 
   // Modals state
   const [showTopicModal, setShowTopicModal] = useState(false);
@@ -174,7 +190,6 @@ const AnalyzeContentInner = () => {
   const [ttsCache, setTtsCache] = useState<Map<string, { url: string; timestamp: number }>>(new Map());
   const [ttsDebugInfo, setTtsDebugInfo] = useState<string>('');
   const [romanizationDebugInfo, setRomanizationDebugInfo] = useState<string>('');
-
   // Progress tracking state
   const [userProgress, setUserProgress] = useState<{ [goalId: string]: SubgoalProgress }>({});
   const [learningGoals, setLearningGoals] = useState<LearningGoal[]>([]);
@@ -182,14 +197,9 @@ const AnalyzeContentInner = () => {
   // Detailed feedback state
   const [showDetailedBreakdown, setShowDetailedBreakdown] = useState<{[key: number]: boolean}>({});
   const [parsedBreakdown, setParsedBreakdown] = useState<any[]>([]);
-  const [feedbackExplanations, setFeedbackExplanations] = useState<Record<number, Record<string, string>>>({});
   const [activePopup, setActivePopup] = useState<{ messageIndex: number; wordKey: string; position: { x: number; y: number } } | null>(null);
-  const [showCorrectedVersions, setShowCorrectedVersions] = useState<Record<number, boolean>>({});
-  const [isLoadingMessageFeedback, setIsLoadingMessageFeedback] = useState<Record<number, boolean>>({});
 
-  // Quick translations state
-  const [quickTranslations, setQuickTranslations] = useState<Record<number, any>>({});
-  const [showQuickTranslations, setShowQuickTranslations] = useState<Record<number, boolean>>({});
+  // Quick translations state - now handled by messageInteractions hook
 
   // User preferences state
   const [userPreferences, setUserPreferences] = useState<{
@@ -225,7 +235,6 @@ const AnalyzeContentInner = () => {
   const tts = useTTS();
   const translation = useTranslation();
   const conversation = useConversation(user as any);
-  const audioProcessing = useAudioProcessing();
   const feedback = useFeedback();
   
   // Use suggestions hook
@@ -235,7 +244,6 @@ const AnalyzeContentInner = () => {
     conversationId,
     userPreferences,
     chatHistory,
-    isProcessing,
     formatScriptLanguageText
   );
 
@@ -252,7 +260,8 @@ const AnalyzeContentInner = () => {
     setUserPreferences,
     setShowProgressModal,
     setProgressData,
-    setUserProgress
+    setUserProgress,
+    userProgress
   );
 
   // Use audio handlers hook
@@ -269,7 +278,9 @@ const AnalyzeContentInner = () => {
     isAnyTTSPlaying,
     setIsAnyTTSPlaying,
     setAiTTSQueued,
-    setShortFeedback
+    setShortFeedback,
+    setIsPlayingTTS,
+    ttsAudioRef
   );
 
   // Use message interactions hook
@@ -290,9 +301,42 @@ const AnalyzeContentInner = () => {
     }
   }, [urlTopics]);
 
+ // Load conversation when URL conversation ID is available
+  useEffect(() => {
+    if (urlConversationId && user && !conversationId) {
+      console.log('[CONVERSATION_LOAD] Loading conversation from URL:', urlConversationId);
+      conversationManagement.loadConversation(urlConversationId);
+    }
+  }, [urlConversationId, user, conversationId, conversationManagement]);
+
+  // Add global click handler for word clicks and popup management
+  useEffect(() => {
+    // Add click handler to close popup when clicking outside
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      
+      if (target && target.closest('[data-popup="true"]')) {
+        return; // Don't hide if clicking on popup
+      }
+      
+      if (target && target.closest('[data-clickable-word="true"]')) {
+        return; // Don't hide if clicking on a word
+      }
+      
+      setActivePopup(null);
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
   // Handle persona data when using a persona - from original
   useEffect(() => {
     if (usePersona && user) {
+      setIsUsingPersona(true); // Set flag that we're using an existing persona
       const personaData = localStorage.getItem('selectedPersona');
       if (personaData) {
         try {
@@ -305,6 +349,16 @@ const AnalyzeContentInner = () => {
       }
     }
   }, [usePersona, user]);
+
+  // Handle existing conversations - check if they were using a persona
+  useEffect(() => {
+    if (urlConversationId && !usePersona && user) {
+      // For existing conversations, check if they were using a persona
+      // This would require a backend call to check conversation metadata
+      // For now, we'll assume existing conversations without usePersona flag are new conversations
+      console.log('[PERSONA] Existing conversation without persona flag - will show persona modal');
+    }
+  }, [urlConversationId, usePersona, user]);
 
   // Authentication protection - from original
   useEffect(() => {
@@ -376,6 +430,26 @@ const AnalyzeContentInner = () => {
     }
   }, [(user as any)?.selectedLanguage, language]);
 
+  // Play TTS for initial AI message when page loads
+  useEffect(() => {
+    if (chatHistory.length > 0 && user && !isProcessing) {
+      const firstMessage = chatHistory[0];
+      if (firstMessage.sender === 'AI' && firstMessage.ttsUrl) {
+        console.log('🔍 [INITIAL_TTS] Playing TTS for initial AI message:', firstMessage.ttsUrl);
+        // Play the existing TTS URL
+        audioHandlers.handlePlayExistingTTS(firstMessage.ttsUrl);
+      } else if (firstMessage.sender === 'AI' && !firstMessage.ttsUrl) {
+        console.log('🔍 [INITIAL_TTS] Generating TTS for initial AI message without TTS URL');
+        // Generate TTS for the initial message
+        const ttsText = firstMessage.romanizedText || firstMessage.text;
+        const cacheKey = `initial_ai_message_${Date.now()}`;
+        audioHandlers.playTTSAudio(ttsText, language, cacheKey).catch(error => {
+          console.error('🔍 [INITIAL_TTS] Error playing initial AI TTS:', error);
+        });
+      }
+    }
+  }, [chatHistory, user, isProcessing, language, audioHandlers]);
+
 
 
   // Suggestions functions are now handled by useSuggestions hook
@@ -424,11 +498,71 @@ const AnalyzeContentInner = () => {
     }
   };
 
+  // Helper function to render formatted text with color-coded underlines and clickable popups
+  const renderFormattedText = (text: string, messageIndex: number) => {
+    console.log('[DEBUG] renderFormattedText called with:', text);
+    if (!text) return text;
+    
+    // Test if the text contains any formatting markers
+    const hasFormatting = text.includes('__') || text.includes('~~') || text.includes('==') || text.includes('<<');
+    console.log('[DEBUG] Text has formatting markers:', hasFormatting);
+    
+    if (!hasFormatting) {
+      return text;
+    }
+    
+    // Process the text to create clickable elements
+    let result = text;
+    
+    // Replace formatting markers with HTML
+    result = result.replace(/__([^_]+)__/g, '<span style="text-decoration: underline; text-decoration-color: #ff6b6b; cursor: pointer;" data-clickable-word="true" data-word="$1" data-message-index="' + messageIndex + '">$1</span>');
+    result = result.replace(/~~([^~]+)~~/g, '<span style="text-decoration: underline; text-decoration-color: #4ecdc4; cursor: pointer;" data-clickable-word="true" data-word="$1" data-message-index="' + messageIndex + '">$1</span>');
+    result = result.replace(/==([^=]+)==/g, '<span style="text-decoration: underline; text-decoration-color: #45b7d1; cursor: pointer;" data-clickable-word="true" data-word="$1" data-message-index="' + messageIndex + '">$1</span>');
+    result = result.replace(/<<([^>]+)>>/g, '<span style="text-decoration: underline; text-decoration-color: #f9ca24; cursor: pointer;" data-clickable-word="true" data-word="$1" data-message-index="' + messageIndex + '">$1</span>');
+    
+    return (
+      <span 
+        dangerouslySetInnerHTML={{ __html: result }} 
+      />
+    );
+  };
+
+  // Helper function to extract corrected version from feedback
+  const extractCorrectedVersion = (feedback: string): { mainText: string; romanizedText?: string } | null => {
+    if (!feedback) return null;
+    
+    // Find the corrected version section
+    const correctedMatch = feedback.match(/\*\*Corrected Version\*\*\s*\n([\s\S]*?)(?=\n\n|$)/);
+    if (!correctedMatch) return null;
+    
+    const correctedText = correctedMatch[1].trim();
+    
+    // Check if there's romanized text in parentheses
+    const romanizedMatch = correctedText.match(/^(.+?)\s*\(([^)]+)\)$/);
+    if (romanizedMatch) {
+      return {
+        mainText: romanizedMatch[1].trim(),
+        romanizedText: romanizedMatch[2].trim()
+      };
+    }
+    
+    return { mainText: correctedText };
+  };
+
   // Event handlers - using message interactions hook
   const handleRequestDetailedFeedback = async (messageIndex: number) => {
     const message = chatHistory[messageIndex];
     if (message) {
-      await messageInteractions.handleRequestDetailedFeedback(messageIndex, message.text);
+      await messageInteractions.handleRequestDetailedFeedback(
+        messageIndex, 
+        message.text, 
+        chatHistory, 
+        userPreferences,
+        conversationId,
+        setChatHistory,
+        fetchUserDashboardPreferences,
+        setUserPreferences
+      );
     }
   };
 
@@ -454,12 +588,398 @@ const AnalyzeContentInner = () => {
     messageInteractions.handleToggleShortFeedback(messageIndex);
   };
 
+  // Simple parsing function for quick translation
+  const parseQuickTranslation = (translationText: string) => {
+    const result = {
+      fullTranslation: '',
+      wordTranslations: {} as Record<string, string>,
+      romanized: '',
+      error: false,
+      generatedWords: [] as string[], // Store the romanized words in order
+      generatedScriptWords: [] as string[] // Store the script words in order
+    };
+    
+    if (!translationText) return result;
+    
+    console.log('=== PARSING QUICK TRANSLATION ===');
+    console.log('Raw text:', translationText);
+    console.log('Text length:', translationText.length);
+    
+    try {
+      const lines = translationText.split('\n');
+      console.log('Total lines:', lines.length);
+      
+      for (const line of lines) {
+        const trimmedLine = line.trim();
+        console.log('Processing line:', `"${trimmedLine}"`);
+        
+        if (trimmedLine.includes('**Full Translation:**')) {
+          console.log('Found Full Translation section');
+          continue;
+        } else if (trimmedLine.includes('**Word-by-Word Breakdown:**')) {
+          console.log('Found Word-by-Word Breakdown section');
+          continue;
+        } else if (trimmedLine.includes('**Romanized Version:**')) {
+          console.log('Found Romanized Version section');
+          continue;
+        }
+        
+        // Simple parsing: look for "script \/ romanized -- translation" format
+        if (trimmedLine.includes(' / ') && trimmedLine.includes(' -- ')) {
+          console.log('Found script/romanized format:', trimmedLine);
+          const parts = trimmedLine.split(' -- ');
+          if (parts.length === 2) {
+            const leftSide = parts[0].trim();
+            const translation = parts[1].trim();
+            
+            // Split left side on " \/ " to get script and romanized
+            const scriptRomanized = leftSide.split(' / ');
+            if (scriptRomanized.length === 2) {
+              const script = scriptRomanized[0].trim();
+              const romanized = scriptRomanized[1].trim();
+              
+              // Store both script and romanized as keys (with punctuation included)
+              result.wordTranslations[script] = translation;
+              result.wordTranslations[romanized] = translation;
+              
+              // Add to generated words lists (with punctuation included)
+              result.generatedScriptWords.push(script);
+              result.generatedWords.push(romanized);
+              
+              console.log(`✅ Parsed: script="${script}", romanized="${romanized}", translation="${translation}"`);
+            }
+          }
+        }
+        // Also handle simple "word -- translation" format
+        else if (trimmedLine.includes(' -- ') && !trimmedLine.includes(' / ')) {
+          console.log('Found simple word format:', trimmedLine);
+          const parts = trimmedLine.split(' -- ');
+          if (parts.length === 2) {
+            const word = parts[0].trim();
+            const translation = parts[1].trim();
+            
+            // Store the word as-is (with punctuation included)
+            result.wordTranslations[word] = translation;
+            result.generatedWords.push(word);
+            result.generatedScriptWords.push(word); // For non-script languages, same as romanized
+            
+            console.log(`✅ Parsed: word="${word}", translation="${translation}"`);
+          }
+        }
+        // Handle full translation line
+        else if (trimmedLine && !trimmedLine.startsWith('**') && !result.fullTranslation) {
+          console.log('Found full translation:', trimmedLine);
+          result.fullTranslation = trimmedLine;
+        }
+      }
+      
+      console.log('=== FINAL PARSED RESULT ===');
+      console.log('Full translation:', result.fullTranslation);
+      console.log('Word translations count:', Object.keys(result.wordTranslations).length);
+      console.log('All word translations:', result.wordTranslations);
+      console.log('Generated script words in order:', result.generatedScriptWords);
+      console.log('Generated romanized words in order:', result.generatedWords);
+      
+    } catch (error) {
+      console.error('Error parsing quick translation:', error);
+      result.error = true;
+    }
+    
+    return result;
+  };
+
   const handleQuickTranslation = async (messageIndex: number, text: string) => {
-    await messageInteractions.handleQuickTranslation(messageIndex, text);
+    console.log('[DEBUG] handleQuickTranslation() called with messageIndex:', messageIndex, 'text:', text);
+    
+    if (messageInteractions.isLoadingMessageFeedback[messageIndex]) {
+      console.log('[DEBUG] Already loading, returning early');
+      return;
+    }
+    
+    try {
+      const token = localStorage.getItem('jwt');
+      const requestData = {
+        ai_message: text,
+        chat_history: chatHistory,
+        language: language,
+        user_level: userPreferences?.userLevel || 'beginner',
+        user_topics: userPreferences?.topics || [],
+        formality: userPreferences?.formality || 'friendly',
+        feedback_language: userPreferences?.feedbackLanguage || 'en',
+        user_goals: (user as any)?.learning_goals ? (typeof (user as any).learning_goals === 'string' ? JSON.parse((user as any).learning_goals) : (user as any).learning_goals) : [],
+        description: conversationDescription
+      };
+      
+      console.log('[DEBUG] Current userPreferences:', userPreferences);
+      
+      const response = await axios.post('/api/quick_translation', requestData, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        }
+      });
+      
+      const result = response.data;
+      console.log('[DEBUG] handleQuickTranslation() received response:', result);
+      
+      const translationText = result.translation;
+      console.log('[DEBUG] Raw Gemini translation text:', translationText);
+      
+      const parsedTranslation = parseQuickTranslation(translationText);
+      console.log('[DEBUG] Parsed translation:', parsedTranslation);
+      
+      // Handle translation result
+      if (!translationText || Object.keys(parsedTranslation.wordTranslations).length === 0) {
+        console.log('[DEBUG] No translation received, setting error state');
+        messageInteractions.setQuickTranslations(prev => ({ 
+          ...prev, 
+          [messageIndex]: { 
+            fullTranslation: 'Translation failed - please try again', 
+            wordTranslations: {},
+            romanized: '',
+            error: true,
+            generatedWords: [],
+            generatedScriptWords: []
+          } 
+        }));
+      } else {
+        console.log('[DEBUG] Translation received successfully, setting parsed translation');
+        messageInteractions.setQuickTranslations(prev => ({ ...prev, [messageIndex]: parsedTranslation }));
+      }
+      
+    } catch (error) {
+      console.error('Quick translation error:', error);
+      messageInteractions.setQuickTranslations(prev => ({ 
+        ...prev, 
+        [messageIndex]: { 
+          fullTranslation: 'Translation failed', 
+          wordTranslations: {},
+          romanized: '',
+          error: true,
+          generatedWords: [],
+          generatedScriptWords: []
+        } 
+      }));
+    }
   };
 
   const handleExplainLLMResponse = async (messageIndex: number, text: string) => {
-    await messageInteractions.handleExplainLLMResponse(messageIndex, text);
+    // Prevent multiple simultaneous requests
+    if (isLoadingExplain) {
+      console.log('[DEBUG] Explain request already in progress, ignoring');
+      return;
+    }
+    
+    // This should only trigger the detailed breakdown (AI explanation)
+    try {
+      setIsLoadingExplain(true);
+      
+      // Clear any existing explanation first to ensure only one explanation is shown
+      setLlmBreakdown('');
+      setShowLlmBreakdown(false);
+      
+      const token = localStorage.getItem('jwt');
+      const requestData = {
+        llm_response: text,
+        user_input: "",
+        context: "",
+        language: language,
+        user_level: userPreferences?.userLevel || 'beginner',
+        user_topics: userPreferences?.topics || [],
+        formality: userPreferences?.formality || 'friendly',
+        feedback_language: userPreferences?.feedbackLanguage || 'en',
+        user_goals: (user as any)?.learning_goals ? (typeof (user as any).learning_goals === 'string' ? JSON.parse((user as any).learning_goals) : (user as any).learning_goals) : [],
+        description: conversationDescription
+      };
+      
+      const response = await axios.post('/api/detailed_breakdown', requestData, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        }
+      });
+      
+      const result = response.data;
+      console.log('[DEBUG] explainLLMResponse() received response:', result);
+      
+      const breakdownText = result.breakdown;
+      console.log('[DEBUG] Raw breakdown text:', breakdownText);
+      
+      if (!breakdownText) {
+        console.log('[DEBUG] No breakdown received');
+        return;
+      }
+      
+      // Set the breakdown in sidebar state (this overwrites any previous explanation)
+      setLlmBreakdown(breakdownText);
+      setShowLlmBreakdown(true);
+      setShowQuickTranslation(false); // Collapse quick translation when LLM breakdown is shown
+      
+    } catch (error) {
+      console.error('Error explaining LLM response for left panel:', error);
+    } finally {
+      setIsLoadingExplain(false);
+    }
+  };
+
+  // Wrapper function for renderClickableMessage with additional parameters
+  const renderClickableMessageWrapper = (message: any, messageIndex: number, translation: any) => {
+    return renderClickableMessage(message, messageIndex, translation, setActivePopup, isDarkMode, userPreferences, language);
+  };
+
+  // Wrapper function for playTTS with cacheKey parameter
+  const playTTSWrapper = (text: string, language: string, cacheKey: string) => {
+    return audioHandlers.playTTSAudio(text, language, cacheKey);
+  };
+
+  // Wrapper function for playTTS with only 2 parameters (for ChatMessagesContainer)
+  const playTTSWrapper2 = (text: string, language: string) => {
+    const cacheKey = `manual_tts_${Date.now()}`;
+    return audioHandlers.playTTSAudio(text, language, cacheKey);
+  };
+
+  // Handle end chat functionality
+  const handleEndChat = async () => {
+    console.log('🏁 [END_CHAT] End chat initiated');
+    console.log('🏁 [END_CHAT] isNewPersona:', isNewPersona);
+    console.log('🏁 [END_CHAT] isUsingPersona:', isUsingPersona);
+    console.log('🏁 [END_CHAT] conversationDescription:', conversationDescription);
+    
+    // Check if there are any user messages in the chat history
+    const userMessages = chatHistory.filter(msg => msg.sender === 'User');
+    
+    console.log('🏁 [END_CHAT] Chat history:', chatHistory.length);
+    console.log('🏁 [END_CHAT] User messages:', userMessages.length);
+    console.log('🏁 [END_CHAT] Conversation ID:', conversationId);
+    
+    // For new conversations (no conversationId), always generate title and progress
+    // even if there are no user messages, so it shows up in recent conversations
+    const isNewConversation = !conversationId;
+    
+    if (userMessages.length === 0 && !isNewConversation) {
+      console.log('🏁 [END_CHAT] No user messages in existing conversation, navigating to dashboard without evaluation');
+      router.push('/dashboard');
+      return;
+    }
+    
+    // Show persona modal unless we're using an existing persona
+    if (!isUsingPersona) {
+      console.log('🏁 [END_CHAT] Showing persona modal - no existing persona being used');
+      setShowPersonaModal(true);
+    } else {
+      console.log('🏁 [END_CHAT] Skipping persona modal - using existing persona');
+      // Generate conversation summary (progress modal will handle navigation if needed)
+      try {
+        // For new conversations, always generate summary even if chatHistory is empty
+        // This ensures the conversation gets a title and shows up in recent conversations
+        if (chatHistory.length > 0 || isNewConversation) {
+          console.log('🏁 [END_CHAT] Calling generateSummary...');
+          const progressModalShown = await conversationManagement.generateSummary(
+            chatHistory,
+            userPreferences?.topics || [],
+            userPreferences?.formality || 'friendly',
+            conversationId || ''
+          );
+          // Progress modal will handle navigation if learning goals exist
+          // If no learning goals, navigate to dashboard
+          if (!progressModalShown) {
+            console.log('🏁 [END_CHAT] No progress modal shown, navigating to dashboard');
+            router.push('/dashboard');
+          }
+        } else {
+          console.log('🏁 [END_CHAT] No chat history in existing conversation, navigating to dashboard');
+          router.push('/dashboard');
+        }
+      } catch (error) {
+        console.error('🏁 [END_CHAT] Error generating conversation summary:', error);
+        router.push('/dashboard');
+      }
+    }
+  };
+
+  // Save persona functionality
+  const savePersona = async (personaName: string) => {
+    setIsSavingPersona(true);
+    try {
+      const personaData = {
+        name: personaName,
+        description: conversationDescription || '',
+        topics: userPreferences?.topics || [],
+        formality: userPreferences?.formality || 'neutral',
+        language: language,
+        conversationId: conversationId,
+        userId: (user as any)?.id
+      };
+
+      // Save persona to database
+      const response = await axios.post('/api/personas', personaData, {
+        headers: await getAuthHeaders()
+      });
+
+      if (response.status === 201) {
+        // Update the conversation to mark it as using a persona
+        if (conversationId) {
+          try {
+            await axios.patch(`/api/conversations/${conversationId}`, {
+              uses_persona: true,
+              persona_id: response.data.persona.id
+            }, {
+              headers: await getAuthHeaders()
+            });
+          } catch (error) {
+            console.error('Error updating conversation with persona info:', error);
+          }
+        }
+        
+        // Close modal
+        setShowPersonaModal(false);
+        
+        // Generate conversation summary after saving persona
+        try {
+          // Check if there are any user messages in the chat history
+          const userMessages = chatHistory.filter(msg => msg.sender === 'User');
+          
+          console.log('Session messages in savePersona:', chatHistory.length);
+          console.log('User session messages in savePersona:', userMessages.length);
+          console.log('Conversation ID in savePersona:', conversationId);
+          
+          // For new conversations, always generate title and progress even if no user messages
+          // so it shows up in recent conversations section
+          const isNewConversation = !conversationId;
+          
+          if (userMessages.length === 0 && !isNewConversation) {
+            console.log('No user messages in existing conversation, navigating to dashboard without evaluation');
+            router.push('/dashboard');
+            return;
+          }
+          
+          // For new conversations, always generate summary even if chatHistory is empty
+          // This ensures the conversation gets a title and shows up in recent conversations
+          if (chatHistory.length > 0 || isNewConversation) {
+            const progressModalShown = await conversationManagement.generateSummary(
+              chatHistory,
+              userPreferences?.topics || [],
+              userPreferences?.formality || 'friendly',
+              conversationId || ''
+            );
+            // Progress modal will handle navigation if learning goals exist
+            // If no learning goals, navigate to dashboard
+            if (!progressModalShown) {
+              router.push('/dashboard');
+            }
+          } else {
+            router.push('/dashboard');
+          }
+        } catch (error) {
+          console.error('Error generating conversation summary:', error);
+          router.push('/dashboard');
+        }
+      }
+    } catch (error) {
+      console.error('Error saving persona:', error);
+    } finally {
+      setIsSavingPersona(false);
+    }
   };
 
   // Initialize MediaRecorder and SpeechRecognition classes - from original
@@ -490,37 +1010,45 @@ const AnalyzeContentInner = () => {
     <>
       <AnalyzeLayout
         isDarkMode={isDarkMode}
-        leftPanelWidth={leftPanelWidth}
-        rightPanelWidth={rightPanelWidth}
+        panelWidths={panelWidths}
         showShortFeedbackPanel={showShortFeedbackPanel}
         setShowShortFeedbackPanel={setShowShortFeedbackPanel}
-        showRightPanel={showRightPanel}
-        setShowRightPanel={setShowRightPanel}
-        setRightPanelWidth={setRightPanelWidth}
         ttsDebugInfo={ttsDebugInfo}
         setTtsDebugInfo={setTtsDebugInfo}
         romanizationDebugInfo={romanizationDebugInfo}
         setRomanizationDebugInfo={setRomanizationDebugInfo}
         translations={translations}
         showTranslations={showTranslations}
-        feedbackExplanations={feedbackExplanations}
+        feedbackExplanations={messageInteractions.feedbackExplanations}
         showDetailedBreakdown={showDetailedBreakdown}
+        setShowDetailedBreakdown={setShowDetailedBreakdown}
         parsedBreakdown={parsedBreakdown}
         activePopup={activePopup}
         // Left panel content props
         shortFeedback={shortFeedback}
-        quickTranslations={quickTranslations}
+        quickTranslations={messageInteractions.quickTranslations}
         showQuickTranslation={showQuickTranslation}
         setShowQuickTranslation={setShowQuickTranslation}
         llmBreakdown={llmBreakdown}
         showLlmBreakdown={showLlmBreakdown}
         setShowLlmBreakdown={setShowLlmBreakdown}
         chatHistory={chatHistory}
-            isLoadingMessageFeedback={messageInteractions.isLoadingMessageFeedback}
-        explainLLMResponse={explainLLMResponse}
-        renderClickableMessage={renderClickableMessage}
+        isLoadingMessageFeedback={messageInteractions.isLoadingMessageFeedback}
+        isLoadingExplain={isLoadingExplain}
+        explainLLMResponse={handleExplainLLMResponse}
+        renderClickableMessage={renderClickableMessageWrapper}
       >
-        <MainContentArea isDarkMode={isDarkMode}>
+        <MainContentArea 
+          isDarkMode={isDarkMode}
+          isRecording={audioHandlers.isRecording}
+          onStartRecording={audioHandlers.handleStartRecording}
+          onStopRecording={audioHandlers.handleStopRecording}
+          autoSpeak={autoSpeak}
+          setAutoSpeak={setAutoSpeak}
+          enableShortFeedback={enableShortFeedback}
+          setEnableShortFeedback={setEnableShortFeedback}
+          onEndChat={handleEndChat}
+        >
           <ChatMessagesContainer
             chatHistory={chatHistory}
             isDarkMode={isDarkMode}
@@ -533,7 +1061,7 @@ const AnalyzeContentInner = () => {
               onToggleShortFeedback={handleToggleShortFeedback}
               onQuickTranslation={handleQuickTranslation}
               onExplainLLMResponse={handleExplainLLMResponse}
-            onPlayTTS={audioHandlers.handlePlayTTS}
+            onPlayTTS={playTTSWrapper2}
             onPlayExistingTTS={audioHandlers.handlePlayExistingTTS}
             translations={translations}
             isTranslating={isTranslating}
@@ -542,9 +1070,9 @@ const AnalyzeContentInner = () => {
             showSuggestionExplanations={{}}
             explainButtonPressed={suggestions.explainButtonPressed}
             parsedBreakdown={parsedBreakdown}
-            feedbackExplanations={feedbackExplanations}
+            feedbackExplanations={messageInteractions.feedbackExplanations}
             activePopup={activePopup}
-            showCorrectedVersions={showCorrectedVersions}
+            showCorrectedVersions={messageInteractions.showCorrectedVersions}
             quickTranslations={messageInteractions.quickTranslations}
             showQuickTranslations={messageInteractions.showQuickTranslations}
             ttsCache={ttsCache}
@@ -560,38 +1088,24 @@ const AnalyzeContentInner = () => {
             handleSuggestionButtonClick={suggestions.handleSuggestionButtonClick}
             isLoadingSuggestions={suggestions.isLoadingSuggestions}
             isLoadingMessageFeedback={messageInteractions.isLoadingMessageFeedback}
+            extractCorrectedVersion={(feedback) => {
+              const result = extractCorrectedVersion(feedback);
+              return result ? { ...result, romanizedText: result.romanizedText || '' } : null;
+            }}
+            renderFormattedText={renderFormattedText}
+            // Suggestion carousel props
+            showSuggestionCarousel={suggestions.showSuggestionCarousel}
+            suggestionMessages={suggestions.suggestionMessages}
+            currentSuggestionIndex={suggestions.currentSuggestionIndex}
+            onNavigateSuggestion={suggestions.navigateSuggestion}
+            onExplainSuggestion={suggestions.explainSuggestion}
+            onPlaySuggestionTTS={suggestions.playSuggestionTTS}
+            isTranslatingSuggestion={suggestions.isTranslatingSuggestion}
+            showSuggestionTranslations={suggestions.showSuggestionTranslations}
+            suggestionTranslations={suggestions.suggestionTranslations}
           />
           
-          {/* Suggestion Carousel */}
-          {!isProcessing && suggestions.showSuggestionCarousel && suggestions.suggestionMessages.length > 0 && (
-            <SuggestionCarousel
-              isDarkMode={isDarkMode}
-              suggestionMessages={suggestions.suggestionMessages}
-              currentSuggestionIndex={suggestions.currentSuggestionIndex}
-              onNavigateSuggestion={suggestions.navigateSuggestion}
-              onExplainSuggestion={suggestions.explainSuggestion}
-              onPlaySuggestionTTS={suggestions.playSuggestionTTS}
-              isTranslatingSuggestion={suggestions.isTranslatingSuggestion}
-              showSuggestionTranslations={suggestions.showSuggestionTranslations}
-              suggestionTranslations={suggestions.suggestionTranslations}
-              isGeneratingTTS={isGeneratingTTS}
-              isPlayingTTS={isPlayingTTS}
-              userPreferences={userPreferences}
-              language={language}
-            />
-          )}
           
-        <RecordingControls
-                  isDarkMode={isDarkMode}
-            isRecording={audioHandlers.isRecording}
-            isProcessing={isProcessing}
-                    onStartRecording={audioHandlers.handleStartRecording}
-                    onStopRecording={audioHandlers.handleStopRecording}
-            autoSpeak={autoSpeak}
-            setAutoSpeak={setAutoSpeak}
-            enableShortFeedback={enableShortFeedback}
-            setEnableShortFeedback={setEnableShortFeedback}
-          />
         </MainContentArea>
       </AnalyzeLayout>
 
@@ -609,10 +1123,7 @@ const AnalyzeContentInner = () => {
         <PersonaModal
           isOpen={showPersonaModal}
           onClose={() => setShowPersonaModal(false)}
-          onSave={async (personaName) => {
-            console.log('Save persona:', personaName);
-            setShowPersonaModal(false);
-          }}
+          onSave={savePersona}
           isSaving={isSavingPersona}
           currentTopics={userPreferences?.topics || []}
           currentDescription={conversationDescription}
@@ -626,8 +1137,18 @@ const AnalyzeContentInner = () => {
         onClose={() => {
           setShowProgressModal(false);
           setProgressData(null);
+          // Navigate back to dashboard after closing progress modal
+          router.push('/dashboard');
         }}
         progressData={progressData}
+      />
+
+      {/* Word Explanation Popup */}
+      <WordExplanationPopup
+        activePopup={activePopup}
+        isDarkMode={isDarkMode}
+        quickTranslations={messageInteractions.quickTranslations}
+        feedbackExplanations={messageInteractions.feedbackExplanations}
       />
     </>
   );

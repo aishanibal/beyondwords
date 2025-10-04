@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { ChatMessage } from '../types/analyze';
 import ChatMessageItem from '../ChatMessageItem';
+import SuggestionCarousel from './SuggestionCarousel';
 
 interface ChatMessagesContainerProps {
   chatHistory: ChatMessage[];
@@ -28,17 +29,27 @@ interface ChatMessagesContainerProps {
   showCorrectedVersions: Record<number, boolean>;
   quickTranslations: Record<number, any>;
   showQuickTranslations: Record<number, boolean>;
+  // Suggestion carousel props
+  showSuggestionCarousel: boolean;
+  suggestionMessages: ChatMessage[];
+  currentSuggestionIndex: number;
+  onNavigateSuggestion: (direction: 'prev' | 'next') => void;
+  onExplainSuggestion: (index: number, text: string) => void;
+  onPlaySuggestionTTS: (suggestion: ChatMessage, index: number) => void;
+  isTranslatingSuggestion: Record<number, boolean>;
+  showSuggestionTranslations: Record<number, boolean>;
+  suggestionTranslations: Record<number, { translation?: string; breakdown?: string; has_breakdown?: boolean }>;
+  isGeneratingTTS: Record<string, boolean>;
+  isPlayingTTS: Record<string, boolean>;
+  userPreferences: any;
+  language: string;
   ttsCache: Map<string, { url: string; timestamp: number }>;
-  isGeneratingTTS: {[key: string]: boolean};
-  isPlayingTTS: {[key: string]: boolean};
   isLoadingMessageFeedback: Record<number, boolean>; // Loading state for message feedback
   romanizationDisplay: string;
-  language: string;
   messageCount: number;
   hasMoreMessages: boolean;
   isLoadingMoreMessages: boolean;
   loadMoreMessages: () => void;
-  userPreferences: any;
   handleSuggestionButtonClick: () => void;
   isLoadingSuggestions: boolean;
 }
@@ -83,7 +94,17 @@ const ChatMessagesContainer: React.FC<ChatMessagesContainerProps> = ({
   loadMoreMessages,
   userPreferences,
   handleSuggestionButtonClick,
-  isLoadingSuggestions
+  isLoadingSuggestions,
+  // Suggestion carousel props
+  showSuggestionCarousel,
+  suggestionMessages,
+  currentSuggestionIndex,
+  onNavigateSuggestion,
+  onExplainSuggestion,
+  onPlaySuggestionTTS,
+  isTranslatingSuggestion,
+  showSuggestionTranslations,
+  suggestionTranslations
 }) => {
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const [virtualItems, setVirtualItems] = useState<{ index: number; start: number }[]>([]);
@@ -275,9 +296,9 @@ const ChatMessagesContainer: React.FC<ChatMessagesContainerProps> = ({
                   isDarkMode={isDarkMode}
                   isLastAIMessage={isLastAIMessage}
                   isLastMessage={isLastMessage}
-                  toggleShortFeedback={() => {}}
-                  toggleDetailedFeedback={() => {}}
-                  generateTTSForText={() => {}}
+                  toggleShortFeedback={onToggleShortFeedback}
+                  toggleDetailedFeedback={onToggleDetailedFeedback}
+                  generateTTSForText={(text, language, cacheKey) => onPlayTTS(text, language)}
                   language={language}
                   userPreferences={{ romanizationDisplay }}
                   playTTS={onPlayTTS}
@@ -295,7 +316,6 @@ const ChatMessagesContainer: React.FC<ChatMessagesContainerProps> = ({
                   quickTranslation={onQuickTranslation}
                   handleSuggestionButtonClick={handleSuggestionButtonClick}
                   isLoadingSuggestions={isLoadingSuggestions}
-                  isProcessing={false}
                   playExistingTTS={onPlayExistingTTS}
                   showCorrectedVersions={showCorrectedVersions}
                   extractCorrectedVersion={() => null}
@@ -305,6 +325,32 @@ const ChatMessagesContainer: React.FC<ChatMessagesContainerProps> = ({
             );
           });
         })()}
+        
+        {/* Suggestion Carousel - positioned after the last visible message */}
+        {showSuggestionCarousel && suggestionMessages.length > 0 && (
+          <div style={{
+            position: 'relative',
+            padding: '0.75rem 0.75rem 0.75rem 0.75rem',
+            marginTop: '0.5rem',
+            width: '100%'
+          }}>
+            <SuggestionCarousel
+              isDarkMode={isDarkMode}
+              suggestionMessages={suggestionMessages}
+              currentSuggestionIndex={currentSuggestionIndex}
+              onNavigateSuggestion={onNavigateSuggestion}
+              onExplainSuggestion={onExplainSuggestion}
+              onPlaySuggestionTTS={onPlaySuggestionTTS}
+              isTranslatingSuggestion={isTranslatingSuggestion}
+              showSuggestionTranslations={showSuggestionTranslations}
+              suggestionTranslations={suggestionTranslations}
+              isGeneratingTTS={isGeneratingTTS}
+              isPlayingTTS={isPlayingTTS}
+              userPreferences={userPreferences}
+              language={language}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

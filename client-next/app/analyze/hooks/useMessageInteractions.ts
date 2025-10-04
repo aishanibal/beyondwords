@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import axios from 'axios';
 import { 
   getDetailedFeedback, 
   getShortFeedback, 
@@ -6,6 +7,11 @@ import {
   getQuickTranslation, 
   explainLLMResponse 
 } from '../services/messageService';
+import { 
+  extractFormattedSentence, 
+  parseFeedbackExplanations, 
+  extractCorrectedVersion 
+} from '../utils/textFormatting';
 
 export const useMessageInteractions = (language: string) => {
   // State for different types of feedback
@@ -19,15 +25,121 @@ export const useMessageInteractions = (language: string) => {
   const [shortFeedback, setShortFeedback] = useState<Record<number, any>>({});
   const [detailedBreakdown, setDetailedBreakdown] = useState<Record<number, any>>({});
   const [quickTranslations, setQuickTranslations] = useState<Record<number, any>>({});
+  const [feedbackExplanations, setFeedbackExplanations] = useState<Record<number, any>>({});
+  const [showCorrectedVersions, setShowCorrectedVersions] = useState<Record<number, boolean>>({});
 
-  // Handle detailed feedback request
-  const handleRequestDetailedFeedback = useCallback(async (messageIndex: number, text: string) => {
+  // Handle detailed feedback request (check button functionality)
+  const handleRequestDetailedFeedback = useCallback(async (
+    messageIndex: number, 
+    text: string, 
+    chatHistory: any[], 
+    userPreferences: any,
+    conversationId: string | null,
+    setChatHistory: (history: any[] | ((prev: any[]) => any[])) => void,
+    fetchUserDashboardPreferences?: (languageCode: string) => Promise<any>,
+    setUserPreferences?: (prefs: any) => void
+  ) => {
+    if (!conversationId) {
+      return;
+    }
+    
     setIsLoadingMessageFeedback(prev => ({ ...prev, [messageIndex]: true }));
     
     try {
-      const feedback = await getDetailedFeedback(messageIndex, text, language);
-      setDetailedFeedback(prev => ({ ...prev, [messageIndex]: feedback }));
-      setShowDetailedBreakdown(prev => ({ ...prev, [messageIndex]: true }));
+      const token = localStorage.getItem('jwt');
+      
+      // Get the message text and context
+      const message = chatHistory[messageIndex];
+      const user_input = message?.text || '';
+      const context = chatHistory.slice(-4).map((msg: any) => `${msg.sender}: ${msg.text}`).join('\n');
+      
+      // Ensure user preferences are loaded for the current language
+      if (fetchUserDashboardPreferences && setUserPreferences && 
+          (!userPreferences.romanizationDisplay || userPreferences.romanizationDisplay === 'both')) {
+        const dashboardPrefs = await fetchUserDashboardPreferences(language || 'en');
+        if (dashboardPrefs) {
+          setUserPreferences((prev: any) => ({
+            ...prev,
+            romanizationDisplay: dashboardPrefs.romanization_display || 'both'
+          }));
+        }
+      }
+      
+      const requestData = {
+        user_input,
+        context,
+        language,
+        user_level: userPreferences.userLevel,
+        user_topics: userPreferences.topics,
+        romanization_display: userPreferences.romanizationDisplay
+      };
+      
+      const response = await axios.post(
+        '/api/feedback',
+        requestData,
+        token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
+      );
+      
+      const detailedFeedback = response.data.feedback;
+      
+      // Extract formatted sentence from feedback and update chat history
+      const formattedSentence = extractFormattedSentence(detailedFeedback, userPreferences.romanizationDisplay || 'both');
+      
+      // Parse explanations for each highlighted word
+      const explanations = parseFeedbackExplanations(detailedFeedback);
+      
+      // Extract corrected version
+      const correctedVersion = extractCorrectedVersion(detailedFeedback);
+      
+      // Store explanations for this message
+      setFeedbackExplanations(prev => ({
+        ...prev,
+        [messageIndex]: explanations
+      }));
+      
+      // Show corrected version automatically when feedback is generated
+      setShowCorrectedVersions(prev => ({
+        ...prev,
+        [messageIndex]: true
+      }));
+      
+      // Update the message in chat history with the feedback and formatted text
+      setChatHistory(prev => {
+        const updated = prev.map((msg: any, idx: number) => {
+          if (idx === messageIndex) {
+            const updatedMsg = { 
+              ...msg, 
+              detailedFeedback: detailedFeedback,
+              // Update the message text with formatted version if available
+              ...(formattedSentence && {
+                text: formattedSentence.mainText,
+                romanizedText: formattedSentence.romanizedText
+              })
+            };
+            return updatedMsg;
+          }
+          return msg;
+        });
+        return updated;
+      });
+      
+      // Store feedback in the database for the specific message (if it has an ID)
+      if (message && message.id) {
+        const token = localStorage.getItem('jwt');
+        try {
+          await axios.post(
+            '/api/messages/feedback',
+            {
+              messageId: message.id,
+              feedback: detailedFeedback
+            },
+            token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
+          );
+        } catch (dbError) {
+          console.error('Error saving feedback to database:', dbError);
+        }
+      }
+      
     } catch (error) {
       console.error('Error getting detailed feedback:', error);
     } finally {
@@ -120,6 +232,8 @@ export const useMessageInteractions = (language: string) => {
     shortFeedback,
     detailedBreakdown,
     quickTranslations,
+    feedbackExplanations,
+    showCorrectedVersions,
     
     // Actions
     handleRequestDetailedFeedback,
@@ -133,7 +247,10 @@ export const useMessageInteractions = (language: string) => {
     // Setters
     setShowDetailedBreakdown,
     setShowShortFeedback,
-    setShowQuickTranslations
+    setShowQuickTranslations,
+    setQuickTranslations,
+    setFeedbackExplanations,
+    setShowCorrectedVersions
   };
 };
 

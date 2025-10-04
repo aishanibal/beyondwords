@@ -457,13 +457,21 @@ export const getConversationWithMessages = async (conversationId: number): Promi
 };
 
 export const updateConversationTitle = async (conversationId: number, title: string): Promise<{ changes: number }> => {
-  const { error } = await supabase
+  console.log('🔍 [DB] Updating conversation title:', { conversationId, title: title.substring(0, 50) + '...' });
+  
+  const { error, data } = await supabase
     .from('conversations')
     .update({ title })
-    .eq('id', conversationId);
+    .eq('id', conversationId)
+    .select('id');
   
-  if (error) throw error;
-  return { changes: 1 };
+  if (error) {
+    console.error('🔍 [DB] Error updating conversation title:', error);
+    throw error;
+  }
+  
+  console.log('🔍 [DB] Conversation title updated successfully, data:', data);
+  return { changes: data ? data.length : 1 };
 };
 
 export const updateConversationSynopsis = async (conversationId: number, synopsis: string, progressData?: any): Promise<{ changes: number }> => {
@@ -472,13 +480,42 @@ export const updateConversationSynopsis = async (conversationId: number, synopsi
     updates.progress_data = progressData;
   }
   
-  const { error } = await supabase
+  console.log('🔍 [DB] Updating conversation synopsis:', { 
+    conversationId, 
+    synopsis: synopsis.substring(0, 100) + '...', 
+    progressData 
+  });
+  
+  const { error, data } = await supabase
     .from('conversations')
     .update(updates)
-    .eq('id', conversationId);
+    .eq('id', conversationId)
+    .select('id');
   
-  if (error) throw error;
-  return { changes: 1 };
+  if (error) {
+    console.error('🔍 [DB] Error updating conversation synopsis:', error);
+    throw error;
+  }
+  
+  console.log('🔍 [DB] Conversation synopsis updated successfully, data:', data);
+  return { changes: data ? data.length : 1 };
+};
+
+export const updateConversationLearningGoals = async (conversationId: number, learningGoals: string[]): Promise<{ changes: number }> => {
+  console.log('🔍 [DB] Updating conversation learning_goals:', { conversationId, learningGoals });
+  const { error, data } = await supabase
+    .from('conversations')
+    .update({ learning_goals: learningGoals })
+    .eq('id', conversationId)
+    .select('id');
+
+  if (error) {
+    console.error('🔍 [DB] Error updating learning_goals:', error);
+    throw error;
+  }
+
+  console.log('🔍 [DB] Learning goals updated successfully, data:', data);
+  return { changes: data ? data.length : 1 };
 };
 
 export const deleteConversation = async (conversationId: number): Promise<{ changes: number }> => {

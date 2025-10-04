@@ -1,7 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import axios from 'axios';
 
-const BACKEND_URL = process.env.BACKEND_URL || 'https://beyondwords-express.onrender.com/api/user/language-dashboards';
+const BACKEND_URL = (process.env.BACKEND_URL || 'https://beyondwords-express.onrender.com').replace(/\/$/, '') + '/api/user/language-dashboards';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {

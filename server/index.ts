@@ -35,13 +35,13 @@ import {
   createPersona,
   getUserPersonas,
   deletePersona,
-  supabase,
   User,
   LanguageDashboard,
   Session,
   Conversation,
   Message,
-  Persona
+  Persona,
+  updateConversationLearningGoals
 } from './supabase-db';
 import { OAuth2Client } from 'google-auth-library';
 import path from 'path';
@@ -82,10 +82,23 @@ app.use(express.json());
 app.use(cors({ 
   origin: [
     'http://localhost:3000',
-    'https://speakbeyondwords-sigma.vercel.app'
+    'https://speakbeyondwords-sigma.vercel.app',
+    'https://speakbeyondwords-sigma.vercel.app/',
+    'https://speakbeyondwords-sigma.vercel.app/*'
   ], 
-  credentials: false 
+  credentials: false,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
 }));
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    message: 'BeyondWords Express server is running'
+  });
+});
 
 // Multer configuration for file uploads
 const storage: StorageEngine = multer.diskStorage({
@@ -759,24 +772,56 @@ app.post('/auth/login', async (req: Request, res: Response) => {
   }
 });
 
-// Alias under /api so frontend can call /api/auth/exchange without rewrites
-app.post('/api/auth/exchange', async (req: Request, res: Response) => {
+// JWT token exchange endpoint (for Supabase auth integration)
+app.post('/auth/exchange', async (req: Request, res: Response) => {
   try {
-    const { email, name } = req.body || {};
-    if (!email) return res.status(400).json({ error: 'Email required' });
-
+    const { email, name } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+    
+    console.log('[AUTH_EXCHANGE] Token exchange request for email:', email);
+    
     // Find or create user by email
     let user = await findUserByEmail(email);
+    
     if (!user) {
-      user = await createUser({ email, name: name || email.split('@')[0], role: 'user', onboarding_complete: false });
+      // Create new user if doesn't exist
+      console.log('[AUTH_EXCHANGE] Creating new user for email:', email);
+      const newUser = {
+        email,
+        name: name || email.split('@')[0],
+        google_id: undefined, // This is from Supabase, not Google OAuth
+        role: 'user' as const,
+        onboarding_complete: false
+      };
+      
+      try {
+        user = await createUser(newUser);
+        console.log('[AUTH_EXCHANGE] New user created with ID:', user.id);
+      } catch (error: any) {
+        console.error('[AUTH_EXCHANGE] Failed to create user:', error);
+        return res.status(500).json({ error: 'Failed to create user' });
+      }
+    } else {
+      console.log('[AUTH_EXCHANGE] Found existing user with ID:', user.id);
     }
-
+    
+    // Ensure user exists before proceeding
+    if (!user) {
+      return res.status(500).json({ error: 'User not found or created' });
+    }
+    
+    // Generate JWT token
     const token = jwt.sign(
-      { userId: user.id, email: user.email, name: user.name },
+      { userId: user.id, email: user.email, role: user.role },
       JWT_SECRET,
       { expiresIn: '7d' }
     );
-
+    
+    console.log('[AUTH_EXCHANGE] JWT token generated for user:', user.id);
+    
     res.json({ 
       token,
       user: {
@@ -788,8 +833,8 @@ app.post('/api/auth/exchange', async (req: Request, res: Response) => {
       }
     });
   } catch (error: any) {
-    console.error('Auth exchange alias error:', error);
-    res.status(500).json({ error: 'Failed to exchange identity' });
+    console.error('[AUTH_EXCHANGE] Token exchange error:', error);
+    res.status(500).json({ error: 'Token exchange failed' });
   }
 });
 
@@ -1352,25 +1397,7 @@ app.post('/api/conversations/:id/messages', optionalAuthenticateJWT as any, asyn
   try {
     console.log('🔄 SERVER: Adding message to conversation:', req.params.id);
     const { sender, text, messageType, audioFilePath, detailedFeedback, message_order, romanized_text } = req.body;
-    console.log('📝 SERVER: Message details:', { sender, text: (text||'').substring(0, 50) + '...', messageType, message_order, romanized_text: romanized_text ? 'present' : 'none' });
-
-    // Compute a safe message order if missing
-    let finalOrder: number | undefined = typeof message_order === 'number' ? message_order : undefined;
-    if (finalOrder === undefined || Number.isNaN(finalOrder)) {
-      const { data: maxRows, error: maxErr } = await supabase
-        .from('messages')
-        .select('message_order')
-        .eq('conversation_id', Number(req.params.id))
-        .order('message_order', { ascending: false })
-        .limit(1);
-      if (maxErr) {
-        console.warn('⚠️ SERVER: Could not fetch max message_order, defaulting to 1:', maxErr.message);
-        finalOrder = 1;
-      } else {
-        const currentMax = (maxRows && maxRows.length > 0 && typeof maxRows[0].message_order === 'number') ? maxRows[0].message_order : 0;
-        finalOrder = currentMax + 1;
-      }
-    }
+    console.log('📝 SERVER: Message details:', { sender, text: text.substring(0, 50) + '...', messageType, message_order, romanized_text: romanized_text ? 'present' : 'none' });
 
     const message = await addMessage(
       Number(req.params.id),
@@ -1379,7 +1406,7 @@ app.post('/api/conversations/:id/messages', optionalAuthenticateJWT as any, asyn
       messageType,
       audioFilePath,
       detailedFeedback,
-      finalOrder,
+      message_order,
       romanized_text
     );
 
@@ -1392,12 +1419,44 @@ app.post('/api/conversations/:id/messages', optionalAuthenticateJWT as any, asyn
 
 app.put('/api/conversations/:id/title', optionalAuthenticateJWT as any, async (req: Request, res: Response) => {
   try {
-    const { title } = req.body;
-    const result = await updateConversationTitle(Number(req.params.id), title);
-    res.json({ success: true, changes: result.changes });
+    const { title, synopsis, progress_data } = req.body;
+    const conversationId = Number(req.params.id);
+    
+    console.log('🔍 [UPDATE_TITLE] Updating conversation:', conversationId, { 
+      title: title ? title.substring(0, 50) + '...' : null, 
+      synopsis: synopsis ? synopsis.substring(0, 100) + '...' : null, 
+      progress_data: progress_data 
+    });
+    
+    let changes = 0;
+    
+    // Update title if provided
+    if (title) {
+      console.log('🔍 [UPDATE_TITLE] Updating title for conversation:', conversationId);
+      const titleResult = await updateConversationTitle(conversationId, title);
+      changes += titleResult.changes;
+      console.log('🔍 [UPDATE_TITLE] Title updated successfully, changes:', titleResult.changes);
+    }
+    
+    // Update synopsis if provided
+    if (synopsis) {
+      console.log('🔍 [UPDATE_TITLE] Updating synopsis for conversation:', conversationId);
+      const synopsisResult = await updateConversationSynopsis(conversationId, synopsis, progress_data);
+      changes += synopsisResult.changes;
+      console.log('🔍 [UPDATE_TITLE] Synopsis updated successfully, changes:', synopsisResult.changes);
+    }
+    
+    console.log('🔍 [UPDATE_TITLE] Total changes made:', changes);
+    res.json({ success: true, changes });
   } catch (error: any) {
-    console.error('Update conversation title error:', error);
-    res.status(500).json({ error: 'Failed to update conversation title' });
+    console.error('🔍 [UPDATE_TITLE] Update conversation title/synopsis error:', error);
+    console.error('🔍 [UPDATE_TITLE] Error details:', {
+      message: error.message,
+      stack: error.stack,
+      conversationId: req.params.id,
+      body: req.body
+    });
+    res.status(500).json({ error: 'Failed to update conversation title/synopsis', details: error.message });
   }
 });
 
@@ -1452,16 +1511,15 @@ app.patch('/api/conversations/:id', optionalAuthenticateJWT as any, async (req: 
 });
 
 // Text suggestions endpoint
-app.post('/api/suggestions', optionalAuthenticateJWT as any, async (req: Request, res: Response) => {
+app.post('/api/suggestions', authenticateJWT, async (req: Request, res: Response) => {
   try {
     console.log('🔍 [NODE_SERVER] POST /api/suggestions called');
     console.log('🔍 [NODE_SERVER] Request body:', req.body);
-    console.log('🔍 [NODE_SERVER] User ID:', req.user?.userId || '(none - fallback)');
+    console.log('🔍 [NODE_SERVER] User ID:', req.user?.userId);
     const { conversationId, language } = req.body;
     
     // Get user data for personalized suggestions
-    let user = null as any;
-    try { if (req.user?.userId) user = await findUserById(req.user.userId); } catch {}
+    const user = await findUserById(req.user.userId);
     const userLevel = req.body.user_level || user?.proficiency_level || 'beginner';
     const userTopics = req.body.user_topics || (user?.talk_topics && typeof user.talk_topics === 'string' ? JSON.parse(user.talk_topics) : Array.isArray(user?.talk_topics) ? user.talk_topics : []);
     const userGoals = req.body.user_goals || (user?.learning_goals && typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : Array.isArray(user?.learning_goals) ? user.learning_goals : []);
@@ -1603,7 +1661,7 @@ app.post('/api/suggestions-test', async (req: Request, res: Response) => {
 });
 
 // Translation endpoint
-app.post('/api/translate', optionalAuthenticateJWT as any, async (req: Request, res: Response) => {
+app.post('/api/translate', authenticateJWT, async (req: Request, res: Response) => {
   try {
     console.log('POST /api/translate called');
     const { text, source_language, target_language, breakdown } = req.body;
@@ -1649,7 +1707,7 @@ app.post('/api/translate', optionalAuthenticateJWT as any, async (req: Request, 
 });
 
 // Explain suggestion endpoint
-app.post('/api/explain_suggestion', optionalAuthenticateJWT as any, async (req: Request, res: Response) => {
+app.post('/api/explain_suggestion', authenticateJWT, async (req: Request, res: Response) => {
   try {
     console.log('POST /api/explain_suggestion called');
     const { suggestion_text, chatHistory, language, user_level, user_topics, formality, feedback_language, user_goals } = req.body;
@@ -2028,6 +2086,140 @@ app.post('/api/quick_translation', authenticateJWT, async (req: Request, res: Re
   } catch (error: any) {
     console.error('Quick translation error:', error);
     res.status(500).json({ error: 'Error getting quick translation', details: error.message });
+  }
+});
+
+// AI Response endpoint (for frontend compatibility)
+app.post('/api/ai_response', authenticateJWT, async (req: Request, res: Response) => {
+  try {
+    console.log('🔍 [AI_RESPONSE] POST /api/ai_response called');
+    console.log('🔍 [AI_RESPONSE] Request body:', req.body);
+    console.log('🔍 [AI_RESPONSE] User ID:', req.user?.userId);
+    
+    const { transcription, chat_history, language, user_level, user_topics, formality, feedback_language, user_goals } = req.body;
+    
+    if (!transcription) {
+      return res.status(400).json({ error: 'No transcription provided' });
+    }
+    
+    // Call Python API for AI response
+    try {
+      const pythonApiUrl = (process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com').replace(/\/$/, '');
+      const pythonRequestData = {
+        transcription: transcription,
+        chat_history: chat_history || [],
+        language: language || 'en',
+        user_level: user_level || 'beginner',
+        user_topics: user_topics || [],
+        formality: formality || 'friendly',
+        feedback_language: feedback_language || 'en',
+        user_goals: user_goals || []
+      };
+      
+      console.log('🔍 [AI_RESPONSE] Calling Python API:', {
+        url: `${pythonApiUrl}/ai_response`,
+        data: pythonRequestData
+      });
+      
+      const pythonResponse = await axios.post(`${pythonApiUrl}/ai_response`, pythonRequestData, {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 30000
+      });
+      
+      console.log('🔍 [AI_RESPONSE] Python AI response received:', {
+        status: pythonResponse.status,
+        data: pythonResponse.data
+      });
+      res.json(pythonResponse.data);
+    } catch (pythonError: any) {
+      console.error('🔍 [AI_RESPONSE] Python API not available:', pythonError.message);
+      
+      // Fallback response if Python API fails
+      res.json({
+        response: "I'm sorry, I'm having trouble processing your request right now. Please try again later.",
+        error: "Python API not available"
+      });
+    }
+  } catch (error: any) {
+    console.error('🔍 [AI_RESPONSE] AI response error:', error);
+    res.status(500).json({ error: 'Error getting AI response', details: error.message });
+  }
+});
+
+// Conversation summary endpoint (for frontend compatibility)
+app.post('/api/conversation-summary', authenticateJWT, async (req: Request, res: Response) => {
+  try {
+    console.log('🔍 [CONVERSATION_SUMMARY] POST /api/conversation-summary called');
+    console.log('🔍 [CONVERSATION_SUMMARY] Request body:', req.body);
+    console.log('🔍 [CONVERSATION_SUMMARY] User ID:', req.user?.userId);
+    
+    const { chat_history, subgoal_instructions, user_topics, target_language, feedback_language, is_continued_conversation, conversation_id } = req.body;
+    
+    if (!chat_history || !Array.isArray(chat_history)) {
+      return res.status(400).json({ error: 'No chat history provided' });
+    }
+    
+    // Call Python API for conversation summary
+    try {
+      const pythonApiUrl = (process.env.PYTHON_API_URL || 'https://beyondwords.onrender.com').replace(/\/$/, '');
+      const pythonRequestData = {
+        chat_history: chat_history,
+        subgoal_instructions: subgoal_instructions || '',
+        user_topics: user_topics || [],
+        target_language: target_language || 'en',
+        feedback_language: feedback_language || 'en',
+        is_continued_conversation: is_continued_conversation || false
+      };
+      
+      console.log('🔍 [CONVERSATION_SUMMARY] Calling Python API:', {
+        url: `${pythonApiUrl}/conversation_summary`,
+        data: pythonRequestData
+      });
+      
+      const pythonResponse = await axios.post(`${pythonApiUrl}/conversation_summary`, pythonRequestData, {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 30000
+      });
+      
+      console.log('🔍 [CONVERSATION_SUMMARY] Python conversation summary received:', {
+        status: pythonResponse.status,
+        data: pythonResponse.data
+      });
+      // Persist learning_goals on the conversation if available
+      try {
+        if (conversation_id && req.user?.userId) {
+          const userRecord = await findUserById(req.user.userId);
+          let userGoals: string[] = [];
+          if (userRecord && (userRecord as any).learning_goals) {
+            const raw = (userRecord as any).learning_goals;
+            userGoals = Array.isArray(raw) ? raw : JSON.parse(raw);
+          }
+          if (Array.isArray(userGoals) && userGoals.length > 0) {
+            await updateConversationLearningGoals(Number(conversation_id), userGoals);
+          }
+        }
+      } catch (persistErr) {
+        console.warn('⚠️ [CONVERSATION_SUMMARY] Failed to persist learning_goals:', persistErr);
+      }
+
+      res.json(pythonResponse.data);
+    } catch (pythonError: any) {
+      console.error('🔍 [CONVERSATION_SUMMARY] Python API not available:', pythonError.message);
+      
+      // Fallback response if Python API fails
+      res.json({
+        success: false,
+        summary: {
+          title: "Conversation Summary",
+          synopsis: "Summary generation is temporarily unavailable. Please try again later.",
+          learningGoals: []
+        },
+        error: "Python API not available"
+      });
+    }
+  } catch (error: any) {
+    console.error('🔍 [CONVERSATION_SUMMARY] Conversation summary error:', error);
+    res.status(500).json({ error: 'Error generating conversation summary', details: error.message });
   }
 });
 
