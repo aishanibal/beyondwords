@@ -2370,16 +2370,13 @@ async function generateTTSWithDebug(text: string, language: string): Promise<{ t
       console.log(`🎯 [TTS DEBUG] Relative path from Python API: ${relativePath}`);
       console.log(`🎯 [TTS DEBUG] Actual path from Python API: ${actualPath}`);
       
-      // The Python API now returns a relative path that we can serve directly
-      // Convert to the correct URL path for serving
+      // The Python API creates files on its own server, so we need to serve them directly
+      // from the Python API server, not from our Express server
       const fileName = path.basename(relativePath);
-      const ttsUrl = `/files/${fileName}`;
+      const ttsUrl = `${pythonApiUrl}/uploads/${fileName}`;
       
       console.log('🎯 [TTS DEBUG] TTS audio will be served at:', ttsUrl);
       console.log('🎯 [TTS DEBUG] File extension:', path.extname(relativePath));
-      
-      // Note: We don't check if the file exists locally because the Python API
-      // creates the file on its server, and we serve it via the /files endpoint
       
       return {
         ttsUrl: ttsUrl,

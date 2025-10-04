@@ -139,7 +139,36 @@ export const getTTSText = (message: ChatMessage, romanizationDisplay: string, la
   }
 };
 
-// Retry TTS request with exponential backoff
+// Fallback TTS using browser's built-in speech synthesis
+const fallbackTTS = (text: string, language: string): Promise<void> => {
+  return new Promise((resolve, reject) => {
+    if (!('speechSynthesis' in window)) {
+      reject(new Error('Speech synthesis not supported in this browser'));
+      return;
+    }
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = language;
+    utterance.rate = 0.9;
+    utterance.pitch = 1.0;
+    utterance.volume = 0.8;
+
+    utterance.onend = () => {
+      console.log('🔊 [FALLBACK_TTS] Speech synthesis completed');
+      resolve();
+    };
+
+    utterance.onerror = (event) => {
+      console.error('🔊 [FALLBACK_TTS] Speech synthesis error:', event.error);
+      reject(new Error(`Speech synthesis failed: ${event.error}`));
+    };
+
+    console.log('🔊 [FALLBACK_TTS] Using browser speech synthesis as fallback');
+    speechSynthesis.speak(utterance);
+  });
+};
+
+// Retry TTS request with exponential backoff and fallback
 const retryTTSRequest = async (
   text: string, 
   language: string, 
@@ -171,13 +200,28 @@ const retryTTSRequest = async (
     } catch (error: any) {
       console.error(`TTS attempt ${attempt} failed:`, error);
       
-      // If it's the last attempt, handle the error
+      // If it's the last attempt, try fallback TTS
       if (attempt === maxRetries) {
         if (error.response?.status === 503) {
-          console.warn('🔊 TTS service is temporarily unavailable. The Python API may be starting up. Audio will be available shortly.');
-          console.info('💡 Tip: TTS audio may take a moment to become available. Please try again in a few seconds.');
+          console.warn('🔊 TTS service is temporarily unavailable. Trying browser fallback...');
+          try {
+            await fallbackTTS(cleanTextForTTS(text), language);
+            console.log('🔊 [FALLBACK_TTS] Successfully used browser speech synthesis');
+            return;
+          } catch (fallbackError) {
+            console.error('🔊 [FALLBACK_TTS] Browser speech synthesis also failed:', fallbackError);
+            console.info('💡 Tip: TTS audio may take a moment to become available. Please try again in a few seconds.');
+          }
         } else if (error.response?.status === 500) {
-          console.warn('🔊 TTS generation failed. Please try again later.');
+          console.warn('🔊 TTS generation failed. Trying browser fallback...');
+          try {
+            await fallbackTTS(cleanTextForTTS(text), language);
+            console.log('🔊 [FALLBACK_TTS] Successfully used browser speech synthesis');
+            return;
+          } catch (fallbackError) {
+            console.error('🔊 [FALLBACK_TTS] Browser speech synthesis also failed:', fallbackError);
+            console.warn('🔊 TTS generation failed. Please try again later.');
+          }
         } else {
           console.warn('🔊 TTS request failed:', error.message);
         }

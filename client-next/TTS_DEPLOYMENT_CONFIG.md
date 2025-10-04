@@ -2,7 +2,14 @@
 
 ## Overview
 
-The TTS system is designed to work across different deployment environments. This document explains how to configure it properly for production deployment.
+The TTS system is designed to work across different deployment environments with automatic fallback capabilities. This document explains how to configure it properly for production deployment.
+
+### Key Features
+- **Automatic Environment Detection**: Detects Vercel, localhost, and other deployments
+- **URL Construction**: Builds absolute URLs for TTS files
+- **Accessibility Validation**: Checks if TTS files are accessible before playing
+- **Browser Fallback**: Uses built-in speech synthesis when Python API is unavailable
+- **Graceful Degradation**: Seamlessly falls back to browser TTS for 503/500 errors
 
 ## Architecture
 
@@ -145,6 +152,11 @@ npm run dev
    - Check browser console for `🔍 [TTS_CONFIG]` logs
    - Verify the constructed URL is correct
    - Test URL accessibility manually
+
+5. **Python API Unavailable (503 Errors)**
+   - ✅ **Fixed**: Browser speech synthesis fallback automatically activates
+   - Check console for `🔊 [FALLBACK_TTS]` logs
+   - Fallback works for both main TTS and suggestion TTS
 
 ### Debug Information
 
