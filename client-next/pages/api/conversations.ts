@@ -3,7 +3,11 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import axios from 'axios';
 
 // Build backend URL from a known base. Avoid using a misconfigured BACKEND_URL that could be '/'
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://beyondwords-express.onrender.com';
+const API_BASE = (() => {
+  const base = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://beyondwords-express.onrender.com';
+  // Remove trailing slash to prevent double slashes
+  return base.replace(/\/$/, '');
+})();
 const BACKEND_URL = `${API_BASE}/api/conversations`;
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {

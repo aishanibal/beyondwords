@@ -120,7 +120,10 @@ export const loadExistingConversation = async (conversationId: string) => {
   try {
     console.log('[CONVERSATION_SERVICE] Loading conversation:', conversationId);
     const headers = await getAuthHeaders();
-    const response = await axios.get(`/api/conversations/${conversationId}`, { headers });
+    const url = `/api/conversations/${conversationId}`;
+    console.log('[CONVERSATION_SERVICE] Request URL:', url);
+    console.log('[CONVERSATION_SERVICE] Headers:', headers);
+    const response = await axios.get(url, { headers });
 
     console.log('[CONVERSATION_SERVICE] Response status:', response.status);
     console.log('[CONVERSATION_SERVICE] Response data:', response.data);

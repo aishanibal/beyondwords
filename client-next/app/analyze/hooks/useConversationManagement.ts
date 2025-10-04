@@ -74,6 +74,12 @@ export const useConversationManagement = (
       return;
     }
 
+    // Prevent multiple simultaneous loads
+    if (isLoadingConversation) {
+      console.log('[CONVERSATION_LOAD] Already loading conversation, skipping');
+      return;
+    }
+
     console.log('[CONVERSATION_LOAD] Starting to load conversation:', conversationId);
     setIsLoadingConversation(true);
     
@@ -114,6 +120,15 @@ export const useConversationManagement = (
         setConversationId(null);
         setConversationDescription('');
         setSessionStartTime(null);
+        
+        // Show user-friendly error message
+        const errorMessage = {
+          sender: 'System',
+          text: `❌ Conversation not found. The conversation with ID ${conversationId} may have been deleted or you may not have access to it.`,
+          timestamp: new Date(),
+          isFromOriginalConversation: false
+        };
+        setChatHistory([errorMessage]);
       }
     } catch (error) {
       console.error('[CONVERSATION_LOAD] Error loading conversation:', error);
@@ -122,6 +137,15 @@ export const useConversationManagement = (
       setConversationId(null);
       setConversationDescription('');
       setSessionStartTime(null);
+      
+      // Show user-friendly error message
+      const errorMessage = {
+        sender: 'System',
+        text: `❌ Error loading conversation. Please try refreshing the page or contact support if the problem persists.`,
+        timestamp: new Date(),
+        isFromOriginalConversation: false
+      };
+      setChatHistory([errorMessage]);
     } finally {
       setIsLoadingConversation(false);
     }

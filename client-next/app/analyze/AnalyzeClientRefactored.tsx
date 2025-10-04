@@ -118,6 +118,7 @@ const AnalyzeContentInner = () => {
   const [sessionStartTime, setSessionStartTime] = useState<Date | null>(null);
   const [isLoadingConversation, setIsLoadingConversation] = useState(false);
   const [isSavingPersona, setIsSavingPersona] = useState(false);
+  const [loadedConversationId, setLoadedConversationId] = useState<string | null>(null);
   
   // Additional state variables from original
   const [skipValidation, setSkipValidation] = useState(false);
@@ -295,12 +296,15 @@ const AnalyzeContentInner = () => {
 
   // Load conversation when URL conversation ID is available
   useEffect(() => {
-    if (urlConversationId && user) {
+    if (urlConversationId && user && !isLoadingConversation && loadedConversationId !== urlConversationId) {
       console.log('[CONVERSATION_LOAD] Loading conversation from URL:', urlConversationId);
-      // Always load conversation if URL has conversation ID, regardless of current conversationId state
+      console.log('[CONVERSATION_LOAD] Current conversationId:', conversationId);
+      console.log('[CONVERSATION_LOAD] Loaded conversationId:', loadedConversationId);
+      
+      setLoadedConversationId(urlConversationId);
       conversationManagement.loadConversation(urlConversationId);
     }
-  }, [urlConversationId, user, conversationManagement]);
+  }, [urlConversationId, user, isLoadingConversation, loadedConversationId, conversationId, conversationManagement]);
 
   // Add global click handler for word clicks and popup management
   useEffect(() => {
@@ -1014,6 +1018,26 @@ const AnalyzeContentInner = () => {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-lg">Loading conversation...</div>
+      </div>
+    );
+  }
+
+  // Show error if conversation failed to load and we have a URL conversation ID
+  if (urlConversationId && !conversationId && !isLoadingConversation && chatHistory.length === 0) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="text-lg text-red-600 mb-4">❌ Conversation Not Found</div>
+          <div className="text-gray-600 mb-4">
+            The conversation with ID {urlConversationId} could not be loaded.
+          </div>
+          <button 
+            onClick={() => router.push('/dashboard')}
+            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+          >
+            Go to Dashboard
+          </button>
+        </div>
       </div>
     );
   }
