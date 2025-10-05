@@ -27,6 +27,7 @@ export const useAudioHandlers = (
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const interruptedRef = useRef<boolean>(false);
+  const manualStopRef = useRef<boolean>(false);
   const autoSpeakRef = useRef<boolean>(autoSpeak);
   const MediaRecorderClassRef = useRef<typeof MediaRecorder | null>(null);
   const SpeechRecognitionClassRef = useRef<any>(null);
@@ -49,6 +50,8 @@ export const useAudioHandlers = (
   const handleStartRecording = useCallback(async () => {
     console.log('🔍 [DEBUG] handleStartRecording called');
     setWasInterrupted(false);
+    interruptedRef.current = false;
+    manualStopRef.current = false;
     
     // Prevent recording when TTS is playing
     if (isAnyTTSPlaying) {
@@ -116,18 +119,25 @@ export const useAudioHandlers = (
       mediaRecorder.onstop = () => {
         console.log('🔍 [DEBUG] MediaRecorder onstop event triggered');
         console.log('🔍 [DEBUG] interruptedRef.current:', interruptedRef.current);
+        console.log('🔍 [DEBUG] manualStopRef.current:', manualStopRef.current);
         console.log('🔍 [DEBUG] audioChunksRef.current length:', audioChunksRef.current.length);
         console.log('🔍 [DEBUG] Total audio chunks size:', audioChunksRef.current.reduce((total, chunk) => total + chunk.size, 0), 'bytes');
         
         if (interruptedRef.current) {
           console.log('🔍 [DEBUG] Recording was interrupted, cleaning up');
           interruptedRef.current = false;
+          manualStopRef.current = false;
           setWasInterrupted(true);
           stream.getTracks().forEach(track => track.stop());
           setMediaStream(null);
           setIsRecording(false);
           setManualRecording(false);
           return;
+        }
+        
+        if (manualStopRef.current) {
+          console.log('🔍 [DEBUG] Manual stop detected, processing audio');
+          manualStopRef.current = false;
         }
         
         console.log('🔍 [DEBUG] Creating audio blob and sending to backend');
@@ -256,7 +266,11 @@ export const useAudioHandlers = (
     }
     
     if (isManualStop) {
+      manualStopRef.current = true;
+      console.log('🔍 [DEBUG] Manual stop detected, setting manualStopRef to true');
+    } else {
       interruptedRef.current = true;
+      console.log('🔍 [DEBUG] Interruption detected, setting interruptedRef to true');
     }
     
     if (recognitionRef.current) {
@@ -283,6 +297,8 @@ export const useAudioHandlers = (
       clearTimeout(recordingTimeoutRef.current);
       recordingTimeoutRef.current = null;
     }
+    interruptedRef.current = false;
+    manualStopRef.current = false;
   }, []);
 
   const sendAudioToBackend = useCallback(async (audioBlob: Blob) => {
