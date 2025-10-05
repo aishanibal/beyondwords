@@ -1441,9 +1441,21 @@ app.put('/api/conversations/:id/title', optionalAuthenticateJWT as any, async (r
     // Update synopsis if provided
     if (synopsis) {
       console.log('🔍 [UPDATE_TITLE] Updating synopsis for conversation:', conversationId);
-      const synopsisResult = await updateConversationSynopsis(conversationId, synopsis, progress_data);
-      changes += synopsisResult.changes;
-      console.log('🔍 [UPDATE_TITLE] Synopsis updated successfully, changes:', synopsisResult.changes);
+      try {
+        const synopsisResult = await updateConversationSynopsis(conversationId, synopsis, progress_data);
+        changes += synopsisResult.changes;
+        console.log('🔍 [UPDATE_TITLE] Synopsis updated successfully, changes:', synopsisResult.changes);
+      } catch (synopsisError: any) {
+        console.error('🔍 [UPDATE_TITLE] Failed to update synopsis:', synopsisError);
+        console.error('🔍 [UPDATE_TITLE] Synopsis error details:', {
+          message: synopsisError.message,
+          stack: synopsisError.stack,
+          conversationId,
+          synopsisLength: synopsis.length,
+          progressDataKeys: progress_data ? Object.keys(progress_data) : null
+        });
+        throw synopsisError;
+      }
     }
     
     console.log('🔍 [UPDATE_TITLE] Total changes made:', changes);

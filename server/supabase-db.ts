@@ -477,13 +477,31 @@ export const updateConversationTitle = async (conversationId: number, title: str
 export const updateConversationSynopsis = async (conversationId: number, synopsis: string, progressData?: any): Promise<{ changes: number }> => {
   const updates: any = { synopsis };
   if (progressData) {
-    updates.progress_data = progressData;
+    // Validate and sanitize progressData before storing
+    try {
+      // Ensure progressData is a valid object
+      if (typeof progressData === 'object' && progressData !== null) {
+        // Limit array sizes to prevent database issues
+        const sanitizedProgressData = {
+          subgoalIds: Array.isArray(progressData.subgoalIds) ? progressData.subgoalIds.slice(0, 50) : [],
+          subgoalNames: Array.isArray(progressData.subgoalNames) ? progressData.subgoalNames.slice(0, 50) : [],
+          percentages: Array.isArray(progressData.percentages) ? progressData.percentages.slice(0, 50) : []
+        };
+        updates.progress_data = sanitizedProgressData;
+        console.log('🔍 [DB] Sanitized progress data:', sanitizedProgressData);
+      } else {
+        console.warn('🔍 [DB] Invalid progressData type, skipping:', typeof progressData);
+      }
+    } catch (e) {
+      console.error('🔍 [DB] Error sanitizing progressData:', e);
+      // Skip progress_data if it can't be sanitized
+    }
   }
   
   console.log('🔍 [DB] Updating conversation synopsis:', { 
     conversationId, 
     synopsis: synopsis.substring(0, 100) + '...', 
-    progressData 
+    progressDataKeys: progressData ? Object.keys(progressData) : null
   });
   
   const { error, data } = await supabase
@@ -494,6 +512,12 @@ export const updateConversationSynopsis = async (conversationId: number, synopsi
   
   if (error) {
     console.error('🔍 [DB] Error updating conversation synopsis:', error);
+    console.error('🔍 [DB] Error details:', {
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      code: error.code
+    });
     throw error;
   }
   
