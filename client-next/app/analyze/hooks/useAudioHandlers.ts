@@ -48,6 +48,19 @@ export const useAudioHandlers = (
       return;
     }
     
+    // Add loading message immediately when recording starts
+    const recordingMessage = { 
+      sender: 'User', 
+      text: '🎤 Recording...', 
+      romanizedText: '',
+      timestamp: new Date(),
+      isFromOriginalConversation: false,
+      isRecording: true
+    };
+    
+    console.log('🔍 [DEBUG] Adding recording message to chat history');
+    setChatHistory(prev => [...prev, recordingMessage]);
+    
     if (!MediaRecorderClassRef.current) {
       alert('MediaRecorder API not supported in this browser.');
       return;
@@ -177,6 +190,9 @@ export const useAudioHandlers = (
     } catch (err: unknown) {
       console.error('Error starting recording:', err);
       alert('Failed to access microphone. Please check permissions.');
+      
+      // Remove the recording message if recording failed
+      setChatHistory(prev => prev.filter(msg => !(msg.isRecording && msg.sender === 'User')));
     }
   }, [language, isAnyTTSPlaying]);
 
@@ -207,6 +223,8 @@ export const useAudioHandlers = (
     console.log('🔍 [DEBUG] sendAudioToBackend called with audioBlob:', audioBlob);
     if (!(audioBlob instanceof Blob)) {
       console.error('🔍 [DEBUG] Invalid audio blob provided');
+      // Remove any recording message if audio blob is invalid
+      setChatHistory(prev => prev.filter(msg => !(msg.isRecording && msg.sender === 'User')));
       return;
     }
     
@@ -214,19 +232,21 @@ export const useAudioHandlers = (
       console.log('🔍 [DEBUG] Starting audio processing...');
       setIsProcessing(true);
       
-      // Add user message immediately with a placeholder
-      const placeholderMessage = { 
-        sender: 'User', 
-        text: '🎤 Processing your message...', 
-        romanizedText: '',
-        timestamp: new Date(),
-        isFromOriginalConversation: false,
-        isProcessing: true
-      };
-      
-      console.log('🔍 [DEBUG] Adding placeholder message to chat history');
-      // Add placeholder message immediately
-      setChatHistory(prev => [...prev, placeholderMessage]);
+      // Replace recording message with processing message
+      setChatHistory(prev => {
+        const updated = prev.map((msg, index) => {
+          if (msg.isRecording && msg.sender === 'User') {
+            return {
+              ...msg,
+              text: '🎤 Processing your message...',
+              isRecording: false,
+              isProcessing: true
+            };
+          }
+          return msg;
+        });
+        return updated;
+      });
       
       // Process audio with full pipeline
       const result = await processAudioWithPipeline(
@@ -366,13 +386,17 @@ export const useAudioHandlers = (
         stack: (error as any)?.stack
       });
       
-      const errorMessage = {
-        sender: 'System',
-        text: '❌ Error processing audio. Please try again.',
-        timestamp: new Date(),
-        isFromOriginalConversation: false
-      };
-      setChatHistory(prev => [...prev, errorMessage]);
+      // Remove the processing message and add error message
+      setChatHistory(prev => {
+        const filtered = prev.filter(msg => !(msg.isProcessing && msg.sender === 'User'));
+        const errorMessage = {
+          sender: 'System',
+          text: '❌ Error processing audio. Please try again.',
+          timestamp: new Date(),
+          isFromOriginalConversation: false
+        };
+        return [...filtered, errorMessage];
+      });
     } finally {
       console.log('🔍 [DEBUG] Audio processing completed, setting isProcessing to false');
       setIsProcessing(false);

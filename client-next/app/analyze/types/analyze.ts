@@ -19,6 +19,7 @@ export interface ChatMessage {
   totalSuggestions?: number;
   isFromOriginalConversation?: boolean; // Track if message is from original conversation
   isProcessing?: boolean; // Track if message is being processed
+  isRecording?: boolean; // Track if message is currently being recorded
 }
 
 export interface User {
