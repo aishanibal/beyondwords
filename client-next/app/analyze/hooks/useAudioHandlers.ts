@@ -344,6 +344,11 @@ export const useAudioHandlers = (
       
       // Replace recording message with processing message
       setChatHistory(prev => {
+        console.log('🔍 [DEBUG] ===== SETCHATHISTORY CALLED (PROCESSING) =====');
+        console.log('🔍 [DEBUG] Current chat history length before processing update:', prev.length);
+        console.log('🔍 [DEBUG] Recording messages in history:', prev.filter(msg => msg.isRecording && msg.sender === 'User').length);
+        console.log('🔍 [DEBUG] All user messages before processing:', prev.filter(msg => msg.sender === 'User').map(msg => ({ text: msg.text, isProcessing: msg.isProcessing, isRecording: msg.isRecording, id: msg.id })));
+        
         const updated = prev.map((msg, index) => {
           if (msg.isRecording && msg.sender === 'User') {
             console.log('🔍 [DEBUG] Replacing recording message with processing message');
@@ -370,9 +375,14 @@ export const useAudioHandlers = (
             isFromOriginalConversation: false,
             isProcessing: true
           };
-          return [...updated, processingMessage];
+          const finalHistory = [...updated, processingMessage];
+          console.log('🔍 [DEBUG] Final chat history length after processing fallback:', finalHistory.length);
+          console.log('🔍 [DEBUG] ===== SETCHATHISTORY COMPLETED (PROCESSING FALLBACK) =====');
+          return finalHistory;
         }
         
+        console.log('🔍 [DEBUG] Final chat history length after processing replacement:', updated.length);
+        console.log('🔍 [DEBUG] ===== SETCHATHISTORY COMPLETED (PROCESSING REPLACEMENT) =====');
         return updated;
       });
       
@@ -400,11 +410,14 @@ export const useAudioHandlers = (
       
       // Replace the placeholder message with the actual transcript
       setChatHistory(prev => {
+        console.log('🔍 [DEBUG] ===== SETCHATHISTORY CALLED =====');
         console.log('🔍 [DEBUG] Current chat history length before update:', prev.length);
         console.log('🔍 [DEBUG] Processing messages in history:', prev.filter(msg => msg.isProcessing && msg.sender === 'User').length);
+        console.log('🔍 [DEBUG] All user messages:', prev.filter(msg => msg.sender === 'User').map(msg => ({ text: msg.text, isProcessing: msg.isProcessing, isRecording: msg.isRecording, id: msg.id })));
         
         // Generate unique ID for this transcription
         const transcriptionId = `transcription_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        console.log('🔍 [DEBUG] Generated transcription ID:', transcriptionId);
         
         // Check if this exact transcription already exists to prevent duplicates
         const transcriptionExists = prev.some(msg => 
@@ -454,10 +467,12 @@ export const useAudioHandlers = (
           };
           const finalHistory = [...updated, transcriptionMessage];
           console.log('🔍 [DEBUG] Final chat history length after fallback:', finalHistory.length);
+          console.log('🔍 [DEBUG] ===== SETCHATHISTORY COMPLETED (FALLBACK) =====');
           return finalHistory;
         }
         
         console.log('🔍 [DEBUG] Final chat history length after replacement:', updated.length);
+        console.log('🔍 [DEBUG] ===== SETCHATHISTORY COMPLETED (REPLACEMENT) =====');
         return updated;
       });
       
