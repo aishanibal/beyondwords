@@ -37,6 +37,7 @@ export const useAudioHandlers = (
   const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
   const [manualRecording, setManualRecording] = useState(false);
   const recordingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isProcessingAudioRef = useRef<boolean>(false);
 
   // Update autoSpeakRef when autoSpeak changes
   autoSpeakRef.current = autoSpeak;
@@ -52,6 +53,7 @@ export const useAudioHandlers = (
     setWasInterrupted(false);
     interruptedRef.current = false;
     manualStopRef.current = false;
+    isProcessingAudioRef.current = false; // Reset processing flag
     
     // Prevent recording when TTS is playing
     if (isAnyTTSPlaying) {
@@ -120,8 +122,15 @@ export const useAudioHandlers = (
         console.log('🔍 [DEBUG] MediaRecorder onstop event triggered');
         console.log('🔍 [DEBUG] interruptedRef.current:', interruptedRef.current);
         console.log('🔍 [DEBUG] manualStopRef.current:', manualStopRef.current);
+        console.log('🔍 [DEBUG] isProcessingAudioRef.current:', isProcessingAudioRef.current);
         console.log('🔍 [DEBUG] audioChunksRef.current length:', audioChunksRef.current.length);
         console.log('🔍 [DEBUG] Total audio chunks size:', audioChunksRef.current.reduce((total, chunk) => total + chunk.size, 0), 'bytes');
+        
+        // Prevent multiple processing of the same audio
+        if (isProcessingAudioRef.current) {
+          console.log('🔍 [DEBUG] Audio already being processed, ignoring duplicate onstop event');
+          return;
+        }
         
         if (interruptedRef.current) {
           console.log('🔍 [DEBUG] Recording was interrupted, cleaning up');
@@ -140,6 +149,8 @@ export const useAudioHandlers = (
           manualStopRef.current = false;
         }
         
+        // Set processing flag to prevent duplicate calls
+        isProcessingAudioRef.current = true;
         console.log('🔍 [DEBUG] Creating audio blob and sending to backend');
         
         // Check if we have any audio chunks
@@ -299,6 +310,7 @@ export const useAudioHandlers = (
     }
     interruptedRef.current = false;
     manualStopRef.current = false;
+    isProcessingAudioRef.current = false;
   }, []);
 
   const sendAudioToBackend = useCallback(async (audioBlob: Blob) => {
@@ -371,6 +383,20 @@ export const useAudioHandlers = (
       
       // Replace the placeholder message with the actual transcript
       setChatHistory(prev => {
+        // Check if this transcription already exists to prevent duplicates
+        const transcriptionExists = prev.some(msg => 
+          msg.sender === 'User' && 
+          msg.text === result.transcription && 
+          !msg.isProcessing && 
+          !msg.isRecording
+        );
+        
+        if (transcriptionExists) {
+          console.log('🔍 [DEBUG] Transcription already exists, preventing duplicate');
+          // Just remove any processing messages
+          return prev.filter(msg => !(msg.isProcessing && msg.sender === 'User'));
+        }
+        
         const updated = prev.map((msg, index) => {
           if (msg.isProcessing && msg.sender === 'User') {
             console.log('🔍 [DEBUG] Replacing processing message with actual transcription:', result.transcription);
@@ -542,6 +568,7 @@ export const useAudioHandlers = (
     } finally {
       console.log('🔍 [DEBUG] Audio processing completed, setting isProcessing to false');
       setIsProcessing(false);
+      isProcessingAudioRef.current = false; // Reset processing flag
     }
   }, [language, chatHistory, userPreferences, autoSpeak, enableShortFeedback, conversationId, setChatHistory, setIsProcessing, setShortFeedback, setAiTTSQueued, setIsAnyTTSPlaying, setIsPlayingShortFeedbackTTS]);
 
