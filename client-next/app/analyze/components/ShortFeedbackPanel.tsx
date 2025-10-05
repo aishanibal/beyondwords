@@ -26,6 +26,7 @@ interface ShortFeedbackPanelProps {
   language: string;
   userPreferences: any;
   handleLeftResizeStart: (e: React.MouseEvent) => void;
+  autoSpeak: boolean;
 }
 
 const ShortFeedbackPanel: React.FC<ShortFeedbackPanelProps> = ({
@@ -51,7 +52,8 @@ const ShortFeedbackPanel: React.FC<ShortFeedbackPanelProps> = ({
   playTTSAudio,
   language,
   userPreferences,
-  handleLeftResizeStart
+  handleLeftResizeStart,
+  autoSpeak
 }) => {
   if (!showShortFeedbackPanel) return null;
 
@@ -378,32 +380,34 @@ const ShortFeedbackPanel: React.FC<ShortFeedbackPanelProps> = ({
           }}>
             {parsedBreakdown.length > 0 ? (
               <div>
-                {/* TTS button for detailed breakdown */}
-                <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'flex-end' }}>
-                  <button
-                    onClick={() => {
-                      const cacheKey = `detailed_breakdown_panel`;
-                      playTTSAudio(shortFeedback, language, cacheKey);
-                    }}
-                    disabled={isGeneratingTTS['detailed_breakdown_panel'] || isPlayingTTS['detailed_breakdown_panel']}
-                    style={{
-                      padding: '0.3rem 0.7rem',
-                      borderRadius: 6,
-                      border: isPlayingTTS['detailed_breakdown_panel'] ? 'none' : '1px solid #28a745',
-                      background: isPlayingTTS['detailed_breakdown_panel'] ? 'linear-gradient(135deg, #28a745 0%, #1e7e34 100%)' : 'rgba(40,167,69,0.08)',
-                      color: isPlayingTTS['detailed_breakdown_panel'] ? '#fff' : '#28a745',
-                      fontSize: '0.7rem',
-                      cursor: (isGeneratingTTS['detailed_breakdown_panel'] || isPlayingTTS['detailed_breakdown_panel']) ? 'not-allowed' : 'pointer',
-                      transition: 'all 0.2s ease',
-                      opacity: (isGeneratingTTS['detailed_breakdown_panel'] || isPlayingTTS['detailed_breakdown_panel']) ? 0.6 : 1,
-                      fontWeight: 500,
-                      boxShadow: isPlayingTTS['detailed_breakdown_panel'] ? '0 2px 6px rgba(40,167,69,0.18)' : '0 1px 3px rgba(40,167,69,0.10)'
-                    }}
-                    title={isPlayingTTS['detailed_breakdown_panel'] ? 'Playing audio...' : 'Listen to this breakdown'}
-                  >
-                    {isGeneratingTTS['detailed_breakdown_panel'] ? '🔄' : isPlayingTTS['detailed_breakdown_panel'] ? '🔊 Playing' : '🔊 Listen'}
-                  </button>
-                </div>
+                {/* TTS button for detailed breakdown - only show when autospeak is ON */}
+                {autoSpeak && (
+                  <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'flex-end' }}>
+                    <button
+                      onClick={() => {
+                        const cacheKey = `detailed_breakdown_panel`;
+                        playTTSAudio(shortFeedback, language, cacheKey);
+                      }}
+                      disabled={isGeneratingTTS['detailed_breakdown_panel'] || isPlayingTTS['detailed_breakdown_panel']}
+                      style={{
+                        padding: '0.3rem 0.7rem',
+                        borderRadius: 6,
+                        border: isPlayingTTS['detailed_breakdown_panel'] ? 'none' : '1px solid #28a745',
+                        background: isPlayingTTS['detailed_breakdown_panel'] ? 'linear-gradient(135deg, #28a745 0%, #1e7e34 100%)' : 'rgba(40,167,69,0.08)',
+                        color: isPlayingTTS['detailed_breakdown_panel'] ? '#fff' : '#28a745',
+                        fontSize: '0.7rem',
+                        cursor: (isGeneratingTTS['detailed_breakdown_panel'] || isPlayingTTS['detailed_breakdown_panel']) ? 'not-allowed' : 'pointer',
+                        transition: 'all 0.2s ease',
+                        opacity: (isGeneratingTTS['detailed_breakdown_panel'] || isPlayingTTS['detailed_breakdown_panel']) ? 0.6 : 1,
+                        fontWeight: 500,
+                        boxShadow: isPlayingTTS['detailed_breakdown_panel'] ? '0 2px 6px rgba(40,167,69,0.18)' : '0 1px 3px rgba(40,167,69,0.10)'
+                      }}
+                      title={isPlayingTTS['detailed_breakdown_panel'] ? 'Playing audio...' : 'Listen to this breakdown'}
+                    >
+                      {isGeneratingTTS['detailed_breakdown_panel'] ? '🔄' : isPlayingTTS['detailed_breakdown_panel'] ? '🔊 Playing' : '🔊 Listen'}
+                    </button>
+                  </div>
+                )}
                 {parsedBreakdown.map((sentenceData, index) => (
                   <div key={index} style={{ marginBottom: index < parsedBreakdown.length - 1 ? '1rem' : '0' }}>
                     <div style={{ 

@@ -21,6 +21,7 @@ export const useAudioHandlers = (
   setAiTTSQueued: React.Dispatch<React.SetStateAction<{ text: string; language: string; cacheKey: string } | null>>,
   setShortFeedback: React.Dispatch<React.SetStateAction<string>>,
   setIsPlayingShortFeedbackTTS: React.Dispatch<React.SetStateAction<boolean>>,
+  setShortFeedbackTTSQueued: React.Dispatch<React.SetStateAction<{ text: string; language: string; cacheKey: string } | null>>,
   clearSuggestionCarousel?: () => void
 ) => {
   const recognitionRef = useRef<any>(null);
@@ -494,24 +495,19 @@ export const useAudioHandlers = (
         console.warn('[MESSAGE_SAVE] No conversation ID available for user message');
       }
       
-      // Show short feedback if available and play TTS automatically
+      // Show short feedback if available and play TTS only when autospeak is ON
       if (result.shortFeedback) {
         setShortFeedback(result.shortFeedback);
         
-        // Play short feedback TTS immediately for all modes
-        const cacheKey = `short_feedback_${Date.now()}`;
-        console.log('[DEBUG] Playing short feedback TTS immediately');
-        setIsPlayingShortFeedbackTTS(true);
-        setIsAnyTTSPlaying(true);
-        playTTSAudio(result.shortFeedback, language, cacheKey).then(() => {
-          console.log('[DEBUG] Short feedback TTS finished');
-          setIsPlayingShortFeedbackTTS(false);
-          setIsAnyTTSPlaying(false);
-        }).catch(error => {
-          console.error('[DEBUG] Error playing short feedback TTS:', error);
-          setIsPlayingShortFeedbackTTS(false);
-          setIsAnyTTSPlaying(false);
-        });
+        // Play short feedback TTS only when autospeak is ON
+        if (autoSpeak) {
+          // Queue short feedback TTS to play after AI response TTS finishes
+          const cacheKey = `short_feedback_${Date.now()}`;
+          console.log('[DEBUG] Queuing short feedback TTS to play after AI response (autospeak is ON)');
+          setShortFeedbackTTSQueued({ text: result.shortFeedback, language, cacheKey });
+        } else {
+          console.log('[DEBUG] Skipping short feedback TTS (autospeak is OFF)');
+        }
       }
       
       // Add AI response if present

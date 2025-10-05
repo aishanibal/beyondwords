@@ -111,7 +111,7 @@ const AnalyzeContentInner = () => {
   const [language, setLanguage] = useState('en');
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [autoSpeak, setAutoSpeak] = useState(true);
+  const [autoSpeak, setAutoSpeak] = useState(false);
   const [enableShortFeedback, setEnableShortFeedback] = useState(true);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [conversationDescription, setConversationDescription] = useState('');
@@ -133,6 +133,7 @@ const AnalyzeContentInner = () => {
   // TTS state variables from original
   const [isAnyTTSPlaying, setIsAnyTTSPlaying] = useState(false);
   const [aiTTSQueued, setAiTTSQueued] = useState<{ text: string; language: string; cacheKey: string } | null>(null);
+  const [shortFeedbackTTSQueued, setShortFeedbackTTSQueued] = useState<{ text: string; language: string; cacheKey: string } | null>(null);
 
   // Suggestions state - now handled by useSuggestions hook
 
@@ -222,7 +223,7 @@ const AnalyzeContentInner = () => {
   // Refs - all from original
   const recognitionRef = useRef<any>(null);
   const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
-  const autoSpeakRef = useRef<boolean>(true);
+  const autoSpeakRef = useRef<boolean>(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const interruptedRef = useRef<boolean>(false);
@@ -281,6 +282,7 @@ const AnalyzeContentInner = () => {
     setAiTTSQueued,
     setShortFeedback,
     setIsPlayingShortFeedbackTTS,
+    setShortFeedbackTTSQueued,
     suggestions.clearSuggestionCarousel
   );
 
@@ -560,7 +562,40 @@ const AnalyzeContentInner = () => {
     }
   }, [isPlayingShortFeedbackTTS, aiTTSQueued, isPlayingAITTS, autoSpeak, isAnyTTSPlaying, audioHandlers]);
 
-
+  // Handle short feedback TTS playback when AI response TTS finishes (auto TTS queue)
+  useEffect(() => {
+    if (!isPlayingAITTS && shortFeedbackTTSQueued && !isPlayingShortFeedbackTTS && autoSpeak) {
+      console.log('[DEBUG] AI response TTS finished, playing short feedback TTS');
+      setIsPlayingShortFeedbackTTS(true);
+      setIsAnyTTSPlaying(true);
+      
+      const playShortFeedbackTTS = async () => {
+        try {
+          await audioHandlers.handlePlayTTS(shortFeedbackTTSQueued.text, shortFeedbackTTSQueued.language);
+          console.log('[DEBUG] Short feedback TTS finished');
+        } catch (error) {
+          console.error('[DEBUG] Error playing short feedback TTS:', error);
+        } finally {
+          setIsPlayingShortFeedbackTTS(false);
+          setIsAnyTTSPlaying(false);
+          setShortFeedbackTTSQueued(null);
+          
+          // Restart recording after short feedback TTS is completely done
+          if (autoSpeak) {
+            console.log('[DEBUG] Short feedback TTS finished, restarting recording');
+            setTimeout(() => {
+              if (autoSpeak && !isAnyTTSPlaying) {
+                console.log('[DEBUG] Starting recording after short feedback TTS completion');
+                audioHandlers.handleStartRecording();
+              }
+            }, 300);
+          }
+        }
+      };
+      
+      playShortFeedbackTTS();
+    }
+  }, [isPlayingAITTS, shortFeedbackTTSQueued, isPlayingShortFeedbackTTS, autoSpeak, isAnyTTSPlaying, audioHandlers]);
 
   // Suggestions functions are now handled by useSuggestions hook
 
