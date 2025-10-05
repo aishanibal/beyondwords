@@ -1254,7 +1254,40 @@ const AnalyzeContentInner = () => {
       {showPersonaModal && (
         <PersonaModal
           isOpen={showPersonaModal}
-          onClose={() => setShowPersonaModal(false)}
+          onClose={async () => {
+            setShowPersonaModal(false);
+            // Generate conversation summary when skipping persona
+            try {
+              const userMessages = chatHistory.filter(msg => msg.sender === 'User');
+              const isNewConversation = !conversationId;
+              
+              if (userMessages.length === 0 && !isNewConversation) {
+                console.log('🏁 [SKIP_PERSONA] No user messages in existing conversation, navigating to dashboard without evaluation');
+                router.push('/dashboard');
+                return;
+              }
+              
+              if (chatHistory.length > 0 || isNewConversation) {
+                console.log('🏁 [SKIP_PERSONA] Calling generateSummary...');
+                const progressModalShown = await conversationManagement.generateSummary(
+                  chatHistory,
+                  userPreferences?.topics || [],
+                  userPreferences?.formality || 'friendly',
+                  conversationId || ''
+                );
+                if (!progressModalShown) {
+                  console.log('🏁 [SKIP_PERSONA] No progress modal shown, navigating to dashboard');
+                  router.push('/dashboard');
+                }
+              } else {
+                console.log('🏁 [SKIP_PERSONA] No chat history in existing conversation, navigating to dashboard');
+                router.push('/dashboard');
+              }
+            } catch (error) {
+              console.error('🏁 [SKIP_PERSONA] Error generating conversation summary:', error);
+              router.push('/dashboard');
+            }
+          }}
           onSave={savePersona}
           isSaving={isSavingPersona}
           currentTopics={userPreferences?.topics || []}

@@ -194,9 +194,9 @@ export const useConversationManagement = (
         conversationId
       );
 
-      if (summary && summary.learningGoals && summary.learningGoals.length > 0) {
+      if (summary) {
         // summary.learningGoals is actually an array of progress percentages from the API
-        const progressPercentages = summary.learningGoals as number[];
+        const progressPercentages = summary.learningGoals as number[] || [];
         
         // Get the current user's learning goals to map progress to subgoals
         const currentProgressArray = Object.values(userProgress);
@@ -244,11 +244,11 @@ export const useConversationManagement = (
 
         setUserProgress(updatedProgressObj);
         
-        // Show progress modal if there are learning goals (regardless of level up events)
-        if (progressPercentages.length > 0) {
+        // Always show progress modal if there are user learning goals, regardless of progress percentages
+        if (userLearningGoals.length > 0) {
           setProgressData({
             percentages: progressPercentages,
-            subgoalNames: subgoalNames.slice(0, progressPercentages.length),
+            subgoalNames: subgoalNames.slice(0, Math.max(progressPercentages.length, userLearningGoals.length)),
             levelUpEvents
           });
           setShowProgressModal(true);
