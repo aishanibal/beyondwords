@@ -20,7 +20,8 @@ export const useAudioHandlers = (
   setIsAnyTTSPlaying: React.Dispatch<React.SetStateAction<boolean>>,
   setAiTTSQueued: React.Dispatch<React.SetStateAction<{ text: string; language: string; cacheKey: string } | null>>,
   setShortFeedback: React.Dispatch<React.SetStateAction<string>>,
-  setIsPlayingShortFeedbackTTS: React.Dispatch<React.SetStateAction<boolean>>
+  setIsPlayingShortFeedbackTTS: React.Dispatch<React.SetStateAction<boolean>>,
+  clearSuggestionCarousel?: () => void
 ) => {
   const recognitionRef = useRef<any>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -319,6 +320,12 @@ export const useAudioHandlers = (
         
         return updated;
       });
+      
+      // Clear suggestion carousel when new user message is added
+      if (clearSuggestionCarousel) {
+        console.log('🔍 [DEBUG] Clearing suggestion carousel due to new user transcription');
+        clearSuggestionCarousel();
+      }
       
       // Save user message to backend
       if (conversationId) {

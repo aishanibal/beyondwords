@@ -280,7 +280,8 @@ const AnalyzeContentInner = () => {
     setIsAnyTTSPlaying,
     setAiTTSQueued,
     setShortFeedback,
-    setIsPlayingShortFeedbackTTS
+    setIsPlayingShortFeedbackTTS,
+    suggestions.clearSuggestionCarousel
   );
 
   // Use message interactions hook
