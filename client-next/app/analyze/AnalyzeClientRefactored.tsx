@@ -1198,7 +1198,9 @@ const AnalyzeContentInner = () => {
               onToggleDetailedFeedback={handleToggleDetailedFeedback}
               onToggleShortFeedback={handleToggleShortFeedback}
               onQuickTranslation={handleQuickTranslation}
-              onExplainLLMResponse={handleExplainLLMResponse}
+              onExplainLLMResponse={async (messageIndex: number, text: string) => {
+                await handleRequestShortFeedback(messageIndex);
+              }}
             onPlayTTS={playTTSWrapper2}
             onPlayExistingTTS={audioHandlers.handlePlayExistingTTS}
             translations={translations}
