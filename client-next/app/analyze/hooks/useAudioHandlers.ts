@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback } from 'react';
 import { processAudioWithPipeline } from '../services/audioService';
 import { saveMessageToBackend } from '../services/conversationService';
 import { playTTSAudio, getTTSText } from '../services/audioService';
@@ -35,9 +35,16 @@ export const useAudioHandlers = (
   const [wasInterrupted, setWasInterrupted] = useState(false);
   const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
   const [manualRecording, setManualRecording] = useState(false);
+  const recordingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Update autoSpeakRef when autoSpeak changes
   autoSpeakRef.current = autoSpeak;
+  
+  // Clear any stuck recording messages on initialization
+  React.useEffect(() => {
+    console.log('🔍 [DEBUG] useAudioHandlers initialized, clearing any stuck recording messages');
+    setChatHistory(prev => prev.filter(msg => !(msg.isRecording && msg.sender === 'User')));
+  }, []);
 
   const handleStartRecording = useCallback(async () => {
     console.log('🔍 [DEBUG] handleStartRecording called');
@@ -124,6 +131,24 @@ export const useAudioHandlers = (
         }
         
         console.log('🔍 [DEBUG] Creating audio blob and sending to backend');
+        
+        // Check if we have any audio chunks
+        if (audioChunksRef.current.length === 0) {
+          console.error('🔍 [DEBUG] No audio chunks recorded!');
+          // Remove the recording message and add error message
+          setChatHistory(prev => {
+            const filtered = prev.filter(msg => !(msg.isRecording && msg.sender === 'User'));
+            const errorMessage = {
+              sender: 'System',
+              text: '❌ No audio recorded. Please try again.',
+              timestamp: new Date(),
+              isFromOriginalConversation: false
+            };
+            return [...filtered, errorMessage];
+          });
+          return;
+        }
+        
         const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
         console.log('🔍 [DEBUG] Audio blob created:', {
           size: audioBlob.size,
@@ -131,6 +156,24 @@ export const useAudioHandlers = (
           chunks: audioChunksRef.current.length,
           mimeType: mimeType
         });
+        
+        // Check if audio blob is valid
+        if (audioBlob.size === 0) {
+          console.error('🔍 [DEBUG] Audio blob is empty!');
+          // Remove the recording message and add error message
+          setChatHistory(prev => {
+            const filtered = prev.filter(msg => !(msg.isRecording && msg.sender === 'User'));
+            const errorMessage = {
+              sender: 'System',
+              text: '❌ Empty audio recorded. Please try again.',
+              timestamp: new Date(),
+              isFromOriginalConversation: false
+            };
+            return [...filtered, errorMessage];
+          });
+          return;
+        }
+        
         sendAudioToBackend(audioBlob);
         stream.getTracks().forEach(track => track.stop());
         setMediaStream(null);
@@ -141,6 +184,12 @@ export const useAudioHandlers = (
       // Start recording with timeslice to get regular audio chunks
       mediaRecorder.start(100); // 100ms timeslice for better audio capture
       setIsRecording(true);
+      
+      // Set a timeout to automatically stop recording after 30 seconds
+      recordingTimeoutRef.current = setTimeout(() => {
+        console.log('🔍 [DEBUG] Recording timeout reached, stopping recording automatically');
+        handleStopRecording(false);
+      }, 30000);
       if (autoSpeakRef.current) {
         // Use SpeechRecognition for silence detection in autospeak mode only
         if (!SpeechRecognitionClassRef.current) {
@@ -198,6 +247,14 @@ export const useAudioHandlers = (
   }, [language, isAnyTTSPlaying]);
 
   const handleStopRecording = useCallback((isManualStop: boolean = true) => {
+    console.log('🔍 [DEBUG] handleStopRecording called, isManualStop:', isManualStop);
+    
+    // Clear the recording timeout
+    if (recordingTimeoutRef.current) {
+      clearTimeout(recordingTimeoutRef.current);
+      recordingTimeoutRef.current = null;
+    }
+    
     if (isManualStop) {
       interruptedRef.current = true;
     }
@@ -219,6 +276,14 @@ export const useAudioHandlers = (
     setIsRecording(false);
     setManualRecording(false);
   }, [mediaStream]);
+
+  // Cleanup function to clear timeout on unmount
+  const cleanup = useCallback(() => {
+    if (recordingTimeoutRef.current) {
+      clearTimeout(recordingTimeoutRef.current);
+      recordingTimeoutRef.current = null;
+    }
+  }, []);
 
   const sendAudioToBackend = useCallback(async (audioBlob: Blob) => {
     console.log('🔍 [DEBUG] sendAudioToBackend called with audioBlob:', audioBlob);
@@ -439,12 +504,12 @@ export const useAudioHandlers = (
         stack: (error as any)?.stack
       });
       
-      // Remove the processing message and add error message
+      // Remove both processing and recording messages and add error message
       setChatHistory(prev => {
-        const filtered = prev.filter(msg => !(msg.isProcessing && msg.sender === 'User'));
+        const filtered = prev.filter(msg => !(msg.isProcessing && msg.sender === 'User') && !(msg.isRecording && msg.sender === 'User'));
         const errorMessage = {
           sender: 'System',
-          text: '❌ Error processing audio. Please try again.',
+          text: `❌ Error processing audio: ${(error as any)?.message || 'Unknown error'}. Please try again.`,
           timestamp: new Date(),
           isFromOriginalConversation: false
         };
@@ -511,6 +576,7 @@ export const useAudioHandlers = (
     handleStopRecording,
     handlePlayTTS,
     handlePlayExistingTTS,
+    cleanup,
     recognitionRef,
     mediaRecorderRef,
     MediaRecorderClassRef,
