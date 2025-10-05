@@ -1,7 +1,7 @@
 import React, { useRef, useState, useCallback } from 'react';
 import { processAudioWithPipeline } from '../services/audioService';
 import { saveMessageToBackend } from '../services/conversationService';
-import { playTTSAudio, getTTSText } from '../services/audioService';
+import { playTTSAudio, getTTSText, stopCurrentTTS, isTTSCurrentlyPlaying } from '../services/audioService';
 import { ChatMessage } from '../types/analyze';
 import { TTS_TIMEOUTS } from '../config/constants';
 import { constructTTSUrl, isTTSUrlAccessible } from '../config/ttsConfig';
@@ -424,12 +424,15 @@ export const useAudioHandlers = (
         const cacheKey = `short_feedback_${Date.now()}`;
         console.log('[DEBUG] Playing short feedback TTS immediately');
         setIsPlayingShortFeedbackTTS(true);
+        setIsAnyTTSPlaying(true);
         playTTSAudio(result.shortFeedback, language, cacheKey).then(() => {
           console.log('[DEBUG] Short feedback TTS finished');
           setIsPlayingShortFeedbackTTS(false);
+          setIsAnyTTSPlaying(false);
         }).catch(error => {
           console.error('[DEBUG] Error playing short feedback TTS:', error);
           setIsPlayingShortFeedbackTTS(false);
+          setIsAnyTTSPlaying(false);
         });
       }
       
@@ -478,8 +481,13 @@ export const useAudioHandlers = (
         const cacheKey = `ai_message_auto_${Date.now()}`;
         
         // Play audio immediately for all AI messages
-        playTTSAudio(ttsText, language, cacheKey).catch(error => {
+        setIsAnyTTSPlaying(true);
+        playTTSAudio(ttsText, language, cacheKey).then(() => {
+          console.log('[DEBUG] AI response TTS finished');
+          setIsAnyTTSPlaying(false);
+        }).catch(error => {
           console.error('[DEBUG] Error playing AI TTS:', error);
+          setIsAnyTTSPlaying(false);
         });
         
         // Also queue for autospeak mode if enabled
@@ -535,20 +543,36 @@ export const useAudioHandlers = (
       console.log('🔍 [DEBUG] Audio processing completed, setting isProcessing to false');
       setIsProcessing(false);
     }
-  }, [language, chatHistory, userPreferences, autoSpeak, enableShortFeedback, conversationId, setChatHistory, setIsProcessing, setShortFeedback, setAiTTSQueued]);
+  }, [language, chatHistory, userPreferences, autoSpeak, enableShortFeedback, conversationId, setChatHistory, setIsProcessing, setShortFeedback, setAiTTSQueued, setIsAnyTTSPlaying, setIsPlayingShortFeedbackTTS]);
 
   const handlePlayTTS = useCallback(async (text: string, language: string) => {
     try {
+      // Check if TTS is already playing globally
+      if (isTTSCurrentlyPlaying()) {
+        console.log('🔊 [AUDIO_HANDLERS] TTS already playing, stopping current TTS first');
+        stopCurrentTTS();
+        setIsAnyTTSPlaying(false);
+      }
+      
       const cacheKey = `manual_tts_${Date.now()}`;
+      setIsAnyTTSPlaying(true);
       await playTTSAudio(text, language, cacheKey);
     } catch (error) {
       console.error('Error playing TTS:', error);
+      setIsAnyTTSPlaying(false);
     }
-  }, []);
+  }, [setIsAnyTTSPlaying]);
 
   const handlePlayExistingTTS = useCallback(async (ttsUrl: string) => {
     try {
       console.log('🔍 [EXISTING_TTS] Attempting to play existing TTS:', ttsUrl);
+      
+      // Check if TTS is already playing globally and stop it
+      if (isTTSCurrentlyPlaying()) {
+        console.log('🔊 [EXISTING_TTS] TTS already playing, stopping current TTS first');
+        stopCurrentTTS();
+        setIsAnyTTSPlaying(false);
+      }
       
       // Construct absolute URL using the configuration
       const absoluteUrl = constructTTSUrl(ttsUrl);
@@ -561,15 +585,22 @@ export const useAudioHandlers = (
       }
       
       const audio = new Audio(absoluteUrl);
+      setIsAnyTTSPlaying(true);
       
       // Add event listeners for better error handling
       audio.addEventListener('error', (e) => {
         console.error('🔍 [EXISTING_TTS] Audio load error:', e);
         console.warn('🔍 [EXISTING_TTS] Audio file may be corrupted or in unsupported format');
+        setIsAnyTTSPlaying(false);
       });
       
       audio.addEventListener('canplaythrough', () => {
         console.log('🔍 [EXISTING_TTS] Audio loaded successfully, playing...');
+      });
+      
+      audio.addEventListener('ended', () => {
+        console.log('🔍 [EXISTING_TTS] TTS finished playing');
+        setIsAnyTTSPlaying(false);
       });
       
       await audio.play();
@@ -578,11 +609,12 @@ export const useAudioHandlers = (
     } catch (error) {
       console.error('🔍 [EXISTING_TTS] Failed to play existing TTS audio:', error);
       console.warn('🔍 [EXISTING_TTS] The TTS file may be missing, inaccessible, or corrupted');
+      setIsAnyTTSPlaying(false);
       
       // Don't try to generate new TTS here as we don't have the original text
       // The user can manually trigger TTS if needed
     }
-  }, []);
+  }, [setIsAnyTTSPlaying]);
 
   return {
     isRecording,

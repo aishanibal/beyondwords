@@ -1,5 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import axios from 'axios';
+import { playTTSAudio as globalPlayTTSAudio, stopCurrentTTS, isTTSCurrentlyPlaying } from '../services/audioService';
 
 interface TTSQueueItem {
   text: string;
@@ -116,32 +117,49 @@ export function useTTS() {
   }, []);
 
   const playTTSAudio = useCallback(async (text: string, language: string, cacheKey: string) => {
-    console.log('🎵 [PLAY_TTS_AUDIO] Called with:', { text, language, cacheKey });
+    console.log('🎵 [USE_TTS] Called with:', { text, language, cacheKey });
 
-    // Stop any currently playing audio
+    // Check if TTS is already playing globally and stop it
+    if (isTTSCurrentlyPlaying()) {
+      console.log('🎵 [USE_TTS] TTS already playing globally, stopping current TTS first');
+      stopCurrentTTS();
+    }
+
+    // Stop any currently playing audio in this hook
     if (ttsAudioRef.current) {
-      console.log('🎵 [PLAY_TTS_AUDIO] Stopping current audio');
+      console.log('🎵 [USE_TTS] Stopping current audio in hook');
       ttsAudioRef.current.pause();
       ttsAudioRef.current = null;
     }
 
     // Set playing state
-    console.log('🎵 [PLAY_TTS_AUDIO] Setting playing state');
+    console.log('🎵 [USE_TTS] Setting playing state');
     setIsPlayingTTS(prev => ({ ...prev, [cacheKey]: true }));
     setIsPlayingAnyTTS(true);
     setIsPlaying(true);
     setCurrentPlayingText(text);
     
     try {
-      console.log('🎵 [PLAY_TTS_AUDIO] Calling generateTTSForText...');
-      const ttsUrl = await generateTTSForText(text, language, cacheKey);
-      console.log('🎵 [PLAY_TTS_AUDIO] Generated TTS URL:', ttsUrl);
+      // Use the global TTS manager instead of local implementation
+      console.log('🎵 [USE_TTS] Using global TTS manager');
+      await globalPlayTTSAudio(text, language, cacheKey);
+      console.log('🎵 [USE_TTS] Global TTS finished playing');
       
-      if (ttsUrl) {
-        // Handle both relative and absolute URLs from backend
-        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://beyondwords-express.onrender.com';
-        const audioUrl = ttsUrl.startsWith('http') ? ttsUrl : `${backendUrl}${ttsUrl}`;
-        console.log('🎵 [PLAY_TTS_AUDIO] Constructed audio URL:', audioUrl);
+      // Update state when TTS finishes
+      setIsPlayingTTS(prev => ({ ...prev, [cacheKey]: false }));
+      setIsPlayingAnyTTS(false);
+      setIsPlaying(false);
+      setCurrentPlayingText(null);
+      
+    } catch (error) {
+      console.error('🎵 [USE_TTS] Error playing TTS:', error);
+      setIsPlayingTTS(prev => ({ ...prev, [cacheKey]: false }));
+      setIsPlayingAnyTTS(false);
+      setIsPlaying(false);
+      setCurrentPlayingText(null);
+      throw error;
+    }
+  }, []);
         
         const accessible = await waitForUrlAccessible(audioUrl, 6, 300);
         if (!accessible) {

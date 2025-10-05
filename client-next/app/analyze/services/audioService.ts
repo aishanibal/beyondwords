@@ -139,11 +139,30 @@ export const getTTSText = (message: ChatMessage, romanizationDisplay: string, la
   }
 };
 
-// Play TTS audio (simplified - no retry logic)
+// Global TTS manager to prevent multiple voices playing simultaneously
+let currentTTSAudio: HTMLAudioElement | null = null;
+let isTTSPlaying = false;
+
+// Stop any currently playing TTS
+export const stopCurrentTTS = () => {
+  if (currentTTSAudio) {
+    console.log('🔊 [TTS_MANAGER] Stopping current TTS audio');
+    currentTTSAudio.pause();
+    currentTTSAudio = null;
+  }
+  isTTSPlaying = false;
+};
+
+// Play TTS audio with global coordination
 export const playTTSAudio = async (text: string, language: string, cacheKey: string): Promise<void> => {
   try {
+    // Stop any currently playing TTS before starting new one
+    stopCurrentTTS();
+    
     const cleanText = cleanTextForTTS(text);
     const token = localStorage.getItem('jwt');
+    
+    console.log('🔊 [TTS_MANAGER] Starting TTS for:', cleanText.substring(0, 50));
     
     // Call Express backend directly instead of Next.js API route
     const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://beyondwords-express.onrender.com';
@@ -160,10 +179,30 @@ export const playTTSAudio = async (text: string, language: string, cacheKey: str
     
     if (response.data.ttsUrl) {
       const audio = new Audio(response.data.ttsUrl);
+      currentTTSAudio = audio;
+      isTTSPlaying = true;
+      
+      // Set up event handlers
+      audio.onended = () => {
+        console.log('🔊 [TTS_MANAGER] TTS finished playing');
+        currentTTSAudio = null;
+        isTTSPlaying = false;
+      };
+      
+      audio.onerror = (error) => {
+        console.error('🔊 [TTS_MANAGER] TTS audio error:', error);
+        currentTTSAudio = null;
+        isTTSPlaying = false;
+      };
+      
       await audio.play();
+      console.log('🔊 [TTS_MANAGER] TTS started playing successfully');
     }
   } catch (error: any) {
-    console.error('TTS request failed:', error);
+    console.error('🔊 [TTS_MANAGER] TTS request failed:', error);
+    currentTTSAudio = null;
+    isTTSPlaying = false;
+    
     if (error.response?.status === 503) {
       console.warn('🔊 TTS service is temporarily unavailable.');
     } else if (error.response?.status === 500) {
@@ -173,6 +212,9 @@ export const playTTSAudio = async (text: string, language: string, cacheKey: str
     }
   }
 };
+
+// Check if TTS is currently playing
+export const isTTSCurrentlyPlaying = () => isTTSPlaying;
 
 // Process audio with full pipeline
 export const processAudioWithPipeline = async (
