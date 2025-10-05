@@ -349,9 +349,11 @@ export const useAudioHandlers = (
         console.log('🔍 [DEBUG] Recording messages in history:', prev.filter(msg => msg.isRecording && msg.sender === 'User').length);
         console.log('🔍 [DEBUG] All user messages before processing:', prev.filter(msg => msg.sender === 'User').map(msg => ({ text: msg.text, isProcessing: msg.isProcessing, isRecording: msg.isRecording, id: msg.id })));
         
+        let recordingMessageReplaced = false;
         const updated = prev.map((msg, index) => {
-          if (msg.isRecording && msg.sender === 'User') {
+          if (msg.isRecording && msg.sender === 'User' && !recordingMessageReplaced) {
             console.log('🔍 [DEBUG] Replacing recording message with processing message');
+            recordingMessageReplaced = true;
             return {
               ...msg,
               text: '🎤 Processing your message...',
@@ -363,8 +365,7 @@ export const useAudioHandlers = (
         });
         
         // Fallback: if no recording message found, add processing message
-        const hasRecordingMessage = updated.some(msg => msg.isRecording && msg.sender === 'User');
-        if (!hasRecordingMessage) {
+        if (!recordingMessageReplaced) {
           console.log('🔍 [DEBUG] No recording message found, adding processing message as fallback');
           const processingMessage = {
             id: `processing_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
