@@ -86,10 +86,12 @@ interface ChatMessageItemProps {
   playTTS: (text: string, language: string, cacheKey: string) => void;
   getTTSText: (message: any, romanizationDisplay: 'always' | 'never' | 'if_different') => string;
   isLoadingMessageFeedback: { [key: number]: boolean };
+  isLoadingExplain: boolean;
   isTranslating: { [key: number]: boolean };
   isGeneratingTTS: { [key: string]: boolean };
   isPlayingTTS: { [key: string]: boolean };
   quickTranslation: (index: number, text: string) => void;
+  onExplainLLMResponse: (messageIndex: number, text: string) => Promise<void>;
   handleSuggestionButtonClick: () => void;
   isLoadingSuggestions: boolean;
   playExistingTTS: (url: string, cacheKey: string) => void;
@@ -113,10 +115,12 @@ const ChatMessageItem: React.FC<ChatMessageItemProps> = React.memo(({
   playTTS,
   getTTSText,
   isLoadingMessageFeedback,
+  isLoadingExplain,
   isTranslating,
   isGeneratingTTS,
   isPlayingTTS,
   quickTranslation,
+  onExplainLLMResponse,
   handleSuggestionButtonClick,
   isLoadingSuggestions,
   playExistingTTS,
@@ -343,8 +347,8 @@ const ChatMessageItem: React.FC<ChatMessageItemProps> = React.memo(({
         {!isUserMessage && (
           <>
             <button
-              onClick={() => quickTranslation(index, message.text)}
-              disabled={isLoadingMessageFeedback[index]}
+              onClick={() => onExplainLLMResponse(index, message.text)}
+              disabled={isLoadingExplain}
               style={{
                 padding: '0.35rem 0.9rem',
                 borderRadius: 6,
@@ -352,16 +356,16 @@ const ChatMessageItem: React.FC<ChatMessageItemProps> = React.memo(({
                 background: 'rgba(74,144,226,0.08)',
                 color: '#4a90e2',
                 fontSize: '0.8rem',
-                cursor: isLoadingMessageFeedback[index] ? 'not-allowed' : 'pointer',
+                cursor: isLoadingExplain ? 'not-allowed' : 'pointer',
                 transition: 'all 0.2s ease',
-                opacity: isLoadingMessageFeedback[index] ? 0.6 : 1,
+                opacity: isLoadingExplain ? 0.6 : 1,
                 minWidth: '70px',
                 fontWeight: 500,
                 boxShadow: '0 1px 3px rgba(74,144,226,0.10)'
               }}
-              title="Get translation"
+              title="Get detailed explanation"
             >
-              {isLoadingMessageFeedback[index] ? '🔄' : '💡 Explain'}
+              {isLoadingExplain ? '🔄 Explaining...' : '💡 Explain'}
             </button>
             <button
               onClick={handleListenClick}

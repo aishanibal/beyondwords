@@ -45,6 +45,7 @@ interface ChatMessagesContainerProps {
   language: string;
   ttsCache: Map<string, { url: string; timestamp: number }>;
   isLoadingMessageFeedback: Record<number, boolean>; // Loading state for message feedback
+  isLoadingExplain: boolean; // Loading state for explain button
   romanizationDisplay: string;
   messageCount: number;
   hasMoreMessages: boolean;
@@ -86,6 +87,7 @@ const ChatMessagesContainer: React.FC<ChatMessagesContainerProps> = ({
   isGeneratingTTS,
   isPlayingTTS,
   isLoadingMessageFeedback,
+  isLoadingExplain,
   romanizationDisplay,
   language,
   messageCount,
@@ -314,6 +316,8 @@ const ChatMessagesContainer: React.FC<ChatMessagesContainerProps> = ({
                   isGeneratingTTS={isGeneratingTTS}
                   isPlayingTTS={isPlayingTTS}
                   quickTranslation={onQuickTranslation}
+                  onExplainLLMResponse={onExplainLLMResponse}
+                  isLoadingExplain={isLoadingExplain}
                   handleSuggestionButtonClick={handleSuggestionButtonClick}
                   isLoadingSuggestions={isLoadingSuggestions}
                   playExistingTTS={onPlayExistingTTS}

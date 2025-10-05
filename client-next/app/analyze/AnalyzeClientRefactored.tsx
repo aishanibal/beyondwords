@@ -1226,6 +1226,7 @@ const AnalyzeContentInner = () => {
             handleSuggestionButtonClick={suggestions.handleSuggestionButtonClick}
             isLoadingSuggestions={suggestions.isLoadingSuggestions}
             isLoadingMessageFeedback={messageInteractions.isLoadingMessageFeedback}
+            isLoadingExplain={isLoadingExplain}
             // Suggestion carousel props
             showSuggestionCarousel={suggestions.showSuggestionCarousel}
             suggestionMessages={suggestions.suggestionMessages}
