@@ -349,11 +349,9 @@ export const useAudioHandlers = (
         console.log('🔍 [DEBUG] Recording messages in history:', prev.filter(msg => msg.isRecording && msg.sender === 'User').length);
         console.log('🔍 [DEBUG] All user messages before processing:', prev.filter(msg => msg.sender === 'User').map(msg => ({ text: msg.text, isProcessing: msg.isProcessing, isRecording: msg.isRecording, id: msg.id })));
         
-        let recordingMessageReplaced = false;
         const updated = prev.map((msg, index) => {
-          if (msg.isRecording && msg.sender === 'User' && !recordingMessageReplaced) {
+          if (msg.isRecording && msg.sender === 'User') {
             console.log('🔍 [DEBUG] Replacing recording message with processing message');
-            recordingMessageReplaced = true;
             return {
               ...msg,
               text: '🎤 Processing your message...',
@@ -364,8 +362,9 @@ export const useAudioHandlers = (
           return msg;
         });
         
-        // Fallback: if no recording message found, add processing message
-        if (!recordingMessageReplaced) {
+        // Only add fallback if no replacement happened
+        const replacementHappened = updated.some(msg => msg.isProcessing && msg.sender === 'User');
+        if (!replacementHappened) {
           console.log('🔍 [DEBUG] No recording message found, adding processing message as fallback');
           const processingMessage = {
             id: `processing_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -437,12 +436,9 @@ export const useAudioHandlers = (
           return filtered;
         }
         
-        // Find and replace processing messages
-        let processingMessageReplaced = false;
         const updated = prev.map((msg, index) => {
-          if (msg.isProcessing && msg.sender === 'User' && !processingMessageReplaced) {
+          if (msg.isProcessing && msg.sender === 'User') {
             console.log('🔍 [DEBUG] Replacing processing message with actual transcription:', result.transcription);
-            processingMessageReplaced = true;
             return {
               ...msg,
               id: transcriptionId,
@@ -454,8 +450,9 @@ export const useAudioHandlers = (
           return msg;
         });
         
-        // Fallback: if no processing message found, add transcription message
-        if (!processingMessageReplaced) {
+        // Only add fallback if no replacement happened
+        const replacementHappened = updated.some(msg => msg.text === result.transcription && msg.sender === 'User' && !msg.isProcessing);
+        if (!replacementHappened) {
           console.log('🔍 [DEBUG] No processing message found, adding transcription message as fallback');
           const transcriptionMessage = {
             id: transcriptionId,
