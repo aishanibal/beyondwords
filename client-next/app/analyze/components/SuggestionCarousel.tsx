@@ -190,7 +190,7 @@ const SuggestionCarousel: React.FC<SuggestionCarouselProps> = ({
               }}
               title="Get translation"
             >
-              {isTranslatingSuggestion[currentSuggestionIndex] ? '🔄' : '💡 Explain'}
+              {isTranslatingSuggestion[currentSuggestionIndex] ? '🔄 Explaining...' : '💡 Explain'}
             </button>
             
             <button
@@ -214,7 +214,7 @@ const SuggestionCarousel: React.FC<SuggestionCarouselProps> = ({
               }}
               title={isPlayingTTS[`suggestion_${currentSuggestionIndex}`] ? 'Playing audio...' : 'Listen to this message'}
             >
-              {isGeneratingTTS[`suggestion_${currentSuggestionIndex}`] ? '🔄' : isPlayingTTS[`suggestion_${currentSuggestionIndex}`] ? '🔊 Playing' : '🔊 Listen'}
+              {isGeneratingTTS[`suggestion_${currentSuggestionIndex}`] ? '🔄 Generating...' : isPlayingTTS[`suggestion_${currentSuggestionIndex}`] ? '🔊 Playing' : '🔊 Listen'}
             </button>
           </div>
           

@@ -563,7 +563,7 @@ const AnalyzeLayout: React.FC<AnalyzeLayoutProps> = ({
                       }}
                       title="Get detailed LLM breakdown"
                     >
-                      {isLoadingExplain ? '🔄' : '📝 Detailed Explanation'}
+                      {isLoadingExplain ? '🔄 Explaining...' : '📝 Detailed Explanation'}
                     </button>
                   </div>
                   {showQuickTranslation && (

@@ -321,36 +321,36 @@ const ChatMessagesContainer: React.FC<ChatMessagesContainerProps> = ({
                   extractCorrectedVersion={() => null}
                   renderFormattedText={() => null}
                 />
+                
+                {/* Show suggestion carousel immediately after the last AI message */}
+                {isLastAIMessage && showSuggestionCarousel && suggestionMessages.length > 0 && (
+                  <div style={{
+                    position: 'relative',
+                    padding: '0.75rem 0.75rem 0.75rem 0.75rem',
+                    marginTop: '0.5rem',
+                    width: '100%'
+                  }}>
+                    <SuggestionCarousel
+                      isDarkMode={isDarkMode}
+                      suggestionMessages={suggestionMessages}
+                      currentSuggestionIndex={currentSuggestionIndex}
+                      onNavigateSuggestion={onNavigateSuggestion}
+                      onExplainSuggestion={onExplainSuggestion}
+                      onPlaySuggestionTTS={onPlaySuggestionTTS}
+                      isTranslatingSuggestion={isTranslatingSuggestion}
+                      showSuggestionTranslations={showSuggestionTranslations}
+                      suggestionTranslations={suggestionTranslations}
+                      isGeneratingTTS={isGeneratingTTS}
+                      isPlayingTTS={isPlayingTTS}
+                      userPreferences={userPreferences}
+                      language={language}
+                    />
+                  </div>
+                )}
               </div>
             );
           });
         })()}
-        
-        {/* Suggestion Carousel - positioned after the last visible message */}
-        {showSuggestionCarousel && suggestionMessages.length > 0 && (
-          <div style={{
-            position: 'relative',
-            padding: '0.75rem 0.75rem 0.75rem 0.75rem',
-            marginTop: '0.5rem',
-            width: '100%'
-          }}>
-            <SuggestionCarousel
-              isDarkMode={isDarkMode}
-              suggestionMessages={suggestionMessages}
-              currentSuggestionIndex={currentSuggestionIndex}
-              onNavigateSuggestion={onNavigateSuggestion}
-              onExplainSuggestion={onExplainSuggestion}
-              onPlaySuggestionTTS={onPlaySuggestionTTS}
-              isTranslatingSuggestion={isTranslatingSuggestion}
-              showSuggestionTranslations={showSuggestionTranslations}
-              suggestionTranslations={suggestionTranslations}
-              isGeneratingTTS={isGeneratingTTS}
-              isPlayingTTS={isPlayingTTS}
-              userPreferences={userPreferences}
-              language={language}
-            />
-          </div>
-        )}
       </div>
     </div>
   );

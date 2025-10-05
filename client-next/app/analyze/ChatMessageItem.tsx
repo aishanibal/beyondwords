@@ -384,7 +384,7 @@ const ChatMessageItem: React.FC<ChatMessageItemProps> = React.memo(({
               }}
               title={isPlayingTTS[`message_${index}`] ? 'Playing audio...' : 'Listen to this message'}
             >
-              {isGeneratingTTS[`message_${index}`] ? '🔄' : isPlayingTTS[`message_${index}`] ? '🔊 Playing' : '🔊 Listen'}
+              {isGeneratingTTS[`message_${index}`] ? '🔄 Generating...' : isPlayingTTS[`message_${index}`] ? '🔊 Playing' : '🔊 Listen'}
             </button>
             {(isLastAIMessage || isLastMessage) && (
                 <button
@@ -408,7 +408,7 @@ const ChatMessageItem: React.FC<ChatMessageItemProps> = React.memo(({
                     }}
                     title="Get conversation suggestions"
                 >
-                    {isLoadingSuggestions ? 'Loading...' : '💡 Suggestions'}
+                    {isLoadingSuggestions ? '🔄 Loading...' : '💡 Suggestions'}
                 </button>
             )}
           </>
