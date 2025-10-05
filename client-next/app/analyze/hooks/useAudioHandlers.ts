@@ -236,6 +236,7 @@ export const useAudioHandlers = (
       setChatHistory(prev => {
         const updated = prev.map((msg, index) => {
           if (msg.isRecording && msg.sender === 'User') {
+            console.log('🔍 [DEBUG] Replacing recording message with processing message');
             return {
               ...msg,
               text: '🎤 Processing your message...',
@@ -245,23 +246,52 @@ export const useAudioHandlers = (
           }
           return msg;
         });
+        
+        // Fallback: if no recording message found, add processing message
+        const hasRecordingMessage = updated.some(msg => msg.isRecording && msg.sender === 'User');
+        if (!hasRecordingMessage) {
+          console.log('🔍 [DEBUG] No recording message found, adding processing message as fallback');
+          const processingMessage = {
+            sender: 'User',
+            text: '🎤 Processing your message...',
+            romanizedText: '',
+            timestamp: new Date(),
+            isFromOriginalConversation: false,
+            isProcessing: true
+          };
+          return [...updated, processingMessage];
+        }
+        
         return updated;
       });
       
       // Process audio with full pipeline
-      const result = await processAudioWithPipeline(
-        audioBlob,
-        language,
-        chatHistory,
-        userPreferences,
-        autoSpeak,
-        enableShortFeedback
-      );
+      console.log('🔍 [DEBUG] Calling processAudioWithPipeline...');
+      
+      // Add timeout to prevent getting stuck
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Transcription timeout after 30 seconds')), 30000);
+      });
+      
+      const result = await Promise.race([
+        processAudioWithPipeline(
+          audioBlob,
+          language,
+          chatHistory,
+          userPreferences,
+          autoSpeak,
+          enableShortFeedback
+        ),
+        timeoutPromise
+      ]) as any;
+      
+      console.log('🔍 [DEBUG] processAudioWithPipeline completed:', result);
       
       // Replace the placeholder message with the actual transcript
       setChatHistory(prev => {
         const updated = prev.map((msg, index) => {
           if (msg.isProcessing && msg.sender === 'User') {
+            console.log('🔍 [DEBUG] Replacing processing message with actual transcription:', result.transcription);
             return {
               ...msg,
               text: result.transcription,
@@ -271,6 +301,22 @@ export const useAudioHandlers = (
           }
           return msg;
         });
+        
+        // Fallback: if no processing message found, add transcription message
+        const hasProcessingMessage = updated.some(msg => msg.isProcessing && msg.sender === 'User');
+        if (!hasProcessingMessage) {
+          console.log('🔍 [DEBUG] No processing message found, adding transcription message as fallback');
+          const transcriptionMessage = {
+            sender: 'User',
+            text: result.transcription,
+            romanizedText: result.userMessage.romanizedText,
+            timestamp: new Date(),
+            isFromOriginalConversation: false,
+            isProcessing: false
+          };
+          return [...updated, transcriptionMessage];
+        }
+        
         return updated;
       });
       
