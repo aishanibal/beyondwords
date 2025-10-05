@@ -21,7 +21,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       headers['Authorization'] = authHeader;
     }
     
-    const response = await axios.post(`${BACKEND_URL}/explain_suggestion`, req.body, {
+    const response = await axios.post(`${BACKEND_URL}/api/explain_suggestion`, req.body, {
       headers,
       timeout: 30000
     });

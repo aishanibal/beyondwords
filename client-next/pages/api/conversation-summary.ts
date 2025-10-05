@@ -25,7 +25,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     });
 
-    const response = await axios.post(`${BACKEND_URL}/conversation_summary`, req.body, {
+    const response = await axios.post(`${BACKEND_URL}/api/conversation-summary`, req.body, {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': req.headers.authorization || '',

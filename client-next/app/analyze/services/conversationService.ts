@@ -174,7 +174,10 @@ export const saveMessageToBackend = async (message: ChatMessage, conversationId:
   try {
     const headers = await getAuthHeaders();
     await axios.post(`/api/conversations/${conversationId}/messages`, {
-      message: message
+      sender: message.sender,
+      text: message.text,
+      messageType: 'text',
+      message_order: Date.now() // Use timestamp as order for individual messages
     }, { headers });
   } catch (error) {
     console.error('Error saving message to backend:', error);
