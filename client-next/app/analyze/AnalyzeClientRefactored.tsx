@@ -915,53 +915,19 @@ const AnalyzeContentInner = () => {
       return;
     }
     
-    // This should only trigger the detailed breakdown (AI explanation)
+    // Explain should trigger quick translation first
     try {
       setIsLoadingExplain(true);
       
-      // Clear any existing explanation first to ensure only one explanation is shown
+      // Clear any existing explanation first
       setLlmBreakdown('');
       setShowLlmBreakdown(false);
       
-      const token = localStorage.getItem('jwt');
-      const requestData = {
-        llm_response: text,
-        user_input: "",
-        context: "",
-        language: language,
-        user_level: userPreferences?.userLevel || 'beginner',
-        user_topics: userPreferences?.topics || [],
-        formality: userPreferences?.formality || 'friendly',
-        feedback_language: userPreferences?.feedbackLanguage || 'en',
-        user_goals: (user as any)?.learning_goals ? (typeof (user as any).learning_goals === 'string' ? JSON.parse((user as any).learning_goals) : (user as any).learning_goals) : [],
-        description: conversationDescription
-      };
-      
-      const response = await axios.post('/api/detailed_breakdown', requestData, {
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
-        }
-      });
-      
-      const result = response.data;
-      console.log('[DEBUG] explainLLMResponse() received response:', result);
-      
-      const breakdownText = result.breakdown;
-      console.log('[DEBUG] Raw breakdown text:', breakdownText);
-      
-      if (!breakdownText) {
-        console.log('[DEBUG] No breakdown received');
-        return;
-      }
-      
-      // Set the breakdown in sidebar state (this overwrites any previous explanation)
-      setLlmBreakdown(breakdownText);
-      setShowLlmBreakdown(true);
-      setShowQuickTranslation(false); // Collapse quick translation when LLM breakdown is shown
+      // Call quick translation instead of detailed breakdown
+      await handleQuickTranslation(messageIndex, text);
       
     } catch (error) {
-      console.error('Error explaining LLM response for left panel:', error);
+      console.error('Error explaining LLM response (quick translation):', error);
     } finally {
       setIsLoadingExplain(false);
     }
@@ -1209,6 +1175,7 @@ const AnalyzeContentInner = () => {
         isLoadingMessageFeedback={messageInteractions.isLoadingMessageFeedback}
         isLoadingExplain={isLoadingExplain}
         explainLLMResponse={handleExplainLLMResponse}
+        handleRequestDetailedBreakdown={handleRequestDetailedBreakdown}
         renderClickableMessage={renderClickableMessageWrapper}
       >
         <MainContentArea 

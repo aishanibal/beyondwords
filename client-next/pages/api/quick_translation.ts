@@ -2,7 +2,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import axios from 'axios';
 
-const BACKEND_URL = process.env.AI_BACKEND_URL || 'https://beyondwords.onrender.com/quick_translation';
+const BACKEND_URL = process.env.AI_BACKEND_URL || 'https://beyondwords.onrender.com';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -24,7 +24,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     });
 
-    const response = await axios.post(BACKEND_URL, req.body, {
+    const response = await axios.post(`${BACKEND_URL}/api/quick_translation`, req.body, {
       headers: {
         'Content-Type': 'application/json',
       }
