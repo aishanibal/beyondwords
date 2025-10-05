@@ -534,7 +534,7 @@ export const useAudioHandlers = (
           console.warn('[MESSAGE_SAVE] No conversation ID available for AI message');
         }
         
-        // Play TTS for AI response immediately
+        // Play TTS for AI response immediately (always play for regular AI responses)
         console.log('[DEBUG] Playing TTS for AI response immediately');
         const ttsText = getTTSText(result.aiMessage, userPreferences?.romanizationDisplay || 'both', language);
         const cacheKey = `ai_message_auto_${Date.now()}`;
