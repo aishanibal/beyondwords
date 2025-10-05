@@ -77,6 +77,12 @@ export const useAudioHandlers = (
     console.log('🔍 [DEBUG] Adding recording message to chat history');
     setChatHistory(prev => [...prev, recordingMessage]);
     
+    // Clear suggestion carousel when recording starts
+    if (clearSuggestionCarousel) {
+      console.log('🔍 [DEBUG] Clearing suggestion carousel due to recording start');
+      clearSuggestionCarousel();
+    }
+    
     if (!MediaRecorderClassRef.current) {
       alert('MediaRecorder API not supported in this browser.');
       return;
