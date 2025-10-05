@@ -168,16 +168,19 @@ export const loadExistingConversation = async (conversationId: string) => {
 };
 
 // Save message to backend
-export const saveMessageToBackend = async (message: ChatMessage, conversationId: string) => {
+export const saveMessageToBackend = async (message: ChatMessage, conversationId: string, chatHistoryLength?: number) => {
   if (!conversationId) return;
 
   try {
     const headers = await getAuthHeaders();
+    // Calculate message order based on current chat history length, similar to saveSessionToBackend
+    const messageOrder = chatHistoryLength ? chatHistoryLength : Date.now();
+    
     await axios.post(`/api/conversations/${conversationId}/messages`, {
       sender: message.sender,
       text: message.text,
       messageType: 'text',
-      message_order: Date.now() // Use timestamp as order for individual messages
+      message_order: messageOrder
     }, { headers });
   } catch (error) {
     console.error('Error saving message to backend:', error);

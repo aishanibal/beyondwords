@@ -490,7 +490,7 @@ export const useAudioHandlers = (
       // Save user message to backend
       if (conversationId) {
         console.log('[MESSAGE_SAVE] Saving user message to conversation:', conversationId);
-        await saveMessageToBackend(result.userMessage, conversationId);
+        await saveMessageToBackend(result.userMessage, conversationId, chatHistory.length + 1);
       } else {
         console.warn('[MESSAGE_SAVE] No conversation ID available for user message');
       }
@@ -544,7 +544,7 @@ export const useAudioHandlers = (
         // Save AI message to backend
         if (conversationId) {
           console.log('[MESSAGE_SAVE] Saving AI message to conversation:', conversationId);
-          await saveMessageToBackend(result.aiMessage, conversationId);
+          await saveMessageToBackend(result.aiMessage, conversationId, chatHistory.length + 2);
         } else {
           console.warn('[MESSAGE_SAVE] No conversation ID available for AI message');
         }
