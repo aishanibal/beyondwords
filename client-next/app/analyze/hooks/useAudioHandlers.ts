@@ -38,6 +38,7 @@ export const useAudioHandlers = (
   const [manualRecording, setManualRecording] = useState(false);
   const recordingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isProcessingAudioRef = useRef<boolean>(false);
+  const lastProcessedAudioRef = useRef<string | null>(null);
 
   // Update autoSpeakRef when autoSpeak changes
   autoSpeakRef.current = autoSpeak;
@@ -54,6 +55,7 @@ export const useAudioHandlers = (
     interruptedRef.current = false;
     manualStopRef.current = false;
     isProcessingAudioRef.current = false; // Reset processing flag
+    lastProcessedAudioRef.current = null; // Reset last processed audio
     
     // Prevent recording when TTS is playing
     if (isAnyTTSPlaying) {
@@ -63,6 +65,7 @@ export const useAudioHandlers = (
     
     // Add loading message immediately when recording starts
     const recordingMessage = { 
+      id: `recording_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       sender: 'User', 
       text: '🎤 Recording...', 
       romanizedText: '',
@@ -315,6 +318,19 @@ export const useAudioHandlers = (
 
   const sendAudioToBackend = useCallback(async (audioBlob: Blob) => {
     console.log('🔍 [DEBUG] sendAudioToBackend called with audioBlob:', audioBlob);
+    
+    // Create a unique identifier for this audio blob
+    const audioBlobId = `${audioBlob.size}_${audioBlob.type}_${Date.now()}`;
+    
+    // Check if we've already processed this exact audio blob
+    if (lastProcessedAudioRef.current === audioBlobId) {
+      console.log('🔍 [DEBUG] Audio blob already processed, skipping duplicate processing');
+      return;
+    }
+    
+    // Mark this audio blob as being processed
+    lastProcessedAudioRef.current = audioBlobId;
+    
     if (!(audioBlob instanceof Blob)) {
       console.error('🔍 [DEBUG] Invalid audio blob provided');
       // Remove any recording message if audio blob is invalid
@@ -346,6 +362,7 @@ export const useAudioHandlers = (
         if (!hasRecordingMessage) {
           console.log('🔍 [DEBUG] No recording message found, adding processing message as fallback');
           const processingMessage = {
+            id: `processing_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             sender: 'User',
             text: '🎤 Processing your message...',
             romanizedText: '',
@@ -383,25 +400,38 @@ export const useAudioHandlers = (
       
       // Replace the placeholder message with the actual transcript
       setChatHistory(prev => {
-        // Check if this transcription already exists to prevent duplicates
+        console.log('🔍 [DEBUG] Current chat history length before update:', prev.length);
+        console.log('🔍 [DEBUG] Processing messages in history:', prev.filter(msg => msg.isProcessing && msg.sender === 'User').length);
+        
+        // Generate unique ID for this transcription
+        const transcriptionId = `transcription_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        
+        // Check if this exact transcription already exists to prevent duplicates
         const transcriptionExists = prev.some(msg => 
           msg.sender === 'User' && 
           msg.text === result.transcription && 
           !msg.isProcessing && 
-          !msg.isRecording
+          !msg.isRecording &&
+          msg.id !== transcriptionId
         );
         
         if (transcriptionExists) {
           console.log('🔍 [DEBUG] Transcription already exists, preventing duplicate');
-          // Just remove any processing messages
-          return prev.filter(msg => !(msg.isProcessing && msg.sender === 'User'));
+          // Just remove any processing messages and return current state
+          const filtered = prev.filter(msg => !(msg.isProcessing && msg.sender === 'User'));
+          console.log('🔍 [DEBUG] Filtered chat history length:', filtered.length);
+          return filtered;
         }
         
+        // Find and replace processing messages
+        let processingMessageReplaced = false;
         const updated = prev.map((msg, index) => {
-          if (msg.isProcessing && msg.sender === 'User') {
+          if (msg.isProcessing && msg.sender === 'User' && !processingMessageReplaced) {
             console.log('🔍 [DEBUG] Replacing processing message with actual transcription:', result.transcription);
+            processingMessageReplaced = true;
             return {
               ...msg,
+              id: transcriptionId,
               text: result.transcription,
               romanizedText: result.userMessage.romanizedText,
               isProcessing: false
@@ -411,10 +441,10 @@ export const useAudioHandlers = (
         });
         
         // Fallback: if no processing message found, add transcription message
-        const hasProcessingMessage = updated.some(msg => msg.isProcessing && msg.sender === 'User');
-        if (!hasProcessingMessage) {
+        if (!processingMessageReplaced) {
           console.log('🔍 [DEBUG] No processing message found, adding transcription message as fallback');
           const transcriptionMessage = {
+            id: transcriptionId,
             sender: 'User',
             text: result.transcription,
             romanizedText: result.userMessage.romanizedText,
@@ -422,9 +452,12 @@ export const useAudioHandlers = (
             isFromOriginalConversation: false,
             isProcessing: false
           };
-          return [...updated, transcriptionMessage];
+          const finalHistory = [...updated, transcriptionMessage];
+          console.log('🔍 [DEBUG] Final chat history length after fallback:', finalHistory.length);
+          return finalHistory;
         }
         
+        console.log('🔍 [DEBUG] Final chat history length after replacement:', updated.length);
         return updated;
       });
       
