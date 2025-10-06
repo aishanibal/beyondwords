@@ -915,19 +915,16 @@ const AnalyzeContentInner = () => {
       return;
     }
     
-    // Explain should trigger quick translation first
+    // This function is now used for the explain button in the translation panel
+    // It should call the detailed breakdown function
     try {
       setIsLoadingExplain(true);
       
-      // Clear any existing explanation first
-      setLlmBreakdown('');
-      setShowLlmBreakdown(false);
-      
-      // Call quick translation instead of detailed breakdown
-      await handleQuickTranslation(messageIndex, text);
+      // Call the detailed breakdown function
+      await handleRequestDetailedBreakdown(messageIndex);
       
     } catch (error) {
-      console.error('Error explaining LLM response (quick translation):', error);
+      console.error('Error explaining LLM response:', error);
     } finally {
       setIsLoadingExplain(false);
     }
@@ -1201,7 +1198,7 @@ const AnalyzeContentInner = () => {
               onToggleShortFeedback={handleToggleShortFeedback}
               onQuickTranslation={handleQuickTranslation}
               onExplainLLMResponse={async (messageIndex: number, text: string) => {
-                await handleRequestShortFeedback(messageIndex);
+                await handleExplainLLMResponse(messageIndex, text);
               }}
             onPlayTTS={playTTSWrapper2}
             onPlayExistingTTS={audioHandlers.handlePlayExistingTTS}

@@ -86,6 +86,10 @@ const nextConfig: NextConfig = {
       {
         source: '/api/personas',
         destination: `${backendUrl}/api/personas`, // Express backend
+      },
+      {
+        source: '/api/conversations/:id/messages',
+        destination: `${backendUrl}/api/conversations/:id/messages`, // Express backend
       }
     ];
   },

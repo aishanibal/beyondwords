@@ -347,8 +347,8 @@ const ChatMessageItem: React.FC<ChatMessageItemProps> = React.memo(({
         {!isUserMessage && (
           <>
             <button
-              onClick={() => onExplainLLMResponse(index, message.text)}
-              disabled={isLoadingExplain}
+              onClick={() => quickTranslation(index, message.text)}
+              disabled={isTranslating[index]}
               style={{
                 padding: '0.35rem 0.9rem',
                 borderRadius: 6,
@@ -356,16 +356,16 @@ const ChatMessageItem: React.FC<ChatMessageItemProps> = React.memo(({
                 background: 'rgba(74,144,226,0.08)',
                 color: '#4a90e2',
                 fontSize: '0.8rem',
-                cursor: isLoadingExplain ? 'not-allowed' : 'pointer',
+                cursor: isTranslating[index] ? 'not-allowed' : 'pointer',
                 transition: 'all 0.2s ease',
-                opacity: isLoadingExplain ? 0.6 : 1,
+                opacity: isTranslating[index] ? 0.6 : 1,
                 minWidth: '70px',
                 fontWeight: 500,
                 boxShadow: '0 1px 3px rgba(74,144,226,0.10)'
               }}
-              title="Get detailed explanation"
+              title="Get translation and explanation"
             >
-              {isLoadingExplain ? '🔄 Explaining...' : '💡 Explain'}
+              {isTranslating[index] ? '🔄 Translating...' : '🌐 Translate'}
             </button>
             <button
               onClick={handleListenClick}
