@@ -52,10 +52,6 @@ const nextConfig: NextConfig = {
         destination: `${backendUrl}/api/tts-test`, // Express backend fallback
       },
       {
-        source: '/api/quick_translation',
-        destination: `${backendUrl}/api/quick_translation`, // Express backend
-      },
-      {
         source: '/api/explain_suggestion',
         destination: `${backendUrl}/api/explain_suggestion`, // Express backend
       },
