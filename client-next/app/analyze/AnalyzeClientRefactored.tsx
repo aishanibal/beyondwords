@@ -510,20 +510,27 @@ const AnalyzeContentInner = () => {
           !lastMessage.isFromOriginalConversation && 
           lastTTSMessageId !== messageId) {
         
-        console.log('🔍 [AUTO_TTS] New AI message detected, playing TTS');
-        setLastTTSMessageId(messageId); // Mark this message as having TTS played
-        
-        if (lastMessage.ttsUrl) {
-          // Play existing TTS URL
-          audioHandlers.handlePlayExistingTTS(lastMessage.ttsUrl).catch(error => {
-            console.error('🔍 [AUTO_TTS] Error playing existing TTS:', error);
-          });
+        // Only trigger auto TTS if NOT in autospeak mode
+        // In autospeak mode, TTS is handled by the queue system
+        if (!autoSpeak) {
+          console.log('🔍 [AUTO_TTS] New AI message detected, playing TTS (manual mode)');
+          setLastTTSMessageId(messageId); // Mark this message as having TTS played
+          
+          if (lastMessage.ttsUrl) {
+            // Play existing TTS URL
+            audioHandlers.handlePlayExistingTTS(lastMessage.ttsUrl).catch(error => {
+              console.error('🔍 [AUTO_TTS] Error playing existing TTS:', error);
+            });
+          } else {
+            // Generate new TTS
+            const ttsText = lastMessage.romanizedText || lastMessage.text;
+            audioHandlers.handlePlayTTS(ttsText, language).catch(error => {
+              console.error('🔍 [AUTO_TTS] Error playing new AI TTS:', error);
+            });
+          }
         } else {
-          // Generate new TTS
-          const ttsText = lastMessage.romanizedText || lastMessage.text;
-          audioHandlers.handlePlayTTS(ttsText, language).catch(error => {
-            console.error('🔍 [AUTO_TTS] Error playing new AI TTS:', error);
-          });
+          console.log('🔍 [AUTO_TTS] New AI message detected, but autospeak mode - TTS handled by queue');
+          setLastTTSMessageId(messageId); // Still mark as processed to prevent duplicate triggers
         }
       }
     }

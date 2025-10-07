@@ -554,15 +554,21 @@ export const useAudioHandlers = (
         const ttsText = getTTSText(result.aiMessage, userPreferences?.romanizationDisplay || 'both', language);
         const cacheKey = `ai_message_auto_${Date.now()}`;
         
-        // Play audio immediately for all AI messages
-        setIsAnyTTSPlaying(true);
-        playTTSAudio(ttsText, language, cacheKey).then(() => {
-          console.log('[DEBUG] AI response TTS finished');
-          setIsAnyTTSPlaying(false);
-        }).catch(error => {
-          console.error('[DEBUG] Error playing AI TTS:', error);
-          setIsAnyTTSPlaying(false);
-        });
+        // Only play TTS immediately if NOT in autospeak mode
+        // In autospeak mode, TTS is handled by the queue system
+        if (!autoSpeak) {
+          console.log('[DEBUG] Manual mode: Playing AI TTS immediately');
+          setIsAnyTTSPlaying(true);
+          playTTSAudio(ttsText, language, cacheKey).then(() => {
+            console.log('[DEBUG] AI response TTS finished');
+            setIsAnyTTSPlaying(false);
+          }).catch(error => {
+            console.error('[DEBUG] Error playing AI TTS:', error);
+            setIsAnyTTSPlaying(false);
+          });
+        } else {
+          console.log('[DEBUG] Autospeak mode: AI TTS will be handled by queue system');
+        }
         
         // Also queue for autospeak mode if enabled
         if (autoSpeak) {
