@@ -186,6 +186,13 @@ export const useConversationManagement = (
     if (!user || !conversationId) return false;
 
     try {
+      console.log('🔍 [CONVERSATION_MANAGEMENT] Calling generateConversationSummary with:', {
+        sessionMessages: sessionMessages.length,
+        language,
+        topics,
+        formality,
+        conversationId
+      });
       const summary = await generateConversationSummary(
         sessionMessages,
         language,
@@ -193,12 +200,16 @@ export const useConversationManagement = (
         formality,
         conversationId
       );
+      console.log('🔍 [CONVERSATION_MANAGEMENT] generateConversationSummary returned:', summary);
 
       if (summary) {
         console.log('🔍 [CONVERSATION_MANAGEMENT] Summary received:', summary);
         // summary.learningGoals is actually an array of progress percentages from the API
         const progressPercentages = summary.learningGoals as number[] || [];
         console.log('🔍 [CONVERSATION_MANAGEMENT] Progress percentages:', progressPercentages);
+        console.log('🔍 [CONVERSATION_MANAGEMENT] Progress percentages length:', progressPercentages.length);
+        console.log('🔍 [CONVERSATION_MANAGEMENT] Progress percentages type:', typeof progressPercentages);
+        console.log('🔍 [CONVERSATION_MANAGEMENT] Progress percentages is array:', Array.isArray(progressPercentages));
         
         // Get the current user's learning goals to map progress to subgoals
         const currentProgressArray = Object.values(userProgress);
