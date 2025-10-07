@@ -210,12 +210,15 @@ export const generateConversationSummary = async (
       conversation_id: conversationId
     }, { headers });
 
+    console.log('🔍 [CONVERSATION_SERVICE] Raw response data:', response.data);
+    
     if (response.data.success) {
       const summary = {
-        title: response.data.title,
-        synopsis: response.data.synopsis,
-        learningGoals: response.data.progress_percentages || []
+        title: response.data.summary?.title || response.data.title,
+        synopsis: response.data.summary?.synopsis || response.data.synopsis,
+        learningGoals: response.data.summary?.learningGoals || response.data.progress_percentages || []
       };
+      console.log('🔍 [CONVERSATION_SERVICE] Processed summary:', summary);
       
       // Build progress data expected by dashboard (subgoalIds aligned to percentages)
       let subgoalIds: string[] = [];
@@ -256,7 +259,8 @@ export const generateConversationSummary = async (
         conversationId,
         title: summary.title,
         synopsis: summary.synopsis,
-        progress_data: progressData
+        progress_data: progressData,
+        learningGoals: summary.learningGoals
       });
       
       await axios.put(`/api/conversations/${conversationId}/title`, {

@@ -2159,7 +2159,7 @@ app.post('/api/ai_response', authenticateJWT, async (req: Request, res: Response
 });
 
 // Conversation summary endpoint (for frontend compatibility)
-app.post('/api/conversation-summary', authenticateJWT, async (req: Request, res: Response) => {
+app.post('/api/conversation-summary', optionalAuthenticateJWT as any, async (req: Request, res: Response) => {
   try {
     console.log('🔍 [CONVERSATION_SUMMARY] POST /api/conversation-summary called');
     console.log('🔍 [CONVERSATION_SUMMARY] Request body:', req.body);

@@ -195,8 +195,10 @@ export const useConversationManagement = (
       );
 
       if (summary) {
+        console.log('🔍 [CONVERSATION_MANAGEMENT] Summary received:', summary);
         // summary.learningGoals is actually an array of progress percentages from the API
         const progressPercentages = summary.learningGoals as number[] || [];
+        console.log('🔍 [CONVERSATION_MANAGEMENT] Progress percentages:', progressPercentages);
         
         // Get the current user's learning goals to map progress to subgoals
         const currentProgressArray = Object.values(userProgress);
@@ -206,6 +208,7 @@ export const useConversationManagement = (
         // We need to get the subgoal IDs from the user's current learning goals
         const userLearningGoals = user?.learning_goals ? 
           (typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : user.learning_goals) : [];
+        console.log('🔍 [CONVERSATION_MANAGEMENT] User learning goals:', userLearningGoals);
         
         const subgoalIds: string[] = [];
         const subgoalNames: string[] = [];
@@ -246,6 +249,11 @@ export const useConversationManagement = (
         
         // Always show progress modal if there are user learning goals, regardless of progress percentages
         if (userLearningGoals.length > 0) {
+          console.log('🔍 [CONVERSATION_MANAGEMENT] Showing progress modal with data:', {
+            percentages: progressPercentages,
+            subgoalNames: subgoalNames.slice(0, Math.max(progressPercentages.length, userLearningGoals.length)),
+            levelUpEvents
+          });
           setProgressData({
             percentages: progressPercentages,
             subgoalNames: subgoalNames.slice(0, Math.max(progressPercentages.length, userLearningGoals.length)),
@@ -253,6 +261,8 @@ export const useConversationManagement = (
           });
           setShowProgressModal(true);
           return true; // Progress modal was shown
+        } else {
+          console.log('🔍 [CONVERSATION_MANAGEMENT] No user learning goals found, not showing progress modal');
         }
       }
       return false; // No progress modal shown
