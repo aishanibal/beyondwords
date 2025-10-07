@@ -200,9 +200,41 @@ export const generateConversationSummary = async (
   try {
     const headers = await getAuthHeaders();
     
+    // Get user learning goals to build subgoal instructions
+    let subgoalInstructions = '';
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
+      if (userId) {
+        const dashboards = await getUserLanguageDashboards(userId);
+        const success = (dashboards as any)?.success;
+        const data = (dashboards as any)?.data;
+        const dashboard = success ? (data || []).find((d: any) => d.language === language) : null;
+        const userLearningGoals: string[] = dashboard?.learning_goals || [];
+        
+        // Build subgoal instructions from user's learning goals
+        if (userLearningGoals.length > 0) {
+          const subgoalInstructionsList: string[] = [];
+          userLearningGoals.forEach((goalId: string) => {
+            const goal = LEARNING_GOALS.find(g => g.id === goalId);
+            if (goal?.subgoals) {
+              goal.subgoals.forEach((subgoal, index) => {
+                subgoalInstructionsList.push(`${index + 1}: ${subgoal.description}`);
+              });
+            }
+          });
+          subgoalInstructions = subgoalInstructionsList.join('\n');
+        }
+      }
+    } catch (e) {
+      console.warn('[CONVERSATION_SERVICE] Failed to fetch user learning goals for subgoal instructions:', e);
+    }
+    
+    console.log('🔍 [CONVERSATION_SERVICE] Subgoal instructions:', subgoalInstructions);
+    
     const response = await axios.post(`/api/conversation-summary`, {
       chat_history: sessionMessages,
-      subgoal_instructions: '',
+      subgoal_instructions: subgoalInstructions,
       user_topics: topics,
       target_language: language,
       feedback_language: 'en',
