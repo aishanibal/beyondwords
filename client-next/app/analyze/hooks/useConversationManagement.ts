@@ -206,9 +206,11 @@ export const useConversationManagement = (
         
         // Map progress percentages to subgoal IDs
         // We need to get the subgoal IDs from the user's current learning goals
+        console.log('🔍 [CONVERSATION_MANAGEMENT] User object:', user);
+        console.log('🔍 [CONVERSATION_MANAGEMENT] User learning_goals raw:', user?.learning_goals);
         const userLearningGoals = user?.learning_goals ? 
           (typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : user.learning_goals) : [];
-        console.log('🔍 [CONVERSATION_MANAGEMENT] User learning goals:', userLearningGoals);
+        console.log('🔍 [CONVERSATION_MANAGEMENT] User learning goals parsed:', userLearningGoals);
         
         const subgoalIds: string[] = [];
         const subgoalNames: string[] = [];
@@ -247,22 +249,24 @@ export const useConversationManagement = (
 
         setUserProgress(updatedProgressObj);
         
-        // Always show progress modal if there are user learning goals, regardless of progress percentages
-        if (userLearningGoals.length > 0) {
+        // Show progress modal if there are user learning goals OR if we have progress percentages
+        if (userLearningGoals.length > 0 || progressPercentages.length > 0) {
           console.log('🔍 [CONVERSATION_MANAGEMENT] Showing progress modal with data:', {
             percentages: progressPercentages,
             subgoalNames: subgoalNames.slice(0, Math.max(progressPercentages.length, userLearningGoals.length)),
-            levelUpEvents
+            levelUpEvents,
+            hasUserGoals: userLearningGoals.length > 0,
+            hasProgressData: progressPercentages.length > 0
           });
           setProgressData({
             percentages: progressPercentages,
-            subgoalNames: subgoalNames.slice(0, Math.max(progressPercentages.length, userLearningGoals.length)),
+            subgoalNames: subgoalNames.length > 0 ? subgoalNames.slice(0, Math.max(progressPercentages.length, userLearningGoals.length)) : ['Goal 1', 'Goal 2', 'Goal 3'].slice(0, progressPercentages.length),
             levelUpEvents
           });
           setShowProgressModal(true);
           return true; // Progress modal was shown
         } else {
-          console.log('🔍 [CONVERSATION_MANAGEMENT] No user learning goals found, not showing progress modal');
+          console.log('🔍 [CONVERSATION_MANAGEMENT] No user learning goals or progress data found, not showing progress modal');
         }
       }
       return false; // No progress modal shown
