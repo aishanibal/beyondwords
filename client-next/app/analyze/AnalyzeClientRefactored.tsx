@@ -916,22 +916,55 @@ const AnalyzeContentInner = () => {
   };
 
   const handleExplainLLMResponse = async (messageIndex: number, text: string) => {
-    // Prevent multiple simultaneous requests
+    console.log('[DEBUG] explainLLMResponse() called with messageIndex:', messageIndex, 'text:', text);
+    
     if (isLoadingExplain) {
-      console.log('[DEBUG] Explain request already in progress, ignoring');
+      console.log('[DEBUG] Already loading, returning early');
       return;
     }
     
-    // This function is now used for the explain button in the translation panel
-    // It should call the detailed breakdown function
+    setIsLoadingExplain(true);
+    
     try {
-      setIsLoadingExplain(true);
+      const token = localStorage.getItem('jwt');
+      const requestData = {
+        llm_response: text,
+        user_input: "",
+        context: "",
+        language: language,
+        user_level: userPreferences.userLevel,
+        user_topics: userPreferences.topics,
+        formality: userPreferences.formality,
+        feedback_language: userPreferences.feedbackLanguage,
+        user_goals: user?.learning_goals ? (typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : user.learning_goals) : [],
+        description: conversationDescription
+      };
       
-      // Call the detailed breakdown function
-      await handleRequestDetailedBreakdown(messageIndex);
+      const response = await axios.post('/api/detailed_breakdown', requestData, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        }
+      });
       
-    } catch (error) {
-      console.error('Error explaining LLM response:', error);
+      const result = response.data;
+      console.log('[DEBUG] explainLLMResponse() received response:', result);
+      
+      const breakdownText = result.breakdown;
+      console.log('[DEBUG] Raw breakdown text:', breakdownText);
+      
+      if (!breakdownText) {
+        console.log('[DEBUG] No breakdown received');
+        return;
+      }
+      
+      // Set the breakdown in sidebar state
+      setLlmBreakdown(breakdownText);
+      setShowLlmBreakdown(true);
+      setShowQuickTranslation(false); // Collapse quick translation when LLM breakdown is shown
+      
+    } catch (error: unknown) {
+      console.error('Explain LLM response error:', error);
     } finally {
       setIsLoadingExplain(false);
     }
