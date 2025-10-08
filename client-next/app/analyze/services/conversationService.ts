@@ -306,20 +306,27 @@ export const generateConversationSummary = async (
         learningGoals: summary.learningGoals
       });
       
-      await axios.put(`/api/conversations/${conversationId}/title`, {
-        title: summary.title,
-        synopsis: summary.synopsis,
-        progress_data: progressData
-      }, { headers });
-      
-      console.log('🔍 [CONVERSATION_SERVICE] Conversation updated successfully');
+      // Try to update conversation, but don't fail if it doesn't work
+      try {
+        await axios.put(`/api/conversations/${conversationId}/title`, {
+          title: summary.title,
+          synopsis: summary.synopsis,
+          progress_data: progressData
+        }, { headers });
+        console.log('🔍 [CONVERSATION_SERVICE] Conversation updated successfully');
+      } catch (updateError) {
+        console.warn('🔍 [CONVERSATION_SERVICE] Failed to update conversation, but continuing:', updateError);
+      }
 
       return summary;
+    } else {
+      console.log('🔍 [CONVERSATION_SERVICE] API response success is false:', response.data);
+      return null;
     }
   } catch (error) {
     console.error('Error generating conversation summary:', error);
+    return null;
   }
-  return null;
 };
 
 
