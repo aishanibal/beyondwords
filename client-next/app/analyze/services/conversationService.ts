@@ -195,6 +195,7 @@ export const generateConversationSummary = async (
   formality: string,
   conversationId: string
 ) => {
+  console.log('🔍 [CONVERSATION_SERVICE] generateConversationSummary function called!');
   if (!conversationId) return;
 
   try {
