@@ -208,41 +208,47 @@ export const generateConversationSummary = async (
     let subgoalInstructions = '';
     try {
       console.log('🔍 [CONVERSATION_SERVICE] About to call supabase.auth.getSession()');
-      const { data: { session } } = await supabase.auth.getSession();
-      console.log('🔍 [CONVERSATION_SERVICE] supabase.auth.getSession() completed, session:', !!session);
-      const userId = session?.user?.id;
-      console.log('🔍 [CONVERSATION_SERVICE] userId:', userId);
-      if (userId) {
-        console.log('🔍 [CONVERSATION_SERVICE] About to call getUserLanguageDashboards');
-        const dashboards = await getUserLanguageDashboards(userId);
-        console.log('🔍 [CONVERSATION_SERVICE] getUserLanguageDashboards completed, dashboards:', !!dashboards);
-        const success = (dashboards as any)?.success;
-        const data = (dashboards as any)?.data;
-        console.log('🔍 [CONVERSATION_SERVICE] dashboards success:', success, 'data length:', data?.length);
-        const dashboard = success ? (data || []).find((d: any) => d.language === language) : null;
-        console.log('🔍 [CONVERSATION_SERVICE] found dashboard for language', language, ':', !!dashboard);
-        const userLearningGoals: string[] = dashboard?.learning_goals || [];
-        console.log('🔍 [CONVERSATION_SERVICE] userLearningGoals:', userLearningGoals);
-        
-        // Build subgoal instructions from user's learning goals
-        if (userLearningGoals.length > 0) {
-          console.log('🔍 [CONVERSATION_SERVICE] Building subgoal instructions from', userLearningGoals.length, 'goals');
-          const subgoalInstructionsList: string[] = [];
-          userLearningGoals.forEach((goalId: string) => {
-            const goal = LEARNING_GOALS.find(g => g.id === goalId);
-            if (goal?.subgoals) {
-              goal.subgoals.forEach((subgoal, index) => {
-                subgoalInstructionsList.push(`${index + 1}: ${subgoal.description}`);
-              });
-            }
-          });
-          subgoalInstructions = subgoalInstructionsList.join('\n');
-          console.log('🔍 [CONVERSATION_SERVICE] Built subgoal instructions:', subgoalInstructions);
+      console.log('🔍 [CONVERSATION_SERVICE] supabase object:', !!supabase);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        console.log('🔍 [CONVERSATION_SERVICE] supabase.auth.getSession() completed, session:', !!session);
+        const userId = session?.user?.id;
+        console.log('🔍 [CONVERSATION_SERVICE] userId:', userId);
+        if (userId) {
+          console.log('🔍 [CONVERSATION_SERVICE] About to call getUserLanguageDashboards');
+          const dashboards = await getUserLanguageDashboards(userId);
+          console.log('🔍 [CONVERSATION_SERVICE] getUserLanguageDashboards completed, dashboards:', !!dashboards);
+          const success = (dashboards as any)?.success;
+          const data = (dashboards as any)?.data;
+          console.log('🔍 [CONVERSATION_SERVICE] dashboards success:', success, 'data length:', data?.length);
+          const dashboard = success ? (data || []).find((d: any) => d.language === language) : null;
+          console.log('🔍 [CONVERSATION_SERVICE] found dashboard for language', language, ':', !!dashboard);
+          const userLearningGoals: string[] = dashboard?.learning_goals || [];
+          console.log('🔍 [CONVERSATION_SERVICE] userLearningGoals:', userLearningGoals);
+          
+          // Build subgoal instructions from user's learning goals
+          if (userLearningGoals.length > 0) {
+            console.log('🔍 [CONVERSATION_SERVICE] Building subgoal instructions from', userLearningGoals.length, 'goals');
+            const subgoalInstructionsList: string[] = [];
+            userLearningGoals.forEach((goalId: string) => {
+              const goal = LEARNING_GOALS.find(g => g.id === goalId);
+              if (goal?.subgoals) {
+                goal.subgoals.forEach((subgoal, index) => {
+                  subgoalInstructionsList.push(`${index + 1}: ${subgoal.description}`);
+                });
+              }
+            });
+            subgoalInstructions = subgoalInstructionsList.join('\n');
+            console.log('🔍 [CONVERSATION_SERVICE] Built subgoal instructions:', subgoalInstructions);
+          } else {
+            console.log('🔍 [CONVERSATION_SERVICE] No user learning goals found');
+          }
         } else {
-          console.log('🔍 [CONVERSATION_SERVICE] No user learning goals found');
+          console.log('🔍 [CONVERSATION_SERVICE] No userId found');
         }
-      } else {
-        console.log('🔍 [CONVERSATION_SERVICE] No userId found');
+      } catch (supabaseError) {
+        console.error('🔍 [CONVERSATION_SERVICE] Supabase error:', supabaseError);
+        throw supabaseError;
       }
     } catch (e) {
       console.warn('🔍 [CONVERSATION_SERVICE] Failed to fetch user learning goals for subgoal instructions:', e);
