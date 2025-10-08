@@ -231,6 +231,15 @@ export const generateConversationSummary = async (
     }
     
     console.log('🔍 [CONVERSATION_SERVICE] Subgoal instructions:', subgoalInstructions);
+    console.log('🔍 [CONVERSATION_SERVICE] Request payload:', {
+      chat_history: sessionMessages,
+      subgoal_instructions: subgoalInstructions,
+      user_topics: topics,
+      target_language: language,
+      feedback_language: 'en',
+      is_continued_conversation: false,
+      conversation_id: conversationId
+    });
     
     const response = await axios.post(`/api/conversation-summary`, {
       chat_history: sessionMessages,
@@ -243,6 +252,8 @@ export const generateConversationSummary = async (
     }, { headers });
 
     console.log('🔍 [CONVERSATION_SERVICE] Raw response data:', response.data);
+    console.log('🔍 [CONVERSATION_SERVICE] Response status:', response.status);
+    console.log('🔍 [CONVERSATION_SERVICE] Response headers:', response.headers);
     
     if (response.data.success) {
       const summary = {

@@ -314,6 +314,10 @@ def conversation_summary():
         is_continued_conversation = data.get('is_continued_conversation', False)
         
         print(f"📊 Conversation summary request - Language: {target_language}")
+        print(f"📊 Chat history length: {len(chat_history)}")
+        print(f"📊 Subgoal instructions: {subgoal_instructions}")
+        print(f"📊 User topics: {user_topics}")
+        print(f"📊 Target language: {target_language}")
         
         from gemini_client import generate_conversation_summary
         
