@@ -2,7 +2,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import axios from 'axios';
 
-const BACKEND_URL = process.env.AI_BACKEND_URL || 'https://beyondwords.onrender.com';
+const BACKEND_URL = (process.env.BACKEND_URL || 'https://beyondwords-express.onrender.com').replace(/\/$/, '');
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -17,15 +17,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       headers: req.headers
     });
 
-    console.log('🔍 [CONVERSATION_SUMMARY_API] Calling backend:', {
-      url: BACKEND_URL,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': req.headers.authorization || '',
-      }
+    const authHeader = req.headers.authorization || '';
+    const targetUrl = `${BACKEND_URL}/api/conversation-summary`;
+
+    console.log('🔍 [CONVERSATION_SUMMARY_API] Calling Express backend:', {
+      url: targetUrl,
+      hasAuth: !!authHeader,
     });
 
-    const response = await axios.post(`${BACKEND_URL}/conversation_summary`, req.body, {
+    const response = await axios.post(targetUrl, req.body, {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': req.headers.authorization || '',

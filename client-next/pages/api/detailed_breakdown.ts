@@ -2,7 +2,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import axios from 'axios';
 
-const BACKEND_URL = process.env.AI_BACKEND_URL || 'https://beyondwords.onrender.com';
+const BACKEND_URL = (process.env.BACKEND_URL || 'https://beyondwords-express.onrender.com').replace(/\/$/, '');
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -11,12 +11,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const response = await axios.post(`${BACKEND_URL}/api/detailed_breakdown`, req.body, {
+    console.log('🔍 [DETAILED_BREAKDOWN_API] Request received:', {
+      method: req.method,
+      body: req.body,
+      headers: req.headers
+    });
+
+    const authHeader = req.headers.authorization || '';
+    const targetUrl = `${BACKEND_URL}/api/detailed_breakdown`;
+
+    console.log('🔍 [DETAILED_BREAKDOWN_API] Calling Express backend:', {
+      url: targetUrl,
+      hasAuth: !!authHeader,
+    });
+
+    const response = await axios.post(targetUrl, req.body, {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': req.headers.authorization || '',
       },
       timeout: 30000
+    });
+    
+    console.log('🔍 [DETAILED_BREAKDOWN_API] Backend response:', {
+      status: response.status,
+      data: response.data
     });
     
     res.status(response.status).json(response.data);
