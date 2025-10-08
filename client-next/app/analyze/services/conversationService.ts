@@ -199,7 +199,9 @@ export const generateConversationSummary = async (
   if (!conversationId) return;
 
   try {
+    console.log('🔍 [CONVERSATION_SERVICE] About to call getAuthHeaders()');
     const headers = await getAuthHeaders();
+    console.log('🔍 [CONVERSATION_SERVICE] getAuthHeaders() completed successfully');
     
     // Get user learning goals to build subgoal instructions
     let subgoalInstructions = '';
