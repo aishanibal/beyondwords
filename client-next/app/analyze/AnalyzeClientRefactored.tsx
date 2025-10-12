@@ -271,9 +271,12 @@ const AnalyzeContentInner = () => {
     console.log('[CONVERSATION_ID_DEBUG] Conversation ID changed:', {
       conversationId,
       conversationIdType: typeof conversationId,
-      conversationIdTruthy: !!conversationId
+      conversationIdTruthy: !!conversationId,
+      urlConversationId,
+      loadedConversationId,
+      isLoadingConversation
     });
-  }, [conversationId]);
+  }, [conversationId, urlConversationId, loadedConversationId, isLoadingConversation]);
 
   // Debug TTS state changes
   useEffect(() => {
@@ -952,11 +955,11 @@ const AnalyzeContentInner = () => {
         user_input: "",
         context: "",
         language: language,
-        user_level: userPreferences.userLevel,
-        user_topics: userPreferences.topics,
-        formality: userPreferences.formality,
-        feedback_language: userPreferences.feedbackLanguage,
-        user_goals: user?.learning_goals ? (typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : user.learning_goals) : [],
+        user_level: userPreferences?.userLevel || 'beginner',
+        user_topics: userPreferences?.topics || [],
+        formality: userPreferences?.formality || 'friendly',
+        feedback_language: userPreferences?.feedbackLanguage || 'en',
+        user_goals: (user as any)?.learning_goals ? (typeof (user as any).learning_goals === 'string' ? JSON.parse((user as any).learning_goals) : (user as any).learning_goals) : [],
         description: conversationDescription
       };
       

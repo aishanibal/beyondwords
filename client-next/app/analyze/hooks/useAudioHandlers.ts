@@ -504,7 +504,8 @@ export const useAudioHandlers = (
         conversationId,
         conversationIdType: typeof conversationId,
         conversationIdTruthy: !!conversationId,
-        chatHistoryLength: chatHistory.length
+        chatHistoryLength: chatHistory.length,
+        chatHistoryMessages: chatHistory.map(msg => ({ sender: msg.sender, text: msg.text.substring(0, 50) }))
       });
       
       if (conversationId) {

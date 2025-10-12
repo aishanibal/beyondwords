@@ -92,7 +92,8 @@ export const useConversationManagement = (
         // Set conversation data
         setChatHistory(result.messages || []);
         console.log('[CONVERSATION_LOAD] Setting conversation ID:', conversationId, 'Type:', typeof conversationId);
-        setConversationId(conversationId);
+        console.log('[CONVERSATION_LOAD] Converting conversation ID to string:', String(conversationId));
+        setConversationId(String(conversationId));
         setConversationDescription(result.description || '');
         
         console.log('[CONVERSATION_LOAD] Conversation loaded successfully, ready for continuation');
