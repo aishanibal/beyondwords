@@ -118,7 +118,12 @@ export const saveSessionToBackend = async (
 // Load existing conversation
 export const loadExistingConversation = async (conversationId: string) => {
   try {
-    console.log('[CONVERSATION_SERVICE] Loading conversation:', conversationId);
+    console.log('[CONVERSATION_SERVICE] Loading conversation:', {
+      conversationId,
+      conversationIdType: typeof conversationId,
+      conversationIdLength: conversationId.length,
+      conversationIdTruthy: !!conversationId
+    });
     const headers = await getAuthHeaders();
     const url = `/api/conversations/${conversationId}`;
     console.log('[CONVERSATION_SERVICE] Request URL:', url);

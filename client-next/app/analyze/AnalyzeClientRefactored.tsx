@@ -266,6 +266,26 @@ const AnalyzeContentInner = () => {
     userProgress
   );
 
+  // Debug conversation ID changes
+  useEffect(() => {
+    console.log('[CONVERSATION_ID_DEBUG] Conversation ID changed:', {
+      conversationId,
+      conversationIdType: typeof conversationId,
+      conversationIdTruthy: !!conversationId
+    });
+  }, [conversationId]);
+
+  // Debug TTS state changes
+  useEffect(() => {
+    console.log('[TTS_STATE_DEBUG] TTS state changed:', {
+      isAnyTTSPlaying,
+      isPlayingAITTS,
+      isPlayingShortFeedbackTTS,
+      aiTTSQueued: !!aiTTSQueued,
+      shortFeedbackTTSQueued: !!shortFeedbackTTSQueued
+    });
+  }, [isAnyTTSPlaying, isPlayingAITTS, isPlayingShortFeedbackTTS, aiTTSQueued, shortFeedbackTTSQueued]);
+
   // Use audio handlers hook
   const audioHandlers = useAudioHandlers(
     user,
@@ -314,7 +334,7 @@ const AnalyzeContentInner = () => {
       setLoadedConversationId(urlConversationId);
       conversationManagement.loadConversation(urlConversationId);
     }
-  }, [urlConversationId, user, isLoadingConversation, loadedConversationId, conversationId, conversationManagement]);
+  }, [urlConversationId, user, isLoadingConversation, loadedConversationId]);
 
   // Reset loaded conversation ID when URL changes to empty (new conversation)
   useEffect(() => {

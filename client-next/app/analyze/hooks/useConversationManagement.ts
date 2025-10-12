@@ -91,8 +91,11 @@ export const useConversationManagement = (
         
         // Set conversation data
         setChatHistory(result.messages || []);
+        console.log('[CONVERSATION_LOAD] Setting conversation ID:', conversationId, 'Type:', typeof conversationId);
         setConversationId(conversationId);
         setConversationDescription(result.description || '');
+        
+        console.log('[CONVERSATION_LOAD] Conversation loaded successfully, ready for continuation');
         
         // Set language, formality, topics from conversation
         if (result.language) {
@@ -337,11 +340,7 @@ export const useConversationManagement = (
   }, [language, user, setConversationId, setChatHistory, setSessionStartTime, setConversationDescription, setUserPreferences, router]);
 
   // Load existing conversation if conversation ID is provided
-  useEffect(() => {
-    if (urlConversationId && !isLoadingConversation) {
-      loadConversation(urlConversationId);
-    }
-  }, [urlConversationId, loadConversation, isLoadingConversation]);
+  // This is now handled by the main component to avoid duplicate loading
 
   // Load user preferences on mount
   useEffect(() => {
