@@ -16,7 +16,6 @@ interface ShortFeedbackPanelProps {
   setShowLlmBreakdown: (show: boolean) => void;
   chatHistory: any[];
   isLoadingMessageFeedback: Record<number, boolean>;
-  isLoadingExplain: boolean;
   explainLLMResponse: (messageIndex: number, text: string) => Promise<void>;
   renderClickableMessage: (message: any, messageIndex: number, translation: any) => React.ReactNode;
   parsedBreakdown: any[];
@@ -26,7 +25,6 @@ interface ShortFeedbackPanelProps {
   language: string;
   userPreferences: any;
   handleLeftResizeStart: (e: React.MouseEvent) => void;
-  autoSpeak: boolean;
 }
 
 const ShortFeedbackPanel: React.FC<ShortFeedbackPanelProps> = ({
@@ -43,7 +41,6 @@ const ShortFeedbackPanel: React.FC<ShortFeedbackPanelProps> = ({
   setShowLlmBreakdown,
   chatHistory,
   isLoadingMessageFeedback,
-  isLoadingExplain,
   explainLLMResponse,
   renderClickableMessage,
   parsedBreakdown,
@@ -52,8 +49,7 @@ const ShortFeedbackPanel: React.FC<ShortFeedbackPanelProps> = ({
   playTTSAudio,
   language,
   userPreferences,
-  handleLeftResizeStart,
-  autoSpeak
+  handleLeftResizeStart
 }) => {
   if (!showShortFeedbackPanel) return null;
 
@@ -74,7 +70,7 @@ const ShortFeedbackPanel: React.FC<ShortFeedbackPanelProps> = ({
       border: isDarkMode ? '1px solid rgba(139,163,217,0.3)' : '1px solid #3b5377',
       backdropFilter: 'blur(20px)',
       zIndex: 1,
-      overflow: 'hidden',
+      overflow: 'auto',
       height: '100%'
     }}>
       {/* AI Explanations Header */}
@@ -158,7 +154,8 @@ const ShortFeedbackPanel: React.FC<ShortFeedbackPanelProps> = ({
         flex: 1, 
         display: 'flex',
         flexDirection: 'column',
-        minHeight: 0
+        minHeight: 0,
+        overflow: 'auto'
       }}>
         
         {/* Quick Translation Section */}
@@ -206,6 +203,39 @@ const ShortFeedbackPanel: React.FC<ShortFeedbackPanelProps> = ({
                   </button>
                 )}
               </div>
+              <button
+                onClick={() => {
+                  // Find the AI message that has the quick translation
+                  const messageIndex = Object.keys(quickTranslations)[0];
+                  if (messageIndex) {
+                    const message = chatHistory[parseInt(messageIndex)];
+                    if (message) {
+                      explainLLMResponse(parseInt(messageIndex), message.text);
+                    }
+                  }
+                }}
+                disabled={isLoadingMessageFeedback[Object.keys(quickTranslations)[0] || '0']}
+                style={{
+                  padding: '0.35rem 0.7rem',
+                  borderRadius: 6,
+                  border: `1px solid ${isDarkMode ? 'rgba(139,163,217,0.6)' : '#3b5377'}`,
+                  background: isDarkMode 
+                    ? 'rgba(139,163,217,0.15)' 
+                    : 'rgba(59,83,119,0.08)',
+                  color: isDarkMode ? '#8ba3d9' : '#3b5377',
+                  fontSize: '0.7rem',
+                  cursor: isLoadingMessageFeedback[Object.keys(quickTranslations)[0] || '0'] ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.2s ease',
+                  opacity: isLoadingMessageFeedback[Object.keys(quickTranslations)[0] || '0'] ? 0.6 : 1,
+                  fontWeight: 500,
+                  boxShadow: isDarkMode 
+                    ? '0 1px 3px rgba(139,163,217,0.10)' 
+                    : '0 1px 3px rgba(59,83,119,0.10)'
+                }}
+                title="Get detailed LLM breakdown"
+              >
+                {isLoadingMessageFeedback[Object.keys(quickTranslations)[0] || '0'] ? '🔄' : '📝 Detailed Explanation'}
+              </button>
             </div>
             {showQuickTranslation && (
               <div style={{
@@ -340,34 +370,32 @@ const ShortFeedbackPanel: React.FC<ShortFeedbackPanelProps> = ({
           }}>
             {parsedBreakdown.length > 0 ? (
               <div>
-                {/* TTS button for detailed breakdown - only show when autospeak is ON */}
-                {autoSpeak && (
-                  <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'flex-end' }}>
-                    <button
-                      onClick={() => {
-                        const cacheKey = `detailed_breakdown_panel`;
-                        playTTSAudio(shortFeedback, language, cacheKey);
-                      }}
-                      disabled={isGeneratingTTS['detailed_breakdown_panel'] || isPlayingTTS['detailed_breakdown_panel']}
-                      style={{
-                        padding: '0.3rem 0.7rem',
-                        borderRadius: 6,
-                        border: isPlayingTTS['detailed_breakdown_panel'] ? 'none' : '1px solid #28a745',
-                        background: isPlayingTTS['detailed_breakdown_panel'] ? 'linear-gradient(135deg, #28a745 0%, #1e7e34 100%)' : 'rgba(40,167,69,0.08)',
-                        color: isPlayingTTS['detailed_breakdown_panel'] ? '#fff' : '#28a745',
-                        fontSize: '0.7rem',
-                        cursor: (isGeneratingTTS['detailed_breakdown_panel'] || isPlayingTTS['detailed_breakdown_panel']) ? 'not-allowed' : 'pointer',
-                        transition: 'all 0.2s ease',
-                        opacity: (isGeneratingTTS['detailed_breakdown_panel'] || isPlayingTTS['detailed_breakdown_panel']) ? 0.6 : 1,
-                        fontWeight: 500,
-                        boxShadow: isPlayingTTS['detailed_breakdown_panel'] ? '0 2px 6px rgba(40,167,69,0.18)' : '0 1px 3px rgba(40,167,69,0.10)'
-                      }}
-                      title={isPlayingTTS['detailed_breakdown_panel'] ? 'Playing audio...' : 'Listen to this breakdown'}
-                    >
-                      {isGeneratingTTS['detailed_breakdown_panel'] ? '🔄' : isPlayingTTS['detailed_breakdown_panel'] ? '🔊 Playing' : '🔊 Listen'}
-                    </button>
-                  </div>
-                )}
+                {/* TTS button for detailed breakdown */}
+                <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'flex-end' }}>
+                  <button
+                    onClick={() => {
+                      const cacheKey = `detailed_breakdown_panel`;
+                      playTTSAudio(shortFeedback, language, cacheKey);
+                    }}
+                    disabled={isGeneratingTTS['detailed_breakdown_panel'] || isPlayingTTS['detailed_breakdown_panel']}
+                    style={{
+                      padding: '0.3rem 0.7rem',
+                      borderRadius: 6,
+                      border: isPlayingTTS['detailed_breakdown_panel'] ? 'none' : '1px solid #28a745',
+                      background: isPlayingTTS['detailed_breakdown_panel'] ? 'linear-gradient(135deg, #28a745 0%, #1e7e34 100%)' : 'rgba(40,167,69,0.08)',
+                      color: isPlayingTTS['detailed_breakdown_panel'] ? '#fff' : '#28a745',
+                      fontSize: '0.7rem',
+                      cursor: (isGeneratingTTS['detailed_breakdown_panel'] || isPlayingTTS['detailed_breakdown_panel']) ? 'not-allowed' : 'pointer',
+                      transition: 'all 0.2s ease',
+                      opacity: (isGeneratingTTS['detailed_breakdown_panel'] || isPlayingTTS['detailed_breakdown_panel']) ? 0.6 : 1,
+                      fontWeight: 500,
+                      boxShadow: isPlayingTTS['detailed_breakdown_panel'] ? '0 2px 6px rgba(40,167,69,0.18)' : '0 1px 3px rgba(40,167,69,0.10)'
+                    }}
+                    title={isPlayingTTS['detailed_breakdown_panel'] ? 'Playing audio...' : 'Listen to this breakdown'}
+                  >
+                    {isGeneratingTTS['detailed_breakdown_panel'] ? '🔄' : isPlayingTTS['detailed_breakdown_panel'] ? '🔊 Playing' : '🔊 Listen'}
+                  </button>
+                </div>
                 {parsedBreakdown.map((sentenceData, index) => (
                   <div key={index} style={{ marginBottom: index < parsedBreakdown.length - 1 ? '1rem' : '0' }}>
                     <div style={{ 

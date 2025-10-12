@@ -1,4 +1,5 @@
 import React from 'react';
+import ConversationHeader from './ConversationHeader';
 
 interface AnalyzeLayoutProps {
   isDarkMode: boolean;
@@ -30,6 +31,9 @@ interface AnalyzeLayoutProps {
   explainLLMResponse: (messageIndex: number, text: string) => void;
   handleRequestDetailedBreakdown: (messageIndex: number, text: string) => void;
   renderClickableMessage: (message: any, messageIndex: number, translation: any) => React.ReactNode;
+  // Header props
+  language: string;
+  userPreferences: any;
   children: React.ReactNode;
 }
 
@@ -63,6 +67,9 @@ const AnalyzeLayout: React.FC<AnalyzeLayoutProps> = ({
   explainLLMResponse,
   handleRequestDetailedBreakdown,
   renderClickableMessage,
+  // Header props
+  language,
+  userPreferences,
   children
 }) => {
   return (
@@ -366,6 +373,14 @@ const AnalyzeLayout: React.FC<AnalyzeLayoutProps> = ({
         </div>
       )}
 
+      {/* Header Bar */}
+      <ConversationHeader
+        isDarkMode={isDarkMode}
+        language={language}
+        chatHistory={chatHistory}
+        userPreferences={userPreferences}
+      />
+
       {/* Panels Container */}
       <div style={{
         display: 'flex',
@@ -391,7 +406,7 @@ const AnalyzeLayout: React.FC<AnalyzeLayoutProps> = ({
             border: isDarkMode ? '1px solid rgba(139,163,217,0.3)' : '1px solid #3b5377',
             backdropFilter: 'blur(20px)',
             zIndex: 1,
-            overflow: 'hidden',
+            overflow: 'auto',
             height: '100%'
           }}>
             {/* AI Explanations Header */}

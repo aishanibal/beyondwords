@@ -23,6 +23,7 @@ export const useConversationManagement = (
   setProgressData: React.Dispatch<React.SetStateAction<{
     percentages: number[];
     subgoalNames: string[];
+    subgoalIds?: string[];
     levelUpEvents?: LevelUpEvent[];
   } | null>>,
   setUserProgress: React.Dispatch<React.SetStateAction<{ [goalId: string]: SubgoalProgress }>>,
@@ -272,6 +273,7 @@ export const useConversationManagement = (
           setProgressData({
             percentages: progressPercentages,
             subgoalNames: subgoalNames.length > 0 ? subgoalNames.slice(0, Math.max(progressPercentages.length, userLearningGoals.length)) : ['Goal 1', 'Goal 2', 'Goal 3'].slice(0, progressPercentages.length),
+            subgoalIds: subgoalIds.slice(0, Math.max(progressPercentages.length, userLearningGoals.length)),
             levelUpEvents
           });
           setShowProgressModal(true);
