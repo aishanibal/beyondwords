@@ -99,7 +99,16 @@ export const useConversationManagement = (
         console.log('[CONVERSATION_LOAD] Conversation loaded successfully, ready for continuation');
         
         // Set persona information if conversation uses a persona
-        if (result.usesPersona) {
+        console.log('[CONVERSATION_LOAD] Processing persona information:', {
+          usesPersona: result.usesPersona,
+          personaId: result.personaId,
+          usesPersonaType: typeof result.usesPersona,
+          usesPersonaTruthy: !!result.usesPersona
+        });
+        
+        // Always respect the conversation's persona status from the database
+        // This overrides any URL parameter logic since the conversation data is authoritative
+        if (result.usesPersona === true) {
           setIsUsingPersona(true);
           console.log('[CONVERSATION_LOAD] Conversation uses persona, setting isUsingPersona to true');
         } else {

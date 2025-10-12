@@ -383,7 +383,9 @@ const AnalyzeContentInner = () => {
 
   // Handle persona data when using a persona - from original
   useEffect(() => {
-    if (usePersona && user) {
+    if (usePersona && user && !urlConversationId) {
+      // Only set persona flag if we're NOT loading an existing conversation
+      // For existing conversations, the conversation data should be authoritative
       setIsUsingPersona(true); // Set flag that we're using an existing persona
       const personaData = localStorage.getItem('selectedPersona');
       if (personaData) {
@@ -396,7 +398,7 @@ const AnalyzeContentInner = () => {
         }
       }
     }
-  }, [usePersona, user]);
+  }, [usePersona, user, urlConversationId]);
 
   // Handle existing conversations - check if they were using a persona
   useEffect(() => {
@@ -1043,6 +1045,15 @@ const AnalyzeContentInner = () => {
     }
     
     // Show persona modal unless we're using an existing persona
+    console.log('🏁 [END_CHAT] Persona modal decision logic:', {
+      isUsingPersona,
+      isUsingPersonaType: typeof isUsingPersona,
+      usePersona,
+      conversationId,
+      urlConversationId,
+      conversationDescription
+    });
+    
     if (!isUsingPersona) {
       console.log('🏁 [END_CHAT] Showing persona modal - no existing persona being used');
       setShowPersonaModal(true);

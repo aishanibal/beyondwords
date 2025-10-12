@@ -140,6 +140,14 @@ export const loadExistingConversation = async (conversationId: string) => {
     if (response.data.conversation) {
       const conversation = response.data.conversation;
       
+      console.log('[CONVERSATION_SERVICE] Raw conversation data:', {
+        id: conversation.id,
+        title: conversation.title,
+        uses_persona: conversation.uses_persona,
+        persona_id: conversation.persona_id,
+        description: conversation.description
+      });
+      
       // Parse messages from conversation and ensure proper structure
       const messages: ChatMessage[] = (conversation.messages || []).map((msg: any) => ({
         sender: msg.sender,
@@ -162,7 +170,7 @@ export const loadExistingConversation = async (conversationId: string) => {
         formality: conversation.formality,
         topics: conversation.topics || [],
         createdAt: conversation.created_at || conversation.createdAt,
-        usesPersona: conversation.uses_persona || false,
+        usesPersona: conversation.uses_persona === true || conversation.uses_persona === 'true',
         personaId: conversation.persona_id || null
       };
     } else {

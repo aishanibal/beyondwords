@@ -1392,7 +1392,9 @@ app.get('/api/conversations/:id', optionalAuthenticateJWT as any, async (req: Re
       language: (conversation as any).language,
       formality: (conversation as any).formality,
       messageCount: conversation.message_count,
-      messagesLength: conversation.messages?.length || 0
+      messagesLength: conversation.messages?.length || 0,
+      usesPersona: (conversation as any).uses_persona,
+      personaId: (conversation as any).persona_id
     });
     if (conversation.messages && conversation.messages.length > 0) {
       console.log('📋 SERVER: Sample messages:', conversation.messages.slice(0, 2));
