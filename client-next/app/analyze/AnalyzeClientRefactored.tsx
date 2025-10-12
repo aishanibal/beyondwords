@@ -309,6 +309,11 @@ const AnalyzeContentInner = () => {
     suggestions.clearSuggestionCarousel
   );
 
+  // Debug audio handlers conversationId
+  useEffect(() => {
+    console.log('[AUDIO_HANDLERS_DEBUG] Audio handlers conversationId:', conversationId);
+  }, [conversationId]);
+
   // Use message interactions hook
   const messageInteractions = useMessageInteractions(language);
 

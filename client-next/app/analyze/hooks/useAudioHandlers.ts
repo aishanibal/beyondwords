@@ -337,6 +337,7 @@ export const useAudioHandlers = (
 
   const sendAudioToBackend = useCallback(async (audioBlob: Blob) => {
     console.log('🔍 [DEBUG] sendAudioToBackend called with audioBlob:', audioBlob);
+    console.log('🔍 [DEBUG] sendAudioToBackend conversationId:', conversationId, 'type:', typeof conversationId);
     
     // Create a unique identifier for this audio blob
     const audioBlobId = `${audioBlob.size}_${audioBlob.type}_${Date.now()}`;
