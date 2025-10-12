@@ -52,6 +52,15 @@ export const useAudioHandlers = (
 
   const handleStartRecording = useCallback(async () => {
     console.log('🔍 [DEBUG] handleStartRecording called');
+    console.log('🔍 [DEBUG] Current state check:', {
+      isAnyTTSPlaying,
+      conversationId,
+      conversationIdType: typeof conversationId,
+      isProcessingAudioRef: isProcessingAudioRef.current,
+      mediaRecorderSupported: !!MediaRecorderClassRef.current,
+      speechRecognitionSupported: !!SpeechRecognitionClassRef.current
+    });
+    
     setWasInterrupted(false);
     interruptedRef.current = false;
     manualStopRef.current = false;
@@ -102,8 +111,9 @@ export const useAudioHandlers = (
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
-          sampleRate: 44100,
-          channelCount: 1
+          sampleRate: 16000, // Lower sample rate better for speech recognition
+          channelCount: 1,
+          latency: 0.01 // Low latency for better speech capture
         }
       };
       
@@ -185,7 +195,9 @@ export const useAudioHandlers = (
           size: audioBlob.size,
           type: audioBlob.type,
           chunks: audioChunksRef.current.length,
-          mimeType: mimeType
+          mimeType: mimeType,
+          actualMimeType: audioBlob.type,
+          mimeTypeMatch: audioBlob.type === mimeType
         });
         
         // Check if audio blob is valid
@@ -325,6 +337,7 @@ export const useAudioHandlers = (
 
   const sendAudioToBackend = useCallback(async (audioBlob: Blob) => {
     console.log('🔍 [DEBUG] sendAudioToBackend called with audioBlob:', audioBlob);
+    console.log('🔍 [DEBUG] sendAudioToBackend conversationId:', conversationId, 'type:', typeof conversationId);
     
     // Create a unique identifier for this audio blob
     const audioBlobId = `${audioBlob.size}_${audioBlob.type}_${Date.now()}`;
@@ -488,6 +501,14 @@ export const useAudioHandlers = (
       }
       
       // Save user message to backend
+      console.log('[MESSAGE_SAVE] Conversation ID check:', {
+        conversationId,
+        conversationIdType: typeof conversationId,
+        conversationIdTruthy: !!conversationId,
+        chatHistoryLength: chatHistory.length,
+        chatHistoryMessages: chatHistory.map(msg => ({ sender: msg.sender, text: msg.text.substring(0, 50) }))
+      });
+      
       if (conversationId) {
         console.log('[MESSAGE_SAVE] Saving user message to conversation:', conversationId);
         await saveMessageToBackend(result.userMessage, conversationId, chatHistory.length + 1);

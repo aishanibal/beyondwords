@@ -263,8 +263,34 @@ const AnalyzeContentInner = () => {
     setShowProgressModal,
     setProgressData,
     setUserProgress,
-    userProgress
+    userProgress,
+    setIsUsingPersona
   );
+
+  // Debug conversation ID changes
+  useEffect(() => {
+    console.log('[CONVERSATION_ID_DEBUG] Conversation ID changed:', {
+      conversationId,
+      conversationIdType: typeof conversationId,
+      conversationIdTruthy: !!conversationId,
+      urlConversationId,
+      loadedConversationId,
+      isLoadingConversation,
+      isUsingPersona,
+      usePersona
+    });
+  }, [conversationId, urlConversationId, loadedConversationId, isLoadingConversation, isUsingPersona, usePersona]);
+
+  // Debug TTS state changes
+  useEffect(() => {
+    console.log('[TTS_STATE_DEBUG] TTS state changed:', {
+      isAnyTTSPlaying,
+      isPlayingAITTS,
+      isPlayingShortFeedbackTTS,
+      aiTTSQueued: !!aiTTSQueued,
+      shortFeedbackTTSQueued: !!shortFeedbackTTSQueued
+    });
+  }, [isAnyTTSPlaying, isPlayingAITTS, isPlayingShortFeedbackTTS, aiTTSQueued, shortFeedbackTTSQueued]);
 
   // Use audio handlers hook
   const audioHandlers = useAudioHandlers(
@@ -285,6 +311,11 @@ const AnalyzeContentInner = () => {
     setShortFeedbackTTSQueued,
     suggestions.clearSuggestionCarousel
   );
+
+  // Debug audio handlers conversationId
+  useEffect(() => {
+    console.log('[AUDIO_HANDLERS_DEBUG] Audio handlers conversationId:', conversationId);
+  }, [conversationId]);
 
   // Use message interactions hook
   const messageInteractions = useMessageInteractions(language);
@@ -314,7 +345,7 @@ const AnalyzeContentInner = () => {
       setLoadedConversationId(urlConversationId);
       conversationManagement.loadConversation(urlConversationId);
     }
-  }, [urlConversationId, user, isLoadingConversation, loadedConversationId, conversationId, conversationManagement]);
+  }, [urlConversationId, user, isLoadingConversation, loadedConversationId]);
 
   // Reset loaded conversation ID when URL changes to empty (new conversation)
   useEffect(() => {
@@ -352,7 +383,9 @@ const AnalyzeContentInner = () => {
 
   // Handle persona data when using a persona - from original
   useEffect(() => {
-    if (usePersona && user) {
+    if (usePersona && user && !urlConversationId) {
+      // Only set persona flag if we're NOT loading an existing conversation
+      // For existing conversations, the conversation data should be authoritative
       setIsUsingPersona(true); // Set flag that we're using an existing persona
       const personaData = localStorage.getItem('selectedPersona');
       if (personaData) {
@@ -365,7 +398,7 @@ const AnalyzeContentInner = () => {
         }
       }
     }
-  }, [usePersona, user]);
+  }, [usePersona, user, urlConversationId]);
 
   // Handle existing conversations - check if they were using a persona
   useEffect(() => {
@@ -932,10 +965,10 @@ const AnalyzeContentInner = () => {
         user_input: "",
         context: "",
         language: language,
-        user_level: userPreferences?.userLevel,
-        user_topics: userPreferences?.topics,
-        formality: userPreferences?.formality,
-        feedback_language: userPreferences?.feedbackLanguage,
+        user_level: userPreferences?.userLevel || 'beginner',
+        user_topics: userPreferences?.topics || [],
+        formality: userPreferences?.formality || 'friendly',
+        feedback_language: userPreferences?.feedbackLanguage || 'en',
         user_goals: (user as any)?.learning_goals ? (typeof (user as any).learning_goals === 'string' ? JSON.parse((user as any).learning_goals) : (user as any).learning_goals) : [],
         description: conversationDescription
       };
@@ -990,7 +1023,9 @@ const AnalyzeContentInner = () => {
     console.log('🏁 [END_CHAT] End chat initiated');
     console.log('🏁 [END_CHAT] isNewPersona:', isNewPersona);
     console.log('🏁 [END_CHAT] isUsingPersona:', isUsingPersona);
+    console.log('🏁 [END_CHAT] usePersona (URL param):', usePersona);
     console.log('🏁 [END_CHAT] conversationDescription:', conversationDescription);
+    console.log('🏁 [END_CHAT] conversationId:', conversationId);
     
     // Check if there are any user messages in the chat history
     const userMessages = chatHistory.filter(msg => msg.sender === 'User');
@@ -1010,6 +1045,15 @@ const AnalyzeContentInner = () => {
     }
     
     // Show persona modal unless we're using an existing persona
+    console.log('🏁 [END_CHAT] Persona modal decision logic:', {
+      isUsingPersona,
+      isUsingPersonaType: typeof isUsingPersona,
+      usePersona,
+      conversationId,
+      urlConversationId,
+      conversationDescription
+    });
+    
     if (!isUsingPersona) {
       console.log('🏁 [END_CHAT] Showing persona modal - no existing persona being used');
       setShowPersonaModal(true);

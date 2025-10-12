@@ -72,7 +72,9 @@ export const saveSessionToBackend = async (
   topics: string[], 
   formality: string,
   language: string,
-  user: any
+  user: any,
+  usesPersona: boolean = false,
+  personaId: number | null = null
 ) => {
   if (!user) return null;
 
@@ -82,7 +84,9 @@ export const saveSessionToBackend = async (
       language, 
       title: description || 'New Conversation',
       topics,
-      formality
+      formality,
+      usesPersona,
+      personaId
     }, { headers });
 
     const newConversationId = response.data.conversation.id;
@@ -118,7 +122,12 @@ export const saveSessionToBackend = async (
 // Load existing conversation
 export const loadExistingConversation = async (conversationId: string) => {
   try {
-    console.log('[CONVERSATION_SERVICE] Loading conversation:', conversationId);
+    console.log('[CONVERSATION_SERVICE] Loading conversation:', {
+      conversationId,
+      conversationIdType: typeof conversationId,
+      conversationIdLength: conversationId.length,
+      conversationIdTruthy: !!conversationId
+    });
     const headers = await getAuthHeaders();
     const url = `/api/conversations/${conversationId}`;
     console.log('[CONVERSATION_SERVICE] Request URL:', url);
@@ -130,6 +139,14 @@ export const loadExistingConversation = async (conversationId: string) => {
 
     if (response.data.conversation) {
       const conversation = response.data.conversation;
+      
+      console.log('[CONVERSATION_SERVICE] Raw conversation data:', {
+        id: conversation.id,
+        title: conversation.title,
+        uses_persona: conversation.uses_persona,
+        persona_id: conversation.persona_id,
+        description: conversation.description
+      });
       
       // Parse messages from conversation and ensure proper structure
       const messages: ChatMessage[] = (conversation.messages || []).map((msg: any) => ({
@@ -152,7 +169,9 @@ export const loadExistingConversation = async (conversationId: string) => {
         language: conversation.language || conversation.language_dashboards?.language,
         formality: conversation.formality,
         topics: conversation.topics || [],
-        createdAt: conversation.created_at || conversation.createdAt
+        createdAt: conversation.created_at || conversation.createdAt,
+        usesPersona: conversation.uses_persona === true || conversation.uses_persona === 'true',
+        personaId: conversation.persona_id || null
       };
     } else {
       console.warn('[CONVERSATION_SERVICE] No conversation data in response');

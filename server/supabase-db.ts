@@ -393,8 +393,8 @@ export const createConversation = async (
     topics,
     formality,
     description,
-    uses_persona: usesPersona,
-    persona_id: personaId,
+    uses_persona: Boolean(usesPersona),
+    persona_id: personaId || null,
     learning_goals: learningGoals
   };
 
@@ -628,8 +628,8 @@ export const createConversationWithInitialMessage = async (
       topics,
       formality,
       description,
-      uses_persona: usesPersona,
-      persona_id: personaId,
+      uses_persona: Boolean(usesPersona),
+      persona_id: personaId || null,
       learning_goals: learningGoals
     };
 
