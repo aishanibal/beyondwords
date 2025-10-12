@@ -263,7 +263,8 @@ const AnalyzeContentInner = () => {
     setShowProgressModal,
     setProgressData,
     setUserProgress,
-    userProgress
+    userProgress,
+    setIsUsingPersona
   );
 
   // Debug conversation ID changes
@@ -274,9 +275,11 @@ const AnalyzeContentInner = () => {
       conversationIdTruthy: !!conversationId,
       urlConversationId,
       loadedConversationId,
-      isLoadingConversation
+      isLoadingConversation,
+      isUsingPersona,
+      usePersona
     });
-  }, [conversationId, urlConversationId, loadedConversationId, isLoadingConversation]);
+  }, [conversationId, urlConversationId, loadedConversationId, isLoadingConversation, isUsingPersona, usePersona]);
 
   // Debug TTS state changes
   useEffect(() => {
@@ -1018,7 +1021,9 @@ const AnalyzeContentInner = () => {
     console.log('🏁 [END_CHAT] End chat initiated');
     console.log('🏁 [END_CHAT] isNewPersona:', isNewPersona);
     console.log('🏁 [END_CHAT] isUsingPersona:', isUsingPersona);
+    console.log('🏁 [END_CHAT] usePersona (URL param):', usePersona);
     console.log('🏁 [END_CHAT] conversationDescription:', conversationDescription);
+    console.log('🏁 [END_CHAT] conversationId:', conversationId);
     
     // Check if there are any user messages in the chat history
     const userMessages = chatHistory.filter(msg => msg.sender === 'User');

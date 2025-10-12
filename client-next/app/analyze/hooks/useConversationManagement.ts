@@ -26,7 +26,8 @@ export const useConversationManagement = (
     levelUpEvents?: LevelUpEvent[];
   } | null>>,
   setUserProgress: React.Dispatch<React.SetStateAction<{ [goalId: string]: SubgoalProgress }>>,
-  userProgress: { [goalId: string]: SubgoalProgress }
+  userProgress: { [goalId: string]: SubgoalProgress },
+  setIsUsingPersona: React.Dispatch<React.SetStateAction<boolean>>
 ) => {
   const router = useRouter();
   const [isLoadingConversation, setIsLoadingConversation] = useState(false);
@@ -97,6 +98,15 @@ export const useConversationManagement = (
         
         console.log('[CONVERSATION_LOAD] Conversation loaded successfully, ready for continuation');
         
+        // Set persona information if conversation uses a persona
+        if (result.usesPersona) {
+          setIsUsingPersona(true);
+          console.log('[CONVERSATION_LOAD] Conversation uses persona, setting isUsingPersona to true');
+        } else {
+          setIsUsingPersona(false);
+          console.log('[CONVERSATION_LOAD] Conversation does not use persona, setting isUsingPersona to false');
+        }
+        
         // Set language, formality, topics from conversation
         if (result.language) {
           // Language will be handled by parent component
@@ -123,6 +133,7 @@ export const useConversationManagement = (
         setConversationId(null);
         setConversationDescription('');
         setSessionStartTime(null);
+        setIsUsingPersona(false);
         
         // Show user-friendly error message
         const errorMessage = {
@@ -140,6 +151,7 @@ export const useConversationManagement = (
       setConversationId(null);
       setConversationDescription('');
       setSessionStartTime(null);
+      setIsUsingPersona(false);
       
       // Show user-friendly error message
       const errorMessage = {
@@ -152,7 +164,7 @@ export const useConversationManagement = (
     } finally {
       setIsLoadingConversation(false);
     }
-  }, [user, setChatHistory, setConversationId, setConversationDescription, setUserPreferences, setSessionStartTime]);
+  }, [user, setChatHistory, setConversationId, setConversationDescription, setUserPreferences, setSessionStartTime, setIsUsingPersona]);
 
   // Save session to backend
   const saveSession = useCallback(async (
@@ -318,6 +330,15 @@ export const useConversationManagement = (
     // Set the conversation description
     setConversationDescription(description || '');
     
+    // Set persona flag based on whether we're using an existing persona
+    if (isUsingExistingPersona) {
+      setIsUsingPersona(true);
+      console.log('[CONVERSATION_START] Using existing persona, setting isUsingPersona to true');
+    } else {
+      setIsUsingPersona(false);
+      console.log('[CONVERSATION_START] Not using existing persona, setting isUsingPersona to false');
+    }
+    
     // Check if this is a persona-based conversation (has a description)
     const isPersonaConversation = !!(description && description.trim());
     
@@ -362,7 +383,7 @@ export const useConversationManagement = (
       // Fallback: set a default AI message if none provided
       setChatHistory([{ sender: 'AI', text: 'Hello! What would you like to talk about today?', timestamp: new Date(), isFromOriginalConversation: false }]);
     }
-  }, [language, user, setConversationId, setChatHistory, setSessionStartTime, setConversationDescription, setUserPreferences, router]);
+  }, [language, user, setConversationId, setChatHistory, setSessionStartTime, setConversationDescription, setUserPreferences, setIsUsingPersona, router]);
 
   // Load existing conversation if conversation ID is provided
   // This is now handled by the main component to avoid duplicate loading

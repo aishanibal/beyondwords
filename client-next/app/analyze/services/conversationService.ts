@@ -157,7 +157,9 @@ export const loadExistingConversation = async (conversationId: string) => {
         language: conversation.language || conversation.language_dashboards?.language,
         formality: conversation.formality,
         topics: conversation.topics || [],
-        createdAt: conversation.created_at || conversation.createdAt
+        createdAt: conversation.created_at || conversation.createdAt,
+        usesPersona: conversation.uses_persona || false,
+        personaId: conversation.persona_id || null
       };
     } else {
       console.warn('[CONVERSATION_SERVICE] No conversation data in response');
