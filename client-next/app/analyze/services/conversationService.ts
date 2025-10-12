@@ -200,14 +200,80 @@ export const generateConversationSummary = async (
   formality: string,
   conversationId: string
 ) => {
+  console.log('🔍 [CONVERSATION_SERVICE] generateConversationSummary function called!');
   if (!conversationId) return;
 
   try {
+    console.log('🔍 [CONVERSATION_SERVICE] About to call getAuthHeaders()');
     const headers = await getAuthHeaders();
+    console.log('🔍 [CONVERSATION_SERVICE] getAuthHeaders() completed successfully');
     
+    // Get user learning goals to build subgoal instructions
+    console.log('🔍 [CONVERSATION_SERVICE] Starting to get user learning goals');
+    let subgoalInstructions = '';
+    try {
+      console.log('🔍 [CONVERSATION_SERVICE] About to call supabase.auth.getSession()');
+      console.log('🔍 [CONVERSATION_SERVICE] supabase object:', !!supabase);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        console.log('🔍 [CONVERSATION_SERVICE] supabase.auth.getSession() completed, session:', !!session);
+        const userId = session?.user?.id;
+        console.log('🔍 [CONVERSATION_SERVICE] userId:', userId);
+        if (userId) {
+          console.log('🔍 [CONVERSATION_SERVICE] About to call getUserLanguageDashboards');
+          const dashboards = await getUserLanguageDashboards(userId);
+          console.log('🔍 [CONVERSATION_SERVICE] getUserLanguageDashboards completed, dashboards:', !!dashboards);
+          const success = (dashboards as any)?.success;
+          const data = (dashboards as any)?.data;
+          console.log('🔍 [CONVERSATION_SERVICE] dashboards success:', success, 'data length:', data?.length);
+          const dashboard = success ? (data || []).find((d: any) => d.language === language) : null;
+          console.log('🔍 [CONVERSATION_SERVICE] found dashboard for language', language, ':', !!dashboard);
+          const userLearningGoals: string[] = dashboard?.learning_goals || [];
+          console.log('🔍 [CONVERSATION_SERVICE] userLearningGoals:', userLearningGoals);
+          
+          // Build subgoal instructions from user's learning goals
+          if (userLearningGoals.length > 0) {
+            console.log('🔍 [CONVERSATION_SERVICE] Building subgoal instructions from', userLearningGoals.length, 'goals');
+            const subgoalInstructionsList: string[] = [];
+            userLearningGoals.forEach((goalId: string) => {
+              const goal = LEARNING_GOALS.find(g => g.id === goalId);
+              if (goal?.subgoals) {
+                goal.subgoals.forEach((subgoal, index) => {
+                  subgoalInstructionsList.push(`${index + 1}: ${subgoal.description}`);
+                });
+              }
+            });
+            subgoalInstructions = subgoalInstructionsList.join('\n');
+            console.log('🔍 [CONVERSATION_SERVICE] Built subgoal instructions:', subgoalInstructions);
+          } else {
+            console.log('🔍 [CONVERSATION_SERVICE] No user learning goals found');
+          }
+        } else {
+          console.log('🔍 [CONVERSATION_SERVICE] No userId found');
+        }
+      } catch (supabaseError) {
+        console.error('🔍 [CONVERSATION_SERVICE] Supabase error:', supabaseError);
+        throw supabaseError;
+      }
+    } catch (e) {
+      console.warn('🔍 [CONVERSATION_SERVICE] Failed to fetch user learning goals for subgoal instructions:', e);
+    }
+    
+    console.log('🔍 [CONVERSATION_SERVICE] Subgoal instructions:', subgoalInstructions);
+    console.log('🔍 [CONVERSATION_SERVICE] Request payload:', {
+      chat_history: sessionMessages,
+      subgoal_instructions: subgoalInstructions,
+      user_topics: topics,
+      target_language: language,
+      feedback_language: 'en',
+      is_continued_conversation: false,
+      conversation_id: conversationId
+    });
+    
+    console.log('🔍 [CONVERSATION_SERVICE] About to make axios.post call to /api/conversation-summary');
     const response = await axios.post(`/api/conversation-summary`, {
       chat_history: sessionMessages,
-      subgoal_instructions: '',
+      subgoal_instructions: subgoalInstructions,
       user_topics: topics,
       target_language: language,
       feedback_language: 'en',
@@ -215,26 +281,39 @@ export const generateConversationSummary = async (
       conversation_id: conversationId
     }, { headers });
 
+    console.log('🔍 [CONVERSATION_SERVICE] axios.post call completed successfully!');
+    console.log('🔍 [CONVERSATION_SERVICE] Raw response data:', response.data);
+    console.log('🔍 [CONVERSATION_SERVICE] Response status:', response.status);
+    console.log('🔍 [CONVERSATION_SERVICE] Response headers:', response.headers);
+    
+    console.log('🔍 [CONVERSATION_SERVICE] Checking response.data.success:', response.data.success);
     if (response.data.success) {
+      console.log('🔍 [CONVERSATION_SERVICE] Response success is true, processing summary');
       const summary = {
         title: response.data.title,
         synopsis: response.data.synopsis,
         learningGoals: response.data.progress_percentages || []
       };
+      console.log('🔍 [CONVERSATION_SERVICE] Processed summary:', summary);
       
       // Build progress data expected by dashboard (subgoalIds aligned to percentages)
+      console.log('🔍 [CONVERSATION_SERVICE] Building progress data for dashboard');
       let subgoalIds: string[] = [];
       let subgoalNames: string[] = [];
 
       try {
+        console.log('🔍 [CONVERSATION_SERVICE] About to get session for progress data');
         const { data: { session } } = await supabase.auth.getSession();
         const userId = session?.user?.id;
+        console.log('🔍 [CONVERSATION_SERVICE] Progress data userId:', userId);
         if (userId) {
+          console.log('🔍 [CONVERSATION_SERVICE] About to get dashboards for progress data');
           const dashboards = await getUserLanguageDashboards(userId);
           const success = (dashboards as any)?.success;
           const data = (dashboards as any)?.data;
           const dashboard = success ? (data || []).find((d: any) => d.language === language) : null;
           const userLearningGoals: string[] = dashboard?.learning_goals || [];
+          console.log('🔍 [CONVERSATION_SERVICE] Progress data userLearningGoals:', userLearningGoals);
 
           // Map goalIds to subgoalIds/subgoalNames in deterministic order
           userLearningGoals.forEach((goalId: string) => {
@@ -246,9 +325,10 @@ export const generateConversationSummary = async (
               });
             }
           });
+          console.log('🔍 [CONVERSATION_SERVICE] Built subgoalIds:', subgoalIds, 'subgoalNames:', subgoalNames);
         }
       } catch (e) {
-        console.warn('[CONVERSATION_SERVICE] Failed to fetch user dashboard for learning goals, saving percentages only');
+        console.warn('🔍 [CONVERSATION_SERVICE] Failed to fetch user dashboard for learning goals, saving percentages only:', e);
       }
 
       const progressData = {
@@ -257,27 +337,39 @@ export const generateConversationSummary = async (
         percentages: summary.learningGoals as number[]
       };
       
+      console.log('🔍 [CONVERSATION_SERVICE] Built progressData:', progressData);
       console.log('🔍 [CONVERSATION_SERVICE] Updating conversation with:', {
         conversationId,
         title: summary.title,
         synopsis: summary.synopsis,
-        progress_data: progressData
+        progress_data: progressData,
+        learningGoals: summary.learningGoals
       });
       
-      await axios.put(`/api/conversations/${conversationId}/title`, {
-        title: summary.title,
-        synopsis: summary.synopsis,
-        progress_data: progressData
-      }, { headers });
-      
-      console.log('🔍 [CONVERSATION_SERVICE] Conversation updated successfully');
+      // Try to update conversation, but don't fail if it doesn't work
+      try {
+        console.log('🔍 [CONVERSATION_SERVICE] About to update conversation with axios.put');
+        await axios.put(`/api/conversations/${conversationId}/title`, {
+          title: summary.title,
+          synopsis: summary.synopsis,
+          progress_data: progressData
+        }, { headers });
+        console.log('🔍 [CONVERSATION_SERVICE] Conversation updated successfully');
+      } catch (updateError) {
+        console.warn('🔍 [CONVERSATION_SERVICE] Failed to update conversation, but continuing:', updateError);
+      }
 
+      console.log('🔍 [CONVERSATION_SERVICE] About to return summary:', summary);
       return summary;
+    } else {
+      console.log('🔍 [CONVERSATION_SERVICE] API response success is false:', response.data);
+      return null;
     }
   } catch (error) {
-    console.error('Error generating conversation summary:', error);
+    console.error('🔍 [CONVERSATION_SERVICE] Error generating conversation summary:', error);
+    console.error('🔍 [CONVERSATION_SERVICE] Error details:', error.response?.data || error.message);
+    return null;
   }
-  return null;
 };
 
 

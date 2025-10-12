@@ -615,39 +615,6 @@ const AnalyzeLayout: React.FC<AnalyzeLayoutProps> = ({
                                 </div>
                               )}
                               
-                              {/* Detailed Explanation Button */}
-                              <div style={{ marginTop: '0.75rem', display: 'flex', justifyContent: 'flex-end' }}>
-                                <button
-                                  onClick={() => {
-                                    const message = chatHistory[parseInt(messageIndex)];
-                                    if (message) {
-                                      // Call the detailed breakdown function
-                                      handleRequestDetailedBreakdown(parseInt(messageIndex), message.text);
-                                    }
-                                  }}
-                                  disabled={isLoadingExplain}
-                                  style={{
-                                    padding: '0.35rem 0.7rem',
-                                    borderRadius: 6,
-                                    border: `1px solid ${isDarkMode ? 'rgba(139,163,217,0.6)' : '#3b5377'}`,
-                                    background: isDarkMode 
-                                      ? 'rgba(139,163,217,0.15)' 
-                                      : 'rgba(59,83,119,0.08)',
-                                    color: isDarkMode ? '#8ba3d9' : '#3b5377',
-                                    fontSize: '0.75rem',
-                                    cursor: isLoadingExplain ? 'not-allowed' : 'pointer',
-                                    transition: 'all 0.2s ease',
-                                    opacity: isLoadingExplain ? 0.6 : 1,
-                                    fontWeight: 500,
-                                    boxShadow: isDarkMode 
-                                      ? '0 1px 3px rgba(139,163,217,0.10)' 
-                                      : '0 1px 3px rgba(59,83,119,0.10)'
-                                  }}
-                                  title="Get detailed explanation"
-                                >
-                                  {isLoadingExplain ? '🔄 Getting...' : '📖 Detailed Explanation'}
-                                </button>
-                              </div>
                             </div>
                           )}
                         </div>

@@ -189,6 +189,13 @@ export const useConversationManagement = (
     if (!user || !conversationId) return false;
 
     try {
+      console.log('🔍 [CONVERSATION_MANAGEMENT] Calling generateConversationSummary with:', {
+        sessionMessages: sessionMessages.length,
+        language,
+        topics,
+        formality,
+        conversationId
+      });
       const summary = await generateConversationSummary(
         sessionMessages,
         language,
@@ -196,10 +203,16 @@ export const useConversationManagement = (
         formality,
         conversationId
       );
+      console.log('🔍 [CONVERSATION_MANAGEMENT] generateConversationSummary returned:', summary);
 
       if (summary) {
+        console.log('🔍 [CONVERSATION_MANAGEMENT] Summary received:', summary);
         // summary.learningGoals is actually an array of progress percentages from the API
         const progressPercentages = summary.learningGoals as number[] || [];
+        console.log('🔍 [CONVERSATION_MANAGEMENT] Progress percentages:', progressPercentages);
+        console.log('🔍 [CONVERSATION_MANAGEMENT] Progress percentages length:', progressPercentages.length);
+        console.log('🔍 [CONVERSATION_MANAGEMENT] Progress percentages type:', typeof progressPercentages);
+        console.log('🔍 [CONVERSATION_MANAGEMENT] Progress percentages is array:', Array.isArray(progressPercentages));
         
         // Get the current user's learning goals to map progress to subgoals
         const currentProgressArray = Object.values(userProgress);
@@ -207,8 +220,11 @@ export const useConversationManagement = (
         
         // Map progress percentages to subgoal IDs
         // We need to get the subgoal IDs from the user's current learning goals
+        console.log('🔍 [CONVERSATION_MANAGEMENT] User object:', user);
+        console.log('🔍 [CONVERSATION_MANAGEMENT] User learning_goals raw:', user?.learning_goals);
         const userLearningGoals = user?.learning_goals ? 
           (typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : user.learning_goals) : [];
+        console.log('🔍 [CONVERSATION_MANAGEMENT] User learning goals parsed:', userLearningGoals);
         
         const subgoalIds: string[] = [];
         const subgoalNames: string[] = [];
@@ -247,15 +263,24 @@ export const useConversationManagement = (
 
         setUserProgress(updatedProgressObj);
         
-        // Always show progress modal if there are user learning goals, regardless of progress percentages
-        if (userLearningGoals.length > 0) {
-          setProgressData({
+        // Show progress modal if there are user learning goals OR if we have progress percentages
+        if (userLearningGoals.length > 0 || progressPercentages.length > 0) {
+          console.log('🔍 [CONVERSATION_MANAGEMENT] Showing progress modal with data:', {
             percentages: progressPercentages,
             subgoalNames: subgoalNames.slice(0, Math.max(progressPercentages.length, userLearningGoals.length)),
+            levelUpEvents,
+            hasUserGoals: userLearningGoals.length > 0,
+            hasProgressData: progressPercentages.length > 0
+          });
+          setProgressData({
+            percentages: progressPercentages,
+            subgoalNames: subgoalNames.length > 0 ? subgoalNames.slice(0, Math.max(progressPercentages.length, userLearningGoals.length)) : ['Goal 1', 'Goal 2', 'Goal 3'].slice(0, progressPercentages.length),
             levelUpEvents
           });
           setShowProgressModal(true);
           return true; // Progress modal was shown
+        } else {
+          console.log('🔍 [CONVERSATION_MANAGEMENT] No user learning goals or progress data found, not showing progress modal');
         }
       }
       return false; // No progress modal shown

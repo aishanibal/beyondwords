@@ -1989,11 +1989,22 @@ def is_gemini_ready() -> bool:
 
 def generate_conversation_summary(chat_history: List[Dict], subgoal_instructions: str = "", user_topics: List[str] = None, target_language: str = "en", feedback_language: str = "en", is_continued_conversation: bool = False) -> Dict[str, str]:
     """Generate a title and subgoal evaluation for the conversation using Gemini."""
+    print(f"🔍 [GEMINI_CLIENT] generate_conversation_summary called with:")
+    print(f"🔍 [GEMINI_CLIENT] - chat_history length: {len(chat_history)}")
+    print(f"🔍 [GEMINI_CLIENT] - subgoal_instructions: {subgoal_instructions}")
+    print(f"🔍 [GEMINI_CLIENT] - target_language: {target_language}")
+    print(f"🔍 [GEMINI_CLIENT] - GOOGLE_AI_AVAILABLE: {GOOGLE_AI_AVAILABLE}")
+    
     # Check if Google API services are enabled
-    if not is_google_api_enabled():
+    api_enabled = is_google_api_enabled()
+    print(f"🔍 [GEMINI_CLIENT] - is_google_api_enabled(): {api_enabled}")
+    
+    if not api_enabled:
+        print("❌ [GEMINI_CLIENT] Google API services are disabled")
         return {"title": "[Google API Disabled]", "synopsis": "Google API services are currently disabled. Please enable them in the admin dashboard."}
     
     if not GOOGLE_AI_AVAILABLE:
+        print("❌ [GEMINI_CLIENT] GOOGLE_AI_AVAILABLE is False")
         return {"title": "[Unavailable]", "synopsis": "[Gemini not available]"}
     
     if user_topics is None:
