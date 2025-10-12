@@ -72,7 +72,9 @@ export const saveSessionToBackend = async (
   topics: string[], 
   formality: string,
   language: string,
-  user: any
+  user: any,
+  usesPersona: boolean = false,
+  personaId: number | null = null
 ) => {
   if (!user) return null;
 
@@ -82,7 +84,9 @@ export const saveSessionToBackend = async (
       language, 
       title: description || 'New Conversation',
       topics,
-      formality
+      formality,
+      usesPersona,
+      personaId
     }, { headers });
 
     const newConversationId = response.data.conversation.id;

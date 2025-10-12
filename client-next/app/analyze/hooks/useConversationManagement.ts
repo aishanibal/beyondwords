@@ -171,7 +171,9 @@ export const useConversationManagement = (
     messages: ChatMessage[], 
     description: string, 
     topics: string[], 
-    formality: string
+    formality: string,
+    usesPersona: boolean = false,
+    personaId: number | null = null
   ) => {
     if (!user) return null;
 
@@ -181,7 +183,9 @@ export const useConversationManagement = (
       topics, 
       formality, 
       language, 
-      user
+      user,
+      usesPersona,
+      personaId
     );
     
     if (newConversationId) {

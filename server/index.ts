@@ -1186,6 +1186,17 @@ app.post('/api/conversations', authenticateJWT, async (req: Request, res: Respon
     console.log('🔄 SERVER: Creating conversation with persona info:', { usesPersona, personaId });
     console.log('🔄 SERVER: Creating conversation with learning goals:', learningGoals);
     console.log('🔄 SERVER: Full request body:', req.body);
+    
+    // Ensure persona fields have default values
+    const finalUsesPersona = usesPersona === true || usesPersona === 'true';
+    const finalPersonaId = personaId || null;
+    
+    console.log('🔄 SERVER: Final persona values:', { 
+      originalUsesPersona: usesPersona, 
+      finalUsesPersona, 
+      originalPersonaId: personaId, 
+      finalPersonaId 
+    });
     // Basic validation to provide clearer error messages
     if (!req.user?.userId) {
       return res.status(401).json({ error: 'AUTH_ERROR: Missing or invalid user' });
@@ -1300,8 +1311,8 @@ app.post('/api/conversations', authenticateJWT, async (req: Request, res: Respon
         topics, 
         formality, 
         description, 
-        usesPersona, 
-        personaId, 
+        finalUsesPersona, 
+        finalPersonaId, 
         learningGoals,
         aiIntro
       );
@@ -1319,7 +1330,7 @@ app.post('/api/conversations', authenticateJWT, async (req: Request, res: Respon
       console.error('❌ SERVER: Atomic conversation creation failed, falling back to separate operations:', atomicError);
       
       // Fallback: Create conversation first, then message separately
-      conversation = await createConversation(req.user.userId, languageDashboardId, title, topics, formality, description, usesPersona, personaId, learningGoals);
+      conversation = await createConversation(req.user.userId, languageDashboardId, title, topics, formality, description, finalUsesPersona, finalPersonaId, learningGoals);
       console.log('🔄 SERVER: Fallback conversation creation result:', conversation);
       
       if (!conversation || !conversation.id) {

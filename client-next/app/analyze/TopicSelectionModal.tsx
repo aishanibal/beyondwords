@@ -374,15 +374,22 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
       const timeout = setTimeout(() => controller.abort(), timeoutDuration);
       
       try {
+        console.log('[TOPIC_MODAL] Creating conversation with persona info:', {
+          isUsingExistingPersona,
+          selectedPersonaId,
+          usesPersona: isUsingExistingPersona,
+          personaId: isUsingExistingPersona ? selectedPersonaId : null
+        });
+        
         const response = await axios.post('/api/conversations', {
           language: dashboardLanguage,
-          title: `${finalSubtopic} Discussion`,
+          title: isUsingExistingPersona ? `${finalSubtopic} Discussion (Persona)` : `${finalSubtopic} Discussion`,
           topics: [finalSubtopic],
           formality: selectedFormality,
           learningGoals: [selectedGoal],
           description: finalSubtopic,
-          usesPersona: false,
-          personaId: null
+          usesPersona: isUsingExistingPersona,
+          personaId: isUsingExistingPersona ? selectedPersonaId : null
         }, {
           headers: authHeaders,
           signal: controller.signal
