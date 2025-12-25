@@ -16,6 +16,12 @@ if (!supabaseUrl || !supabaseAnonKey) {
   }
 }
 
+// Validate Supabase URL format
+if (supabaseUrl && !supabaseUrl.match(/^https:\/\/[a-z0-9-]+\.supabase\.co$/)) {
+  console.warn('[SUPABASE] URL format may be incorrect:', supabaseUrl.substring(0, 50) + '...');
+  console.warn('[SUPABASE] Expected format: https://[project-ref].supabase.co');
+}
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
@@ -60,6 +66,46 @@ export const getCurrentSession = async () => {
   } catch (err) {
     console.error('[AUTH] Session retrieval error:', err);
     return { session: null, error: err };
+  }
+};
+
+// Test if Supabase URL is reachable
+export const testSupabaseReachability = async (): Promise<{ reachable: boolean; error?: string }> => {
+  if (!supabaseUrl) {
+    return { reachable: false, error: 'Supabase URL is not configured' };
+  }
+
+  try {
+    // Try to fetch the health endpoint or auth endpoint
+    const testUrl = `${supabaseUrl}/rest/v1/`;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+
+    const response = await fetch(testUrl, {
+      method: 'HEAD',
+      signal: controller.signal,
+      headers: {
+        'apikey': supabaseAnonKey || '',
+      }
+    });
+
+    clearTimeout(timeoutId);
+    return { reachable: true };
+  } catch (err: any) {
+    console.error('[SUPABASE] Reachability test failed:', err);
+    
+    if (err.name === 'AbortError') {
+      return { reachable: false, error: 'Connection timeout - Supabase server is not responding' };
+    }
+    
+    if (err.message?.includes('ERR_NAME_NOT_RESOLVED') || err.message?.includes('Failed to fetch')) {
+      return { 
+        reachable: false, 
+        error: `Cannot resolve Supabase URL: ${supabaseUrl}. The project may be paused, deleted, or the URL is incorrect.` 
+      };
+    }
+    
+    return { reachable: false, error: err.message || 'Unknown connection error' };
   }
 };
 

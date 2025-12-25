@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.closeDatabase = exports.getUserStreak = exports.deletePersona = exports.getUserPersonas = exports.createPersona = exports.addMessage = exports.updateConversationDescription = exports.updateConversationPersona = exports.deleteConversation = exports.updateConversationLearningGoals = exports.updateConversationSynopsis = exports.updateConversationTitle = exports.getConversationWithMessages = exports.getUserConversations = exports.createConversation = exports.deleteLanguageDashboard = exports.updateLanguageDashboard = exports.getLanguageDashboard = exports.getUserLanguageDashboards = exports.createLanguageDashboard = exports.getAllSessions = exports.getSession = exports.saveSession = exports.getAllUsers = exports.updateUser = exports.findUserById = exports.findUserByEmail = exports.findUserByGoogleId = exports.createUser = exports.supabase = void 0;
+exports.closeDatabase = exports.getUserStreak = exports.deletePersona = exports.getUserPersonas = exports.createPersona = exports.createConversationWithInitialMessage = exports.addMessage = exports.updateConversationDescription = exports.updateConversationPersona = exports.deleteConversation = exports.updateConversationLearningGoals = exports.updateConversationSynopsis = exports.updateConversationTitle = exports.getConversationWithMessages = exports.getUserConversations = exports.createConversation = exports.deleteLanguageDashboard = exports.updateLanguageDashboard = exports.getLanguageDashboard = exports.getUserLanguageDashboards = exports.createLanguageDashboard = exports.getAllSessions = exports.getSession = exports.saveSession = exports.getAllUsers = exports.updateUser = exports.findUserById = exports.findUserByEmail = exports.findUserByGoogleId = exports.createUser = exports.supabase = void 0;
 const supabase_js_1 = require("@supabase/supabase-js");
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
@@ -250,8 +250,8 @@ const createConversation = async (userId, languageDashboardId, title, topics, fo
         topics,
         formality,
         description,
-        uses_persona: usesPersona,
-        persona_id: personaId,
+        uses_persona: Boolean(usesPersona),
+        persona_id: personaId || null,
         learning_goals: learningGoals
     };
     if (languageDashboardId) {
@@ -328,12 +328,28 @@ exports.updateConversationTitle = updateConversationTitle;
 const updateConversationSynopsis = async (conversationId, synopsis, progressData) => {
     const updates = { synopsis };
     if (progressData) {
-        updates.progress_data = progressData;
+        try {
+            if (typeof progressData === 'object' && progressData !== null) {
+                const sanitizedProgressData = {
+                    subgoalIds: Array.isArray(progressData.subgoalIds) ? progressData.subgoalIds.slice(0, 50) : [],
+                    subgoalNames: Array.isArray(progressData.subgoalNames) ? progressData.subgoalNames.slice(0, 50) : [],
+                    percentages: Array.isArray(progressData.percentages) ? progressData.percentages.slice(0, 50) : []
+                };
+                updates.progress_data = sanitizedProgressData;
+                console.log('🔍 [DB] Sanitized progress data:', sanitizedProgressData);
+            }
+            else {
+                console.warn('🔍 [DB] Invalid progressData type, skipping:', typeof progressData);
+            }
+        }
+        catch (e) {
+            console.error('🔍 [DB] Error sanitizing progressData:', e);
+        }
     }
     console.log('🔍 [DB] Updating conversation synopsis:', {
         conversationId,
         synopsis: synopsis.substring(0, 100) + '...',
-        progressData
+        progressDataKeys: progressData ? Object.keys(progressData) : null
     });
     const { error, data } = await exports.supabase
         .from('conversations')
@@ -342,6 +358,12 @@ const updateConversationSynopsis = async (conversationId, synopsis, progressData
         .select('id');
     if (error) {
         console.error('🔍 [DB] Error updating conversation synopsis:', error);
+        console.error('🔍 [DB] Error details:', {
+            message: error.message,
+            details: error.details,
+            hint: error.hint,
+            code: error.code
+        });
         throw error;
     }
     console.log('🔍 [DB] Conversation synopsis updated successfully, data:', data);
@@ -418,6 +440,69 @@ const addMessage = async (conversationId, sender, text, messageType = 'text', au
     return data;
 };
 exports.addMessage = addMessage;
+const createConversationWithInitialMessage = async (userId, languageDashboardId, title, topics, formality, description, usesPersona, personaId, learningGoals, initialAiMessage) => {
+    try {
+        const insertPayload = {
+            user_id: userId,
+            title,
+            topics,
+            formality,
+            description,
+            uses_persona: Boolean(usesPersona),
+            persona_id: personaId || null,
+            learning_goals: learningGoals
+        };
+        if (languageDashboardId) {
+            insertPayload.language_dashboard_id = languageDashboardId;
+        }
+        const { data: conversation, error: convError } = await exports.supabase
+            .from('conversations')
+            .insert([insertPayload])
+            .select()
+            .single();
+        if (convError)
+            throw convError;
+        let aiMessage = null;
+        if (initialAiMessage && conversation?.id) {
+            try {
+                const { data: message, error: msgError } = await exports.supabase
+                    .from('messages')
+                    .insert([{
+                        conversation_id: conversation.id,
+                        sender: 'AI',
+                        text: initialAiMessage,
+                        message_type: 'text',
+                        message_order: 1
+                    }])
+                    .select()
+                    .single();
+                if (msgError) {
+                    console.error('❌ Failed to create initial AI message:', msgError);
+                    await exports.supabase
+                        .from('conversations')
+                        .delete()
+                        .eq('id', conversation.id);
+                    throw new Error(`Failed to create initial AI message: ${msgError.message}`);
+                }
+                aiMessage = message;
+            }
+            catch (msgErr) {
+                console.error('❌ Error in atomic message creation:', msgErr);
+                await exports.supabase
+                    .from('conversations')
+                    .delete()
+                    .eq('id', conversation.id);
+                throw msgErr;
+            }
+        }
+        return { conversation, aiMessage };
+    }
+    catch (error) {
+        console.error('❌ Atomic conversation creation failed:', error);
+        throw error;
+    }
+};
+exports.createConversationWithInitialMessage = createConversationWithInitialMessage;
 const createPersona = async (userId, personaData) => {
     const dbData = {
         user_id: userId,

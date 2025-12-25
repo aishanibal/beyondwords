@@ -841,6 +841,14 @@ app.post('/api/conversations', authenticateJWT, async (req, res) => {
         console.log('🔄 SERVER: Creating conversation with persona info:', { usesPersona, personaId });
         console.log('🔄 SERVER: Creating conversation with learning goals:', learningGoals);
         console.log('🔄 SERVER: Full request body:', req.body);
+        const finalUsesPersona = usesPersona === true || usesPersona === 'true';
+        const finalPersonaId = personaId || null;
+        console.log('🔄 SERVER: Final persona values:', {
+            originalUsesPersona: usesPersona,
+            finalUsesPersona,
+            originalPersonaId: personaId,
+            finalPersonaId
+        });
         if (!req.user?.userId) {
             return res.status(401).json({ error: 'AUTH_ERROR: Missing or invalid user' });
         }
@@ -856,18 +864,6 @@ app.post('/api/conversations', authenticateJWT, async (req, res) => {
             console.log('⚠️ SERVER: Could not find language dashboard for language:', language);
             languageDashboardId = null;
         }
-        const conversation = await (0, supabase_db_1.createConversation)(req.user.userId, languageDashboardId, title, topics, formality, description, usesPersona, personaId, learningGoals);
-        console.log('🔄 SERVER: Conversation creation result:', conversation);
-        if (!conversation || !conversation.id) {
-            console.error('❌ SERVER: Failed to create conversation (no id)');
-            return res.status(500).json({ error: 'DB_ERROR: Conversation create returned no id' });
-        }
-        const verify = await (0, supabase_db_1.getConversationWithMessages)(conversation.id);
-        if (!verify) {
-            console.error('❌ SERVER: Conversation not found after creation:', conversation.id);
-            return res.status(500).json({ error: 'VERIFY_ERROR: Conversation not found after creation' });
-        }
-        let aiMessage = null;
         let aiIntro = 'Hello! What would you like to talk about today?';
         let ttsUrl = null;
         try {
@@ -939,25 +935,38 @@ app.post('/api/conversations', authenticateJWT, async (req, res) => {
                 console.error('⚠️ TTS generation error (non-blocking):', ttsError);
                 ttsUrl = null;
             }
-            console.log('🔄 SERVER: Attempting to save AI message to database...');
-            console.log('🔄 SERVER: Message details:', {
-                conversationId: conversation.id,
-                sender: 'AI',
-                text: aiIntro.substring(0, 50) + '...',
-                messageType: 'text',
-                messageOrder: 1
-            });
-            try {
-                aiMessage = await (0, supabase_db_1.addMessage)(conversation.id, 'AI', aiIntro, 'text', undefined, undefined, 1);
-                console.log('✅ AI message saved to database:', aiMessage?.id);
-            }
-            catch (addMessageError) {
-                console.error('❌ SERVER: Failed to save AI message:', addMessageError);
-                aiMessage = null;
-            }
         }
         catch (err) {
-            console.error('Error generating/saving AI intro message:', err);
+            console.error('Error generating AI intro message:', err);
+        }
+        console.log('🔄 SERVER: Creating conversation with initial AI message atomically...');
+        let conversation, aiMessage;
+        try {
+            const result = await (0, supabase_db_1.createConversationWithInitialMessage)(req.user.userId, languageDashboardId, title, topics, formality, description, finalUsesPersona, finalPersonaId, learningGoals, aiIntro);
+            conversation = result.conversation;
+            aiMessage = result.aiMessage;
+            console.log('✅ SERVER: Atomic conversation creation result:', conversation);
+            console.log('✅ SERVER: AI message created:', aiMessage?.id);
+            if (!conversation || !conversation.id) {
+                throw new Error('Atomic conversation create returned no id');
+            }
+        }
+        catch (atomicError) {
+            console.error('❌ SERVER: Atomic conversation creation failed, falling back to separate operations:', atomicError);
+            conversation = await (0, supabase_db_1.createConversation)(req.user.userId, languageDashboardId, title, topics, formality, description, finalUsesPersona, finalPersonaId, learningGoals);
+            console.log('🔄 SERVER: Fallback conversation creation result:', conversation);
+            if (!conversation || !conversation.id) {
+                console.error('❌ SERVER: Failed to create conversation in fallback mode');
+                return res.status(500).json({ error: 'DB_ERROR: Both atomic and fallback conversation creation failed' });
+            }
+            try {
+                aiMessage = await (0, supabase_db_1.addMessage)(conversation.id, 'AI', aiIntro, 'text', undefined, undefined, 1);
+                console.log('✅ SERVER: Fallback AI message created:', aiMessage?.id);
+            }
+            catch (addMessageError) {
+                console.error('❌ SERVER: Failed to add AI message in fallback mode:', addMessageError);
+                aiMessage = null;
+            }
         }
         res.json({ conversation, aiMessage: { text: aiIntro, ttsUrl } });
     }
@@ -1001,7 +1010,9 @@ app.get('/api/conversations/:id', optionalAuthenticateJWT, async (req, res) => {
             language: conversation.language,
             formality: conversation.formality,
             messageCount: conversation.message_count,
-            messagesLength: conversation.messages?.length || 0
+            messagesLength: conversation.messages?.length || 0,
+            usesPersona: conversation.uses_persona,
+            personaId: conversation.persona_id
         });
         if (conversation.messages && conversation.messages.length > 0) {
             console.log('📋 SERVER: Sample messages:', conversation.messages.slice(0, 2));
@@ -1044,9 +1055,22 @@ app.put('/api/conversations/:id/title', optionalAuthenticateJWT, async (req, res
         }
         if (synopsis) {
             console.log('🔍 [UPDATE_TITLE] Updating synopsis for conversation:', conversationId);
-            const synopsisResult = await (0, supabase_db_1.updateConversationSynopsis)(conversationId, synopsis, progress_data);
-            changes += synopsisResult.changes;
-            console.log('🔍 [UPDATE_TITLE] Synopsis updated successfully, changes:', synopsisResult.changes);
+            try {
+                const synopsisResult = await (0, supabase_db_1.updateConversationSynopsis)(conversationId, synopsis, progress_data);
+                changes += synopsisResult.changes;
+                console.log('🔍 [UPDATE_TITLE] Synopsis updated successfully, changes:', synopsisResult.changes);
+            }
+            catch (synopsisError) {
+                console.error('🔍 [UPDATE_TITLE] Failed to update synopsis:', synopsisError);
+                console.error('🔍 [UPDATE_TITLE] Synopsis error details:', {
+                    message: synopsisError.message,
+                    stack: synopsisError.stack,
+                    conversationId,
+                    synopsisLength: synopsis.length,
+                    progressDataKeys: progress_data ? Object.keys(progress_data) : null
+                });
+                throw synopsisError;
+            }
         }
         console.log('🔍 [UPDATE_TITLE] Total changes made:', changes);
         res.json({ success: true, changes });
@@ -1727,7 +1751,13 @@ app.use('/uploads', (req, res, next) => {
     res.header('Cache-Control', 'public, max-age=3600');
     next();
 }, express_1.default.static(path_1.default.join(__dirname, 'uploads')));
-app.use('/files', express_1.default.static(path_1.default.join(__dirname, '..')));
+app.use('/files', (req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    res.header('Cache-Control', 'public, max-age=3600');
+    next();
+}, express_1.default.static(path_1.default.join(__dirname, '..')));
 app.get('/files/:filename', async (req, res) => {
     try {
         const filename = req.params.filename;
@@ -1822,7 +1852,7 @@ async function generateTTSWithDebug(text, language) {
             console.log(`🎯 [TTS DEBUG] Relative path from Python API: ${relativePath}`);
             console.log(`🎯 [TTS DEBUG] Actual path from Python API: ${actualPath}`);
             const fileName = path_1.default.basename(relativePath);
-            const ttsUrl = `/files/${fileName}`;
+            const ttsUrl = `${pythonApiUrl}/uploads/${fileName}`;
             console.log('🎯 [TTS DEBUG] TTS audio will be served at:', ttsUrl);
             console.log('🎯 [TTS DEBUG] File extension:', path_1.default.extname(relativePath));
             return {

@@ -1,11 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
-import React, { useState, ChangeEvent, FormEvent } from 'react';
+import React, { useState, ChangeEvent, FormEvent, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { GoogleLogin } from '@react-oauth/google';
 import { useUser } from '../ClientLayout';
-import { supabase } from '../../lib/supabase';
+import { supabase, testSupabaseReachability } from '../../lib/supabase';
 import logo from '../../assets/logo.png';
 
 export default function SignupPage() {
@@ -27,6 +27,28 @@ export default function SignupPage() {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [connectionTested, setConnectionTested] = useState(false);
+  const [isTestingConnection, setIsTestingConnection] = useState(true);
+
+  // Test Supabase connection on page load
+  useEffect(() => {
+    const testConnection = async () => {
+      try {
+        const result = await testSupabaseReachability();
+        setConnectionTested(true);
+        if (!result.reachable) {
+          setError(result.error || 'Cannot connect to authentication server. Please check your configuration.');
+        }
+      } catch (err: any) {
+        console.error('[SIGNUP] Connection test error:', err);
+        setError('Failed to test connection. Please try again.');
+      } finally {
+        setIsTestingConnection(false);
+      }
+    };
+
+    testConnection();
+  }, []);
 
   const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
     setFormData({
@@ -54,6 +76,17 @@ export default function SignupPage() {
     }
 
     try {
+      // Test Supabase connection first
+      if (!connectionTested) {
+        console.log('[SIGNUP] Testing Supabase connection...');
+        const connectionTest = await testSupabaseReachability();
+        setConnectionTested(true);
+        
+        if (!connectionTest.reachable) {
+          throw new Error(connectionTest.error || 'Cannot connect to authentication server. Please check your internet connection.');
+        }
+      }
+
       // Sign up with Supabase (no email confirmation)
       const { data, error } = await supabase.auth.signUp({
         email: formData.email,
@@ -80,7 +113,26 @@ export default function SignupPage() {
       
     } catch (err: any) {
       console.error('Sign-up error:', err);
-      setError(err.message || 'Sign-up failed. Please try again.');
+      
+      // Handle network/DNS errors with more helpful messages
+      if (err.message?.includes('Failed to fetch') || 
+          err.message?.includes('ERR_NAME_NOT_RESOLVED') ||
+          err.message?.includes('NetworkError') ||
+          err.message?.includes('Cannot resolve Supabase URL') ||
+          err.message?.includes('Connection timeout') ||
+          err.name === 'AuthRetryableFetchError') {
+        setError(
+          err.message || 
+          'Cannot connect to authentication server. ' +
+          'This usually means:\n' +
+          '1. The Supabase project may be paused or deleted\n' +
+          '2. The Supabase URL is incorrect\n' +
+          '3. There is a network connectivity issue\n\n' +
+          'Please contact support or check your Supabase project status.'
+        );
+      } else {
+        setError(err.message || 'Sign-up failed. Please try again.');
+      }
       setIsLoading(false);
     }
   };
@@ -90,6 +142,17 @@ export default function SignupPage() {
     setError('');
 
     try {
+      // Test Supabase connection first
+      if (!connectionTested) {
+        console.log('[SIGNUP] Testing Supabase connection...');
+        const connectionTest = await testSupabaseReachability();
+        setConnectionTested(true);
+        
+        if (!connectionTest.reachable) {
+          throw new Error(connectionTest.error || 'Cannot connect to authentication server. Please check your internet connection.');
+        }
+      }
+
       // Decode the JWT token to get user info
       const decoded = JSON.parse(atob(credentialResponse.credential.split('.')[1]));
       
@@ -110,7 +173,26 @@ export default function SignupPage() {
       
     } catch (err: any) {
       console.error('Google signup error:', err);
-      setError(err.message || 'Google signup failed. Please try again.');
+      
+      // Handle network/DNS errors with more helpful messages
+      if (err.message?.includes('Failed to fetch') || 
+          err.message?.includes('ERR_NAME_NOT_RESOLVED') ||
+          err.message?.includes('NetworkError') ||
+          err.message?.includes('Cannot resolve Supabase URL') ||
+          err.message?.includes('Connection timeout') ||
+          err.name === 'AuthRetryableFetchError') {
+        setError(
+          err.message || 
+          'Cannot connect to authentication server. ' +
+          'This usually means:\n' +
+          '1. The Supabase project may be paused or deleted\n' +
+          '2. The Supabase URL is incorrect\n' +
+          '3. There is a network connectivity issue\n\n' +
+          'Please contact support or check your Supabase project status.'
+        );
+      } else {
+        setError(err.message || 'Google signup failed. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }
