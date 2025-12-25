@@ -76,6 +76,15 @@ export default function SignupPage() {
     }
 
     try {
+      // DEVELOPMENT MODE: Skip Supabase signup if bypassing auth
+      if (process.env.NEXT_PUBLIC_BYPASS_AUTH === 'true' && process.env.NODE_ENV === 'development') {
+        console.log('[SIGNUP] [DEV MODE] Bypassing Supabase signup');
+        // Simulate successful signup
+        setIsLoading(false);
+        router.replace('/onboarding');
+        return;
+      }
+
       // Test Supabase connection first
       if (!connectionTested) {
         console.log('[SIGNUP] Testing Supabase connection...');

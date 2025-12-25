@@ -1,45 +1,92 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient, SupabaseClient } from '@supabase/supabase-js'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+// Check for bypass mode first (before reading env vars)
+const bypassAuth = process.env.NEXT_PUBLIC_BYPASS_AUTH === 'true' && process.env.NODE_ENV === 'development'
 
-// Add better error handling for missing environment variables
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('Missing Supabase environment variables:', {
-    hasUrl: !!supabaseUrl,
-    hasKey: !!supabaseAnonKey,
-    environment: process.env.NODE_ENV
-  });
-  
-  if (process.env.NODE_ENV === 'production') {
-    throw new Error('Critical: Supabase environment variables are missing in production');
-  }
-}
+// Get environment variables (may be undefined or empty)
+// Use nullish coalescing to ensure we have strings (even if empty) for safe .trim() calls
+const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim()
+const supabaseAnonKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '').trim()
 
-// Validate Supabase URL format
-if (supabaseUrl && !supabaseUrl.match(/^https:\/\/[a-z0-9-]+\.supabase\.co$/)) {
-  console.warn('[SUPABASE] URL format may be incorrect:', supabaseUrl.substring(0, 50) + '...');
-  console.warn('[SUPABASE] Expected format: https://[project-ref].supabase.co');
-}
+// DEVELOPMENT MODE: Create a mock Supabase client if bypassing auth
+let supabase: SupabaseClient;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true,
-    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
-    storageKey: 'supabase.auth.token',
-    flowType: 'pkce'
-  },
-  global: {
-    headers: {
-      'x-application-name': 'beyondwords-client'
+if (bypassAuth) {
+  console.warn('⚠️ [DEV MODE] Supabase authentication bypassed - using mock client');
+  // Create a minimal mock client with valid dummy URL/key (SupabaseClient requires non-empty strings)
+  // Using a valid-looking URL format to satisfy the constructor
+  supabase = createClient(
+    'https://dev-bypass.supabase.co',
+    'dev-bypass-key-12345678901234567890',
+    {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      }
     }
+  ) as any;
+} else {
+  // Production/development with auth: require valid Supabase credentials
+  // Check for empty strings as well as undefined
+  if (!supabaseUrl || !supabaseAnonKey || supabaseUrl === '' || supabaseAnonKey === '') {
+    console.error('Missing Supabase environment variables:', {
+      hasUrl: !!supabaseUrl && supabaseUrl !== '',
+      hasKey: !!supabaseAnonKey && supabaseAnonKey !== '',
+      environment: process.env.NODE_ENV
+    });
+    
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('Critical: Supabase environment variables are missing in production');
+    }
+    
+    // In development without bypass, still create a mock to prevent crashes
+    console.warn('⚠️ [DEV] Creating mock Supabase client due to missing credentials');
+    supabase = createClient(
+      'https://dev-mock.supabase.co',
+      'dev-mock-key-12345678901234567890',
+      {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+          detectSessionInUrl: false,
+        }
+      }
+    ) as any;
+  } else {
+    // Validate Supabase URL format
+    if (supabaseUrl && !supabaseUrl.match(/^https:\/\/[a-z0-9-]+\.supabase\.co$/)) {
+      console.warn('[SUPABASE] URL format may be incorrect:', supabaseUrl.substring(0, 50) + '...');
+      console.warn('[SUPABASE] Expected format: https://[project-ref].supabase.co');
+    }
+
+    supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+        storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+        storageKey: 'supabase.auth.token',
+        flowType: 'pkce'
+      },
+      global: {
+        headers: {
+          'x-application-name': 'beyondwords-client'
+        }
+      }
+    });
   }
-})
+}
+
+export { supabase }
 
 // Test connection function for debugging
 export const getCurrentSession = async () => {
+  // DEVELOPMENT MODE: Return no session if bypassing auth
+  if (bypassAuth) {
+    return { session: null, error: null };
+  }
+
   try {
     // Try to get session from storage first
     const storedSession = typeof window !== 'undefined' ? 
@@ -71,6 +118,11 @@ export const getCurrentSession = async () => {
 
 // Test if Supabase URL is reachable
 export const testSupabaseReachability = async (): Promise<{ reachable: boolean; error?: string }> => {
+  // DEVELOPMENT MODE: Return reachable if bypassing auth
+  if (bypassAuth) {
+    return { reachable: true };
+  }
+
   if (!supabaseUrl) {
     return { reachable: false, error: 'Supabase URL is not configured' };
   }
@@ -110,6 +162,11 @@ export const testSupabaseReachability = async (): Promise<{ reachable: boolean; 
 };
 
 export const testSupabaseConnection = async () => {
+  // DEVELOPMENT MODE: Return success if bypassing auth
+  if (bypassAuth) {
+    return { success: true, data: { hasSession: false }, error: null };
+  }
+
   try {
     console.log('[SUPABASE] Testing connection with auth session...');
     
@@ -131,6 +188,20 @@ export const testSupabaseConnection = async () => {
 
 // Enhanced user profile functions with better error handling
 export const getUserProfile = async (userId: string) => {
+  // DEVELOPMENT MODE: Return mock profile if bypassing auth
+  if (bypassAuth) {
+    return { 
+      success: true, 
+      data: {
+        id: userId,
+        email: 'dev@localhost.test',
+        name: 'Development User',
+        onboarding_complete: true
+      }, 
+      error: null 
+    };
+  }
+
   try {
     // console.log('[SUPABASE] Getting user profile for:', userId);
     const { data, error } = await supabase
@@ -160,6 +231,19 @@ export const getUserProfile = async (userId: string) => {
 };
 
 export const createUserProfile = async (userData: any) => {
+  // DEVELOPMENT MODE: Return mock profile if bypassing auth
+  if (bypassAuth) {
+    return { 
+      success: true, 
+      data: {
+        ...userData,
+        id: userData.id || 'dev-user-123',
+        onboarding_complete: false
+      }, 
+      error: null 
+    };
+  }
+
   try {
     console.log('[SUPABASE] Creating user profile:', userData);
     const { data, error } = await supabase

@@ -56,7 +56,25 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const { syncWithUserPreferences } = useDarkMode();
 
   useEffect(() => {
+    // DEVELOPMENT MODE: Bypass authentication if enabled
+    if (process.env.NEXT_PUBLIC_BYPASS_AUTH === 'true' && process.env.NODE_ENV === 'development') {
+      console.warn('⚠️ [DEV MODE] Authentication bypassed - DO NOT USE IN PRODUCTION');
+      // Create a mock user for development
+      const mockUser: User = {
+        id: 'dev-user-123',
+        email: 'dev@localhost.test',
+        name: 'Development User',
+        onboarding_complete: true
+      };
+      setUser(mockUser);
+      setIsLoading(false);
+      return;
+    }
+
     // console.log('[EFFECT] Starting authentication flow');
+    
+    // Store subscription reference for cleanup
+    let subscription: { unsubscribe: () => void } | null = null;
     
     const initAuth = async () => {
       try {
@@ -69,95 +87,115 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           return;
         }
 
+        // DEVELOPMENT MODE: Skip auth state listener if bypassing
+        if (process.env.NEXT_PUBLIC_BYPASS_AUTH === 'true' && process.env.NODE_ENV === 'development') {
+          setIsLoading(false);
+          return;
+        }
+
         // Set up auth state change listener first
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(
-          async (event, newSession) => {
-            // console.log('[AUTH] State change:', event, newSession?.user?.id);
-            
-            if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
-              if (!newSession?.user) return;
-              
+        // Wrap async handler to prevent message channel errors
+        const { data: { subscription: authSubscription } } = supabase.auth.onAuthStateChange(
+          (event, newSession) => {
+            // Use setTimeout to make this truly async and prevent message channel errors
+            setTimeout(async () => {
               try {
-                const { success, data: profile } = await getUserProfile(newSession.user.id);
+                // console.log('[AUTH] State change:', event, newSession?.user?.id);
                 
-                if (success && profile) {
-                  setUser({
-                    id: newSession.user.id,
-                    email: newSession.user.email,
-                    name: profile.name || newSession.user.user_metadata?.full_name,
-                    photoUrl: newSession.user.user_metadata?.picture,
-                    onboarding_complete: profile.onboarding_complete,
-                    ...profile
-                  });
-                  syncWithUserPreferences(profile);
-                } else {
-                  // Create new profile
-                  const newProfile = {
-                    id: newSession.user.id,
-                    email: newSession.user.email || '',
-                    name: newSession.user.user_metadata?.full_name || newSession.user.email?.split('@')[0] || 'User',
-                    google_id: newSession.user.user_metadata?.sub,
-                    onboarding_complete: false
-                  };
+                if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+                  if (!newSession?.user) {
+                    setIsLoading(false);
+                    return;
+                  }
                   
-                  const { success: createSuccess, data: createdProfile } = await createUserProfile(newProfile);
-                  if (createSuccess && createdProfile) {
-                    setUser({
-                      id: createdProfile.id,
-                      email: createdProfile.email,
-                      name: createdProfile.name,
-                      photoUrl: newSession.user.user_metadata?.picture,
-                      onboarding_complete: createdProfile.onboarding_complete || false,
-                      ...createdProfile
-                    });
-                  } else {
-                    console.error('[AUTH] Failed to create user profile');
+                  try {
+                    const { success, data: profile } = await getUserProfile(newSession.user.id);
+                    
+                    if (success && profile) {
+                      setUser({
+                        id: newSession.user.id,
+                        email: newSession.user.email,
+                        name: profile.name || newSession.user.user_metadata?.full_name,
+                        photoUrl: newSession.user.user_metadata?.picture,
+                        onboarding_complete: profile.onboarding_complete,
+                        ...profile
+                      });
+                      syncWithUserPreferences(profile);
+                    } else {
+                      // Create new profile
+                      const newProfile = {
+                        id: newSession.user.id,
+                        email: newSession.user.email || '',
+                        name: newSession.user.user_metadata?.full_name || newSession.user.email?.split('@')[0] || 'User',
+                        google_id: newSession.user.user_metadata?.sub,
+                        onboarding_complete: false
+                      };
+                      
+                      const { success: createSuccess, data: createdProfile } = await createUserProfile(newProfile);
+                      if (createSuccess && createdProfile) {
+                        setUser({
+                          id: createdProfile.id,
+                          email: createdProfile.email,
+                          name: createdProfile.name,
+                          photoUrl: newSession.user.user_metadata?.picture,
+                          onboarding_complete: createdProfile.onboarding_complete || false,
+                          ...createdProfile
+                        });
+                      } else {
+                        console.error('[AUTH] Failed to create user profile');
+                        setUser(null);
+                      }
+                    }
+
+                    // Ensure our app JWT is available for backend calls
+                    try {
+                      const email = newSession.user.email || '';
+                      const name = newSession.user.user_metadata?.full_name || newSession.user.user_metadata?.name || '';
+                      // Try Next API first, then fallback to backend directly
+                      const primary = '/api/auth/exchange';
+                      const backendBase = (process.env.NEXT_PUBLIC_API_BASE_URL || 'https://beyondwords-express.onrender.com').replace(/\/$/, '');
+                      const fallback = `${backendBase}/api/auth/exchange`;
+                      let res = await fetch(primary, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email, name })
+                      });
+                      if (!res.ok) {
+                        res = await fetch(fallback, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ email, name })
+                        });
+                      }
+                      if (res.ok) {
+                        const json = await res.json();
+                        if (json?.token) {
+                          localStorage.setItem('jwt', json.token);
+                        }
+                      }
+                    } catch (e) {
+                      console.warn('[AUTH] JWT exchange failed', e);
+                    }
+                  } catch (err) {
+                    console.error('[AUTH] Profile error:', err);
                     setUser(null);
                   }
+                } else if (event === 'SIGNED_OUT') {
+                  console.log('[AUTH] User signed out');
+                  setUser(null);
+                  localStorage.removeItem('supabase.auth.token');
                 }
-
-                // Ensure our app JWT is available for backend calls
-                try {
-                  const email = newSession.user.email || '';
-                  const name = newSession.user.user_metadata?.full_name || newSession.user.user_metadata?.name || '';
-                  // Try Next API first, then fallback to backend directly
-                  const primary = '/api/auth/exchange';
-                  const backendBase = (process.env.NEXT_PUBLIC_API_BASE_URL || 'https://beyondwords-express.onrender.com').replace(/\/$/, '');
-                  const fallback = `${backendBase}/api/auth/exchange`;
-                  let res = await fetch(primary, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, name })
-                  });
-                  if (!res.ok) {
-                    res = await fetch(fallback, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ email, name })
-                    });
-                  }
-                  if (res.ok) {
-                    const json = await res.json();
-                    if (json?.token) {
-                      localStorage.setItem('jwt', json.token);
-                    }
-                  }
-                } catch (e) {
-                  console.warn('[AUTH] JWT exchange failed', e);
-                }
+                
+                setIsLoading(false);
               } catch (err) {
-                console.error('[AUTH] Profile error:', err);
-                setUser(null);
+                console.error('[AUTH] Error in auth state change handler:', err);
+                setIsLoading(false);
               }
-            } else if (event === 'SIGNED_OUT') {
-              console.log('[AUTH] User signed out');
-              setUser(null);
-              localStorage.removeItem('supabase.auth.token');
-            }
-            
-            setIsLoading(false);
+            }, 0);
           }
         );
+        
+        subscription = authSubscription;
 
         // Handle initial session
         if (session?.user) {
@@ -181,11 +219,6 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         
         // Always set loading to false after handling initial session
         setIsLoading(false);
-
-        return () => {
-          subscription.unsubscribe();
-          // console.log('[AUTH] Cleanup: unsubscribed from auth changes');
-        };
       } catch (err) {
         console.error('[AUTH] Init error:', err);
         setIsLoading(false);
@@ -193,9 +226,29 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     };
 
     initAuth();
+    
+    // Cleanup function - properly unsubscribe when component unmounts
+    return () => {
+      if (subscription) {
+        try {
+          subscription.unsubscribe();
+          // console.log('[AUTH] Cleanup: unsubscribed from auth changes');
+        } catch (err) {
+          console.warn('[AUTH] Error unsubscribing:', err);
+        }
+      }
+    };
   }, [syncWithUserPreferences]);
 
   const logout = async () => {
+    // DEVELOPMENT MODE: Skip Supabase signout if bypassing
+    if (process.env.NEXT_PUBLIC_BYPASS_AUTH === 'true' && process.env.NODE_ENV === 'development') {
+      setUser(null);
+      localStorage.removeItem('jwt');
+      router.push('/');
+      return;
+    }
+
     try {
       await supabase.auth.signOut();
       setUser(null);

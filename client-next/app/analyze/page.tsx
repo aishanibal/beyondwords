@@ -24,6 +24,12 @@ export default function AnalyzePage() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    // DEVELOPMENT MODE: Allow access without authentication
+    if (process.env.NEXT_PUBLIC_BYPASS_AUTH === 'true' && process.env.NODE_ENV === 'development') {
+      setIsLoading(false);
+      return;
+    }
+
     // Check if user is authenticated
     if (user === null) {
       // User is not authenticated, redirect to login

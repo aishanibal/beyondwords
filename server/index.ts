@@ -225,6 +225,18 @@ const upload = multer({
 
 // JWT middleware - handles both custom JWT and Supabase tokens
 function authenticateJWT(req: ExpressRequest, res: Response, next: NextFunction) {
+  // DEVELOPMENT MODE: Bypass authentication if BYPASS_AUTH is enabled
+  if (process.env.BYPASS_AUTH === 'true' && process.env.NODE_ENV === 'development') {
+    console.warn('⚠️ [DEV MODE] Authentication bypassed - DO NOT USE IN PRODUCTION');
+    // Create a mock user for development
+    req.user = {
+      userId: 'dev-user-123',
+      email: 'dev@localhost.test',
+      name: 'Development User'
+    };
+    return next();
+  }
+
   const authHeader = req.headers.authorization;
   if (!authHeader) return res.status(401).json({ error: 'No token provided' });
   const token = authHeader.split(' ')[1];

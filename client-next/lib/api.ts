@@ -3,7 +3,12 @@
 import axios from 'axios';
 import { supabase } from './supabase';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://beyondwords-express.onrender.com';
+// Use localhost for local development, fallback to production
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 
+                     process.env.NEXT_PUBLIC_BACKEND_URL || 
+                     (typeof window !== 'undefined' && window.location.hostname === 'localhost' 
+                       ? 'http://localhost:4000' 
+                       : 'https://beyondwords-express.onrender.com');
 
 // Helper function to get auth token synchronously
 const getAuthToken = (): string | null => {
@@ -39,6 +44,12 @@ const getAuthToken = (): string | null => {
 
 // Helper function to create auth headers
 export const getAuthHeaders = async () => {
+  // DEVELOPMENT MODE: In bypass mode, don't send auth headers (server will bypass auth)
+  if (process.env.NEXT_PUBLIC_BYPASS_AUTH === 'true' && process.env.NODE_ENV === 'development') {
+    console.log('[API] [DEV MODE] Bypassing auth headers');
+    return {}; // Server will handle bypass mode
+  }
+
   // Try custom JWT first
   const customJwt = typeof window !== 'undefined' ? localStorage.getItem('jwt') : null;
   if (customJwt) {
@@ -60,10 +71,11 @@ export const getAuthHeaders = async () => {
 };
 
 // Language Dashboard API functions
+// Use Next.js API routes which will proxy to the correct backend
 export const getUserLanguageDashboards = async (userId: string) => {
   try {
     console.log('[API] Getting language dashboards for user:', userId);
-    const response = await axios.get(`${API_BASE_URL}/api/user/language-dashboards`, {
+    const response = await axios.get('/api/user/language-dashboards', {
       headers: await getAuthHeaders()
     });
     
@@ -95,13 +107,14 @@ export const createLanguageDashboard = async (dashboardData: {
 }) => {
   try {
     console.log('[API] Creating language dashboard:', dashboardData);
-    const response = await axios.post(`${API_BASE_URL}/api/user/language-dashboards`, {
+    const response = await axios.post('/api/user/language-dashboards', {
       language: dashboardData.language,
       proficiency: dashboardData.proficiency_level,
       talkTopics: dashboardData.talk_topics,
       learningGoals: dashboardData.learning_goals,
       practicePreference: dashboardData.practice_preference,
-      feedbackLanguage: dashboardData.feedback_language
+      feedbackLanguage: dashboardData.feedback_language,
+      isPrimary: dashboardData.is_primary
     }, {
       headers: await getAuthHeaders()
     });
@@ -125,7 +138,10 @@ export const createLanguageDashboard = async (dashboardData: {
 export const updateLanguageDashboard = async (language: string, updates: any) => {
   try {
     console.log('[API] Updating language dashboard:', language, updates);
-    const response = await axios.put(`${API_BASE_URL}/api/user/language-dashboards/${language}`, updates, {
+    const response = await axios.put('/api/user/language-dashboards', {
+      language,
+      updates
+    }, {
       headers: await getAuthHeaders()
     });
     
@@ -148,8 +164,9 @@ export const updateLanguageDashboard = async (language: string, updates: any) =>
 export const deleteLanguageDashboard = async (language: string) => {
   try {
     console.log('[API] Deleting language dashboard:', language);
-    await axios.delete(`${API_BASE_URL}/api/user/language-dashboards/${language}`, {
-      headers: await getAuthHeaders()
+    await axios.delete('/api/user/language-dashboards', {
+      headers: await getAuthHeaders(),
+      data: { language }
     });
     
     console.log('[API] Language dashboard deleted');

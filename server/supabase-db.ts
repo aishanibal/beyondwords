@@ -1,12 +1,54 @@
 
 
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-// Initialize Supabase client
-const supabaseUrl = process.env.SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY!;
+// Check for bypass mode FIRST (before reading env vars that might be missing)
+const bypassAuth = process.env.BYPASS_AUTH === 'true' && process.env.NODE_ENV === 'development'
 
-export const supabase = createClient(supabaseUrl, supabaseServiceKey);
+// Get environment variables (may be undefined or empty)
+const supabaseUrl = (process.env.SUPABASE_URL || '').trim()
+const supabaseServiceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || '').trim()
+
+// Initialize Supabase client with bypass mode support
+let supabase: SupabaseClient;
+
+if (bypassAuth) {
+  console.warn('⚠️ [DEV MODE] Server: Supabase authentication bypassed - using mock client');
+  // Create a minimal mock client with valid dummy URL/key
+  // SupabaseClient constructor requires non-empty strings
+  supabase = createClient(
+    'https://dev-bypass.supabase.co',
+    'dev-bypass-key-12345678901234567890'
+  ) as any;
+} else {
+  // Production/development with auth: require valid Supabase credentials
+  const hasValidUrl = supabaseUrl && supabaseUrl.length > 0
+  const hasValidKey = supabaseServiceKey && supabaseServiceKey.length > 0
+  
+  if (!hasValidUrl || !hasValidKey) {
+    console.error('Missing Supabase environment variables:', {
+      hasUrl: hasValidUrl,
+      hasKey: hasValidKey,
+      environment: process.env.NODE_ENV
+    });
+    
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('Critical: Supabase environment variables are missing in production');
+    }
+    
+    // In development without bypass, still create a mock to prevent crashes
+    console.warn('⚠️ [DEV] Server: Creating mock Supabase client due to missing credentials');
+    supabase = createClient(
+      'https://dev-mock.supabase.co',
+      'dev-mock-key-12345678901234567890'
+    ) as any;
+  } else {
+    // Create real Supabase client with valid credentials
+    supabase = createClient(supabaseUrl, supabaseServiceKey);
+  }
+}
+
+export { supabase }
 
 // Types
 export interface User {
@@ -117,6 +159,13 @@ export interface Persona {
 
 // User functions
 export const createUser = async (userData: Partial<User>): Promise<User> => {
+  // DEVELOPMENT MODE: Use SQLite database if bypassing auth
+  if (process.env.BYPASS_AUTH === 'true' && process.env.NODE_ENV === 'development') {
+    console.log('⚠️ [DEV MODE] Using SQLite database for creating user');
+    const sqliteDb = await import('./sqlite-db');
+    return sqliteDb.createUser(userData);
+  }
+
   // Convert camelCase to snake_case for database
   const dbData: any = { ...userData };
   
@@ -187,6 +236,13 @@ export const findUserByEmail = async (email: string): Promise<User | null> => {
 };
 
 export const findUserById = async (id: string): Promise<User | null> => {
+  // DEVELOPMENT MODE: Use SQLite database if bypassing auth
+  if (process.env.BYPASS_AUTH === 'true' && process.env.NODE_ENV === 'development') {
+    console.log('⚠️ [DEV MODE] Using SQLite database for finding user');
+    const sqliteDb = await import('./sqlite-db');
+    return sqliteDb.findUserById(id);
+  }
+
   const { data, error } = await supabase
     .from('users')
     .select('*')
@@ -198,6 +254,17 @@ export const findUserById = async (id: string): Promise<User | null> => {
 };
 
 export const updateUser = async (id: string, updates: Partial<User>): Promise<User> => {
+  // DEVELOPMENT MODE: Use SQLite database if bypassing auth
+  if (process.env.BYPASS_AUTH === 'true' && process.env.NODE_ENV === 'development') {
+    console.log('⚠️ [DEV MODE] Using SQLite database for updating user');
+    const sqliteDb = await import('./sqlite-db');
+    await sqliteDb.updateUser(id, updates);
+    // Return updated user
+    const updated = await sqliteDb.findUserById(id);
+    if (!updated) throw new Error('User not found after update');
+    return updated;
+  }
+
   // Convert camelCase to snake_case for database
   const dbUpdates: any = { ...updates };
   
@@ -307,6 +374,13 @@ export const createLanguageDashboard = async (
   feedbackLanguage = 'en',
   isPrimary = false
 ): Promise<LanguageDashboard> => {
+  // DEVELOPMENT MODE: Use SQLite database if bypassing auth
+  if (process.env.BYPASS_AUTH === 'true' && process.env.NODE_ENV === 'development') {
+    console.log('⚠️ [DEV MODE] Using SQLite database for language dashboard');
+    const sqliteDb = await import('./sqlite-db');
+    return sqliteDb.createLanguageDashboard(userId, language, proficiencyLevel, talkTopics, learningGoals, practicePreference, feedbackLanguage, isPrimary);
+  }
+
   const { data, error } = await supabase
     .from('language_dashboards')
     .insert([{
@@ -327,6 +401,13 @@ export const createLanguageDashboard = async (
 };
 
 export const getUserLanguageDashboards = async (userId: string): Promise<LanguageDashboard[]> => {
+  // DEVELOPMENT MODE: Use SQLite database if bypassing auth
+  if (process.env.BYPASS_AUTH === 'true' && process.env.NODE_ENV === 'development') {
+    console.log('⚠️ [DEV MODE] Using SQLite database for language dashboards');
+    const sqliteDb = await import('./sqlite-db');
+    return sqliteDb.getUserLanguageDashboards(userId);
+  }
+
   const { data, error } = await supabase
     .from('language_dashboards')
     .select('*')
@@ -338,6 +419,13 @@ export const getUserLanguageDashboards = async (userId: string): Promise<Languag
 };
 
 export const getLanguageDashboard = async (userId: string, language: string): Promise<LanguageDashboard | null> => {
+  // DEVELOPMENT MODE: Use SQLite database if bypassing auth
+  if (process.env.BYPASS_AUTH === 'true' && process.env.NODE_ENV === 'development') {
+    console.log('⚠️ [DEV MODE] Using SQLite database for language dashboard');
+    const sqliteDb = await import('./sqlite-db');
+    return sqliteDb.getLanguageDashboard(userId, language);
+  }
+
   const { data, error } = await supabase
     .from('language_dashboards')
     .select('*')
@@ -350,6 +438,17 @@ export const getLanguageDashboard = async (userId: string, language: string): Pr
 };
 
 export const updateLanguageDashboard = async (userId: string, language: string, updates: Partial<LanguageDashboard>): Promise<LanguageDashboard> => {
+  // DEVELOPMENT MODE: Use SQLite database if bypassing auth
+  if (process.env.BYPASS_AUTH === 'true' && process.env.NODE_ENV === 'development') {
+    console.log('⚠️ [DEV MODE] Using SQLite database for updating language dashboard');
+    const sqliteDb = await import('./sqlite-db');
+    await sqliteDb.updateLanguageDashboard(userId, language, updates);
+    // Return updated dashboard
+    const updated = await sqliteDb.getLanguageDashboard(userId, language);
+    if (!updated) throw new Error('Language dashboard not found after update');
+    return updated;
+  }
+
   const { data, error } = await supabase
     .from('language_dashboards')
     .update(updates)
@@ -363,6 +462,13 @@ export const updateLanguageDashboard = async (userId: string, language: string, 
 };
 
 export const deleteLanguageDashboard = async (userId: string, language: string): Promise<{ changes: number }> => {
+  // DEVELOPMENT MODE: Use SQLite database if bypassing auth
+  if (process.env.BYPASS_AUTH === 'true' && process.env.NODE_ENV === 'development') {
+    console.log('⚠️ [DEV MODE] Using SQLite database for deleting language dashboard');
+    const sqliteDb = await import('./sqlite-db');
+    return sqliteDb.deleteLanguageDashboard(userId, language);
+  }
+
   const { error } = await supabase
     .from('language_dashboards')
     .delete()

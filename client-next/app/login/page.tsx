@@ -39,6 +39,14 @@ export default function LoginPage() {
     setError('');
     
     try {
+      // DEVELOPMENT MODE: Skip Supabase login if bypassing auth
+      if (process.env.NEXT_PUBLIC_BYPASS_AUTH === 'true' && process.env.NODE_ENV === 'development') {
+        console.log('[LOGIN] [DEV MODE] Bypassing Supabase login');
+        // Simulate successful login - user will be set by ClientLayout
+        router.push('/dashboard');
+        return;
+      }
+
       const { data, error } = await supabase.auth.signInWithPassword({
         email: formData.email,
         password: formData.password,

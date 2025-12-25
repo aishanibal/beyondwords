@@ -294,6 +294,11 @@ export default function DashboardPage() {
 
   // Authentication protection
   useEffect(() => {
+    // DEVELOPMENT MODE: Allow access without authentication
+    if (process.env.NEXT_PUBLIC_BYPASS_AUTH === 'true' && process.env.NODE_ENV === 'development') {
+      return;
+    }
+
     if (user === null) {
       router.push('/login');
       return;
@@ -301,7 +306,8 @@ export default function DashboardPage() {
   }, [user, router]);
 
   // Show loading while checking authentication
-  if (user === null) {
+  // DEVELOPMENT MODE: Skip auth check
+  if (user === null && !(process.env.NEXT_PUBLIC_BYPASS_AUTH === 'true' && process.env.NODE_ENV === 'development')) {
     return <LoadingScreen message="Checking authentication..." />;
   }
   const [selectedLanguage, setSelectedLanguage] = useState<string | null>(null);

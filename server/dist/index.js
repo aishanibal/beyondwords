@@ -70,6 +70,15 @@ const upload = (0, multer_1.default)({
     }
 });
 function authenticateJWT(req, res, next) {
+    if (process.env.BYPASS_AUTH === 'true' && process.env.NODE_ENV === 'development') {
+        console.warn('⚠️ [DEV MODE] Authentication bypassed - DO NOT USE IN PRODUCTION');
+        req.user = {
+            userId: 'dev-user-123',
+            email: 'dev@localhost.test',
+            name: 'Development User'
+        };
+        return next();
+    }
     const authHeader = req.headers.authorization;
     if (!authHeader)
         return res.status(401).json({ error: 'No token provided' });
