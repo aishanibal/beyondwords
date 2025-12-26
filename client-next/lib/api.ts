@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // API client for server communication
 import axios from 'axios';
-import { supabase } from './supabase';
+import { getIdToken } from './firebase';
 
 // Use localhost for local development, fallback to production
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 
@@ -9,38 +9,6 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ||
                      (typeof window !== 'undefined' && window.location.hostname === 'localhost' 
                        ? 'http://localhost:4000' 
                        : 'https://beyondwords-express.onrender.com');
-
-// Helper function to get auth token synchronously
-const getAuthToken = (): string | null => {
-  if (typeof window !== 'undefined') {
-    // First try to get the custom JWT token
-    const customJwt = localStorage.getItem('jwt');
-    if (customJwt) return customJwt;
-    
-    // Try to get Supabase token from localStorage
-    const supabaseToken = localStorage.getItem('supabase.auth.token');
-    if (supabaseToken) {
-      try {
-        const tokenData = JSON.parse(supabaseToken);
-        return tokenData.access_token;
-      } catch (e) {
-        console.error('Failed to parse Supabase token:', e);
-      }
-    }
-    
-    // Try to get from Supabase session storage
-    const sessionData = localStorage.getItem('sb-' + process.env.NEXT_PUBLIC_SUPABASE_URL?.split('//')[1]?.split('.')[0] + '-auth-token');
-    if (sessionData) {
-      try {
-        const session = JSON.parse(sessionData);
-        return session.access_token;
-      } catch (e) {
-        console.error('Failed to parse Supabase session:', e);
-      }
-    }
-  }
-  return null;
-};
 
 // Helper function to create auth headers
 export const getAuthHeaders = async () => {
@@ -50,21 +18,20 @@ export const getAuthHeaders = async () => {
     return {}; // Server will handle bypass mode
   }
 
-  // Try custom JWT first
+  // Try custom JWT first (from backend token exchange)
   const customJwt = typeof window !== 'undefined' ? localStorage.getItem('jwt') : null;
   if (customJwt) {
     return { Authorization: `Bearer ${customJwt}` };
   }
   
-  // Get Supabase session token
+  // Get Firebase ID token
   try {
-    const { supabase } = await import('./supabase');
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.access_token) {
-      return { Authorization: `Bearer ${session.access_token}` };
+    const firebaseToken = await getIdToken();
+    if (firebaseToken) {
+      return { Authorization: `Bearer ${firebaseToken}` };
     }
   } catch (e) {
-    console.error('Failed to get Supabase session:', e);
+    console.error('Failed to get Firebase token:', e);
   }
   
   return {};
@@ -224,6 +191,87 @@ export const getUserConversations = async (userId: string) => {
     };
   } catch (error: any) {
     console.error('[API] Error getting conversations:', error);
+    return { 
+      success: false, 
+      data: null, 
+      error: error.response?.data?.error || error.message 
+    };
+  }
+};
+
+// User Profile API functions
+export const getUserProfile = async (userId: string) => {
+  try {
+    console.log('[API] Getting user profile for:', userId);
+    const response = await axios.get('/api/user/profile', {
+      headers: await getAuthHeaders()
+    });
+    
+    console.log('[API] User profile response:', response.data);
+    return { 
+      success: true, 
+      data: response.data.user || response.data, 
+      error: null 
+    };
+  } catch (error: any) {
+    console.error('[API] Error getting user profile:', error);
+    return { 
+      success: false, 
+      data: null, 
+      error: error.response?.data?.error || error.message 
+    };
+  }
+};
+
+export const createUserProfile = async (userData: {
+  id: string;
+  email: string;
+  name: string;
+  onboarding_complete?: boolean;
+  [key: string]: any;
+}) => {
+  try {
+    console.log('[API] Creating user profile:', userData);
+    const response = await axios.post('/api/user/profile', {
+      id: userData.id,
+      email: userData.email,
+      name: userData.name,
+      onboarding_complete: userData.onboarding_complete ?? false
+    }, {
+      headers: await getAuthHeaders()
+    });
+    
+    console.log('[API] User profile created:', response.data);
+    return { 
+      success: true, 
+      data: response.data.user || response.data, 
+      error: null 
+    };
+  } catch (error: any) {
+    console.error('[API] Error creating user profile:', error);
+    return { 
+      success: false, 
+      data: null, 
+      error: error.response?.data?.error || error.message 
+    };
+  }
+};
+
+export const updateUserProfile = async (updates: any) => {
+  try {
+    console.log('[API] Updating user profile:', updates);
+    const response = await axios.put('/api/user/profile', updates, {
+      headers: await getAuthHeaders()
+    });
+    
+    console.log('[API] User profile updated:', response.data);
+    return { 
+      success: true, 
+      data: response.data.user || response.data, 
+      error: null 
+    };
+  } catch (error: any) {
+    console.error('[API] Error updating user profile:', error);
     return { 
       success: false, 
       data: null, 

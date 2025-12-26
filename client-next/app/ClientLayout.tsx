@@ -11,8 +11,9 @@ import Navigation from "./components/Navigation";
 import SignupFloating from "./components/SignupFloating";
 import LoadingScreen from "./components/LoadingScreen";
 import { useDarkMode } from './contexts/DarkModeContext';
-import { supabase } from '../lib/supabase';
-import { getUserProfile, createUserProfile, testSupabaseConnection, getCurrentSession } from '../lib/supabase';
+import { getUserProfile, createUserProfile } from '../lib/api';
+import { getCurrentAuthUser, onAuthStateChange, signOutUser } from '../lib/firebase-auth';
+import { getIdToken } from '../lib/firebase';
 
 // Debug Supabase client configuration
 console.log('[SUPABASE_DEBUG] Client imported successfully');
@@ -71,177 +72,127 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       return;
     }
 
-    // console.log('[EFFECT] Starting authentication flow');
-    
-    // Store subscription reference for cleanup
-    let subscription: { unsubscribe: () => void } | null = null;
-    
-    const initAuth = async () => {
+    // Set up Firebase auth state listener
+    const unsubscribe = onAuthStateChange(async (firebaseUser) => {
       try {
-        // Get current session with enhanced session management
-        const { session, error } = await getCurrentSession();
-        
-        if (error) {
-          console.error('[AUTH] Session error:', error);
-          setIsLoading(false);
-          return;
-        }
-
-        // DEVELOPMENT MODE: Skip auth state listener if bypassing
-        if (process.env.NEXT_PUBLIC_BYPASS_AUTH === 'true' && process.env.NODE_ENV === 'development') {
-          setIsLoading(false);
-          return;
-        }
-
-        // Set up auth state change listener first
-        // Wrap async handler to prevent message channel errors
-        const { data: { subscription: authSubscription } } = supabase.auth.onAuthStateChange(
-          (event, newSession) => {
-            // Use setTimeout to make this truly async and prevent message channel errors
-            setTimeout(async () => {
-              try {
-                // console.log('[AUTH] State change:', event, newSession?.user?.id);
-                
-                if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
-                  if (!newSession?.user) {
-                    setIsLoading(false);
-                    return;
-                  }
-                  
-                  try {
-                    const { success, data: profile } = await getUserProfile(newSession.user.id);
-                    
-                    if (success && profile) {
-                      setUser({
-                        id: newSession.user.id,
-                        email: newSession.user.email,
-                        name: profile.name || newSession.user.user_metadata?.full_name,
-                        photoUrl: newSession.user.user_metadata?.picture,
-                        onboarding_complete: profile.onboarding_complete,
-                        ...profile
-                      });
-                      syncWithUserPreferences(profile);
-                    } else {
-                      // Create new profile
-                      const newProfile = {
-                        id: newSession.user.id,
-                        email: newSession.user.email || '',
-                        name: newSession.user.user_metadata?.full_name || newSession.user.email?.split('@')[0] || 'User',
-                        google_id: newSession.user.user_metadata?.sub,
-                        onboarding_complete: false
-                      };
-                      
-                      const { success: createSuccess, data: createdProfile } = await createUserProfile(newProfile);
-                      if (createSuccess && createdProfile) {
-                        setUser({
-                          id: createdProfile.id,
-                          email: createdProfile.email,
-                          name: createdProfile.name,
-                          photoUrl: newSession.user.user_metadata?.picture,
-                          onboarding_complete: createdProfile.onboarding_complete || false,
-                          ...createdProfile
-                        });
-                      } else {
-                        console.error('[AUTH] Failed to create user profile');
-                        setUser(null);
-                      }
-                    }
-
-                    // Ensure our app JWT is available for backend calls
-                    try {
-                      const email = newSession.user.email || '';
-                      const name = newSession.user.user_metadata?.full_name || newSession.user.user_metadata?.name || '';
-                      // Try Next API first, then fallback to backend directly
-                      const primary = '/api/auth/exchange';
-                      const backendBase = (process.env.NEXT_PUBLIC_API_BASE_URL || 'https://beyondwords-express.onrender.com').replace(/\/$/, '');
-                      const fallback = `${backendBase}/api/auth/exchange`;
-                      let res = await fetch(primary, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ email, name })
-                      });
-                      if (!res.ok) {
-                        res = await fetch(fallback, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ email, name })
-                        });
-                      }
-                      if (res.ok) {
-                        const json = await res.json();
-                        if (json?.token) {
-                          localStorage.setItem('jwt', json.token);
-                        }
-                      }
-                    } catch (e) {
-                      console.warn('[AUTH] JWT exchange failed', e);
-                    }
-                  } catch (err) {
-                    console.error('[AUTH] Profile error:', err);
-                    setUser(null);
-                  }
-                } else if (event === 'SIGNED_OUT') {
-                  console.log('[AUTH] User signed out');
-                  setUser(null);
-                  localStorage.removeItem('supabase.auth.token');
-                }
-                
-                setIsLoading(false);
-              } catch (err) {
-                console.error('[AUTH] Error in auth state change handler:', err);
-                setIsLoading(false);
-              }
-            }, 0);
-          }
-        );
-        
-        subscription = authSubscription;
-
-        // Handle initial session
-        if (session?.user) {
-          const { success, data: profile } = await getUserProfile(session.user.id);
+        if (firebaseUser) {
+          // User is signed in
+          const { success, data: profile } = await getUserProfile(firebaseUser.uid);
+          
           if (success && profile) {
             setUser({
-              id: session.user.id,
-              email: session.user.email,
-              name: profile.name || session.user.user_metadata?.full_name,
-              photoUrl: session.user.user_metadata?.picture,
+              id: firebaseUser.uid,
+              email: firebaseUser.email || '',
+              name: profile.name || firebaseUser.displayName || '',
+              photoUrl: firebaseUser.photoURL || profile.photoUrl,
               onboarding_complete: profile.onboarding_complete,
               ...profile
             });
             syncWithUserPreferences(profile);
+          } else {
+            // Create new profile if it doesn't exist
+            const newProfile = {
+              id: firebaseUser.uid,
+              email: firebaseUser.email || '',
+              name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
+              onboarding_complete: false
+            };
+            
+            const { success: createSuccess, data: createdProfile } = await createUserProfile(newProfile);
+            if (createSuccess && createdProfile) {
+              setUser({
+                id: createdProfile.id,
+                email: createdProfile.email,
+                name: createdProfile.name,
+                photoUrl: firebaseUser.photoURL,
+                onboarding_complete: createdProfile.onboarding_complete || false,
+                ...createdProfile
+              });
+            } else {
+              console.error('[AUTH] Failed to create user profile');
+              setUser(null);
+            }
+          }
+
+          // Ensure our app JWT is available for backend calls
+          try {
+            const idToken = await getIdToken();
+            const email = firebaseUser.email || '';
+            const name = firebaseUser.displayName || '';
+            
+            if (idToken) {
+              // Try Next API first, then fallback to backend directly
+              const primary = '/api/auth/exchange';
+              const backendBase = (process.env.NEXT_PUBLIC_API_BASE_URL || 'https://beyondwords-express.onrender.com').replace(/\/$/, '');
+              const fallback = `${backendBase}/api/auth/exchange`;
+              
+              let res = await fetch(primary, {
+                method: 'POST',
+                headers: { 
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${idToken}`
+                },
+                body: JSON.stringify({ 
+                  email, 
+                  name,
+                  firebaseToken: idToken 
+                })
+              });
+              
+              if (!res.ok) {
+                res = await fetch(fallback, {
+                  method: 'POST',
+                  headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${idToken}`
+                  },
+                  body: JSON.stringify({ 
+                    email, 
+                    name,
+                    firebaseToken: idToken 
+                  })
+                });
+              }
+              
+              if (res.ok) {
+                const json = await res.json();
+                if (json?.token) {
+                  localStorage.setItem('jwt', json.token);
+                }
+              }
+            }
+          } catch (e) {
+            console.warn('[AUTH] JWT exchange failed', e);
           }
         } else {
-          // No initial session, user is not logged in
-          console.log('[AUTH] No initial session found');
+          // User is signed out
+          console.log('[AUTH] User signed out');
           setUser(null);
+          localStorage.removeItem('jwt');
         }
         
-        // Always set loading to false after handling initial session
         setIsLoading(false);
       } catch (err) {
-        console.error('[AUTH] Init error:', err);
+        console.error('[AUTH] Error in auth state change handler:', err);
         setIsLoading(false);
       }
-    };
+    });
 
-    initAuth();
+    // Check initial auth state
+    const currentUser = getCurrentAuthUser();
+    if (!currentUser) {
+      setUser(null);
+      setIsLoading(false);
+    }
     
-    // Cleanup function - properly unsubscribe when component unmounts
+    // Cleanup function
     return () => {
-      if (subscription) {
-        try {
-          subscription.unsubscribe();
-          // console.log('[AUTH] Cleanup: unsubscribed from auth changes');
-        } catch (err) {
-          console.warn('[AUTH] Error unsubscribing:', err);
-        }
-      }
+      unsubscribe();
     };
   }, [syncWithUserPreferences]);
 
   const logout = async () => {
-    // DEVELOPMENT MODE: Skip Supabase signout if bypassing
+    // DEVELOPMENT MODE: Skip Firebase signout if bypassing
     if (process.env.NEXT_PUBLIC_BYPASS_AUTH === 'true' && process.env.NODE_ENV === 'development') {
       setUser(null);
       localStorage.removeItem('jwt');
@@ -250,7 +201,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     }
 
     try {
-      await supabase.auth.signOut();
+      await signOutUser();
       setUser(null);
       router.push('/');
     } catch (error) {

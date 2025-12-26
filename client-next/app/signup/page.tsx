@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { GoogleLogin } from '@react-oauth/google';
 import { useUser } from '../ClientLayout';
-import { supabase, testSupabaseReachability } from '../../lib/supabase';
+import { signUpWithEmail, signInWithGoogle, testFirebaseReachability } from '../../lib/firebase-auth';
 import logo from '../../assets/logo.png';
 
 export default function SignupPage() {
@@ -30,11 +30,11 @@ export default function SignupPage() {
   const [connectionTested, setConnectionTested] = useState(false);
   const [isTestingConnection, setIsTestingConnection] = useState(true);
 
-  // Test Supabase connection on page load
+  // Test Firebase connection on page load
   useEffect(() => {
     const testConnection = async () => {
       try {
-        const result = await testSupabaseReachability();
+        const result = await testFirebaseReachability();
         setConnectionTested(true);
         if (!result.reachable) {
           setError(result.error || 'Cannot connect to authentication server. Please check your configuration.');
@@ -76,19 +76,19 @@ export default function SignupPage() {
     }
 
     try {
-      // DEVELOPMENT MODE: Skip Supabase signup if bypassing auth
+      // DEVELOPMENT MODE: Skip Firebase signup if bypassing auth
       if (process.env.NEXT_PUBLIC_BYPASS_AUTH === 'true' && process.env.NODE_ENV === 'development') {
-        console.log('[SIGNUP] [DEV MODE] Bypassing Supabase signup');
+        console.log('[SIGNUP] [DEV MODE] Bypassing Firebase signup');
         // Simulate successful signup
         setIsLoading(false);
         router.replace('/onboarding');
         return;
       }
 
-      // Test Supabase connection first
+      // Test Firebase connection first
       if (!connectionTested) {
-        console.log('[SIGNUP] Testing Supabase connection...');
-        const connectionTest = await testSupabaseReachability();
+        console.log('[SIGNUP] Testing Firebase connection...');
+        const connectionTest = await testFirebaseReachability();
         setConnectionTested(true);
         
         if (!connectionTest.reachable) {
@@ -96,29 +96,18 @@ export default function SignupPage() {
         }
       }
 
-      // Sign up with Supabase (no email confirmation)
-      const { data, error } = await supabase.auth.signUp({
-        email: formData.email,
-        password: formData.password,
-        options: {
-          data: {
-            name: formData.name,
-          },
-          emailRedirectTo: `${window.location.origin}/dashboard`,
-        },
-      });
+      // Sign up with Firebase
+      const result = await signUpWithEmail(formData.email, formData.password, formData.name);
 
-      if (error) {
-        throw error;
+      if (!result.success || !result.user) {
+        throw new Error(result.error || 'Sign up failed');
       }
 
-      if (data.user) {
-        // User will be set automatically by the auth state change listener
-        // New users always need onboarding
-        console.log('[SIGNUP] Success, redirecting to onboarding');
-        setIsLoading(false);
-        router.replace('/onboarding');
-      }
+      // User will be set automatically by the auth state change listener
+      // New users always need onboarding
+      console.log('[SIGNUP] Success, redirecting to onboarding');
+      setIsLoading(false);
+      router.replace('/onboarding');
       
     } catch (err: any) {
       console.error('Sign-up error:', err);
@@ -127,17 +116,16 @@ export default function SignupPage() {
       if (err.message?.includes('Failed to fetch') || 
           err.message?.includes('ERR_NAME_NOT_RESOLVED') ||
           err.message?.includes('NetworkError') ||
-          err.message?.includes('Cannot resolve Supabase URL') ||
-          err.message?.includes('Connection timeout') ||
-          err.name === 'AuthRetryableFetchError') {
+          err.message?.includes('network-request-failed') ||
+          err.message?.includes('Connection timeout')) {
         setError(
           err.message || 
           'Cannot connect to authentication server. ' +
           'This usually means:\n' +
-          '1. The Supabase project may be paused or deleted\n' +
-          '2. The Supabase URL is incorrect\n' +
-          '3. There is a network connectivity issue\n\n' +
-          'Please contact support or check your Supabase project status.'
+          '1. The Firebase project may not be configured correctly\n' +
+          '2. There is a network connectivity issue\n' +
+          '3. Please check your Firebase configuration\n\n' +
+          'Please contact support or check your Firebase project status.'
         );
       } else {
         setError(err.message || 'Sign-up failed. Please try again.');
@@ -151,10 +139,10 @@ export default function SignupPage() {
     setError('');
 
     try {
-      // Test Supabase connection first
+      // Test Firebase connection first
       if (!connectionTested) {
-        console.log('[SIGNUP] Testing Supabase connection...');
-        const connectionTest = await testSupabaseReachability();
+        console.log('[SIGNUP] Testing Firebase connection...');
+        const connectionTest = await testFirebaseReachability();
         setConnectionTested(true);
         
         if (!connectionTest.reachable) {
@@ -162,17 +150,11 @@ export default function SignupPage() {
         }
       }
 
-      // Decode the JWT token to get user info
-      const decoded = JSON.parse(atob(credentialResponse.credential.split('.')[1]));
-      
-      // Sign in with Supabase using the Google credential
-      const { data, error } = await supabase.auth.signInWithIdToken({
-        provider: 'google',
-        token: credentialResponse.credential,
-      });
+      // Sign in with Firebase using the Google credential
+      const result = await signInWithGoogle(credentialResponse.credential);
 
-      if (error) {
-        throw error;
+      if (!result.success || !result.user) {
+        throw new Error(result.error || 'Google signup failed');
       }
 
       // User will be set automatically by the auth state change listener
@@ -187,17 +169,16 @@ export default function SignupPage() {
       if (err.message?.includes('Failed to fetch') || 
           err.message?.includes('ERR_NAME_NOT_RESOLVED') ||
           err.message?.includes('NetworkError') ||
-          err.message?.includes('Cannot resolve Supabase URL') ||
-          err.message?.includes('Connection timeout') ||
-          err.name === 'AuthRetryableFetchError') {
+          err.message?.includes('network-request-failed') ||
+          err.message?.includes('Connection timeout')) {
         setError(
           err.message || 
           'Cannot connect to authentication server. ' +
           'This usually means:\n' +
-          '1. The Supabase project may be paused or deleted\n' +
-          '2. The Supabase URL is incorrect\n' +
-          '3. There is a network connectivity issue\n\n' +
-          'Please contact support or check your Supabase project status.'
+          '1. The Firebase project may not be configured correctly\n' +
+          '2. There is a network connectivity issue\n' +
+          '3. Please check your Firebase configuration\n\n' +
+          'Please contact support or check your Firebase project status.'
         );
       } else {
         setError(err.message || 'Google signup failed. Please try again.');

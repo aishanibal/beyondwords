@@ -8,7 +8,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { GoogleLogin } from '@react-oauth/google';
 import { useUser } from '../ClientLayout';
-import { supabase } from '../../lib/supabase';
+import { signInWithEmail, signInWithGoogle } from '../../lib/firebase-auth';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -39,40 +39,22 @@ export default function LoginPage() {
     setError('');
     
     try {
-      // DEVELOPMENT MODE: Skip Supabase login if bypassing auth
+      // DEVELOPMENT MODE: Skip Firebase login if bypassing auth
       if (process.env.NEXT_PUBLIC_BYPASS_AUTH === 'true' && process.env.NODE_ENV === 'development') {
-        console.log('[LOGIN] [DEV MODE] Bypassing Supabase login');
+        console.log('[LOGIN] [DEV MODE] Bypassing Firebase login');
         // Simulate successful login - user will be set by ClientLayout
         router.push('/dashboard');
         return;
       }
 
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: formData.email,
-        password: formData.password,
-      });
+      const result = await signInWithEmail(formData.email, formData.password);
 
-      if (error) {
-        throw error;
+      if (!result.success || !result.user) {
+        throw new Error(result.error || 'Login failed');
       }
 
-      if (data.user) {
-        // Exchange Supabase identity for app JWT and store it
-        try {
-          const email = data.user.email || formData.email;
-          const name = data.user.user_metadata?.full_name || data.user.user_metadata?.name || '';
-          const res = await fetch('/api/auth/exchange', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, name })
-          });
-          const json = await res.json();
-          if (json?.token) {
-            localStorage.setItem('jwt', json.token);
-          }
-        } catch (_e) {}
-        router.push('/dashboard');
-      }
+      // JWT exchange is handled in signInWithEmail
+      router.push('/dashboard');
     } catch (err: any) {
       console.error('Login error:', err);
       setError(err.message || 'Login failed. Please try again.');
@@ -82,12 +64,8 @@ export default function LoginPage() {
   };
 
   const handleGoogleLogin = () => {
-    supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/dashboard`
-      }
-    });
+    // Google login is handled via the GoogleLogin component's onSuccess callback
+    // which calls handleGoogleSuccess
   };
 
   const handleGoogleSuccess = async (credentialResponse: any) => {
@@ -95,35 +73,14 @@ export default function LoginPage() {
     setError('');
 
     try {
-      // Decode the JWT token to get user info
-      const decoded = JSON.parse(atob(credentialResponse.credential.split('.')[1]));
-      
-      // Sign in with Supabase using the Google credential
-      const { data, error } = await supabase.auth.signInWithIdToken({
-        provider: 'google',
-        token: credentialResponse.credential,
-      });
+      // Sign in with Firebase using the Google credential
+      const result = await signInWithGoogle(credentialResponse.credential);
 
-      if (error) {
-        throw error;
+      if (!result.success || !result.user) {
+        throw new Error(result.error || 'Google login failed');
       }
 
-      // After Supabase Google login, also exchange for app JWT
-      try {
-        const email = data.user?.email;
-        const name = data.user?.user_metadata?.full_name || data.user?.user_metadata?.name || '';
-        if (email) {
-          const res = await fetch('/api/auth/exchange', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, name })
-          });
-          const json = await res.json();
-          if (json?.token) {
-            localStorage.setItem('jwt', json.token);
-          }
-        }
-      } catch (_e) {}
+      // JWT exchange is handled in signInWithGoogle
       router.push('/dashboard');
       
     } catch (err: any) {
