@@ -19,6 +19,13 @@ export const signUpWithEmail = async (email: string, password: string, name: str
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
     
+    // Get the ID token immediately and store it so API calls can use it
+    const idToken = await user.getIdToken();
+    if (idToken) {
+      // Store it temporarily so getAuthHeaders() can use it
+      localStorage.setItem('jwt', idToken);
+    }
+    
     // Create user profile in Firestore
     await createUserProfile({
       id: user.uid,
@@ -26,9 +33,6 @@ export const signUpWithEmail = async (email: string, password: string, name: str
       name: name,
       onboarding_complete: false
     });
-    
-    // Update display name in Firebase Auth
-    // Note: Firebase Auth displayName requires additional setup, we'll use Firestore for name
     
     return {
       success: true,

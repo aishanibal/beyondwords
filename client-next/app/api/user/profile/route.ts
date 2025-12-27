@@ -7,22 +7,37 @@ const USERS_COLLECTION = 'users';
 export async function GET(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization');
+    console.log('[USER_PROFILE_GET] Auth header present:', !!authHeader);
+    
     const user = await getUserFromRequest(authHeader);
     
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      console.log('[USER_PROFILE_GET] No user returned from token verification');
+      return NextResponse.json({ error: 'Unauthorized', details: 'Token verification failed' }, { status: 401 });
     }
 
+    console.log('[USER_PROFILE_GET] Fetching profile for user:', user.uid);
     const userDoc = await adminDb.collection(USERS_COLLECTION).doc(user.uid).get();
     
     if (!userDoc.exists) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      console.log('[USER_PROFILE_GET] User document not found, returning empty profile');
+      // Return a default profile instead of 404 - the profile will be created
+      return NextResponse.json({
+        user: {
+          id: user.uid,
+          email: user.email,
+          onboarding_complete: false,
+        }
+      });
     }
 
     const userData = userDoc.data();
+    console.log('[USER_PROFILE_GET] Profile found:', !!userData);
     return NextResponse.json({
-      id: user.uid,
-      ...userData,
+      user: {
+        id: user.uid,
+        ...userData,
+      }
     });
   } catch (error: any) {
     console.error('[USER_PROFILE_GET] Error:', error);
@@ -61,6 +76,7 @@ export async function POST(request: NextRequest) {
       first_name: body.first_name || '',
       last_name: body.last_name || '',
       preferences: body.preferences || {},
+      onboarding_complete: body.onboarding_complete ?? false,
       created_at: now,
       updated_at: now,
     };
@@ -101,6 +117,7 @@ export async function PUT(request: NextRequest) {
     if (body.last_name !== undefined) updateData.last_name = body.last_name;
     if (body.email !== undefined) updateData.email = body.email;
     if (body.preferences !== undefined) updateData.preferences = body.preferences;
+    if (body.onboarding_complete !== undefined) updateData.onboarding_complete = body.onboarding_complete;
 
     await adminDb.collection(USERS_COLLECTION).doc(user.uid).update(updateData);
 

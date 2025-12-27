@@ -308,21 +308,20 @@ export const useSuggestions = (
 
   // Play suggestion TTS - implementation (simplified)
   const playSuggestionTTS = useCallback(async (suggestion: any, index: number) => {
-    console.log('🔍 [DEBUG] Playing suggestion TTS:', suggestion.text, index);
+    console.log('[DEBUG] Playing suggestion TTS:', suggestion.text, index);
     try {
       const token = localStorage.getItem('jwt');
-        // Call Express backend directly instead of Next.js API route
-        const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://beyondwords-express.onrender.com';
-        const response = await axios.post(`${backendUrl}/api/tts`, {
-          text: suggestion.text,
-          language: language,
-          cacheKey: `suggestion_${index}_${Date.now()}`
-        }, {
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {})
-          }
-        });
+      // Call Next.js API route for TTS
+      const response = await axios.post('/api/tts', {
+        text: suggestion.text,
+        language: language,
+        cacheKey: `suggestion_${index}_${Date.now()}`
+      }, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        }
+      });
       
       if (response.data.ttsUrl) {
         const audio = new Audio(response.data.ttsUrl);
@@ -330,13 +329,6 @@ export const useSuggestions = (
       }
     } catch (error: any) {
       console.error('Error playing suggestion TTS:', error);
-      if (error.response?.status === 503) {
-        console.warn('TTS service is temporarily unavailable for suggestion audio.');
-      } else if (error.response?.status === 500) {
-        console.warn('Suggestion TTS generation failed. Please try again later.');
-      } else {
-        console.warn('Suggestion TTS request failed:', error.message);
-      }
     }
   }, [language]);
 

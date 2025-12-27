@@ -1,9 +1,11 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable react/no-unescaped-entities */
 "use client";
 import React, { useState, ChangeEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '../ClientLayout';
+import { getIdToken } from '../../lib/firebase';
 
 import LoadingScreen from '../components/LoadingScreen';
 import { LANGUAGES, PROFICIENCY_LEVELS, TALK_TOPICS, LEARNING_GOALS, PRACTICE_PREFERENCES, FEEDBACK_LANGUAGES, Language, ProficiencyLevel, Topic, LearningGoal, PracticePreference, FeedbackLanguage } from '../../lib/preferences';
@@ -467,19 +469,26 @@ export default function OnboardingPage() {
         throw new Error('User not authenticated');
       }
 
-      // Create language dashboard using Express server API
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || 'https://beyondwords-express.onrender.com'}/api/user/onboarding`, {
+      // Get Firebase token for authentication
+      const token = localStorage.getItem('jwt') || await getIdToken();
+      if (!token) {
+        throw new Error('Authentication token not available');
+      }
+
+      // Create language dashboard using Next.js API route
+      const response = await fetch('/api/user/language-dashboards', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('supabase.auth.token') ? JSON.parse(localStorage.getItem('supabase.auth.token')!).access_token : ''}`
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           language: onboardingData.language,
           proficiency: onboardingData.proficiency,
           talkTopics: onboardingData.talkTopics,
           learningGoals: onboardingData.learningGoals,
-          practicePreference: onboardingData.practicePreference
+          practicePreference: onboardingData.practicePreference,
+          isPrimary: true
         })
       });
 
@@ -489,7 +498,23 @@ export default function OnboardingPage() {
       }
 
       const result = await response.json();
-      console.log('[ONBOARDING] Server response:', result);
+      console.log('[ONBOARDING] Language dashboard created:', result);
+
+      // Also update user profile to mark onboarding complete
+      const profileResponse = await fetch('/api/user/profile', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          onboarding_complete: true
+        })
+      });
+
+      if (!profileResponse.ok) {
+        console.warn('[ONBOARDING] Failed to update profile, but dashboard created');
+      }
 
       // Update local user state
       setUser({

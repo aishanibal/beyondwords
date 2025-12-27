@@ -65,32 +65,12 @@ export const getAIResponse = async (
     
     console.log('🔍 [AI_RESPONSE] Request data:', aiResponseData);
 
-    let aiResponseResponse;
-    try {
-      aiResponseResponse = await axios.post('/api/ai_response', aiResponseData, {
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
-        }
-      });
-    } catch (primaryErr: any) {
-      const status = primaryErr?.response?.status;
-      console.warn('🔍 [AI_RESPONSE] /api/ai_response failed:', status, primaryErr?.response?.data);
-      // Client-side fallback: call Express directly to bypass any Vercel route issues
-      const backendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL || 'https://beyondwords-express.onrender.com').replace(/\/$/, '');
-      const directUrl = `${backendUrl}/api/ai_response`;
-      try {
-        aiResponseResponse = await axios.post(directUrl, aiResponseData, {
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {})
-          }
-        });
-      } catch (directErr) {
-        console.error('🔍 [AI_RESPONSE] Direct Express fallback failed:', directErr);
-        throw primaryErr; // surface the original
+    const aiResponseResponse = await axios.post('/api/ai_response', aiResponseData, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
       }
-    }
+    });
     
     console.log('🔍 [AI_RESPONSE] Response received:', aiResponseResponse.data);
     
@@ -164,9 +144,8 @@ export const playTTSAudio = async (text: string, language: string, cacheKey: str
     
     console.log('🔊 [TTS_MANAGER] Starting TTS for:', cleanText.substring(0, 50));
     
-    // Call Express backend directly instead of Next.js API route
-    const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://beyondwords-express.onrender.com';
-    const response = await axios.post(`${backendUrl}/api/tts`, {
+    // Call Next.js API route for TTS
+    const response = await axios.post('/api/tts', {
       text: cleanText,
       language: language,
       cacheKey: cacheKey

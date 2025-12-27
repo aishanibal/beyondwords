@@ -15,15 +15,6 @@ import { getUserProfile, createUserProfile } from '../lib/api';
 import { getCurrentAuthUser, onAuthStateChange, signOutUser } from '../lib/firebase-auth';
 import { getIdToken } from '../lib/firebase';
 
-// Debug Supabase client configuration
-console.log('[SUPABASE_DEBUG] Client imported successfully');
-console.log('[SUPABASE_DEBUG] Environment check:', {
-  hasUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
-  hasKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-  url: process.env.NEXT_PUBLIC_SUPABASE_URL?.substring(0, 30) + '...',
-  key: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.substring(0, 20) + '...'
-});
-
 const translucentBg = 'rgba(60,76,115,0.06)';
 const translucentRose = 'rgba(195,141,148,0.08)';
 
@@ -114,55 +105,14 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             }
           }
 
-          // Ensure our app JWT is available for backend calls
+          // Store Firebase token for API calls
           try {
             const idToken = await getIdToken();
-            const email = firebaseUser.email || '';
-            const name = firebaseUser.displayName || '';
-            
             if (idToken) {
-              // Try Next API first, then fallback to backend directly
-              const primary = '/api/auth/exchange';
-              const backendBase = (process.env.NEXT_PUBLIC_API_BASE_URL || 'https://beyondwords-express.onrender.com').replace(/\/$/, '');
-              const fallback = `${backendBase}/api/auth/exchange`;
-              
-              let res = await fetch(primary, {
-                method: 'POST',
-                headers: { 
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${idToken}`
-                },
-                body: JSON.stringify({ 
-                  email, 
-                  name,
-                  firebaseToken: idToken 
-                })
-              });
-              
-              if (!res.ok) {
-                res = await fetch(fallback, {
-                  method: 'POST',
-                  headers: { 
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${idToken}`
-                  },
-                  body: JSON.stringify({ 
-                    email, 
-                    name,
-                    firebaseToken: idToken 
-                  })
-                });
-              }
-              
-              if (res.ok) {
-                const json = await res.json();
-                if (json?.token) {
-                  localStorage.setItem('jwt', json.token);
-                }
-              }
+              localStorage.setItem('jwt', idToken);
             }
           } catch (e) {
-            console.warn('[AUTH] JWT exchange failed', e);
+            console.warn('[AUTH] Failed to get Firebase token', e);
           }
         } else {
           // User is signed out

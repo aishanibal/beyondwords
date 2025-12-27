@@ -6,7 +6,6 @@ import { useUser } from '../ClientLayout';
 import { useDarkMode } from '../contexts/DarkModeContext';
 import axios from 'axios';
 import { useRouter } from 'next/navigation';
-import { supabase } from '../../lib/supabase';
 import { motion } from 'framer-motion';
 import TopicSelectionModal from './TopicSelectionModal';
 import PersonaModal from './PersonaModal';
@@ -245,24 +244,14 @@ const AnalyzeContentInner = () => {
     const router = useRouter();
     const { isDarkMode } = useDarkMode();
   
-    // Helper to get JWT token
+    // Helper to get JWT token (Firebase)
     const getAuthHeaders = async () => {
       if (typeof window === 'undefined') return {};
       
-      // Try custom JWT first
-      const customJwt = localStorage.getItem('jwt');
-      if (customJwt) {
-        return { Authorization: `Bearer ${customJwt}` };
-      }
-      
-      // Get Supabase session token
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.access_token) {
-          return { Authorization: `Bearer ${session.access_token}` };
-        }
-      } catch (e) {
-        console.error('Failed to get Supabase session:', e);
+      // Try stored JWT first (Firebase token)
+      const storedJwt = localStorage.getItem('jwt');
+      if (storedJwt) {
+        return { Authorization: `Bearer ${storedJwt}` };
       }
       
       return {};

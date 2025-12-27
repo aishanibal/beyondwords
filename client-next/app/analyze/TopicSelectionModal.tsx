@@ -1,10 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
-import { supabase } from '../../lib/supabase';
 import { motion, AnimatePresence } from 'framer-motion';
 import { TALK_TOPICS, CLOSENESS_LEVELS, LEARNING_GOALS, Topic, LearningGoal } from '../../lib/preferences';
 import { getUserLanguageDashboards, getUserPersonas } from '../../lib/api';
+import { getIdToken } from '../../lib/firebase';
 import { useUser } from '../ClientLayout';
 export const dynamic = "force-dynamic";
 
@@ -16,20 +16,21 @@ interface TopicSelectionModalProps {
 }
 
 async function getAuthHeaders() {
-  // Try custom JWT first
-  const customJwt = localStorage.getItem('jwt');
-  if (customJwt) {
-    return { Authorization: `Bearer ${customJwt}` };
+  // Try stored JWT first (Firebase token)
+  const storedJwt = localStorage.getItem('jwt');
+  if (storedJwt) {
+    return { Authorization: `Bearer ${storedJwt}` };
   }
   
-  // Get Supabase session token
+  // Get fresh Firebase token
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.access_token) {
-      return { Authorization: `Bearer ${session.access_token}` };
+    const firebaseToken = await getIdToken();
+    if (firebaseToken) {
+      localStorage.setItem('jwt', firebaseToken);
+      return { Authorization: `Bearer ${firebaseToken}` };
     }
   } catch (e) {
-    console.error('Failed to get Supabase session:', e);
+    console.error('Failed to get Firebase token:', e);
   }
   
   return {};
@@ -324,7 +325,7 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
   }, [useCustomSubtopic, scrollToBottomWithDelay]);
 
   const handleStartConversation = async () => {
-    console.log('🚀 USING NEW: Start practice button pressed - testing conversation creation with improved routing');
+    console.log('[TOPIC_MODAL] Start practice button pressed');
     
     if (!dashboardExists) {
       setError('No language dashboard found. Complete onboarding or add this language.');
@@ -347,19 +348,8 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
     setIsLoading(true);
     setError('');
     try {
-      // Check session first
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !session) {
-        setError('Session expired. Please refresh the page and try again.');
-        setIsLoading(false);
-        return;
-      }
-
-      // Build auth headers from active Supabase session (v2 stores token internally)
-      const accessToken = (session as any)?.access_token;
-      const authHeaders = accessToken
-        ? { Authorization: `Bearer ${accessToken}` }
-        : await getAuthHeaders(); // Fallback to legacy/localStorage if present
+      // Get Firebase auth headers
+      const authHeaders = await getAuthHeaders();
       if (!authHeaders.Authorization) {
         setError('Authentication token missing. Please log in again.');
         setIsLoading(false);

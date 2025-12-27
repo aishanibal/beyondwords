@@ -3,12 +3,9 @@
 import axios from 'axios';
 import { getIdToken } from './firebase';
 
-// Use localhost for local development, fallback to production
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 
-                     process.env.NEXT_PUBLIC_BACKEND_URL || 
-                     (typeof window !== 'undefined' && window.location.hostname === 'localhost' 
-                       ? 'http://localhost:4000' 
-                       : 'https://beyondwords-express.onrender.com');
+// All API calls now go through Next.js API routes
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const API_BASE_URL = '';
 
 // Helper function to create auth headers
 export const getAuthHeaders = async () => {
@@ -42,8 +39,9 @@ export const getAuthHeaders = async () => {
 export const getUserLanguageDashboards = async (userId: string) => {
   try {
     console.log('[API] Getting language dashboards for user:', userId);
+    const headers = await getAuthHeaders();
     const response = await axios.get('/api/user/language-dashboards', {
-      headers: await getAuthHeaders()
+      headers
     });
     
     console.log('[API] Language dashboards response:', response.data);
@@ -74,6 +72,7 @@ export const createLanguageDashboard = async (dashboardData: {
 }) => {
   try {
     console.log('[API] Creating language dashboard:', dashboardData);
+    const headers = await getAuthHeaders();
     const response = await axios.post('/api/user/language-dashboards', {
       language: dashboardData.language,
       proficiency: dashboardData.proficiency_level,
@@ -83,7 +82,7 @@ export const createLanguageDashboard = async (dashboardData: {
       feedbackLanguage: dashboardData.feedback_language,
       isPrimary: dashboardData.is_primary
     }, {
-      headers: await getAuthHeaders()
+      headers
     });
     
     console.log('[API] Language dashboard created:', response.data);
@@ -105,11 +104,12 @@ export const createLanguageDashboard = async (dashboardData: {
 export const updateLanguageDashboard = async (language: string, updates: any) => {
   try {
     console.log('[API] Updating language dashboard:', language, updates);
+    const headers = await getAuthHeaders();
     const response = await axios.put('/api/user/language-dashboards', {
       language,
       updates
     }, {
-      headers: await getAuthHeaders()
+      headers
     });
     
     console.log('[API] Language dashboard updated:', response.data);
@@ -131,8 +131,9 @@ export const updateLanguageDashboard = async (language: string, updates: any) =>
 export const deleteLanguageDashboard = async (language: string) => {
   try {
     console.log('[API] Deleting language dashboard:', language);
+    const headers = await getAuthHeaders();
     await axios.delete('/api/user/language-dashboards', {
-      headers: await getAuthHeaders(),
+      headers,
       data: { language }
     });
     
@@ -156,8 +157,9 @@ export const deleteLanguageDashboard = async (language: string) => {
 export const getUserPersonas = async (userId: string) => {
   try {
     console.log('[API] Getting personas for user:', userId);
-    const response = await axios.get(`${API_BASE_URL}/api/personas`, {
-      headers: await getAuthHeaders()
+    const headers = await getAuthHeaders();
+    const response = await axios.get('/api/personas', {
+      headers
     });
     
     console.log('[API] Personas response:', response.data);
@@ -179,8 +181,9 @@ export const getUserPersonas = async (userId: string) => {
 export const getUserConversations = async (userId: string) => {
   try {
     console.log('[API] Getting conversations for user:', userId);
-    const response = await axios.get(`${API_BASE_URL}/api/conversations`, {
-      headers: await getAuthHeaders()
+    const headers = await getAuthHeaders();
+    const response = await axios.get('/api/conversations', {
+      headers
     });
     
     console.log('[API] Conversations response:', response.data);
@@ -203,8 +206,9 @@ export const getUserConversations = async (userId: string) => {
 export const getUserProfile = async (userId: string) => {
   try {
     console.log('[API] Getting user profile for:', userId);
+    const headers = await getAuthHeaders();
     const response = await axios.get('/api/user/profile', {
-      headers: await getAuthHeaders()
+      headers
     });
     
     console.log('[API] User profile response:', response.data);
@@ -232,13 +236,14 @@ export const createUserProfile = async (userData: {
 }) => {
   try {
     console.log('[API] Creating user profile:', userData);
+    const headers = await getAuthHeaders();
     const response = await axios.post('/api/user/profile', {
       id: userData.id,
       email: userData.email,
       name: userData.name,
       onboarding_complete: userData.onboarding_complete ?? false
     }, {
-      headers: await getAuthHeaders()
+      headers
     });
     
     console.log('[API] User profile created:', response.data);
@@ -260,8 +265,9 @@ export const createUserProfile = async (userData: {
 export const updateUserProfile = async (updates: any) => {
   try {
     console.log('[API] Updating user profile:', updates);
+    const headers = await getAuthHeaders();
     const response = await axios.put('/api/user/profile', updates, {
-      headers: await getAuthHeaders()
+      headers
     });
     
     console.log('[API] User profile updated:', response.data);

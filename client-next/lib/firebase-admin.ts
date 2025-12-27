@@ -1,18 +1,48 @@
 import { initializeApp, getApps, cert, App } from 'firebase-admin/app';
 import { getAuth, Auth } from 'firebase-admin/auth';
 import { getFirestore, Firestore } from 'firebase-admin/firestore';
-import { firebaseAdminConfig, environment, useEmulator, emulatorHosts } from './firebase-config';
+import { firebaseAdminConfig, firebaseConfig, environment, useEmulator, emulatorHosts } from './firebase-config';
 
 let app: App;
 let adminAuth: Auth;
 let adminDb: Firestore;
 
+// Get the project ID - use admin config first, fallback to client config
+// This ensures Admin SDK uses the same project as the client SDK
+const getProjectId = () => {
+  return firebaseAdminConfig.projectId || firebaseConfig.projectId || 'demo-project';
+};
+
+// IMPORTANT: Set emulator environment variables BEFORE initializing Firebase Admin
+// The Admin SDK reads these during initialization
+if (environment === 'local' && useEmulator) {
+  // Set Firestore emulator host
+  if (!process.env.FIRESTORE_EMULATOR_HOST && emulatorHosts.firestore.host) {
+    process.env.FIRESTORE_EMULATOR_HOST = `${emulatorHosts.firestore.host}:${emulatorHosts.firestore.port}`;
+  }
+  
+  // Set Auth emulator host (remove http:// prefix)
+  if (!process.env.FIREBASE_AUTH_EMULATOR_HOST && emulatorHosts.auth) {
+    process.env.FIREBASE_AUTH_EMULATOR_HOST = emulatorHosts.auth.replace('http://', '');
+  }
+  
+  console.log(`[FIREBASE_ADMIN] Emulator mode enabled:`);
+  console.log(`  - Firestore: ${process.env.FIRESTORE_EMULATOR_HOST}`);
+  console.log(`  - Auth: ${process.env.FIREBASE_AUTH_EMULATOR_HOST}`);
+}
+
 // Initialize Firebase Admin (only once)
 if (getApps().length === 0) {
   const { projectId, clientEmail, privateKey } = firebaseAdminConfig;
+  const resolvedProjectId = getProjectId();
   
-  // Check if we have valid credentials
-  if (projectId && clientEmail && privateKey) {
+  // For emulator mode, we can initialize with just projectId (no credentials needed)
+  if (environment === 'local' && useEmulator) {
+    app = initializeApp({ projectId: resolvedProjectId });
+    console.log(`[FIREBASE_ADMIN] Initialized for emulator with project: ${resolvedProjectId}`);
+  }
+  // Check if we have valid credentials for non-emulator mode
+  else if (projectId && clientEmail && privateKey) {
     try {
       app = initializeApp({
         credential: cert({
@@ -52,19 +82,6 @@ if (getApps().length === 0) {
   
   adminAuth = getAuth(app);
   adminDb = getFirestore(app);
-  
-  // Connect to Firestore emulator in local environment if enabled
-  if (environment === 'local' && useEmulator && emulatorHosts.firestore.host) {
-    try {
-      // Note: Firestore Admin SDK emulator connection is set via FIRESTORE_EMULATOR_HOST env var
-      // This is automatically detected by the SDK if the env var is set
-      if (process.env.FIRESTORE_EMULATOR_HOST) {
-        console.log(`[FIREBASE_ADMIN] Using Firestore emulator at ${process.env.FIRESTORE_EMULATOR_HOST}`);
-      }
-    } catch (err) {
-      console.warn('[FIREBASE_ADMIN] Emulator connection warning:', err);
-    }
-  }
 } else {
   app = getApps()[0];
   adminAuth = getAuth(app);
@@ -76,10 +93,15 @@ export { app, adminAuth, adminDb };
 // Verify Firebase ID token and get user
 export async function verifyToken(token: string) {
   try {
+    console.log('[FIREBASE_ADMIN] Verifying token, length:', token?.length);
+    console.log('[FIREBASE_ADMIN] Token prefix:', token?.substring(0, 20) + '...');
     const decodedToken = await adminAuth.verifyIdToken(token);
+    console.log('[FIREBASE_ADMIN] Token verified successfully, uid:', decodedToken.uid);
     return { valid: true, uid: decodedToken.uid, email: decodedToken.email };
   } catch (error: any) {
     console.error('[FIREBASE_ADMIN] Token verification failed:', error.message);
+    console.error('[FIREBASE_ADMIN] Error code:', error.code);
+    console.error('[FIREBASE_ADMIN] Full error:', error);
     return { valid: false, uid: null, email: null };
   }
 }

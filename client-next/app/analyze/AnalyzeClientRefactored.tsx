@@ -6,7 +6,6 @@ import { useUser } from '../ClientLayout';
 import { useDarkMode } from '../contexts/DarkModeContext';
 import axios from 'axios';
 import { useRouter } from 'next/navigation';
-import { supabase } from '../../lib/supabase';
 import { motion } from 'framer-motion';
 import TopicSelectionModal from './TopicSelectionModal';
 import PersonaModal from './PersonaModal';
