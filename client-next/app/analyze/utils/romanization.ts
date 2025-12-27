@@ -2,7 +2,7 @@ import Kuroshiro from 'kuroshiro';
 import KuromojiAnalyzer from 'kuroshiro-analyzer-kuromoji';
 import pinyin from 'pinyin';
 import { pinyin as pinyinPro } from 'pinyin-pro';
-import { transliterate } from 'transliteration';
+import transliterate from 'transliteration';
 import * as wanakana from 'wanakana';
 import { convert as romanizeHangul } from 'hangul-romanization';
 import Sanscript from '@indic-transliteration/sanscript';

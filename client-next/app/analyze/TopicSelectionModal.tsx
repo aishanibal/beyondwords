@@ -358,8 +358,9 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
 
       const dashboardLanguage = currentDashboard?.language || currentLanguage || 'en';
       
-      // Add timeout to the request
-      const timeoutDuration = 15000; // 15 seconds for slower cold starts
+      // Add timeout to the request - must be longer than backend AI API timeout (60s)
+      // Give extra buffer for network latency and processing
+      const timeoutDuration = 70000; // 70 seconds to allow for 60s AI API call + buffer
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), timeoutDuration);
       

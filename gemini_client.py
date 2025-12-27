@@ -5,6 +5,13 @@ from typing import Optional, Dict, List
 import re
 import requests
 
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # dotenv is optional, will use system env vars if not available
+
 # Try to import Google AI, but make it optional
 try:
     import google.generativeai as genai
@@ -91,11 +98,15 @@ class LanguageTutor:
 
         if GOOGLE_AI_AVAILABLE:
             try:
+                print(f"🔍 Creating Gemini model: {model_name}")
                 self.model = genai.GenerativeModel(model_name)
+                print(f"✅ Gemini model '{model_name}' created successfully")
             except Exception as e:
-                print(f"⚠️ Error creating model: {e}")
+                print(f"⚠️ Error creating model '{model_name}': {e}")
+                print(f"   Error type: {type(e).__name__}")
                 self.model = None
         else:
+            print(f"⚠️ GOOGLE_AI_AVAILABLE is False, model will be None")
             self.model = None
 
     def is_script_language(self) -> bool:
@@ -104,7 +115,16 @@ class LanguageTutor:
 
     def get_conversational_response(self, user_input: str, context: str = "", description: str = None) -> str:
         """Generate a conversational response in the target language."""
-        
+        if not self.model or not GOOGLE_AI_AVAILABLE:
+            print("⚠️ Gemini model not available, returning fallback response")
+            print(f"   - GOOGLE_AI_AVAILABLE: {GOOGLE_AI_AVAILABLE}")
+            print(f"   - self.model is None: {self.model is None}")
+            print(f"   - API key set: {bool(os.getenv('GOOGLE_API_KEY'))}")
+            if not GOOGLE_AI_AVAILABLE:
+                print("   - Reason: Google AI library not available or not configured")
+            elif self.model is None:
+                print("   - Reason: Model creation failed during initialization")
+            return "Let's keep practicing together!"
         topics_guidance = ""
         topic_integration_rules = ""
         

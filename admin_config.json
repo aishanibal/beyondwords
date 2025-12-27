@@ -44,6 +44,12 @@
         "gemini": 0,
         "system": 6,
         "total_cost": 0.0
+      },
+      "2025-12-27": {
+        "google_cloud": 0,
+        "gemini": 0,
+        "system": 3,
+        "total_cost": 0.0
       }
     },
     "total_cost": 0.07589299999999996,

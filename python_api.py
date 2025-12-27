@@ -14,8 +14,10 @@ from tts_synthesizer_admin_controlled import synthesize_speech
 # Use Gemini for transcription
 from gemini_transcription import transcribe_audio_gemini, transcribe_audio_with_analysis_gemini
 print("🤖 Using Gemini for transcription")
-# from dotenv import load_dotenv
-# load_dotenv()
+
+# Load environment variables from .env file
+from dotenv import load_dotenv
+load_dotenv()
 
 # NOTE: Whisper doesn't natively support Odia ('or'). We map it to Bengali ('bn') 
 # as they are linguistically similar and Bengali is supported by Whisper.

@@ -10,6 +10,13 @@ import json
 import requests
 from typing import Optional, Dict, Any
 
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # dotenv is optional, will use system env vars if not available
+
 class GeminiTranscriber:
     """Audio transcription using Gemini 2.5 Flash"""
     

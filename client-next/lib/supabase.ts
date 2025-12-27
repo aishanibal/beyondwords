@@ -30,15 +30,15 @@ if (bypassAuth) {
   // Production/development with auth: require valid Supabase credentials
   // Check for empty strings as well as undefined
   if (!supabaseUrl || !supabaseAnonKey || supabaseUrl === '' || supabaseAnonKey === '') {
-    console.error('Missing Supabase environment variables:', {
+  console.error('Missing Supabase environment variables:', {
       hasUrl: !!supabaseUrl && supabaseUrl !== '',
       hasKey: !!supabaseAnonKey && supabaseAnonKey !== '',
-      environment: process.env.NODE_ENV
-    });
-    
-    if (process.env.NODE_ENV === 'production') {
-      throw new Error('Critical: Supabase environment variables are missing in production');
-    }
+    environment: process.env.NODE_ENV
+  });
+  
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Critical: Supabase environment variables are missing in production');
+  }
     
     // In development without bypass, still create a mock to prevent crashes
     console.warn('⚠️ [DEV] Creating mock Supabase client due to missing credentials');
@@ -61,19 +61,19 @@ if (bypassAuth) {
     }
 
     supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: true,
-        storage: typeof window !== 'undefined' ? window.localStorage : undefined,
-        storageKey: 'supabase.auth.token',
-        flowType: 'pkce'
-      },
-      global: {
-        headers: {
-          'x-application-name': 'beyondwords-client'
-        }
-      }
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+    storageKey: 'supabase.auth.token',
+    flowType: 'pkce'
+  },
+  global: {
+    headers: {
+      'x-application-name': 'beyondwords-client'
+    }
+  }
     });
   }
 }
