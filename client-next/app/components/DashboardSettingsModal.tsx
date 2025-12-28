@@ -139,7 +139,7 @@ export default function DashboardSettingsModal({
       console.log('[DEBUG] Language:', dashboard.language);
       console.log('[DEBUG] Is script language:', isScriptLanguage(dashboard.language));
 
-      // TODO: Implement dashboard update with Supabase
+      // TODO: Implement dashboard update with Firestore
       // For now, just call onUpdate with the edited data
       console.log('[DEBUG] Would save dashboard data:', updateData);
       onUpdate(editedDashboard);
@@ -164,7 +164,7 @@ export default function DashboardSettingsModal({
     setIsDeleting(true);
     setSaveError('');
     try {
-      // TODO: Implement dashboard deletion with Supabase
+      // TODO: Implement dashboard deletion with Firestore
       // For now, just call onDelete
       console.log('[DEBUG] Would delete dashboard for language:', dashboard.language);
       if (onDelete) {

@@ -1,0 +1,39 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+.env
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Client code (separate deployment)
+client-next/
+
+# Node
+node_modules/
+
+# Local files
+*.log
+*.sqlite
+*.db
+
+# Keys (handled via env vars in Cloud Run)
+tts-key.json
+
+# Test files
+test_*.py
+*_test.py
+

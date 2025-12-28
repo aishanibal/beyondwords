@@ -1,0 +1,21 @@
+# Same as .dockerignore for gcloud builds
+.git
+.gitignore
+__pycache__
+*.py[cod]
+*$py.class
+venv/
+env/
+.env
+.venv
+.vscode/
+.idea/
+client-next/
+node_modules/
+*.log
+*.sqlite
+*.db
+tts-key.json
+test_*.py
+*_test.py
+

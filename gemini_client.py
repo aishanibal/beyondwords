@@ -20,20 +20,46 @@ except ImportError:
     GOOGLE_AI_AVAILABLE = False
     print("⚠️ Google AI not available. Install with: pip install google-generativeai")
 
-# Configure Google AI if available and API key is set
+# Configure Google AI if available
+# Supports both API key (local dev) and Application Default Credentials (Cloud Run)
 api_key = os.getenv("GOOGLE_API_KEY")
-if GOOGLE_AI_AVAILABLE and api_key:
-    try:
-        genai.configure(api_key=api_key)
-        print("✅ Google AI configured successfully")
-    except Exception as e:
-        print(f"⚠️ Error configuring Google AI: {e}")
-        GOOGLE_AI_AVAILABLE = False
-elif not api_key:
-    print("⚠️ GOOGLE_API_KEY environment variable not set.")
-    print("Try setting it with: export GOOGLE_API_KEY='your-api-key-here'")
-    print("Or run: source ~/.bashrc or source ~/.zshrc if you set it there")
-    GOOGLE_AI_AVAILABLE = False
+use_vertex_ai = os.getenv("USE_VERTEX_AI", "false").lower() == "true"
+gcp_project = os.getenv("GCP_PROJECT_ID") or os.getenv("GOOGLE_CLOUD_PROJECT")
+gcp_location = os.getenv("GCP_LOCATION", "us-central1")
+
+if GOOGLE_AI_AVAILABLE:
+    if api_key:
+        # Use API key (local development or explicit key)
+        try:
+            genai.configure(api_key=api_key)
+            print("✅ Google AI configured with API key")
+        except Exception as e:
+            print(f"⚠️ Error configuring Google AI with API key: {e}")
+            GOOGLE_AI_AVAILABLE = False
+    elif use_vertex_ai and gcp_project:
+        # Use Vertex AI with Application Default Credentials (Cloud Run)
+        try:
+            import google.auth
+            credentials, project = google.auth.default()
+            genai.configure(credentials=credentials)
+            print(f"✅ Google AI configured via Vertex AI ADC (project: {gcp_project})")
+        except Exception as e:
+            print(f"⚠️ Error configuring Google AI via ADC: {e}")
+            GOOGLE_AI_AVAILABLE = False
+    else:
+        # Try ADC as fallback (works on Cloud Run with service account)
+        try:
+            import google.auth
+            credentials, project = google.auth.default()
+            genai.configure(credentials=credentials)
+            print(f"✅ Google AI configured via Application Default Credentials")
+        except Exception as e:
+            print("⚠️ No authentication method available for Google AI.")
+            print("   Options:")
+            print("   1. Set GOOGLE_API_KEY environment variable (local dev)")
+            print("   2. Run on GCP with a service account (Cloud Run)")
+            print("   3. Set USE_VERTEX_AI=true and GCP_PROJECT_ID (Vertex AI)")
+            GOOGLE_AI_AVAILABLE = False
 
 def is_google_api_enabled() -> bool:
     """Check if Google API services are enabled via admin dashboard"""

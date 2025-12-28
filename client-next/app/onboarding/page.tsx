@@ -488,6 +488,7 @@ export default function OnboardingPage() {
           talkTopics: onboardingData.talkTopics,
           learningGoals: onboardingData.learningGoals,
           practicePreference: onboardingData.practicePreference,
+          feedbackLanguage: onboardingData.feedbackLanguage,
           isPrimary: true
         })
       });

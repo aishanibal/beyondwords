@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { GoogleLogin } from '@react-oauth/google';
 import { useUser } from '../ClientLayout';
-import { supabase } from '../../lib/supabase';
+import { signUpWithEmail, signInWithGoogle } from '../../lib/firebase-auth';
 import logo from '../../assets/logo.png';
 
 export default function SignupPage() {
@@ -54,29 +54,18 @@ export default function SignupPage() {
     }
 
     try {
-      // Sign up with Supabase (no email confirmation)
-      const { data, error } = await supabase.auth.signUp({
-        email: formData.email,
-        password: formData.password,
-        options: {
-          data: {
-            name: formData.name,
-          },
-          emailRedirectTo: `${window.location.origin}/dashboard`,
-        },
-      });
+      // Sign up with Firebase
+      const result = await signUpWithEmail(formData.email, formData.password, formData.name);
 
-      if (error) {
-        throw error;
+      if (!result.success || !result.user) {
+        throw new Error(result.error || 'Sign-up failed');
       }
 
-      if (data.user) {
-        // User will be set automatically by the auth state change listener
-        // New users always need onboarding
-        console.log('[SIGNUP] Success, redirecting to onboarding');
-        setIsLoading(false);
-        router.replace('/onboarding');
-      }
+      // User will be set automatically by the auth state change listener
+      // New users always need onboarding
+      console.log('[SIGNUP] Success, redirecting to onboarding');
+      setIsLoading(false);
+      router.replace('/onboarding');
       
     } catch (err: any) {
       console.error('Sign-up error:', err);
@@ -90,17 +79,11 @@ export default function SignupPage() {
     setError('');
 
     try {
-      // Decode the JWT token to get user info
-      const decoded = JSON.parse(atob(credentialResponse.credential.split('.')[1]));
-      
-      // Sign in with Supabase using the Google credential
-      const { data, error } = await supabase.auth.signInWithIdToken({
-        provider: 'google',
-        token: credentialResponse.credential,
-      });
+      // Sign in with Firebase using the Google credential
+      const result = await signInWithGoogle(credentialResponse.credential);
 
-      if (error) {
-        throw error;
+      if (!result.success || !result.user) {
+        throw new Error(result.error || 'Google signup failed');
       }
 
       // User will be set automatically by the auth state change listener

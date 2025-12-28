@@ -520,7 +520,7 @@ export default function DashboardPage() {
       return;
     }
     try {
-      // TODO: Implement conversation deletion with Supabase
+      // TODO: Implement conversation deletion with Firestore
       // await deleteConversation(conversationId);
       setConversations((prev: ConversationType[]) => prev.filter((conv: ConversationType) => conv.id !== conversationId));
     } catch (error) {
@@ -533,7 +533,7 @@ export default function DashboardPage() {
       return;
     }
     try {
-      // TODO: Implement persona deletion with Supabase
+      // TODO: Implement persona deletion with Firestore
       // await deletePersona(personaId);
       setPersonas((prev: PersonaType[]) => prev.filter((persona: PersonaType) => persona.id !== personaId));
     } catch (error) {
@@ -582,7 +582,7 @@ export default function DashboardPage() {
     async function fetchStreak() {
       if (user?.id && selectedLanguage) {
         try {
-                  // TODO: Implement streak API with Supabase
+                  // TODO: Implement streak API with Firestore
         // const res = await getStreak(user.id, selectedLanguage);
         setStreak(0); // Default streak value
         } catch (err) {
