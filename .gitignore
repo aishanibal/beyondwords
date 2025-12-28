@@ -50,6 +50,12 @@ dist/
 *.env.production.local
 server/.env
 
+# Service account keys (NEVER commit these!)
+tts-key.json
+*-key.json
+*.pem
+service-account*.json
+
 # Database files
 *.db
 *.sqlite
