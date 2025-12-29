@@ -8,6 +8,8 @@ import os
 import sys
 import subprocess
 import platform
+import wave
+import struct
 from typing import Optional
 from admin_dashboard import AdminDashboard
 
@@ -370,6 +372,22 @@ class AdminControlledTTSSynthesizer:
                 "error": f"Failed to create fallback audio: {e}",
                 **debug_info
             }
+        
+    def _convert_aiff_to_wav(self, aiff_path: str) -> Optional[str]:
+        """Convert AIFF file to WAV using ffmpeg/sox (works with Python 3.13+)"""
+        try:
+            wav_path = aiff_path.replace('.aiff', '.wav')
+            # Use the existing _convert_to_wav method which handles ffmpeg/sox
+            converted_path = self._convert_to_wav(aiff_path, wav_path)
+            if converted_path and os.path.exists(converted_path):
+                print(f"✅ Converted AIFF to WAV: {converted_path}")
+                return converted_path
+            else:
+                print(f"⚠️ AIFF to WAV conversion failed")
+                return None
+        except Exception as e:
+            print(f"⚠️ AIFF to WAV conversion failed: {e}")
+            return None
 
     def _try_system_tts(self, text: str, language_code: str, output_path: str) -> Optional[str]:
         """Try system TTS (FREE)"""
@@ -417,8 +435,7 @@ class AdminControlledTTSSynthesizer:
                     # Convert AIFF to WAV for browser compatibility
                     print(f"🔄 Attempting to convert AIFF to WAV: {aiff_path}")
                     try:
-                        from convert_aiff_to_wav import convert_aiff_to_wav
-                        wav_path = convert_aiff_to_wav(aiff_path)
+                        wav_path = self._convert_aiff_to_wav(aiff_path)
                         print(f"🔄 Conversion result: {wav_path}")
                         
                         if wav_path and os.path.exists(wav_path):
@@ -443,8 +460,7 @@ class AdminControlledTTSSynthesizer:
                         # Convert AIFF to WAV for browser compatibility
                         print(f"🔄 Attempting to convert fallback AIFF to WAV: {aiff_path}")
                         try:
-                            from convert_aiff_to_wav import convert_aiff_to_wav
-                            wav_path = convert_aiff_to_wav(aiff_path)
+                            wav_path = self.convert_aiff_to_wav(aiff_path)
                             print(f"🔄 Fallback conversion result: {wav_path}")
                             
                             if wav_path and os.path.exists(wav_path):
@@ -788,6 +804,26 @@ class AdminControlledTTSSynthesizer:
             except (subprocess.TimeoutExpired, FileNotFoundError) as e:
                 print(f"⚠️ sox not available or failed: {e}")
             
+            # Try macOS built-in afconvert (for AIFF files on macOS)
+            if self.system == 'darwin' and input_path.endswith('.aiff'):
+                try:
+                    cmd = ['afconvert', '-f', 'WAVE', '-d', 'LEI16@22050', '-c', '1', input_path, wav_path]
+                    print(f"🔄 Attempting macOS afconvert conversion: {' '.join(cmd)}")
+                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+                    
+                    if result.returncode == 0 and os.path.exists(wav_path):
+                        file_size = os.path.getsize(wav_path)
+                        print(f"✅ Converted to WAV using macOS afconvert: {wav_path} ({file_size} bytes)")
+                        # Clean up original file
+                        try:
+                            os.remove(input_path)
+                        except:
+                            pass
+                        return wav_path
+                    else:
+                        print(f"⚠️ afconvert conversion failed: {result.stderr}")
+                except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+                    print(f"⚠️ afconvert not available or failed: {e}")
             # If both ffmpeg and sox fail, try to use the file as-is if it's already supported
             if input_path.endswith('.mp3') or input_path.endswith('.wav'):
                 print(f"🌐 Using original format (no conversion available): {input_path}")

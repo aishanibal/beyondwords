@@ -134,7 +134,12 @@ export const stopCurrentTTS = () => {
 };
 
 // Play TTS audio with global coordination
-export const playTTSAudio = async (text: string, language: string, cacheKey: string): Promise<void> => {
+export const playTTSAudio = async (
+  text: string, 
+  language: string, 
+  cacheKey: string,
+  onStateChange?: (isPlaying: boolean) => void
+): Promise<void> =>{
   try {
     // Stop any currently playing TTS before starting new one
     stopCurrentTTS();
@@ -160,12 +165,16 @@ export const playTTSAudio = async (text: string, language: string, cacheKey: str
       const audio = new Audio(response.data.ttsUrl);
       currentTTSAudio = audio;
       isTTSPlaying = true;
+
+      // Notify state change
+      if (onStateChange) onStateChange(true);
       
       // Set up event handlers
       audio.onended = () => {
         console.log('🔊 [TTS_MANAGER] TTS finished playing');
         currentTTSAudio = null;
         isTTSPlaying = false;
+        if (onStateChange) onStateChange(false);
       };
       
       audio.onerror = (error) => {
@@ -181,6 +190,9 @@ export const playTTSAudio = async (text: string, language: string, cacheKey: str
     console.error('🔊 [TTS_MANAGER] TTS request failed:', error);
     currentTTSAudio = null;
     isTTSPlaying = false;
+
+    // Notify state change on error
+    if (onStateChange) onStateChange(false);
     
     if (error.response?.status === 503) {
       console.warn('🔊 TTS service is temporarily unavailable.');

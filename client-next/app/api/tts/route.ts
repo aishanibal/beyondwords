@@ -16,7 +16,13 @@ export async function POST(request: NextRequest) {
     });
 
     const data = await response.json();
-    return NextResponse.json(data, { status: response.status });
+
+    let ttsUrl: string | null = null;
+    if (data.success && data.output_path) {
+      // Python serves the file at /uploads/<filename>
+      ttsUrl = `${PYTHON_API_URL}/uploads/${encodeURIComponent(data.output_path)}`;
+    }
+    return NextResponse.json({...data, ttsUrl, },  { status: response.status });
   } catch (error: any) {
     console.error('[TTS_API] Error:', error);
     return NextResponse.json(

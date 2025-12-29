@@ -309,7 +309,13 @@ export const generateConversationSummary = async (
         console.warn('[CONVERSATION_SERVICE] Failed to update conversation:', updateError);
       }
 
-      return summary;
+      return {
+        title: summary.title,
+        synopsis: summary.synopsis,
+        learningGoals: summary.learningGoals as number[],
+        subgoalIds,
+        subgoalNames
+      };
     } else {
       return null;
     }

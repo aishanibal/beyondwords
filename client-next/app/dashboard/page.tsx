@@ -1410,7 +1410,7 @@ export default function DashboardPage() {
                             {persona.formality}
                           </span>
                         </div>
-                        {persona.topics.length > 0 && (
+                        {persona.topics?.length > 0 && (
                           <div style={{ 
                             textAlign: 'center',
                             color: 'var(--rose-accent)', 
@@ -1418,8 +1418,8 @@ export default function DashboardPage() {
                             fontFamily: 'AR One Sans, Arial, sans-serif',
                             opacity: 0.8
                           }}>
-                            {persona.topics.slice(0, 2).join(', ')}
-                            {persona.topics.length > 2 && '...'}
+                            {persona.topics?.slice(0, 2).join(', ')}
+                            {persona.topics?.length > 2 && '...'}
                           </div>
                         )}
                       </div>

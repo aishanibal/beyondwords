@@ -580,9 +580,8 @@ export const useAudioHandlers = (
         if (!autoSpeak) {
           console.log('[DEBUG] Manual mode: Playing AI TTS immediately');
           setIsAnyTTSPlaying(true);
-          playTTSAudio(ttsText, language, cacheKey).then(() => {
-            console.log('[DEBUG] AI response TTS finished');
-            setIsAnyTTSPlaying(false);
+          playTTSAudio(ttsText, language, cacheKey, (isPlaying) => {
+            setIsAnyTTSPlaying(isPlaying);
           }).catch(error => {
             console.error('[DEBUG] Error playing AI TTS:', error);
             setIsAnyTTSPlaying(false);
@@ -658,7 +657,9 @@ export const useAudioHandlers = (
       
       const cacheKey = `manual_tts_${Date.now()}`;
       setIsAnyTTSPlaying(true);
-      await playTTSAudio(text, language, cacheKey);
+      await playTTSAudio(text, language, cacheKey, (isPlaying) => {
+        setIsAnyTTSPlaying(isPlaying);
+      });
     } catch (error) {
       console.error('Error playing TTS:', error);
       setIsAnyTTSPlaying(false);

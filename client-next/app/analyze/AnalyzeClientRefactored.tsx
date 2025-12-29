@@ -13,6 +13,7 @@ import LoadingScreen from '../components/LoadingScreen';
 import { LEARNING_GOALS, LearningGoal, getProgressiveSubgoalDescription, getSubgoalLevel, updateSubgoalProgress, SubgoalProgress, LevelUpEvent } from '../../lib/preferences';
 import { getUserLanguageDashboards } from '../../lib/api';
 import ChatMessageItem from './ChatMessageItem';
+import { playTTSAudio } from './services/audioService';
 
 // Import the new components
 import AnalyzeLayout from './components/AnalyzeLayout';
@@ -1007,16 +1008,17 @@ const AnalyzeContentInner = () => {
     return renderClickableMessage(message, messageIndex, translation, setActivePopup, isDarkMode, userPreferences, language);
   };
 
-  // Wrapper function for playTTS with cacheKey parameter
-  const playTTSWrapper = (text: string, language: string, cacheKey: string) => {
-    return audioHandlers.handlePlayTTS(text, language);
+  const playTTSWrapper = async (text: string, language: string, cacheKey: string) => {
+    await playTTSAudio(text, language, cacheKey, (isPlaying) => {
+      setIsPlayingTTS(prev => ({ ...prev, [cacheKey]: isPlaying }));
+    });
   };
 
-  // Wrapper function for playTTS with only 2 parameters (for ChatMessagesContainer)
-  const playTTSWrapper2 = (text: string, language: string) => {
-    return audioHandlers.handlePlayTTS(text, language);
+  // Also update playTTSWrapper2 to accept cacheKey:
+  const playTTSWrapper2 = async (text: string, language: string, cacheKey?: string) => {
+    const key = cacheKey || `manual_tts_${Date.now()}`;
+    return playTTSWrapper(text, language, key);
   };
-
   // Handle end chat functionality
   const handleEndChat = async () => {
     console.log('🏁 [END_CHAT] End chat initiated');
