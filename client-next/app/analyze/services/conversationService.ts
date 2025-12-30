@@ -170,6 +170,8 @@ export const loadExistingConversation = async (conversationId: string) => {
         language: conversation.language || conversation.language_dashboards?.language,
         formality: conversation.formality,
         topics: conversation.topics || [],
+        learningGoals: conversation.learning_goals || [],
+        selectedSubgoals: conversation.selected_subgoals || [],
         createdAt: conversation.created_at || conversation.createdAt,
         usesPersona: conversation.uses_persona === true || conversation.uses_persona === 'true',
         personaId: conversation.persona_id || null

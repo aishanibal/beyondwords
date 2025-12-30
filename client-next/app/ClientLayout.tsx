@@ -164,9 +164,6 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     throw new Error('NEXT_PUBLIC_GOOGLE_CLIENT_ID is missing');
   }
 
-  // Handle routing after authentication
-  const [isRedirecting, setIsRedirecting] = useState(false);
-
   // Memoize only the user properties needed for routing to prevent infinite loops
   const userRoutingState = useMemo(() => ({
     exists: !!user,
@@ -175,9 +172,10 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
   useEffect(() => {
     let redirectTimeout: NodeJS.Timeout;
+    let isCancelled = false;
 
     const handleRedirect = () => {
-      if (isRedirecting) return; // Prevent multiple redirects
+      if (isCancelled) return;
 
       console.log('[ROUTING] State:', { 
         isLoading, 
@@ -189,24 +187,15 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       if (!userRoutingState.exists) {
         if (pathname !== '/login' && pathname !== '/signup' && pathname !== '/') {
           console.log('[ROUTING] No user, redirecting to login');
-          setIsRedirecting(true);
-          redirectTimeout = setTimeout(() => {
-            router.replace('/login');
-          }, 100);
+          router.replace('/login');
         }
       } else if (userRoutingState.exists && !isLoading) {
         if (userRoutingState.onboardingComplete === false && pathname !== '/onboarding') {
           console.log('[ROUTING] User needs onboarding, redirecting from', pathname);
-          setIsRedirecting(true);
-          redirectTimeout = setTimeout(() => {
-            router.replace('/onboarding');
-          }, 100);
+          router.replace('/onboarding');
         } else if (userRoutingState.onboardingComplete && (pathname === '/onboarding' || pathname === '/login' || pathname === '/signup')) {
           console.log('[ROUTING] User completed onboarding, redirecting to dashboard');
-          setIsRedirecting(true);
-          redirectTimeout = setTimeout(() => {
-            router.replace('/dashboard');
-          }, 100);
+          router.replace('/dashboard');
         }
       }
     };
@@ -215,15 +204,13 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     const routingTimeout = setTimeout(handleRedirect, 200);
 
     return () => {
+      isCancelled = true;
+      clearTimeout(routingTimeout);
       if (redirectTimeout) {
         clearTimeout(redirectTimeout);
       }
-      if (routingTimeout) {
-        clearTimeout(routingTimeout);
-      }
-      setIsRedirecting(false);
     };
-  }, [isLoading, userRoutingState.exists, userRoutingState.onboardingComplete, pathname, router, isRedirecting]);
+  }, [isLoading, userRoutingState.exists, userRoutingState.onboardingComplete, pathname, router]);
 
   // Only show loading screen if we're still checking authentication
   if (isLoading) {

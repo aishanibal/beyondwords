@@ -130,6 +130,14 @@ export const useConversationManagement = (
           setUserPreferences(prev => ({ ...prev, topics: result.topics }));
           console.log('[CONVERSATION_LOAD] Set topics:', result.topics);
         }
+        if (result.learningGoals) {
+          setUserPreferences(prev => ({ ...prev, user_goals: result.learningGoals }));
+          console.log('[CONVERSATION_LOAD] Set learning goals:', result.learningGoals);
+        }
+        if (result.selectedSubgoals) {
+          setUserPreferences(prev => ({ ...prev, selected_subgoals: result.selectedSubgoals }));
+          console.log('[CONVERSATION_LOAD] Set selected subgoals:', result.selectedSubgoals);
+        }
         
         // Set session start time
         if (result.createdAt) {
@@ -325,13 +333,15 @@ export const useConversationManagement = (
     formality: string, 
     learningGoals: string[], 
     description?: string, 
-    isUsingExistingPersona?: boolean
+    isUsingExistingPersona?: boolean,
+    selectedSubgoals?: string[]
   ) => {
     console.log('[CONVERSATION_START] Starting new conversation:', {
       conversationId: newConversationId,
       topics,
       formality,
       learningGoals,
+      selectedSubgoals,
       description,
       isUsingExistingPersona
     });
@@ -361,12 +371,13 @@ export const useConversationManagement = (
     const dashboardPrefs = await fetchUserDashboardPreferences(language, (user as any).id);
     const romanizationDisplay = dashboardPrefs?.romanization_display || 'both';
     
-    // Update user preferences with the selected formality, topics, and learning goals
+    // Update user preferences with the selected formality, topics, learning goals, and subgoals
     setUserPreferences(prev => ({
       ...prev,
       formality,
       topics,
       user_goals: learningGoals,
+      selected_subgoals: selectedSubgoals || [],
       romanizationDisplay
     }));
     

@@ -118,7 +118,7 @@ def transcribe():
                 "error": "Could not transcribe audio",
                 "transcription": "",
                 "response": ""
-            })
+            }), 400
         
         print(f"📝 Transcription: {transcription}")
         
@@ -147,7 +147,7 @@ def transcribe():
             "error": str(e),
             "transcription": "",
             "response": ""
-        })
+        }), 500
 
 @app.route('/transcribe_only', methods=['POST'])
 def transcribe_only():
@@ -166,7 +166,7 @@ def transcribe_only():
             return jsonify({
                 "error": "No audio data provided",
                 "transcription": ""
-            })
+            }), 400
         
         # Decode base64 audio data
         import base64
@@ -181,7 +181,7 @@ def transcribe_only():
             return jsonify({
                 "error": "Invalid audio data format",
                 "transcription": ""
-            })
+            }), 400
         
         # Save audio data to temporary file
         with tempfile.NamedTemporaryFile(delete=False, suffix='.webm') as temp_file:
@@ -202,7 +202,7 @@ def transcribe_only():
                 return jsonify({
                     "error": "Could not transcribe audio",
                     "transcription": ""
-                })
+                }), 400
             
             print(f"📝 Transcription: {transcription}")
             
@@ -226,7 +226,7 @@ def transcribe_only():
         return jsonify({
             "error": str(e),
             "transcription": ""
-        })
+        }), 500
 
 @app.route('/ai_response', methods=['POST'])
 def ai_response():
@@ -271,16 +271,32 @@ def ai_response():
         return jsonify({
             "error": str(e),
             "response": ""
-        })
+        }), 500
 
 @app.route('/analyze', methods=['POST'])
 def analyze():
     """Analyze speech with reference text"""
+    temp_audio_path = None
     try:
-        data = request.get_json()
-        audio_file = data.get('audio_file')
-        reference_text = data.get('reference_text', '')
-        language = data.get('language', 'en')
+        # Support both JSON and FormData
+        if request.content_type and 'multipart/form-data' in request.content_type:
+            # Handle FormData from Next.js
+            audio_file = request.files.get('audio')
+            reference_text = request.form.get('reference_text', '')
+            language = request.form.get('language', 'en')
+            
+            if audio_file:
+                # Save uploaded file to temp location
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.webm') as temp_file:
+                    audio_file.save(temp_file.name)
+                    temp_audio_path = temp_file.name
+                    audio_file = temp_audio_path
+        else:
+            # Handle JSON
+            data = request.get_json()
+            audio_file = data.get('audio_file')
+            reference_text = data.get('reference_text', '')
+            language = data.get('language', 'en')
         
         print(f"🔍 Analyze request - Language: {language}")
         
@@ -301,7 +317,14 @@ def analyze():
             "transcription": "",
             "reference": "",
             "analysis": ""
-        })
+        }), 500
+    finally:
+        # Clean up temp file if created
+        if temp_audio_path and os.path.exists(temp_audio_path):
+            try:
+                os.unlink(temp_audio_path)
+            except Exception:
+                pass
 
 @app.route('/conversation_summary', methods=['POST'])
 def conversation_summary():
@@ -355,7 +378,7 @@ def conversation_summary():
             "title": "",
             "synopsis": "",
             "progress_percentages": []
-        })
+        }), 500
 
 @app.route('/health', methods=['GET'])
 def health():
@@ -420,7 +443,7 @@ def feedback():
         return jsonify({
             "error": str(e),
             "feedback": ""
-        })
+        }), 500
 
 @app.route('/short_feedback', methods=['POST'])
 def short_feedback():
@@ -460,7 +483,7 @@ def short_feedback():
         return jsonify({
             "error": str(e),
             "feedback": ""
-        })
+        }), 500
 
 @app.route('/initial_message', methods=['POST'])
 def initial_message():
@@ -500,7 +523,7 @@ def initial_message():
         return jsonify({
             "error": str(e),
             "message": ""
-        })
+        }), 500
 
 @app.route('/suggestions', methods=['POST'])
 def suggestions():
@@ -543,7 +566,7 @@ def suggestions():
         return jsonify({
             "error": str(e),
             "suggestions": []
-        })
+        }), 500
 
 @app.route('/translate', methods=['POST'])
 def translate():
@@ -577,7 +600,7 @@ def translate():
         return jsonify({
             "error": str(e),
             "translation": {}
-        })
+        }), 500
 
 @app.route('/detailed_breakdown', methods=['POST'])
 def detailed_breakdown():
@@ -621,7 +644,7 @@ def detailed_breakdown():
         return jsonify({
             "error": str(e),
             "breakdown": ""
-        })
+        }), 500
 
 @app.route('/explain_suggestion', methods=['POST'])
 def explain_suggestion():
@@ -662,7 +685,7 @@ def explain_suggestion():
             "error": str(e),
             "translation": "",
             "explanation": ""
-        })
+        }), 500
 
 @app.route('/quick_translation', methods=['POST'])
 def quick_translation():
@@ -705,7 +728,7 @@ def quick_translation():
         return jsonify({
             "error": str(e),
             "translation": ""
-        })
+        }), 500
 
 @app.route('/generate_tts', methods=['POST'])
 def generate_tts():
@@ -809,7 +832,7 @@ def generate_tts():
             "admin_settings": {},
             "cost_estimate": "unknown",
             "debug": {"exception": str(e)}
-        })
+        }), 500
 
 @app.route('/admin')
 def admin_index():
@@ -932,6 +955,9 @@ def admin_api_set_tts_system():
     from admin_dashboard import AdminDashboard
     dashboard = AdminDashboard()
     
+    if 'admin_logged_in' not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    
     data = request.get_json()
     system = data.get('system')
     
@@ -965,22 +991,23 @@ def admin_api_toggle_google_api():
     from admin_dashboard import AdminDashboard
     dashboard = AdminDashboard()
     
-    # Since this is called from the admin dashboard, we'll allow it without session check
-    # The admin dashboard itself requires authentication to access
+    if 'admin_logged_in' not in session:
+        return jsonify({"error": "Not authenticated"}), 401
     
     data = request.get_json()
     enabled = data.get('enabled', False)
+    password = data.get('password', '')
     
     if enabled:
-        if dashboard.enable_google_api_services("admin123"):  # Using default password for now
+        if dashboard.enable_google_api_services(password):
             return jsonify({"success": True, "message": "Google API services enabled"})
         else:
-            return jsonify({"success": False, "message": "Failed to enable Google API services"})
+            return jsonify({"success": False, "message": "Failed to enable Google API services - invalid password"}), 400
     else:
-        if dashboard.disable_google_api_services("admin123"):  # Using default password for now
+        if dashboard.disable_google_api_services(password):
             return jsonify({"success": True, "message": "Google API services disabled"})
         else:
-            return jsonify({"success": False, "message": "Failed to disable Google API services"})
+            return jsonify({"success": False, "message": "Failed to disable Google API services - invalid password"}), 400
 
 # Serve TTS files
 @app.route('/uploads/<filename>')

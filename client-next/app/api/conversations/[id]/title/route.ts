@@ -29,15 +29,28 @@ export async function PUT(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    await docRef.update({
+    const updateData: Record<string, any> = {
       title: body.title,
       updated_at: new Date().toISOString(),
-    });
+    };
+
+    // Also save synopsis if provided
+    if (body.synopsis !== undefined) {
+      updateData.synopsis = body.synopsis;
+    }
+
+    // Also save progress_data if provided
+    if (body.progress_data !== undefined) {
+      updateData.progress_data = body.progress_data;
+    }
+
+    await docRef.update(updateData);
 
     return NextResponse.json({ 
       id,
       title: body.title,
-      message: 'Title updated' 
+      synopsis: body.synopsis,
+      message: 'Conversation updated' 
     });
   } catch (error: any) {
     console.error('[TITLE_API] PUT error:', error);

@@ -30,9 +30,23 @@ export async function GET(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
+    // Fetch messages from subcollection
+    const messagesSnapshot = await docRef
+      .collection('messages')
+      .orderBy('message_order', 'asc')
+      .get();
+    
+    const messages = messagesSnapshot.docs.map(msgDoc => ({
+      id: msgDoc.id,
+      ...msgDoc.data(),
+    }));
+
     return NextResponse.json({
-      id: doc.id,
-      ...data,
+      conversation: {
+        id: doc.id,
+        ...data,
+        messages,
+      }
     });
   } catch (error: any) {
     console.error('[CONVERSATION_API] GET error:', error);

@@ -211,6 +211,74 @@ const ConversationHeader: React.FC<ConversationHeaderProps> = ({
                 </motion.span>
               ) : null;
             })}
+            
+            {/* Selected Subgoals Tags - Fourth */}
+            {userPreferences?.selected_subgoals?.map((subgoalId: string, index: number) => {
+              // Find the parent goal and subgoal
+              let subgoalDescription = '';
+              let parentGoal: LearningGoal | undefined;
+              for (const goal of LEARNING_GOALS) {
+                const subgoal = goal.subgoals?.find(s => s.id === subgoalId);
+                if (subgoal) {
+                  subgoalDescription = subgoal.description;
+                  parentGoal = goal;
+                  break;
+                }
+              }
+              if (!subgoalDescription) return null;
+              
+              // Truncate description for display
+              const shortDescription = subgoalDescription.length > 40 
+                ? subgoalDescription.substring(0, 40) + '...' 
+                : subgoalDescription;
+              
+              return (
+                <motion.span 
+                  key={subgoalId} 
+                  style={{
+                    background: isDarkMode ? 'rgba(147,197,153,0.15)' : 'rgba(147,197,153,0.1)',
+                    color: isDarkMode ? '#93C599' : '#4a8a50',
+                    padding: '0.35rem 0.6rem',
+                    borderRadius: '16px',
+                    fontSize: '0.85rem',
+                    fontWeight: 600,
+                    border: isDarkMode ? '1px solid rgba(147,197,153,0.3)' : '1px solid rgba(147,197,153,0.2)',
+                    whiteSpace: 'nowrap',
+                    fontFamily: 'Montserrat, Arial, sans-serif',
+                    boxShadow: isDarkMode ? '0 2px 8px rgba(147,197,153,0.1)' : '0 2px 8px rgba(147,197,153,0.08)',
+                    backdropFilter: 'blur(10px)',
+                    display: 'inline-block',
+                    flexShrink: 0,
+                    cursor: 'pointer',
+                    position: 'relative'
+                  }}
+                  initial={{ opacity: 0, scale: 0.8, y: 10 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  transition={{ 
+                    duration: 1.2, 
+                    delay: ((userPreferences?.topics?.length || 0) + (userPreferences?.formality ? 1 : 0) + (userPreferences?.user_goals?.length || 0)) * 0.25 + index * 0.25 + 0.6,
+                    ease: "easeOut"
+                  }}
+                  whileHover={{ 
+                    scale: 1.05, 
+                    y: -2,
+                    boxShadow: isDarkMode ? '0 4px 15px rgba(147,197,153,0.2)' : '0 4px 15px rgba(147,197,153,0.15)',
+                    transition: { duration: 0.4 }
+                  }}
+                  whileTap={{ scale: 0.95 }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.padding = '0.35rem 0.8rem';
+                    e.currentTarget.innerHTML = `📋 ${shortDescription}`;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.padding = '0.35rem 0.6rem';
+                    e.currentTarget.innerHTML = '📋';
+                  }}
+                >
+                  📋
+                </motion.span>
+              );
+            })}
           </div>
         )}
       </div>

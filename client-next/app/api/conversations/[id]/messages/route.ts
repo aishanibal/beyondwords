@@ -29,7 +29,18 @@ export async function GET(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    return NextResponse.json(data?.messages || []);
+    // Fetch messages from subcollection
+    const messagesSnapshot = await docRef
+      .collection('messages')
+      .orderBy('message_order', 'asc')
+      .get();
+    
+    const messages = messagesSnapshot.docs.map(msgDoc => ({
+      id: msgDoc.id,
+      ...msgDoc.data(),
+    }));
+
+    return NextResponse.json(messages);
   } catch (error: any) {
     console.error('[MESSAGES_API] GET error:', error);
     return NextResponse.json(
@@ -65,21 +76,27 @@ export async function POST(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Add new message to messages array
+    const now = new Date().toISOString();
+    
+    // Add new message to messages subcollection (consistent with conversation creation)
     const newMessage = {
-      id: `msg_${Date.now()}`,
-      role: body.role || 'user',
-      content: body.content,
-      timestamp: new Date().toISOString(),
-      ...body,
+      conversation_id: id,
+      sender: body.sender || 'user',
+      text: body.text || body.content || '',
+      message_type: body.messageType || 'text',
+      message_order: body.message_order || Date.now(),
+      created_at: now,
     };
 
+    const messageRef = await docRef.collection('messages').add(newMessage);
+
+    // Update conversation's updated_at and increment message_count
     await docRef.update({
-      messages: FieldValue.arrayUnion(newMessage),
-      updated_at: new Date().toISOString(),
+      updated_at: now,
+      message_count: FieldValue.increment(1),
     });
 
-    return NextResponse.json(newMessage, { status: 201 });
+    return NextResponse.json({ id: messageRef.id, ...newMessage }, { status: 201 });
   } catch (error: any) {
     console.error('[MESSAGES_API] POST error:', error);
     return NextResponse.json(

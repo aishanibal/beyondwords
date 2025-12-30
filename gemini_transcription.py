@@ -145,9 +145,11 @@ class GeminiTranscriber:
             'm4a': 'audio/mp4',
             'aac': 'audio/aac',
             'ogg': 'audio/ogg',
-            'flac': 'audio/flac'
+            'flac': 'audio/flac',
+            'webm': 'audio/webm',  # Browser MediaRecorder default format
+            'opus': 'audio/opus'
         }
-        return mime_types.get(ext, 'audio/mpeg')
+        return mime_types.get(ext, 'audio/webm')
 
     def transcribe_with_analysis(
         self,

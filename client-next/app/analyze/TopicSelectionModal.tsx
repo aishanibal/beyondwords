@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 interface TopicSelectionModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onStartConversation: (id: string, topics: string[], aiMessage: any, formality: string, learningGoals: string[], description?: string, isUsingExistingPersona?: boolean) => void;
+  onStartConversation: (id: string, topics: string[], aiMessage: any, formality: string, learningGoals: string[], description?: string, isUsingExistingPersona?: boolean, selectedSubgoals?: string[]) => void;
   currentLanguage?: string;
 }
 
@@ -47,6 +47,8 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
   const [customSubtopic, setCustomSubtopic] = useState<string>('');
   const [selectedFormality, setSelectedFormality] = useState<string>('friendly');
   const [selectedGoal, setSelectedGoal] = useState<string>('');
+  const [selectedSubgoals, setSelectedSubgoals] = useState<string[]>([]);
+  const [hasShownSubgoals, setHasShownSubgoals] = useState<boolean>(false);
   const [savedPersonas, setSavedPersonas] = useState<any[]>([]);
   const [isLoadingPersonas, setIsLoadingPersonas] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -246,6 +248,21 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
 
   const handleGoalSelect = (goalId: string) => {
     setSelectedGoal(goalId);
+    setSelectedSubgoals([]); // Clear subgoal selections when parent goal changes
+    setHasShownSubgoals(true);
+    setError('');
+    // Scroll to show subgoals section
+    scrollToBottomWithDelay(300);
+  };
+
+  const handleSubgoalToggle = (subgoalId: string) => {
+    setSelectedSubgoals(prev => {
+      if (prev.includes(subgoalId)) {
+        return prev.filter(id => id !== subgoalId);
+      } else {
+        return [...prev, subgoalId];
+      }
+    });
     setError('');
   };
 
@@ -309,6 +326,14 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
       scrollToBottomWithDelay(300);
     }
   }, [customSubtopic, selectedSubtopic, selectedGoal, scrollToBottomWithDelay]);
+
+  // Reset subgoals section when goal is cleared
+  useEffect(() => {
+    if (!selectedGoal) {
+      setHasShownSubgoals(false);
+      setSelectedSubgoals([]);
+    }
+  }, [selectedGoal]);
 
   // Auto-scroll when custom topic is expanded
   useEffect(() => {
@@ -378,6 +403,7 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
           topics: [finalSubtopic],
           formality: selectedFormality,
           learningGoals: [selectedGoal],
+          selectedSubgoals: selectedSubgoals.length > 0 ? selectedSubgoals : undefined,
           description: finalSubtopic,
           usesPersona: isUsingExistingPersona,
           personaId: isUsingExistingPersona ? selectedPersonaId : null
@@ -406,7 +432,8 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
           selectedFormality, 
           [selectedGoal],
           finalSubtopic,
-          isUsingExistingPersona
+          isUsingExistingPersona,
+          selectedSubgoals.length > 0 ? selectedSubgoals : undefined
         );
         onClose();
       } catch (err: any) {
@@ -1224,6 +1251,100 @@ export default function TopicSelectionModal({ isOpen, onClose, onStartConversati
                       </motion.div>
                     );
                   })}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* 5. Subgoals Selection Section - Show once a learning goal is selected */}
+          <AnimatePresence>
+            {hasShownSubgoals && selectedGoal && (
+              <motion.div
+                key="subgoals-section"
+                initial={{ opacity: 0, y: 20, height: 0 }}
+                animate={{ opacity: 1, y: 0, height: 'auto' }}
+                exit={{ opacity: 0, y: -20, height: 0 }}
+                transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
+                layout
+                style={{ marginBottom: '2rem', overflow: 'hidden' }}
+              >
+                <h3 style={{ 
+                  color: 'var(--foreground)', 
+                  fontSize: '1.1rem', 
+                  fontWeight: 600, 
+                  marginBottom: '0.5rem',
+                  fontFamily: 'Montserrat, Arial, sans-serif',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem'
+                }}>
+                  📋 Choose Specific Subgoals
+                </h3>
+                <p style={{ 
+                  color: 'var(--muted-foreground)', 
+                  fontSize: '0.85rem', 
+                  marginBottom: '1rem', 
+                  lineHeight: 1.4,
+                  fontFamily: 'AR One Sans, Arial, sans-serif'
+                }}>
+                  Select specific skills to focus on (optional - leave empty to work on all)
+                </p>
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.5rem'
+                }}>
+                  {(() => {
+                    const goal: LearningGoal | undefined = LEARNING_GOALS.find((g: LearningGoal) => g.id === selectedGoal);
+                    if (!goal?.subgoals) return null;
+                    
+                    return goal.subgoals.map((subgoal) => {
+                      const isSelected = selectedSubgoals.includes(subgoal.id);
+                      return (
+                        <motion.div
+                          key={subgoal.id}
+                          whileHover={{ scale: 1.01 }}
+                          whileTap={{ scale: 0.99 }}
+                          onClick={() => handleSubgoalToggle(subgoal.id)}
+                          style={{
+                            padding: '0.75rem 1rem',
+                            borderRadius: 12,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.75rem',
+                            fontWeight: 500,
+                            color: 'var(--foreground)',
+                            fontSize: '0.8rem',
+                            fontFamily: 'AR One Sans, Arial, sans-serif',
+                            border: `2px solid ${isSelected ? 'var(--rose-primary)' : 'transparent'}`,
+                            background: isSelected ? 'rgba(126, 90, 117, 0.08)' : 'var(--card)',
+                            boxShadow: isSelected ? '0 4px 16px rgba(126, 90, 117, 0.15)' : '0 2px 8px rgba(0, 0, 0, 0.08)',
+                            transition: 'all 0.2s ease',
+                            lineHeight: 1.4
+                          }}
+                        >
+                          <div style={{
+                            width: '20px',
+                            height: '20px',
+                            borderRadius: '6px',
+                            border: `2px solid ${isSelected ? 'var(--rose-primary)' : 'var(--muted-foreground)'}`,
+                            background: isSelected ? 'var(--rose-primary)' : 'transparent',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0,
+                            transition: 'all 0.2s ease'
+                          }}>
+                            {isSelected && (
+                              <span style={{ color: '#fff', fontSize: '0.7rem', fontWeight: 'bold' }}>✓</span>
+                            )}
+                          </div>
+                          <span>{subgoal.description}</span>
+                        </motion.div>
+                      );
+                    });
+                  })()}
                 </div>
               </motion.div>
             )}

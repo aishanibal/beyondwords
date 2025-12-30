@@ -145,6 +145,7 @@ export async function POST(request: NextRequest) {
       formality: body.formality || 'friendly',
       description: body.description || null,
       learning_goals: body.learningGoals || [],
+      selected_subgoals: body.selectedSubgoals || [],
       uses_persona: body.usesPersona || false,
       persona_id: body.personaId || null,
       message_count: 0,
