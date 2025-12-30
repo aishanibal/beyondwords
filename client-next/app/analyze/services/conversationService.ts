@@ -286,7 +286,7 @@ export const generateConversationSummary = async (
           if (goal?.subgoals) {
             goal.subgoals.forEach(sub => {
               subgoalIds.push(sub.id);
-              subgoalNames.push(goal.goal);
+              subgoalNames.push(sub.description);
             });
           }
         });

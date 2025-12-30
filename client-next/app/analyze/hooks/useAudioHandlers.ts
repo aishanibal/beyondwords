@@ -5,6 +5,8 @@ import { playTTSAudio, getTTSText, stopCurrentTTS, isTTSCurrentlyPlaying } from 
 import { ChatMessage } from '../types/analyze';
 import { TTS_TIMEOUTS } from '../config/constants';
 import { constructTTSUrl, isTTSUrlAccessible } from '../config/ttsConfig';
+import { cleanTextForTTS } from '../utils/textFormatting';
+import axios from 'axios';
 
 export const useAudioHandlers = (
   user: any,
@@ -580,12 +582,54 @@ export const useAudioHandlers = (
         if (!autoSpeak) {
           console.log('[DEBUG] Manual mode: Playing AI TTS immediately');
           setIsAnyTTSPlaying(true);
-          playTTSAudio(ttsText, language, cacheKey, (isPlaying) => {
-            setIsAnyTTSPlaying(isPlaying);
-          }).catch(error => {
-            console.error('[DEBUG] Error playing AI TTS:', error);
+          
+          // Generate TTS and get the URL, then store it in the message
+          try {
+            // Call TTS API to get the URL
+            const token = localStorage.getItem('jwt');
+            const ttsResponse = await axios.post('/api/tts', {
+              text: cleanTextForTTS(ttsText),
+              language: language,
+              cacheKey: cacheKey
+            }, {
+              headers: {
+                'Content-Type': 'application/json',
+                ...(token ? { Authorization: `Bearer ${token}` } : {})
+              }
+            });
+            
+            const ttsUrl = ttsResponse.data?.ttsUrl;
+            
+            // Store the TTS URL in the message
+            if (ttsUrl) {
+              setChatHistory(prev => {
+                return prev.map((msg, index) => {
+                  // Find the AI message we just created (last AI message that's not from original conversation)
+                  if (msg.sender === 'AI' && 
+                      !msg.isFromOriginalConversation && 
+                      !msg.isProcessing &&
+                      msg.text === result.aiMessage!.text) {
+                    return {
+                      ...msg,
+                      ttsUrl: ttsUrl
+                    };
+                  }
+                  return msg;
+                });
+              });
+              
+              // Now play the TTS
+              playTTSAudio(ttsText, language, cacheKey, (isPlaying) => {
+                setIsAnyTTSPlaying(isPlaying);
+              }).catch(error => {
+                console.error('[DEBUG] Error playing AI TTS:', error);
+                setIsAnyTTSPlaying(false);
+              });
+            }
+          } catch (error) {
+            console.error('[DEBUG] Error generating TTS URL:', error);
             setIsAnyTTSPlaying(false);
-          });
+          }
         } else {
           console.log('[DEBUG] Autospeak mode: AI TTS will be handled by queue system');
         }

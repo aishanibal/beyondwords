@@ -737,7 +737,35 @@ def generate_tts():
         data = request.get_json()
         text = data.get('text', '')
         language_code = data.get('language_code', 'en')
-        output_path = data.get('output_path', 'tts_output/response.wav')
+        cache_key = data.get('cacheKey', '')
+
+          # Generate unique filename using cacheKey to prevent caching issues
+        import hashlib
+        import os
+        from werkzeug.utils import secure_filename
+        
+        if cache_key:
+            # Use cacheKey to create unique filename (sanitize it first)
+            safe_key = secure_filename(cache_key.replace(' ', '_').replace('/', '_'))
+            # Limit length to avoid filesystem issues
+            if len(safe_key) > 50:
+                safe_key = safe_key[:50]
+            filename = f"{safe_key}.wav"
+        else:
+            # Fallback: use hash of text + timestamp if no cacheKey
+            import time
+            text_hash = hashlib.md5(f"{text}_{time.time()}".encode()).hexdigest()[:8]
+            filename = f"tts_{text_hash}.wav"
+        
+        output_path = data.get('output_path', f'tts_output/{filename}')
+        # Override output_path to use our unique filename
+        if not output_path or output_path == 'tts_output/response.wav':
+            output_path = f'tts_output/{filename}'
+        else:
+            # If custom path provided, use it but ensure unique filename
+            output_dir = os.path.dirname(output_path)
+            output_path = os.path.join(output_dir, filename) if output_dir else filename
+        
         
         print(f"🎤 [PYTHON_API] TTS request received:")
         print(f"🎤 [PYTHON_API]   text: '{text}' (length: {len(text)})")
@@ -747,7 +775,6 @@ def generate_tts():
         print(f"🎤 [PYTHON_API]   timestamp: {__import__('datetime').datetime.now()}")
         
         # Ensure the output directory exists
-        import os
         output_dir = os.path.dirname(output_path)
         if output_dir:
             os.makedirs(output_dir, exist_ok=True)

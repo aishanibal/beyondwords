@@ -247,36 +247,22 @@ export const useConversationManagement = (
         console.log('🔍 [CONVERSATION_MANAGEMENT] Progress percentages length:', progressPercentages.length);
         console.log('🔍 [CONVERSATION_MANAGEMENT] Progress percentages type:', typeof progressPercentages);
         console.log('🔍 [CONVERSATION_MANAGEMENT] Progress percentages is array:', Array.isArray(progressPercentages));
+         
+        // Use subgoal data from the summary response instead of rebuilding from user object
+        const subgoalIdsFromSummary = summary.subgoalIds || [];
+        const subgoalNamesFromSummary = summary.subgoalNames || [];
+        
+        console.log('🔍 [CONVERSATION_MANAGEMENT] Subgoal IDs from summary:', subgoalIdsFromSummary);
+        console.log('🔍 [CONVERSATION_MANAGEMENT] Subgoal names from summary:', subgoalNamesFromSummary);
         
         // Get the current user's learning goals to map progress to subgoals
         const currentProgressArray = Object.values(userProgress);
         const levelUpEvents: LevelUpEvent[] = [];
         
-        // Map progress percentages to subgoal IDs
-        // We need to get the subgoal IDs from the user's current learning goals
-        console.log('🔍 [CONVERSATION_MANAGEMENT] User object:', user);
-        console.log('🔍 [CONVERSATION_MANAGEMENT] User learning_goals raw:', user?.learning_goals);
-        const userLearningGoals = user?.learning_goals ? 
-          (typeof user.learning_goals === 'string' ? JSON.parse(user.learning_goals) : user.learning_goals) : [];
-        console.log('🔍 [CONVERSATION_MANAGEMENT] User learning goals parsed:', userLearningGoals);
-        
-        const subgoalIds: string[] = [];
-        const subgoalNames: string[] = [];
-        
-        // Extract subgoal IDs from user's learning goals
-        userLearningGoals.forEach((goalId: string) => {
-          const goal = LEARNING_GOALS.find(g => g.id === goalId);
-          if (goal?.subgoals) {
-            goal.subgoals.forEach(subgoal => {
-              subgoalIds.push(subgoal.id);
-              subgoalNames.push(goal.goal);
-            });
-          }
-        });
         
         // Process each progress percentage
-        for (let i = 0; i < Math.min(progressPercentages.length, subgoalIds.length); i++) {
-          const subgoalId = subgoalIds[i];
+        for (let i = 0; i < Math.min(progressPercentages.length, subgoalIdsFromSummary.length); i++) {
+          const subgoalId = subgoalIdsFromSummary[i];
           const progress = progressPercentages[i];
           
           const result = updateSubgoalProgress(subgoalId, progress, currentProgressArray);
@@ -296,20 +282,37 @@ export const useConversationManagement = (
         }, {} as { [goalId: string]: SubgoalProgress });
 
         setUserProgress(updatedProgressObj);
+
+        // Save updated progress to localStorage
+        if (user?.id && language) {
+          // Convert object back to array for localStorage (dashboard expects array format)
+          const progressArray = Object.values(updatedProgressObj);
+          localStorage.setItem(`subgoal_progress_${user.id}_${language}`, JSON.stringify(progressArray));
+          
+          // Dispatch custom event to notify dashboard of progress update
+          window.dispatchEvent(new CustomEvent('subgoalProgressUpdated', {
+            detail: { levelUpEvents, updatedProgress: progressArray }
+          }));
+          
+          console.log('🔍 [CONVERSATION_MANAGEMENT] Saved progress to localStorage and dispatched event:', {
+            progressArray,
+            levelUpEvents
+          });
+        }
         
         // Show progress modal if there are user learning goals OR if we have progress percentages
-        if (userLearningGoals.length > 0 || progressPercentages.length > 0) {
+        if (subgoalIdsFromSummary.length > 0 || progressPercentages.length > 0) {
           console.log('🔍 [CONVERSATION_MANAGEMENT] Showing progress modal with data:', {
             percentages: progressPercentages,
-            subgoalNames: subgoalNames.slice(0, Math.max(progressPercentages.length, userLearningGoals.length)),
+            subgoalNames: subgoalNamesFromSummary.slice(0, Math.max(progressPercentages.length, subgoalIdsFromSummary.length)),
             levelUpEvents,
-            hasUserGoals: userLearningGoals.length > 0,
+            hasSubgoals: subgoalIdsFromSummary.length > 0,
             hasProgressData: progressPercentages.length > 0
           });
           setProgressData({
             percentages: progressPercentages,
-            subgoalNames: subgoalNames.length > 0 ? subgoalNames.slice(0, Math.max(progressPercentages.length, userLearningGoals.length)) : ['Goal 1', 'Goal 2', 'Goal 3'].slice(0, progressPercentages.length),
-            subgoalIds: subgoalIds.slice(0, Math.max(progressPercentages.length, userLearningGoals.length)),
+            subgoalNames: subgoalNamesFromSummary.length > 0 ? subgoalNamesFromSummary.slice(0, Math.max(progressPercentages.length, subgoalIdsFromSummary.length)) : ['Goal 1', 'Goal 2', 'Goal 3'].slice(0, progressPercentages.length),
+            subgoalIds: subgoalIdsFromSummary.slice(0, Math.max(progressPercentages.length, subgoalIdsFromSummary.length)),
             levelUpEvents
           });
           setShowProgressModal(true);
