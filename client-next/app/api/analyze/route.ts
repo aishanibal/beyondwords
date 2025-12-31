@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 // Call Python API directly for analysis
-const PYTHON_API_URL = (process.env.AI_BACKEND_URL || 'https://beyondwords.onrender.com').replace(/\/$/, '');
+const PYTHON_API_URL = (process.env.AI_BACKEND_URL || 'https://beyondwordsapi-759507959904.us-east1.run.app').replace(/\/$/, '');
 
 export async function POST(request: NextRequest) {
   try {

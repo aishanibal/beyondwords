@@ -3,8 +3,8 @@ import { adminDb, getUserFromRequest } from '@/lib/firebase-admin';
 
 const CONVERSATIONS_COLLECTION = 'conversations';
 
-// Get Python API URL - use environment variable or default to localhost for local dev
-const PYTHON_API_URL = (process.env.AI_BACKEND_URL || 'http://localhost:5000').replace(/\/$/, '');
+// Get Python API URL - use environment variable or default to production
+const PYTHON_API_URL = (process.env.AI_BACKEND_URL || 'https://beyondwordsapi-759507959904.us-east1.run.app').replace(/\/$/, '');
 // AI API calls can take 20-60 seconds, especially for first call or complex prompts
 const AI_API_TIMEOUT = parseInt(process.env.AI_API_TIMEOUT || '60000', 10); // Default 60 seconds
 

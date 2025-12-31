@@ -67,7 +67,7 @@ const productionConfig: EnvironmentConfig = {
     privateKey: (process.env.FIREBASE_PRIVATE_KEY_PROD || '').replace(/\\n/g, '\n'),
   },
   apiBaseUrl: 'https://beyondwords-client.vercel.app', // Production Next.js
-  aiBackendUrl: 'https://beyondwords.onrender.com', // Production Python API
+  aiBackendUrl: 'https://beyondwordsapi-759507959904.us-east1.run.app', // Production Python API
   useEmulator: false,
   emulatorHosts: {
     auth: '',
