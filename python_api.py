@@ -380,6 +380,25 @@ def conversation_summary():
             "progress_percentages": []
         }), 500
 
+@app.route('/', methods=['GET'])
+def root():
+    """Root endpoint - returns API info"""
+    return jsonify({
+        "service": "BeyondWords Python API",
+        "status": "running",
+        "version": "1.0.0",
+        "endpoints": {
+            "health": "/health",
+            "transcribe": "/transcribe",
+            "transcribe_only": "/transcribe_only",
+            "ai_response": "/ai_response",
+            "suggestions": "/suggestions",
+            "translate": "/translate",
+            "tts": "/generate_tts",
+            "conversation_summary": "/conversation_summary"
+        }
+    })
+
 @app.route('/health', methods=['GET'])
 def health():
     """Health check endpoint"""
@@ -1067,12 +1086,25 @@ def serve_tts_file(filename):
         traceback.print_exc()
         return jsonify({"error": "Failed to serve file"}), 500
 
+# JSON error handlers so we never return HTML
+@app.errorhandler(404)
+def not_found(e):
+    return jsonify({"error": "Not found", "path": request.path}), 404
+
+@app.errorhandler(405)
+def method_not_allowed(e):
+    return jsonify({"error": "Method not allowed", "path": request.path, "method": request.method}), 405
+
+@app.errorhandler(500)
+def internal_error(e):
+    return jsonify({"error": "Internal server error", "details": str(e)}), 500
+
 if __name__ == '__main__':
     print("Starting Python Speech Analysis API...")
     print("🔐 Admin Dashboard: http://localhost:5000/admin")
     print("🔑 Default password: admin123")
     load_models()
     
-    # Use PORT environment variable for Render
+    # Use PORT environment variable for Cloud Run/Render
     PORT = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=PORT, debug=False) 

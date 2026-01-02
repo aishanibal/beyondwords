@@ -5,10 +5,11 @@
 set -e
 
 # Configuration - update these values
-PROJECT_ID="${GCP_PROJECT_ID:-heirloom-463918}"
-REGION="${GCP_REGION:-us-central1}"
-SERVICE_NAME="beyondwords-python-api"
-IMAGE_NAME="gcr.io/${PROJECT_ID}/${SERVICE_NAME}"
+PROJECT_ID="${GCP_PROJECT_ID:-gen-lang-client-0443903956}"
+REGION="${GCP_REGION:-us-east1}"
+SERVICE_NAME="beyondwordsapi"
+# Use Artifact Registry (modern approach) instead of GCR
+IMAGE_NAME="${REGION}-docker.pkg.dev/${PROJECT_ID}/cloud-run-source-deploy/${SERVICE_NAME}"
 
 echo "🚀 Deploying Python API to Cloud Run..."
 echo "   Project: ${PROJECT_ID}"
@@ -18,14 +19,10 @@ echo "   Service: ${SERVICE_NAME}"
 # Ensure we're in the project root
 cd "$(dirname "$0")/.."
 
-# Build and push container image using Cloud Build
-echo "📦 Building container image..."
-gcloud builds submit --tag "${IMAGE_NAME}" --project "${PROJECT_ID}"
-
-# Deploy to Cloud Run
-echo "🌐 Deploying to Cloud Run..."
+# Deploy to Cloud Run using source-based deployment (simpler, no need to manage images)
+echo "🌐 Deploying to Cloud Run from source..."
 gcloud run deploy "${SERVICE_NAME}" \
-    --image "${IMAGE_NAME}" \
+    --source . \
     --platform managed \
     --region "${REGION}" \
     --project "${PROJECT_ID}" \
