@@ -11,6 +11,15 @@ import datetime
 from gemini_client import get_conversational_response, get_detailed_feedback, get_text_suggestions, get_translation, is_gemini_ready, get_short_feedback, get_detailed_breakdown, create_tutor, get_quick_translation
 from tts_synthesizer_admin_controlled import synthesize_speech
 
+# Import for Google ID token verification
+try:
+    from google.oauth2 import id_token
+    from google.auth.transport import requests as google_requests
+    GOOGLE_AUTH_AVAILABLE = True
+except ImportError:
+    GOOGLE_AUTH_AVAILABLE = False
+    print("⚠️ Google auth libraries not available - token validation disabled")
+
 # Use Gemini for transcription
 from gemini_transcription import transcribe_audio_gemini, transcribe_audio_with_analysis_gemini
 print("🤖 Using Gemini for transcription")
@@ -26,6 +35,39 @@ load_dotenv()
 app = Flask(__name__)
 app.secret_key = os.urandom(24)  # For session management
 CORS(app)
+
+# Optional: Validate Google ID tokens for authenticated calls
+def validate_google_token():
+    """Validate Google ID token from Authorization header (optional)"""
+    auth_header = request.headers.get('Authorization', '')
+    
+    # Skip validation for certain paths that don't need auth
+    public_paths = ['/health', '/admin', '/admin/login']
+    if request.path in public_paths or request.path.startswith('/admin/'):
+        return None
+    
+    if not auth_header.startswith('Bearer '):
+        return None  # No token provided, allow through (for backwards compatibility)
+    
+    if not GOOGLE_AUTH_AVAILABLE:
+        print("⚠️ Token provided but Google auth not available")
+        return None
+    
+    try:
+        token = auth_header.split('Bearer ')[1]
+        # Verify the token
+        request_adapter = google_requests.Request()
+        id_info = id_token.verify_oauth2_token(token, request_adapter)
+        print(f"✅ Authenticated request from: {id_info.get('email', 'unknown')}")
+        return id_info
+    except Exception as e:
+        print(f"⚠️ Token validation failed: {e}")
+        return None  # Allow through even if validation fails (for backwards compatibility)
+
+@app.before_request
+def check_auth():
+    """Check authentication before each request"""
+    validate_google_token()
 
 # Check API key at startup
 api_key = os.getenv("GOOGLE_API_KEY")
