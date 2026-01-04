@@ -1099,11 +1099,17 @@ def method_not_allowed(e):
 def internal_error(e):
     return jsonify({"error": "Internal server error", "details": str(e)}), 500
 
+# Module-level initialization for gunicorn
+print("🚀 Initializing Flask app...")
+load_models()
+print("✅ Flask app ready with routes:")
+for rule in app.url_map.iter_rules():
+    print(f"   - {rule.rule} [{', '.join(rule.methods)}]")
+
 if __name__ == '__main__':
-    print("Starting Python Speech Analysis API...")
+    print("Starting Python Speech Analysis API in development mode...")
     print("🔐 Admin Dashboard: http://localhost:5000/admin")
     print("🔑 Default password: admin123")
-    load_models()
     
     # Use PORT environment variable for Cloud Run/Render
     PORT = int(os.environ.get('PORT', 5000))

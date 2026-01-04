@@ -33,5 +33,6 @@ RUN mkdir -p tts_output uploads
 ENV PORT=8080
 
 # Run with gunicorn for production
-CMD exec gunicorn --bind :$PORT --workers 1 --threads 8 --timeout 0 python_api:app
+# Bind to 0.0.0.0:$PORT for Cloud Run, use reasonable timeout
+CMD exec gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 8 --timeout 300 python_api:app
 
