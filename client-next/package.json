@@ -25,6 +25,7 @@
     "form-data": "^4.0.4",
     "formidable": "^3.5.4",
     "framer-motion": "^12.23.9",
+    "google-auth-library": "^9.0.0",
     "hangul-romanization": "^1.0.1",
     "kuroshiro": "^1.2.0",
     "kuroshiro-analyzer-kuromoji": "^1.1.0",

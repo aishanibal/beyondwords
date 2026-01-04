@@ -27,21 +27,26 @@ interface EnvironmentConfig {
   };
 }
 
+// Shared Firebase configuration (same for local and production)
+const sharedFirebaseConfig: FirebaseConfig = {
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || '',
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || '',
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || '',
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || '',
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || '',
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || '',
+};
+
+const sharedFirebaseAdminConfig: FirebaseAdminConfig = {
+  projectId: process.env.FIREBASE_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || '',
+  clientEmail: process.env.FIREBASE_CLIENT_EMAIL || '',
+  privateKey: (process.env.FIREBASE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
+};
+
 // Local environment configuration
 const localConfig: EnvironmentConfig = {
-  firebase: {
-    apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY_LOCAL || '',
-    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN_LOCAL || '',
-    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID_LOCAL || '',
-    storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET_LOCAL || '',
-    messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID_LOCAL || '',
-    appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID_LOCAL || '',
-  },
-  firebaseAdmin: {
-    projectId: process.env.FIREBASE_PROJECT_ID_LOCAL || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID_LOCAL || '',
-    clientEmail: process.env.FIREBASE_CLIENT_EMAIL_LOCAL || '',
-    privateKey: (process.env.FIREBASE_PRIVATE_KEY_LOCAL || '').replace(/\\n/g, '\n'),
-  },
+  firebase: sharedFirebaseConfig,
+  firebaseAdmin: sharedFirebaseAdminConfig,
   apiBaseUrl: 'http://localhost:3000', // Next.js API routes
   aiBackendUrl: 'http://localhost:5000', // Python API
   useEmulator: process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === 'true',
@@ -53,19 +58,8 @@ const localConfig: EnvironmentConfig = {
 
 // Production environment configuration
 const productionConfig: EnvironmentConfig = {
-  firebase: {
-    apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY_PROD || '',
-    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN_PROD || '',
-    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID_PROD || '',
-    storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET_PROD || '',
-    messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID_PROD || '',
-    appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID_PROD || '',
-  },
-  firebaseAdmin: {
-    projectId: process.env.FIREBASE_PROJECT_ID_PROD || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID_PROD || '',
-    clientEmail: process.env.FIREBASE_CLIENT_EMAIL_PROD || '',
-    privateKey: (process.env.FIREBASE_PRIVATE_KEY_PROD || '').replace(/\\n/g, '\n'),
-  },
+  firebase: sharedFirebaseConfig,
+  firebaseAdmin: sharedFirebaseAdminConfig,
   apiBaseUrl: 'https://beyondwords-client.vercel.app', // Production Next.js
   aiBackendUrl: 'https://beyondwordsapi-759507959904.us-east1.run.app', // Production Python API
   useEmulator: false,
