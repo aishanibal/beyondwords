@@ -3,50 +3,85 @@ import { getAuth, Auth, connectAuthEmulator } from 'firebase/auth';
 import { getFirestore, Firestore, connectFirestoreEmulator } from 'firebase/firestore';
 import { firebaseConfig, environment, useEmulator, emulatorHosts } from './firebase-config';
 
-// Initialize Firebase app (only once)
-let app: FirebaseApp;
-let auth: Auth;
-let db: Firestore;
+// Lazy initialization - only initialize when needed (in browser)
+let app: FirebaseApp | undefined;
+let auth: Auth | undefined;
+let db: Firestore | undefined;
 
-// Check if Firebase is already initialized
-if (getApps().length === 0) {
-  app = initializeApp(firebaseConfig);
-  auth = getAuth(app);
-  db = getFirestore(app);
-
-  // Connect to emulators in local development (only in browser)
-  if (environment === 'local' && useEmulator && typeof window !== 'undefined') {
-    try {
-      if (emulatorHosts.auth) {
-        connectAuthEmulator(auth, emulatorHosts.auth, { disableWarnings: true });
-        console.log(`[FIREBASE] Connected to Auth emulator at ${emulatorHosts.auth}`);
-      }
-      if (emulatorHosts.firestore.host) {
-        connectFirestoreEmulator(db, emulatorHosts.firestore.host, emulatorHosts.firestore.port);
-        console.log(`[FIREBASE] Connected to Firestore emulator at ${emulatorHosts.firestore.host}:${emulatorHosts.firestore.port}`);
-      }
-    } catch (err) {
-      // Emulators already connected or other error - ignore
-      console.warn('[FIREBASE] Emulator connection warning:', err);
-    }
+// Initialize Firebase lazily (only in browser, not during build)
+function initializeFirebase() {
+  // Skip initialization during SSR/build
+  if (typeof window === 'undefined') {
+    return;
   }
-  
-  console.log(`[FIREBASE] Initialized for ${environment} environment with project: ${firebaseConfig.projectId}`);
-} else {
-  app = getApps()[0];
-  auth = getAuth(app);
-  db = getFirestore(app);
+
+  // Already initialized
+  if (app && auth && db) {
+    return;
+  }
+
+  // Check if Firebase is already initialized by another import
+  if (getApps().length === 0) {
+    app = initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    db = getFirestore(app);
+
+    // Connect to emulators in local development
+    if (environment === 'local' && useEmulator) {
+      try {
+        if (emulatorHosts.auth) {
+          connectAuthEmulator(auth, emulatorHosts.auth, { disableWarnings: true });
+          console.log(`[FIREBASE] Connected to Auth emulator at ${emulatorHosts.auth}`);
+        }
+        if (emulatorHosts.firestore.host) {
+          connectFirestoreEmulator(db, emulatorHosts.firestore.host, emulatorHosts.firestore.port);
+          console.log(`[FIREBASE] Connected to Firestore emulator at ${emulatorHosts.firestore.host}:${emulatorHosts.firestore.port}`);
+        }
+      } catch (err) {
+        // Emulators already connected or other error - ignore
+        console.warn('[FIREBASE] Emulator connection warning:', err);
+      }
+    }
+    
+    console.log(`[FIREBASE] Initialized for ${environment} environment with project: ${firebaseConfig.projectId}`);
+  } else {
+    app = getApps()[0];
+    auth = getAuth(app);
+    db = getFirestore(app);
+  }
 }
 
+// Getter functions that ensure Firebase is initialized
+export function getFirebaseApp(): FirebaseApp {
+  initializeFirebase();
+  if (!app) throw new Error('Firebase app not initialized');
+  return app;
+}
+
+export function getFirebaseAuth(): Auth {
+  initializeFirebase();
+  if (!auth) throw new Error('Firebase auth not initialized');
+  return auth;
+}
+
+export function getFirebaseDb(): Firestore {
+  initializeFirebase();
+  if (!db) throw new Error('Firebase db not initialized');
+  return db;
+}
+
+// Legacy exports for backward compatibility (but use getters instead)
 export { app, auth, db };
 
 // Auth helper functions
 export const getCurrentUser = () => {
-  return auth.currentUser;
+  const firebaseAuth = getFirebaseAuth();
+  return firebaseAuth.currentUser;
 };
 
 export const getIdToken = async (): Promise<string | null> => {
-  const user = auth.currentUser;
+  const firebaseAuth = getFirebaseAuth();
+  const user = firebaseAuth.currentUser;
   if (!user) return null;
   try {
     return await user.getIdToken();
@@ -62,8 +97,10 @@ export const getIdToken = async (): Promise<string | null> => {
 // Test Firebase connection
 export const testFirebaseConnection = async (): Promise<{ reachable: boolean; error?: string }> => {
   try {
+    const firebaseAuth = getFirebaseAuth();
+    
     // Try to get auth instance (will throw if not configured)
-    if (!auth) {
+    if (!firebaseAuth) {
       return { reachable: false, error: 'Firebase Auth is not initialized' };
     }
     

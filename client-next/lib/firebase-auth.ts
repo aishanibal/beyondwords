@@ -9,14 +9,14 @@ import {
   User,
   AuthError
 } from 'firebase/auth';
-import { auth } from './firebase';
+import { getFirebaseAuth } from './firebase';
 import { getUserProfile, createUserProfile } from './api';
 import { environment, firebaseConfig, apiBaseUrl } from './firebase-config';
 
 // Sign up with email and password
 export const signUpWithEmail = async (email: string, password: string, name: string) => {
   try {
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    const userCredential = await createUserWithEmailAndPassword(getFirebaseAuth(), email, password);
     const user = userCredential.user;
     
     // Get the ID token immediately and store it so API calls can use it
@@ -52,7 +52,7 @@ export const signUpWithEmail = async (email: string, password: string, name: str
 // Sign in with email and password
 export const signInWithEmail = async (email: string, password: string) => {
   try {
-    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    const userCredential = await signInWithEmailAndPassword(getFirebaseAuth(), email, password);
     const user = userCredential.user;
     
     // Exchange for app JWT token
@@ -77,7 +77,7 @@ export const signInWithEmail = async (email: string, password: string) => {
 export const signInWithGoogle = async (idToken: string) => {
   try {
     const credential = GoogleAuthProvider.credential(idToken);
-    const userCredential = await signInWithCredential(auth, credential);
+    const userCredential = await signInWithCredential(getFirebaseAuth(), credential);
     const user = userCredential.user;
     
     // Get or create user profile
@@ -112,7 +112,7 @@ export const signInWithGoogle = async (idToken: string) => {
 // Sign out
 export const signOutUser = async () => {
   try {
-    await signOut(auth);
+    await signOut(getFirebaseAuth());
     localStorage.removeItem('jwt');
     return { success: true, error: null };
   } catch (error: any) {
@@ -126,12 +126,12 @@ export const signOutUser = async () => {
 
 // Get current user
 export const getCurrentAuthUser = (): User | null => {
-  return auth.currentUser;
+  return getFirebaseAuth().currentUser;
 };
 
 // Subscribe to auth state changes
 export const onAuthStateChange = (callback: (user: User | null) => void) => {
-  return onAuthStateChanged(auth, callback);
+  return onAuthStateChanged(getFirebaseAuth(), callback);
 };
 
 // Exchange Firebase ID token for app JWT
@@ -224,6 +224,7 @@ export const testFirebaseReachability = async (): Promise<{ reachable: boolean; 
 
   try {
     // Check if Firebase is properly configured
+    const auth = getFirebaseAuth();
     if (!auth) {
       return { reachable: false, error: 'Firebase Auth is not initialized' };
     }

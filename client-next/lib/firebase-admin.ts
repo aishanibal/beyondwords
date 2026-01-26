@@ -36,13 +36,18 @@ if (getApps().length === 0) {
   const { projectId, clientEmail, privateKey } = firebaseAdminConfig;
   const resolvedProjectId = getProjectId();
   
+  // Validate that credentials aren't empty strings
+  const hasValidCredentials = projectId && clientEmail && privateKey && 
+    privateKey.trim().length > 0 && 
+    privateKey.includes('BEGIN PRIVATE KEY');
+  
   // For emulator mode, we can initialize with just projectId (no credentials needed)
   if (environment === 'local' && useEmulator) {
     app = initializeApp({ projectId: resolvedProjectId });
     console.log(`[FIREBASE_ADMIN] Initialized for emulator with project: ${resolvedProjectId}`);
   }
   // Check if we have valid credentials for non-emulator mode
-  else if (projectId && clientEmail && privateKey) {
+  else if (hasValidCredentials) {
     try {
       app = initializeApp({
         credential: cert({
@@ -55,8 +60,9 @@ if (getApps().length === 0) {
       console.log(`[FIREBASE_ADMIN] Initialized for ${environment} environment with project: ${projectId}`);
     } catch (err) {
       console.error('[FIREBASE_ADMIN] Failed to initialize with credentials:', err);
-      // Fallback: try to initialize without explicit credentials (works in Google Cloud)
-      app = initializeApp({ projectId });
+      // Fallback: try to initialize with projectId (may work in Google Cloud)
+      app = initializeApp({ projectId: resolvedProjectId });
+      console.warn('[FIREBASE_ADMIN] Falling back to projectId-only initialization');
     }
   } else {
     // Try environment variable fallback (JSON string)
@@ -71,12 +77,24 @@ if (getApps().length === 0) {
         console.log(`[FIREBASE_ADMIN] Initialized from JSON env var for project: ${parsedKey.project_id}`);
       } catch (err) {
         console.error('[FIREBASE_ADMIN] Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY:', err);
-        app = initializeApp();
+        // Fallback to projectId
+        app = initializeApp({ projectId: resolvedProjectId });
       }
     } else {
-      // No credentials - initialize with defaults (works in Google Cloud environments)
-      console.warn('[FIREBASE_ADMIN] No credentials found, using default initialization');
-      app = initializeApp();
+      // No credentials - try with projectId and GOOGLE_CLOUD_PROJECT
+      console.warn('[FIREBASE_ADMIN] No credentials found. Attempting initialization with projectId.');
+      console.warn('[FIREBASE_ADMIN] Missing: FIREBASE_CLIENT_EMAIL or FIREBASE_PRIVATE_KEY');
+      if (resolvedProjectId && resolvedProjectId !== 'demo-project') {
+        // Set GOOGLE_CLOUD_PROJECT as fallback (required by Firebase Admin)
+        if (!process.env.GOOGLE_CLOUD_PROJECT) {
+          process.env.GOOGLE_CLOUD_PROJECT = resolvedProjectId;
+        }
+        app = initializeApp({ projectId: resolvedProjectId });
+        console.warn('[FIREBASE_ADMIN] Initialized with projectId only - token verification may fail without credentials');
+      } else {
+        app = initializeApp();
+        console.error('[FIREBASE_ADMIN] No projectId found - Admin SDK will not work properly');
+      }
     }
   }
   
@@ -121,3 +139,4 @@ export async function getUserFromRequest(authHeader: string | null) {
   
   return { uid: result.uid, email: result.email };
 }
+
